@@ -139,3 +139,15 @@ source. If you hit something not listed here, please add it.
   images will grow memory use.
 - **[`IconOverlay`](../overlays/icon-overlay.md) is rasterized once** at its construction size. Resizing it later stretches the raster.
 - **Feather icons are black** until you tint them.
+
+## Audio
+
+- **No AAC (`.m4a`, `.aac`).** It is patent-encumbered, so it is left out on purpose. Convert to Ogg Vorbis or Opus.
+  Apple Lossless and other exotic formats are not supported either.
+- **Mono and stereo only.** Files with more channels are rejected, except Opus, which is mixed down to stereo.
+  FLAC is limited to 24 bits per sample and is converted to 16-bit.
+- **Positioning is point-based.** There are no sound cones, occlusion by walls, or reverb, and OpenAL's
+  distance units are unitless: choose your own scale and set the [attenuation](../audio/spatial-audio.md#distance-falloff) to match.
+- **No seeking or playback position.** A playback can be paused and resumed but not moved to a time.
+- **MP3 loops are not sample-tight.** MP3 has encoder delay and no sample index, so use Ogg, Opus or FLAC where a loop must be seamless.
+- **Audio output cannot be chosen.** OpenAL uses the system default device, and it is not re-opened if that changes.

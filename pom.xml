@@ -651,6 +651,12 @@
             <artifactId>lucene-analysis-common</artifactId>
             <version>10.2.2</version>
         </dependency>
+        <!-- Pure-Java MP3 decoder for the audio system (LGPL). -->
+        <dependency>
+            <groupId>com.googlecode.soundlibs</groupId>
+            <artifactId>jlayer</artifactId>
+            <version>1.0.1-1</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>

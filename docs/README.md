@@ -41,6 +41,11 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | Controls | [ButtonOverlay](overlays/button-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
 | Feedback | [ProgressBarOverlay](overlays/progress-bar-overlay.md) · [LoadingSpinnerOverlay](overlays/loading-spinner-overlay.md) · [SeparatorOverlay](overlays/separator-overlay.md) |
 | Images | [ImageOverlay](overlays/image-overlay.md) · [IconOverlay](overlays/icon-overlay.md) |
+| **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
+| [Sound](audio/sound.md) | Short effects held in memory |
+| [Music](audio/music.md) | Streamed tracks, looping, crossfades |
+| [Playback](audio/playback.md) | Volume, pitch, pan, pause, fades and callbacks on a playing sound |
+| [3D audio](audio/spatial-audio.md) | Listener, positioned sounds, distance falloff, Doppler |
 | **[Styling](styling/README.md)** | Colors, box styling, themes, backgrounds, fonts, images |
 | [Colors and paints](styling/colors-and-paints.md) | `Color`, gradients, animated paints |
 | [Styling](styling/styling.md) | Background, border, hover, and corner radius on every element |

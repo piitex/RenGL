@@ -4,7 +4,23 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4c9a2e17-6a4f-4c56-8432-20d3d4776a42" name="Changes" comment="Removed some comments." />
+    <list default="true" id="4c9a2e17-6a4f-4c56-8432-20d3d4776a42" name="Changes" comment="Removed some comments.">
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Audio.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/AudioChannel.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/AudioDecoder.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Music.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Pcm.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/PcmStream.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Playback.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Sound.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/AudioDemo.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/reference/known-limitations.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/reference/known-limitations.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/Engine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/Engine.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -28,15 +44,22 @@
     &quot;assignee&quot;: &quot;HackusatePvP&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings">{
-  &quot;selectedUrlAndAccountId&quot;: {
-    &quot;url&quot;: &quot;https://github.com/HackusatePvP/RenGL.git&quot;,
-    &quot;accountId&quot;: &quot;cd81848c-ba0d-4265-8199-352e6b7ba8aa&quot;
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/piitex/RenGL.git",
+    "accountId": "cd81848c-ba0d-4265-8199-352e6b7ba8aa"
   }
-}</component>
+}]]></component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Renderer.java" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/theme/Themeable.java" root0="SKIP_INSPECTION" />
+  </component>
+  <component name="MavenImportPreferences">
+    <option name="generalSettings">
+      <MavenGeneralSettings>
+        <option name="mavenHomeTypeForPersistence" value="WRAPPER" />
+      </MavenGeneralSettings>
+    </option>
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 0
@@ -47,6 +70,7 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Application.AudioDemo.executor": "Run",
     "Application.Demo.executor": "Run",
     "Application.DownloadDemo.executor": "Run",
     "Application.FileDialogDemo.executor": "Run",
@@ -97,7 +121,21 @@
       <recent name="me.piitex.engine.io" />
     </key>
   </component>
-  <component name="RunManager" selected="Application.SnapshotDemo">
+  <component name="RunManager" selected="Application.AudioDemo">
+    <configuration name="AudioDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.AudioDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="Demo" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.Demo" />
       <module name="RenGL" />
@@ -211,6 +249,7 @@
       </method>
     </configuration>
     <list>
+      <item itemvalue="Application.AudioDemo" />
       <item itemvalue="Application.DownloadDemo" />
       <item itemvalue="Application.FileDialogDemo" />
       <item itemvalue="Application.SnapshotDemo" />
@@ -222,9 +261,9 @@
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Application.Demo" />
         <item itemvalue="Application.PickerDemo" />
         <item itemvalue="Application.MenuDemo" />
-        <item itemvalue="Application.Demo" />
         <item itemvalue="Application.ResizableContainerDemo" />
       </list>
     </recent_temporary>
