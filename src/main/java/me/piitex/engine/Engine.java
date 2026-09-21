@@ -1,5 +1,6 @@
 package me.piitex.engine;
 
+import me.piitex.engine.audio.Audio;
 import me.piitex.engine.gl.GLFWindow;
 import me.piitex.engine.gl.NativeMenuBar;
 import me.piitex.engine.gl.renderer.metal.MetalContext;
@@ -142,6 +143,7 @@ public class Engine {
         window.notifyClosing();
 
         FileDialog.shutdown();
+        Audio.shutdown();
         Scheduler.shutdown();
     }
 
