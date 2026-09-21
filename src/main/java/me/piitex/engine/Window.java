@@ -434,6 +434,10 @@ public class Window implements Themeable {
         return containers.remove(index, container);
     }
 
+    public void clear() {
+        containers.clear();
+    }
+
     /**
      * Shows {@code popup} as a top-level Container above everything else, on the
      * floating layer that dropdown lists, menus, and dialogs live on. Only one popup is
