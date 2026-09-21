@@ -48,7 +48,9 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 public final class Audio {
     private static final Logger log = LogManager.getLogger("Audio");
 
-    /** Guards all OpenAL calls, the active list and every {@link Playback}'s state. */
+    /**
+     * Guards all OpenAL calls, the active list and every {@link Playback}'s state.
+     */
     static final Object LOCK = new Object();
 
     private static final long TICK_MILLIS = 15;
@@ -73,30 +75,40 @@ public final class Audio {
     private static String musicPath;
 
     private Audio() {
+
     }
 
-
-    /** Plays a sound effect once on {@link AudioChannel#SFX}. The file is loaded on first use and cached. */
+    /**
+     * Plays a sound effect once on {@link AudioChannel#SFX}. The file is loaded on first use and cached.
+     */
     public static Playback play(String path) {
         return sound(path).play();
     }
 
-    /** Plays a sound effect once at {@code volume}. */
+    /**
+     * Plays a sound effect once at {@code volume}.
+     */
     public static Playback play(String path, float volume) {
         return sound(path).play(volume);
     }
 
-    /** Plays a sound effect on a specific channel, for example {@link AudioChannel#UI}. */
+    /**
+     * Plays a sound effect on a specific channel, for example {@link AudioChannel#UI}.
+     */
     public static Playback play(String path, AudioChannel channel) {
         return sound(path).channel(channel).play();
     }
 
-    /** Plays a sound effect once at a position in the world. See {@link #listener()} and {@link Playback#position}. */
+    /**
+     * Plays a sound effect once at a position in the world. See {@link #listener()} and {@link Playback#position}.
+     */
     public static Playback playAt(String path, float x, float y, float z) {
         return sound(path).playAt(x, y, z);
     }
 
-    /** {@link #playAt(String, float, float, float)} for a 2D game: plays at (x, y) on the plane {@code z = 0}. */
+    /**
+     * {@link #playAt(String, float, float, float)} for a 2D game: plays at (x, y) on the plane {@code z = 0}.
+     */
     public static Playback playAt(String path, float x, float y) {
         return sound(path).playAt(x, y);
     }
@@ -110,7 +122,9 @@ public final class Audio {
         return playMusic(path, 1f);
     }
 
-    /** Like {@link #playMusic(String)} with a custom crossfade length. {@code 0} switches instantly. */
+    /**
+     * Like {@link #playMusic(String)} with a custom crossfade length. {@code 0} switches instantly.
+     */
     public static Playback playMusic(String path, float fadeSeconds) {
         synchronized (LOCK) {
             if (music != null && !music.isFinished() && path.equals(musicPath)) return music;
@@ -122,12 +136,16 @@ public final class Audio {
         }
     }
 
-    /** Fades the background music out over one second and stops it. */
+    /**
+     * Fades the background music out over one second and stops it.
+     */
     public static void stopMusic() {
         stopMusic(1f);
     }
 
-    /** Fades the background music out over {@code fadeSeconds} ({@code 0} stops instantly). */
+    /**
+     * Fades the background music out over {@code fadeSeconds} ({@code 0} stops instantly).
+     */
     public static void stopMusic(float fadeSeconds) {
         synchronized (LOCK) {
             if (music != null) music.stop(fadeSeconds);
@@ -136,7 +154,9 @@ public final class Audio {
         }
     }
 
-    /** The playback started by {@link #playMusic}, or null if there is none. */
+    /**
+     * The playback started by {@link #playMusic}, or null if there is none.
+     */
     public static Playback getMusic() {
         synchronized (LOCK) {
             return music != null && !music.isFinished() ? music : null;
@@ -144,7 +164,9 @@ public final class Audio {
     }
 
 
-    /** Loads (or fetches from the cache) the sound at {@code path}. Do not {@code close()} a sound you got here; use {@link #unload}. */
+    /**
+     * Loads (or fetches from the cache) the sound at {@code path}. Do not {@code close()} a sound you got here; use {@link #unload}.
+     */
     public static Sound sound(String path) {
         return sounds.computeIfAbsent(path, Sound::load);
     }
@@ -157,12 +179,16 @@ public final class Audio {
         return tracks.computeIfAbsent(path, Music::load);
     }
 
-    /** Decodes the given sound effects now so the first {@link #play(String)} of each has no delay. */
+    /**
+     * Decodes the given sound effects now so the first {@link #play(String)} of each has no delay.
+     */
     public static void preload(String... paths) {
         for (String path : paths) sound(path);
     }
 
-    /** Stops and frees a cached sound or track. It is loaded again the next time it is played. */
+    /**
+     * Stops and frees a cached sound or track. It is loaded again the next time it is played.
+     */
     public static void unload(String path) {
         Sound s = sounds.remove(path);
         if (s != null) s.close();
@@ -179,7 +205,9 @@ public final class Audio {
         return listener;
     }
 
-    /** Sets how positioned sounds fade with distance. The default is {@link DistanceModel#INVERSE_CLAMPED}. */
+    /**
+     * Sets how positioned sounds fade with distance. The default is {@link DistanceModel#INVERSE_CLAMPED}.
+     */
     public static void setDistanceModel(DistanceModel model) {
         synchronized (LOCK) {
             distanceModel = model;
@@ -199,7 +227,9 @@ public final class Audio {
         }
     }
 
-    /** Sets the speed of sound in world units per second, for the Doppler effect. The default, 343.3, suits metres. */
+    /**
+     * Sets the speed of sound in world units per second, for the Doppler effect. The default, 343.3, suits metres.
+     */
     public static void setSpeedOfSound(float unitsPerSecond) {
         synchronized (LOCK) {
             speedOfSound = Math.max(0.001f, unitsPerSecond);
@@ -207,7 +237,9 @@ public final class Audio {
         }
     }
 
-    /** Sets the volume of one channel, 0 to 1. Applies to playbacks already running. */
+    /**
+     * Sets the volume of one channel, 0 to 1. Applies to playbacks already running.
+     */
     public static void setVolume(AudioChannel channel, float volume) {
         synchronized (LOCK) {
             channelVolume[channel.ordinal()] = Math.max(0f, volume);
@@ -221,7 +253,9 @@ public final class Audio {
         }
     }
 
-    /** Sets the volume of everything, 0 to 1. */
+    /**
+     * Sets the volume of everything, 0 to 1.
+     */
     public static void setMasterVolume(float volume) {
         synchronized (LOCK) {
             master = Math.max(0f, volume);
@@ -235,7 +269,9 @@ public final class Audio {
         }
     }
 
-    /** Silences everything without changing any volume, and restores it when set back to false. */
+    /**
+     * Silences everything without changing any volume, and restores it when set back to false.
+     */
     public static void setMuted(boolean muted) {
         synchronized (LOCK) {
             Audio.muted = muted;
@@ -250,7 +286,9 @@ public final class Audio {
     }
 
 
-    /** Pauses everything currently playing. Use {@link #resumeAll()} to continue. */
+    /**
+     * Pauses everything currently playing. Use {@link #resumeAll()} to continue.
+     */
     public static void pauseAll() {
         synchronized (LOCK) {
             for (Playback p : new ArrayList<>(active)) p.pause();
@@ -263,7 +301,9 @@ public final class Audio {
         }
     }
 
-    /** Stops everything, music included. */
+    /**
+     * Stops everything, music included.
+     */
     public static void stopAll() {
         synchronized (LOCK) {
             for (Playback p : new ArrayList<>(active)) p.stop();
@@ -272,7 +312,9 @@ public final class Audio {
         }
     }
 
-    /** True if the audio device opened. False means every playback is silent. */
+    /**
+     * True if the audio device opened. False means every playback is silent.
+     */
     public static boolean isAvailable() {
         return ensureInit();
     }
@@ -315,7 +357,9 @@ public final class Audio {
         for (Playback p : active) p.applyGain();
     }
 
-    /** True once the device is open. Holds no lock of its own; call with {@link #LOCK} held. */
+    /**
+     * True once the device is open. Holds no lock of its own; call with {@link #LOCK} held.
+     */
     static boolean isReady() {
         return available;
     }
@@ -336,7 +380,9 @@ public final class Audio {
         }
     }
 
-    /** Opens the device on first use. Returns whether audio is available. */
+    /**
+     * Opens the device on first use. Returns whether audio is available.
+     */
     static boolean ensureInit() {
         synchronized (LOCK) {
             if (initTried) return available;
@@ -369,7 +415,9 @@ public final class Audio {
         }
     }
 
-    /** Audio thread: advances fades and refills streams. */
+    /**
+     * Audio thread: advances fades and refills streams.
+     */
     private static void run() {
         long last = System.nanoTime();
         Thread self = Thread.currentThread();
