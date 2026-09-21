@@ -1,0 +1,208 @@
+package me.piitex.engine.ui.menu;
+
+import me.piitex.engine.Window;
+import me.piitex.engine.input.MouseTracker;
+import me.piitex.engine.ui.Element;
+import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.theme.Theme;
+import me.piitex.engine.ui.theme.ThemeManager;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+
+/**
+ * A floating list of {@link MenuItem}s shown at a point in the window. It is the
+ * building block under both the right-click {@link Element#setContextMenu context menu}
+ * and each menu of a {@link MenuBarOverlay}, and is usable on its own through
+ * {@link #show}, {@link #showAtMouse}, and {@link #showBelow} for things like a "more"
+ * button.
+ * <p>
+ * Shown through {@link Window#showPopup}, so it paints above everything, dismisses on an
+ * outside click or Escape, and only one is ever open. Submenus cascade to the side inside
+ * that same popup. Keyboard: Up/Down move, Right/Enter open a submenu or choose, Left/
+ * Escape close one level, and the mouse works as expected (hovering a submenu row opens
+ * it after a short delay so the pointer can cross neighbouring rows on its way).
+ * <p>
+ * Colors come from the active {@link Theme} at the moment the menu opens (the field
+ * tokens the dropdown list uses, with {@link Theme#getSelection()} as the highlight);
+ * the setters here pin a color instead. A menu taller than the window is clamped to the
+ * top edge but does not scroll.
+ * <p>
+ * A PopupMenu is a plain object rather than an Element, so one can be built, kept, and
+ * shown as often as needed. Use {@link #onOpen} to refresh item state just before each
+ * show.
+ */
+public class PopupMenu {
+    private final List<MenuItem> items = new ArrayList<>();
+    private float fontSize = 15f;
+    private float itemHeight = 28f;
+    private float minWidth = 160f;
+    private Color backgroundColor;
+    private Color hoverColor;
+    private Color textColor;
+    private Color disabledTextColor;
+    private Color borderColor;
+    private Consumer<PopupMenu> onOpen;
+    private Runnable onClose;
+
+    private MenuPopup popup;
+    /** Set by {@link MenuBarOverlay}: called with -1/+1 when Left/Right is pressed with no submenu to enter or leave. */
+    IntConsumer sidewaysListener;
+    /** Set by {@link MenuBarOverlay} to learn when this menu closes, alongside the user's {@link #onClose}. */
+    Runnable closeListener;
+
+    public PopupMenu(MenuItem... items) {
+        Collections.addAll(this.items, items);
+    }
+
+    public PopupMenu add(MenuItem item) {
+        items.add(item);
+        return this;
+    }
+
+    /** Shorthand for {@code add(new MenuItem(label, action))}. */
+    public PopupMenu add(String label, Runnable action) {
+        return add(new MenuItem(label, action));
+    }
+
+    public PopupMenu addSeparator() {
+        return add(MenuItem.separator());
+    }
+
+    /** The live item list, which can be edited freely between shows. */
+    public List<MenuItem> getItems() {
+        return items;
+    }
+
+    public void clear() {
+        items.clear();
+    }
+
+    /** Runs just before every show, so items can be enabled/disabled or rebuilt to match current state. */
+    public void onOpen(Consumer<PopupMenu> onOpen) {
+        this.onOpen = onOpen;
+    }
+
+    /** Runs whenever the menu closes, by any route (choice, outside click, Escape). */
+    public void onClose(Runnable onClose) {
+        this.onClose = onClose;
+    }
+
+    /* Appearance */
+
+    public float getFontSize() {
+        return fontSize;
+    }
+
+    public void setFontSize(float fontSize) {
+        this.fontSize = fontSize;
+    }
+
+    public float getItemHeight() {
+        return itemHeight;
+    }
+
+    public void setItemHeight(float itemHeight) {
+        this.itemHeight = Math.max(1f, itemHeight);
+    }
+
+    public float getMinWidth() {
+        return minWidth;
+    }
+
+    public void setMinWidth(float minWidth) {
+        this.minWidth = minWidth;
+    }
+
+    /** Pins the panel background instead of following the theme; null goes back to the theme. */
+    public void setBackgroundColor(Color color) {
+        this.backgroundColor = color;
+    }
+
+    /** Pins the highlight behind the hovered/active row; null goes back to the theme. */
+    public void setHoverColor(Color color) {
+        this.hoverColor = color;
+    }
+
+    public void setTextColor(Color color) {
+        this.textColor = color;
+    }
+
+    public void setDisabledTextColor(Color color) {
+        this.disabledTextColor = color;
+    }
+
+    public void setBorderColor(Color color) {
+        this.borderColor = color;
+    }
+
+    Color background() {
+        return backgroundColor != null ? backgroundColor : ThemeManager.getCurrent().getFieldBackground();
+    }
+
+    Color highlight() {
+        return hoverColor != null ? hoverColor : ThemeManager.getCurrent().getSelection();
+    }
+
+    Color text() {
+        return textColor != null ? textColor : ThemeManager.getCurrent().getText();
+    }
+
+    Color disabledText() {
+        return disabledTextColor != null ? disabledTextColor : ThemeManager.getCurrent().getPlaceholderText();
+    }
+
+    Color border() {
+        return borderColor != null ? borderColor : ThemeManager.getCurrent().getFieldBorder();
+    }
+
+    Theme theme() {
+        return ThemeManager.getCurrent();
+    }
+
+    /* Showing */
+
+    public boolean isOpen() {
+        return popup != null;
+    }
+
+    /**
+     * Opens the menu with its top-left corner at ({@code x}, {@code y}) in window coordinates,
+     * pulled back inside the window if it would overflow the right or bottom edge. Replaces
+     * any popup already open. Does nothing with no items or no window.
+     */
+    public void show(Window window, double x, double y) {
+        if (window == null) return;
+        if (onOpen != null) onOpen.accept(this); // may populate an empty menu, so run before the emptiness check
+        if (items.isEmpty()) return;
+
+        MenuPopup p = new MenuPopup(this, window, x, y);
+        window.showPopup(p, () -> {
+            p.dispose();
+            if (popup == p) popup = null;
+            if (closeListener != null) closeListener.run();
+            if (onClose != null) onClose.run();
+        });
+        popup = p; // after showPopup, whose closePopup() of a previous menu would otherwise clear this
+    }
+
+    /** Opens the menu where the mouse pointer currently is, which is what a right-click handler needs. */
+    public void showAtMouse(Window window) {
+        show(window, MouseTracker.getX(), MouseTracker.getY());
+    }
+
+    /** Opens the menu just under {@code anchor} with their left edges aligned, as for a "more" button. */
+    public void showBelow(Element anchor) {
+        show(anchor.getWindow(), anchor.getAbsoluteX(), anchor.getAbsoluteY() + anchor.getHeight());
+    }
+
+    /** Closes the menu (and any open submenus) if it is showing. */
+    public void close() {
+        MenuPopup p = popup;
+        if (p == null) return;
+        p.close();
+    }
+}

@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="4c9a2e17-6a4f-4c56-8432-20d3d4776a42" name="Changes" comment="Removed some comments." />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Interface" />
+        <option value="AnnotationType" />
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;HackusatePvP&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/HackusatePvP/RenGL.git&quot;,
+    &quot;accountId&quot;: &quot;cd81848c-ba0d-4265-8199-352e6b7ba8aa&quot;
+  }
+}</component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Renderer.java" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/theme/Themeable.java" root0="SKIP_INSPECTION" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0
+}</component>
+  <component name="ProjectId" id="3JOdM448tFxQm2lfx0MpytIoZpp" />
+  <component name="ProjectViewState">
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Application.Demo.executor": "Run",
+    "Application.DownloadDemo.executor": "Run",
+    "Application.FileDialogDemo.executor": "Run",
+    "Application.Main.executor": "Run",
+    "Application.MenuDemo.executor": "Run",
+    "Application.PickerDemo.executor": "Run",
+    "Application.ResizableContainerDemo.executor": "Run",
+    "Application.SnapshotDemo.executor": "Run",
+    "Application.SplashDemo.executor": "Run",
+    "Maven.RenGL [clean,compile].executor": "Run",
+    "Maven.RenGL [clean,install].executor": "Run",
+    "Maven.RenGL [clean,package].executor": "Run",
+    "Maven.RenGL [clean].executor": "Run",
+    "Maven.RenGL [deploy].executor": "Run",
+    "Maven.RenGL [install].executor": "Run",
+    "Maven.RenGL [package].executor": "Run",
+    "Maven.RenGL [validate].executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Notification.DisplayName-DoNotAsk-vcs.git.repo.init.error": "Initializing repository…",
+    "Notification.DoNotAsk-vcs.git.repo.init.error": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "main",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/annon/IdeaProjects/RenGL copy/src/main/resources",
+    "node.js.detected.package.jshint": "true",
+    "node.js.selected.package.jshint": "",
+    "nodejs_package_manager_path": "npm",
+    "project.structure.last.edited": "Project",
+    "project.structure.proportion": "0.15",
+    "project.structure.side.proportion": "0.2",
+    "settings.editor.selected.configurable": "preferences.pluginManager"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/main/resources" />
+      <recent name="$PROJECT_DIR$/target/classes" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/docs/containers" />
+    </key>
+    <key name="CopyClassDialog.RECENTS_KEY">
+      <recent name="me.piitex.engine.gl.renderer" />
+      <recent name="me.piitex.engine" />
+      <recent name="me.piitex.engine.io" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Application.SnapshotDemo">
+    <configuration name="Demo" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.Demo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="DownloadDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.DownloadDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="FileDialogDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.FileDialogDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="MenuDemo" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.MenuDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="PickerDemo" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.PickerDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="ResizableContainerDemo" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.ResizableContainerDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SnapshotDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.SnapshotDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SplashDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.SplashDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <list>
+      <item itemvalue="Application.DownloadDemo" />
+      <item itemvalue="Application.FileDialogDemo" />
+      <item itemvalue="Application.SnapshotDemo" />
+      <item itemvalue="Application.SplashDemo" />
+      <item itemvalue="Application.PickerDemo" />
+      <item itemvalue="Application.ResizableContainerDemo" />
+      <item itemvalue="Application.Demo" />
+      <item itemvalue="Application.MenuDemo" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Application.PickerDemo" />
+        <item itemvalue="Application.MenuDemo" />
+        <item itemvalue="Application.Demo" />
+        <item itemvalue="Application.ResizableContainerDemo" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-34e2839f716b-intellij.indexing.shared.core-IU-262.9437.185" />
+        <option value="bundled-js-predefined-d6986cc7102b-4abd2a77f808-JavaScript-IU-262.9437.185" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="4c9a2e17-6a4f-4c56-8432-20d3d4776a42" name="Changes" comment="" />
+      <created>1789535997440</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1789535997440</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <ignored-roots>
+      <path value="$PROJECT_DIR$" />
+    </ignored-roots>
+    <MESSAGE value="Added ScrollingGradient and fixed issues with LinearGradient." />
+    <MESSAGE value="Added JavaDoc" />
+    <MESSAGE value="Added ScrollingGradient to Demo." />
+    <MESSAGE value="Expanding FormID range to support ~16 million addresses." />
+    <MESSAGE value="Removed some comments." />
+    <option name="LAST_COMMIT_MESSAGE" value="Removed some comments." />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
+  </component>
+</project>

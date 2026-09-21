@@ -1,0 +1,241 @@
+# Animation and transitions
+
+[Documentation](../README.md) › Animation
+
+RenGL animates through **transitions**: small self-contained objects you attach to any element with
+`playTransition`. The engine drives each one every frame until it says it is finished, then drops it.
+
+```java
+element.fadeIn(0.3f); // built-in convenience
+element.playTransition(new FadeTransition(0.5f, FadeTransition.Direction.IN)); // any Transition
+```
+
+Everything time-based in RenGL is driven by **delta time**: the seconds since the previous frame (capped at
+0.25 s). Multiply speeds by it and your animation runs at the same real-world speed on every machine.
+
+```java
+double x = 0, speedPerSecond = 200;
+float delta = 1f / 60f; // seconds since the last frame (from the update event)
+x += speedPerSecond * delta; // correct at 30, 60, or 240 fps
+```
+
+## The Transition interface
+
+```java nocompile
+public interface Transition {
+    void update(Element target, float delta); // advance and apply the effect
+    default void renderBackground(Renderer r, Element target) {} // draw BEHIND the element
+    void render(Renderer r, Element target); // draw ON TOP of the element
+    boolean isFinished(); // done? then it is dropped
+    default boolean stop() { return false; } // stop early; true if it was running
+}
+```
+
+Each frame, for every running transition:
+
+1. `update(target, delta)` runs during the update pass.
+2. `renderBackground` runs before the element draws.
+3. The element draws.
+4. `render` runs after the element draws, outside any opacity layer.
+
+When `isFinished()` returns `true`, the transition still gets **one more `render` call** at its final state and is
+then removed. Transitions are updated only while the element is enabled and the engine is updating it.
+
+### Stopping one early
+
+`transition.stop()` ends a transition where it is, leaving the element as it currently is and skipping any completion
+callback. It returns `true` if the transition was running and is now stopped, and `false` if it could not be stopped
+(already finished or stopped, or a custom transition that does not override `stop()`). It never throws.
+
+```java nocompile
+FadeTransition fade = panel.fadeOut(2f);
+boolean stopped = fade.stop(); // panel stays at whatever opacity it had reached
+```
+
+Prefer a transition to an `onUpdate` hook for animation. An element holds only **one** `onUpdate` listener
+(registering a second replaces the first), while it can run any number of transitions at once.
+
+## Fades
+
+```java
+element.fadeIn(0.3f); // transparent -> opaque
+element.fadeIn(0.3f, () -> System.out.println("shown")); // with a completion callback
+element.fadeOut(0.3f); // opaque -> transparent
+element.fadeOut(0.3f, () -> element.setEnabled(false));
+
+element.fadeIn(Color.BLACK, 1f); // dissolve out of a solid color
+element.fadeOut(Color.WHITE, 1f); // dissolve into a solid color
+```
+
+All eight overloads return the `FadeTransition`, so you can read `getProgress()` (0 to 1, regardless of
+direction), `getDirection()` (`FadeTransition.Direction.IN` or `OUT`) and `getColor()`.
+
+Things to know:
+
+- A fade changes the element's **overall opacity**. The entire element, including background, border, content and
+  all children, fades **together as one unit** (it is composited in an offscreen layer, so overlapping parts do not
+  double-blend).
+- A fully transparent element is **not drawn, but is still enabled and clickable.** Disable it in the completion
+  callback if it should stop interacting.
+- Starting a fade while another is running **replaces** the running one. Clicking mid-fade is safe.
+- The color versions crossfade with a solid color instead of plain transparency.
+- Layers are skipped at full opacity, so a normal, non-fading element pays nothing.
+
+You can also set a static opacity: `element.setOpacity(0.5f)`.
+
+### Chaining
+
+The completion callback runs on the frame the fade finishes, so chaining is just nesting:
+
+```java
+panel.fadeOut(0.25f, () -> {
+    panel.setEnabled(false);
+    next.setEnabled(true);
+    next.fadeIn(0.25f);
+});
+```
+
+## Easing
+
+`Easing` reshapes a linear 0-1 time into an eased 0-1 progress curve.
+
+```java
+Easing linear = Easing.LINEAR; // constant speed
+Easing easeIn = Easing.EASE_IN; // slow start, fast end (t * t)
+Easing easeOut = Easing.EASE_OUT; // fast start, slow settle
+Easing easeInOut = Easing.EASE_IN_OUT; // slow at both ends
+
+Easing custom = t -> t * t * t; // any lambda; should map 0 to 0 and 1 to 1
+float y = Easing.EASE_OUT.apply(0.5f);
+```
+
+It is a functional interface (`float apply(float t)`). `ProgressBarOverlay.animateTo` takes one. Your own
+transitions can use it the same way.
+
+## Built-in transitions used by widgets
+
+| Class | Used by | What it does |
+|---|---|---|
+| `FadeTransition` | `Element.fadeIn/fadeOut` | Fades opacity, optionally through a solid color |
+| `ProgressTransition` | `ProgressBarOverlay.animateTo` | Tweens a bar's progress with an `Easing`; `stop()` (or `cancel()`) stops it without firing its callback |
+| `SweepTransition` | `ProgressBarOverlay.setIndeterminate` | Looping bouncing segment; `stop()` ends it |
+| `StripeTransition` | `ProgressBarOverlay.setStripes` | Advances the stripe offset; the bar draws the stripes. `stop()` ends it |
+| `SpinTransition` | [`LoadingSpinnerOverlay`](../overlays/loading-spinner-overlay.md) | Looping ring of dots with a fading trail; `stop()` ends it |
+
+`SweepTransition` and `SpinTransition` never finish on their own. They draw from `render` rather than changing a
+property, which is the seam any custom "draw something animated over this element" effect uses.
+
+## Writing a custom transition
+
+Implement `Transition`, do the work in `update`, and return `true` from `isFinished()` when done.
+
+### A slide-in
+
+```java
+public class SlideIn implements Transition {
+    private final double fromX;
+    private final double toX;
+    private final float duration;
+    private final Easing easing;
+    private float elapsed;
+
+    public SlideIn(double fromX, double toX, float duration, Easing easing) {
+        this.fromX = fromX;
+        this.toX = toX;
+        this.duration = duration;
+        this.easing = easing;
+    }
+
+    @Override
+    public void update(Element target, float delta) {
+        elapsed = Math.min(duration, elapsed + delta);
+        double t = easing.apply(elapsed / duration);
+        double x = fromX + (toX - fromX) * t;
+        if (target instanceof Container container) {
+            container.moveTo(x, container.getY()); // respects drag bounds and collision
+        } else {
+            target.setX(x);
+        }
+    }
+
+    @Override
+    public void render(Renderer renderer, Element target) {
+        // nothing to draw; the effect is the movement
+    }
+
+    @Override
+    public boolean isFinished() {
+        return elapsed >= duration;
+    }
+}
+```
+
+Play it:
+
+```java
+panel.playTransition(new SlideIn(-300, 40, 0.4f, Easing.EASE_OUT));
+```
+
+Children are positioned relative to their container, so `setX` moves a container's contents too. `Container.moveTo` additionally applies drag bounds and collision.
+
+### A pulse drawn on top
+
+```java
+public class Pulse implements Transition {
+    private float time;
+
+    @Override
+    public void update(Element target, float delta) {
+        time += delta;
+    }
+
+    @Override
+    public void render(Renderer renderer, Element target) {
+        float a = 0.25f + 0.25f * (float) Math.sin(time * 5f);
+        renderer.drawBorder((float) target.getX(), (float) target.getY(),
+                (float) target.getWidth(), (float) target.getHeight(),
+                new Color(1f, 1f, 0.3f, a), 3f, target.getStyling().getCornerRadius());
+    }
+
+    @Override
+    public boolean isFinished() {
+        return false; // loops until the program ends
+    }
+}
+```
+
+```java
+button.playTransition(new Pulse());
+```
+
+## Animation without transitions
+
+For a one-off, an `onUpdate` hook and delta time is enough:
+
+```java
+container.onUpdate(event -> {
+    double x = container.getX() + 250 * event.getDelta();
+    if (x > window.getWindowOptions().getWidth() - container.getWidth()) x = 0;
+    container.moveTo(x, container.getY());
+});
+```
+
+## Animated paints and backgrounds
+
+Two other kinds of motion do not use transitions:
+
+- [`ScrollingGradient`](../styling/colors-and-paints.md#scrolling-animated-gradients) and other [`AnimatedPaint`](../styling/colors-and-paints.md#animatedpaint)s advance once per frame automatically. See
+  [Colors and paints](../styling/colors-and-paints.md).
+- [`Background`](../styling/backgrounds.md) effects have their own `update` and their own `fadeIn`/`fadeOut`. See
+  [Backgrounds](../styling/backgrounds.md).
+
+## Method reference
+
+| Member | Description |
+|---|---|
+| `Element.playTransition(Transition)` | Attach a transition |
+| `Element.isTransitioning()` | Whether any transition is running |
+| `Element.fadeIn/fadeOut(...)` | Convenience fades (8 overloads) |
+| `Element.getOpacity/setOpacity` | Whole-element opacity (0..1) |
+| `Transition` | `update`, `renderBackground` (default no-op), `render`, `isFinished`, `stop` (default returns `false`) |
+| `Easing` | `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_OUT`, `apply(float)` |
