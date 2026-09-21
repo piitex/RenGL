@@ -1,0 +1,100 @@
+# Layouts
+
+[Documentation](../README.md) › Layouts
+
+A **layout** is a [`Container`](../containers/container.md) that positions its own children automatically,
+so you do not set each child's `x`/`y` by hand. Everything else about a container (styling, theming, click
+and update hooks, transitions, dragging) works exactly as it does on a plain [`Container`](../containers/container.md).
+
+| Layout | Arranges children | Page |
+|---|---|---|
+| [`VerticalLayout`](vertical-layout.md) | in a single column, top to bottom | [vertical-layout.md](vertical-layout.md) |
+| [`HorizontalLayout`](horizontal-layout.md) | in a single row, left to right | [horizontal-layout.md](horizontal-layout.md) |
+| [`GridLayout`](grid-layout.md) | in a table with a fixed column count | [grid-layout.md](grid-layout.md) |
+| [`StackLayout`](stack-layout.md) | layered on top of one another | [stack-layout.md](stack-layout.md) |
+| [`SplitContainer`](../containers/split-container.md) | two resizable panes with a draggable divider | [split-container.md](../containers/split-container.md) |
+| [`TabContainer`](../containers/tab-container.md) | a tab strip that switches between pages of content | [tab-container.md](../containers/tab-container.md) |
+
+All of them live in `me.piitex.engine.ui.layout`.
+
+## How positioning works
+
+- A layout sets each child's `x`/`y` **every frame**, relative to the layout (in `update`) and once immediately on every `addElement`.
+  You do not call anything. Positioning a layout child by hand is pointless, because the layout overwrites it.
+- **Children keep their own size.** A layout positions children but does not resize them. ([`SplitContainer`](../containers/split-container.md)
+  and [`TabContainer`](../containers/tab-container.md) are the exceptions. They resize their panes to fill the available space.)
+- **A layout does not resize itself** to fit its children. Its width and height are what you gave the
+  constructor. Children that overflow just draw past the layout's box (and are clipped to it, since
+  containers clip by default).
+- Layouts nest freely. A [`HorizontalLayout`](horizontal-layout.md) inside a [`VerticalLayout`](vertical-layout.md) is repositioned along with its
+  parent, and repositions its own children.
+- `relayout()` recomputes positions immediately. Call it if you change a child's size and need the new
+  positions before the next frame.
+
+## Shared settings
+
+Every layout inherits these from `Layout`:
+
+| Setting | Meaning | Default |
+|---|---|---|
+| `setSpacing(float)` | Gap between children along the layout's axis | `0` |
+| `setPadding(float)` | Inset between the layout's edges and its children | `0` |
+| `setAlignment(Alignment)` | Where the children sit within the layout (see below) | `TOP_LEFT` |
+
+`Layout.Alignment` is one setting with nine positions: `TOP_LEFT`, `TOP_CENTER`, `TOP_RIGHT`, `CENTER_LEFT`,
+`CENTER`, `CENTER_RIGHT`, `BOTTOM_LEFT`, `BOTTOM_CENTER`, `BOTTOM_RIGHT`.
+
+- `VerticalLayout` / `HorizontalLayout`: places the whole block of children within the padded area.
+- `GridLayout`: places each child within its cell.
+- `StackLayout`: places each child within the layout.
+
+## Styling a layout
+
+A layout is an [`Element`](../core/element.md), and a fresh one is an **opaque white box with a white border**. That is usually
+not what you want.
+
+```java
+// Invisible layout that only positions things:
+layout.getStyling().setBackgroundColor(Color.TRANSPARENT);
+layout.getStyling().setHoverColor(Color.TRANSPARENT);
+layout.getStyling().setBorderThickness(0f);
+
+// Or a themed panel:
+layout.useTheme();
+```
+
+`useTheme()` opts the layout into the current [theme](../styling/theming.md) (panel background, border,
+radius). This is what the demo does for its main form panel.
+
+## A form built from nested layouts
+
+```java
+VerticalLayout form = new VerticalLayout(100, 100, 360, 260);
+form.setSpacing(12);
+form.setPadding(16);
+form.useTheme();
+
+HorizontalLayout nameRow = new HorizontalLayout(320, 28);
+nameRow.setSpacing(8);
+nameRow.getStyling().setBackgroundColor(Color.TRANSPARENT);
+nameRow.getStyling().setHoverColor(Color.TRANSPARENT);
+nameRow.getStyling().setBorderThickness(0f);
+nameRow.addElement(new TextFieldOverlay(150, 28));
+nameRow.addElement(new TextFieldOverlay(150, 28));
+
+form.addElement(new TextOverlay("Name", 14f, Color.BLACK));
+form.addElement(nameRow);
+form.addElement(new ButtonOverlay("Save", 120, 32));
+
+root.addElement(form);
+```
+
+## Choosing a layout
+
+- A list of things, one per line: [`VerticalLayout`](vertical-layout.md).
+- A toolbar or a checkbox next to its label: [`HorizontalLayout`](horizontal-layout.md).
+- Label/field pairs that must line up in columns: [`GridLayout`](grid-layout.md) with two columns.
+- A badge on an icon, or a spinner over a button: [`StackLayout`](stack-layout.md).
+- Resizable side-by-side or stacked panes: [`SplitContainer`](../containers/split-container.md).
+- Several pages of content, one visible at a time: [`TabContainer`](../containers/tab-container.md).
+- Content taller than its box: put a layout inside a [`ScrollContainer`](../containers/scroll-container.md).

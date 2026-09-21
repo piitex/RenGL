@@ -1,0 +1,141 @@
+package me.piitex.engine.ui.overlays;
+
+import me.piitex.engine.gl.renderer.Renderer;
+import me.piitex.engine.ui.CursorMode;
+import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.theme.Overridable;
+import me.piitex.engine.ui.theme.Theme;
+import me.piitex.engine.ui.theme.ThemeManager;
+import me.piitex.engine.ui.theme.Themeable;
+
+/**
+ * A clickable, mutually exclusive circular selector, filling the role JavaFX's and
+ * AtlantaFX's {@code RadioButton} plays within a {@link RadioGroup}. The ring is this
+ * Element's own {@link me.piitex.engine.ui.color.Styling}, meaning the background,
+ * hover, and border field tokens {@link CheckBoxOverlay}'s box also uses, rounded into
+ * a full circle by the constructor. The inner dot is drawn on top while
+ * {@link #isSelected()}, using {@link Theme#getText()}, the same token and contrast
+ * pairing {@link CheckBoxOverlay}'s checkmark uses against that field background.
+ * <p>
+ * Selection is exclusive only within a {@link RadioGroup}, so add every mutually
+ * exclusive RadioButtonOverlay to the same group through {@link RadioGroup#add}. A
+ * button not in any group selects itself in isolation when clicked, and nothing
+ * deselects it afterward.
+ * <p>
+ * This class registers its own {@link #onMouseClick} handler to select itself. Calling
+ * {@code onMouseClick(...)} afterward replaces that handler and stops the radio button
+ * from selecting, the same trade-off {@link ButtonOverlay} and {@link CheckBoxOverlay}
+ * document for their own click handlers. Use {@link RadioGroup#onChange} to react to
+ * selection changes.
+ */
+public class RadioButtonOverlay extends Overlay implements Themeable {
+    private boolean selected;
+    private RadioGroup group;
+    private final Overridable<Color> dotColor = new Overridable<>(Color.BLACK);
+
+    /**
+     * An unselected 18x18 circle.
+     */
+    public RadioButtonOverlay() {
+        this(18);
+    }
+
+    /**
+     * An unselected {@code size}x{@code size} circle.
+     */
+    public RadioButtonOverlay(double size) {
+        setWidth(size);
+        setHeight(size);
+        setCursorMode(CursorMode.POINTER);
+        // A square box rounded at half its own size renders as a full circle rather
+        // than a rounded rect. That is a shape invariant, not a themed property, so
+        // cornerRadius is pinned through the plain setter rather than
+        // applyThemeCornerRadius (see Overridable). Theme#getCornerRadius() stays
+        // reserved for the square controls that use it: ButtonOverlay,
+        // TextFieldOverlay, and a themed Container.
+        getStyling().setCornerRadius((float) (size / 2));
+        onMouseClick(event -> select());
+        ThemeManager.register(this);
+    }
+
+    /**
+     * Whether this button is currently the selected member of its {@link RadioGroup}, or, when ungrouped, whether it has ever been clicked. See the class docs.
+     */
+    public boolean isSelected() {
+        return selected;
+    }
+
+    /**
+     * Selects this button. If it belongs to a {@link RadioGroup}, every other member is
+     * deselected and {@link RadioGroup#onChange} fires. If it is ungrouped, only this
+     * button is selected. A no-op if it is already selected. This is what a click runs.
+     */
+    public void select() {
+        if (selected) return;
+        if (group != null) {
+            group.select(this);
+        } else {
+            selected = true;
+        }
+    }
+
+    /** Package-private: only {@link RadioGroup} sets this directly, so it can select the chosen button and deselect its siblings in one pass. Everything else goes through {@link #select()}. */
+    void setSelectedInternal(boolean selected) {
+        this.selected = selected;
+    }
+
+    /**
+     * The {@link RadioGroup} this button belongs to, or null if it is ungrouped. See the class docs. This is set through {@link RadioGroup#add} rather than directly.
+     */
+    public RadioGroup getGroup() {
+        return group;
+    }
+
+    /** Package-private: only {@link RadioGroup#add} and {@link RadioGroup#remove} set this. */
+    void setGroupInternal(RadioGroup group) {
+        this.group = group;
+    }
+
+    public Color getDotColor() {
+        return dotColor.get();
+    }
+
+    /** Pins the inner dot color against every future theme switch. See {@link Overridable}. */
+    public void setDotColor(Color dotColor) {
+        this.dotColor.set(dotColor);
+    }
+
+    /**
+     * Themes the ring, meaning the background, hover, and border field tokens
+     * {@link CheckBoxOverlay} also uses, along with the inner dot color, as a baseline.
+     * It skips whichever property {@link #setDotColor} or {@link #getStyling()}'s own
+     * setters have already pinned. See {@link Overridable}. It does not touch the corner
+     * radius, which is pinned at construction to keep this circular. See the
+     * constructor.
+     */
+    @Override
+    public void applyTheme(Theme theme) {
+        getStyling().applyThemeBackgroundColor(theme.getFieldBackground());
+        getStyling().applyThemeHoverColor(theme.getFieldHoverBackground());
+        getStyling().applyThemeBorderColor(theme.getFieldBorder());
+        getStyling().applyThemeBorderThickness(theme.getBorderThickness());
+        dotColor.applyTheme(theme.getText());
+    }
+
+    /**
+     * Draws the ring through {@code super.render(...)}, using the background, hover, and border styling that the constructor rounds into a circle, then draws a filled inner dot while {@link #isSelected()}.
+     */
+    @Override
+    public void render(Renderer renderer) {
+        if (!isEnabled()) return;
+
+        super.render(renderer);
+
+        if (selected) {
+            float centerX = (float) (getX() + getWidth() / 2.0);
+            float centerY = (float) (getY() + getHeight() / 2.0);
+            float radius = (float) (Math.min(getWidth(), getHeight()) / 2.0) * 0.45f;
+            renderer.drawCircle(centerX, centerY, radius, dotColor.get());
+        }
+    }
+}
