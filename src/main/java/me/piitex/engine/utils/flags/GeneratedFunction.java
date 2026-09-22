@@ -13,6 +13,8 @@ import java.lang.annotation.Target;
 @Target(value = ElementType.METHOD)
 public @interface GeneratedFunction {
     String prompter();
+
     String model();
+
     boolean reviewed();
 }

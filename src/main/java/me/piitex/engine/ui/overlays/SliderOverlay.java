@@ -435,7 +435,9 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         tickLabelFontDirty = true;
     }
 
-    /** {label size, tick label size}. */
+    /**
+     * {label size, tick label size}.
+     */
     @Override
     public float[] getFontSizes() {
         return new float[]{labelFontSize, tickLabelFontSize};

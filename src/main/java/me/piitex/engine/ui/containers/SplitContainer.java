@@ -33,9 +33,13 @@ import java.util.function.Consumer;
 public class SplitContainer extends Layout {
 
     public enum Orientation {
-        /** Panes side by side, divided by a vertical bar. */
+        /**
+         * Panes side by side, divided by a vertical bar.
+         */
         HORIZONTAL,
-        /** Panes stacked top over bottom, divided by a horizontal bar. */
+        /**
+         * Panes stacked top over bottom, divided by a horizontal bar.
+         */
         VERTICAL
     }
 
@@ -73,22 +77,30 @@ public class SplitContainer extends Layout {
         return orientation;
     }
 
-    /** The left (or top) pane, or null. */
+    /**
+     * The left (or top) pane, or null.
+     */
     public Element getFirst() {
         return getElements().get(FIRST);
     }
 
-    /** The right (or bottom) pane, or null. */
+    /**
+     * The right (or bottom) pane, or null.
+     */
     public Element getSecond() {
         return getElements().get(SECOND);
     }
 
-    /** Sets the left (or top) pane, replacing any existing one. */
+    /**
+     * Sets the left (or top) pane, replacing any existing one.
+     */
     public void setFirst(Element pane) {
         setPane(FIRST, pane);
     }
 
-    /** Sets the right (or bottom) pane, replacing any existing one. */
+    /**
+     * Sets the right (or bottom) pane, replacing any existing one.
+     */
     public void setSecond(Element pane) {
         setPane(SECOND, pane);
     }
@@ -104,7 +116,9 @@ public class SplitContainer extends Layout {
         super.addElement(pane, slot); // Layout's index overload: stores it and relayouts
     }
 
-    /** Fills the first pane, then the second; a third call throws, since a SplitContainer holds exactly two. */
+    /**
+     * Fills the first pane, then the second; a third call throws, since a SplitContainer holds exactly two.
+     */
     @Override
     public void addElement(Element element) {
         if (getFirst() == null) {
@@ -121,12 +135,16 @@ public class SplitContainer extends Layout {
         throw new UnsupportedOperationException("Use setFirst/setSecond");
     }
 
-    /** Where the divider sits, as a fraction of the space between the panes (0 = all second pane, 1 = all first), before {@link #getMinPaneSize()} limits it. */
+    /**
+     * Where the divider sits, as a fraction of the space between the panes (0 = all second pane, 1 = all first), before {@link #getMinPaneSize()} limits it.
+     */
     public double getDividerPosition() {
         return dividerPosition;
     }
 
-    /** Does NOT fire {@link #onDividerMoved}; only user drags do. */
+    /**
+     * Does NOT fire {@link #onDividerMoved}; only user drags do.
+     */
     public void setDividerPosition(double position) {
         dividerPosition = Math.max(0, Math.min(1, position));
         relayout();
@@ -136,7 +154,9 @@ public class SplitContainer extends Layout {
         return dividerThickness;
     }
 
-    /** Width of the divider bar, and so of its grab area. */
+    /**
+     * Width of the divider bar, and so of its grab area.
+     */
     public void setDividerThickness(float thickness) {
         dividerThickness = Math.max(1f, thickness);
         relayout();
@@ -146,24 +166,32 @@ public class SplitContainer extends Layout {
         return minPaneSize;
     }
 
-    /** The smallest size, in points along the split axis, either pane can be dragged down to. */
+    /**
+     * The smallest size, in points along the split axis, either pane can be dragged down to.
+     */
     public void setMinPaneSize(float minPaneSize) {
         this.minPaneSize = Math.max(0f, minPaneSize);
         relayout();
     }
 
-    /** Registers the callback fired with the new {@link #getDividerPosition()} as the user drags the divider. Only one is held at a time. */
+    /**
+     * Registers the callback fired with the new {@link #getDividerPosition()} as the user drags the divider. Only one is held at a time.
+     */
     public void onDividerMoved(Consumer<Double> onDividerMoved) {
         this.onDividerMoved = onDividerMoved;
     }
 
-    /** Space along the split axis available to the two panes, i.e. without the divider or padding. */
+    /**
+     * Space along the split axis available to the two panes, i.e. without the divider or padding.
+     */
     private double available() {
         double total = orientation == Orientation.HORIZONTAL ? getWidth() : getHeight();
         return Math.max(0, total - 2 * getPadding() - dividerThickness);
     }
 
-    /** Size of the first pane along the split axis, after the minimum-size limits. */
+    /**
+     * Size of the first pane along the split axis, after the minimum-size limits.
+     */
     private double firstSize() {
         double available = available();
         double min = Math.min(minPaneSize, available / 2.0);
@@ -201,7 +229,9 @@ public class SplitContainer extends Layout {
         element.setY(y);
     }
 
-    /** The draggable bar between the panes. A child like any other, so hit-testing, hover and the resize cursor need no special handling. */
+    /**
+     * The draggable bar between the panes. A child like any other, so hit-testing, hover and the resize cursor need no special handling.
+     */
     private final class Divider extends Overlay implements Themeable, Draggable {
         private double grabOffset;
 

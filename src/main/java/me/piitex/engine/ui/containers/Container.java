@@ -90,12 +90,16 @@ public class Container extends Element implements Themeable, Draggable {
         }
     }
 
-    /** As {@link #addElements(Collection)}: {@code container.addElements(title, field, button)}. */
+    /**
+     * As {@link #addElements(Collection)}: {@code container.addElements(title, field, button)}.
+     */
     public void addElements(Element... children) {
         addElements(Arrays.asList(children));
     }
 
-    /** As {@link #addElement(Element)}, at a specific draw index (replacing whatever is there). */
+    /**
+     * As {@link #addElement(Element)}, at a specific draw index (replacing whatever is there).
+     */
     public void addElement(Element child, int index) {
         elements.put(index, child);
         adopt(child);
@@ -229,7 +233,9 @@ public class Container extends Element implements Themeable, Draggable {
         return draggable;
     }
 
-    /** A plain Container only takes a drag if it opted in via {@link #setDraggable}; otherwise the press falls through to its parent. */
+    /**
+     * A plain Container only takes a drag if it opted in via {@link #setDraggable}; otherwise the press falls through to its parent.
+     */
     @Override
     public boolean canDrag(double x, double y) {
         return draggable;
@@ -522,17 +528,23 @@ public class Container extends Element implements Themeable, Draggable {
         return getAbsoluteX() + childOffsetX();
     }
 
-    /** As {@link #getContentOriginX()}, for y. */
+    /**
+     * As {@link #getContentOriginX()}, for y.
+     */
     public double getContentOriginY() {
         return getAbsoluteY() + childOffsetY();
     }
 
-    /** How far this container shifts its children's space from its own top-left, horizontally. 0, except for a scrolled container. */
+    /**
+     * How far this container shifts its children's space from its own top-left, horizontally. 0, except for a scrolled container.
+     */
     protected double childOffsetX() {
         return 0;
     }
 
-    /** As {@link #childOffsetX()}, for y. */
+    /**
+     * As {@link #childOffsetX()}, for y.
+     */
     protected double childOffsetY() {
         return 0;
     }

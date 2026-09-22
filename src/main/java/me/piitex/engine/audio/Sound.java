@@ -58,14 +58,16 @@ public final class Sound implements AutoCloseable {
     /**
      * Loads a sound from a file path or classpath resource.
      *
-     * @throws java.io.UncheckedIOException     if the file cannot be found or read
-     * @throws IllegalArgumentException if the format is unsupported or the file is corrupt
+     * @throws java.io.UncheckedIOException if the file cannot be found or read
+     * @throws IllegalArgumentException     if the format is unsupported or the file is corrupt
      */
     public static Sound load(String path) {
         return create(path, AudioDecoder.read(path));
     }
 
-    /** Loads a sound through an {@link AssetManager}, so it can come out of a mounted {@code .pak}. */
+    /**
+     * Loads a sound through an {@link AssetManager}, so it can come out of a mounted {@code .pak}.
+     */
     public static Sound load(AssetManager assets, String name) {
         return create(name, AudioDecoder.read(assets, name));
     }
@@ -92,7 +94,9 @@ public final class Sound implements AutoCloseable {
         return new Sound("tone:" + frequency + "Hz", Audio.isAvailable() ? new Pcm(samples, 1, rate) : null);
     }
 
-    /** Sets the channel this sound plays on (default {@link AudioChannel#SFX}). */
+    /**
+     * Sets the channel this sound plays on (default {@link AudioChannel#SFX}).
+     */
     public Sound channel(AudioChannel channel) {
         this.channel = channel;
         return this;
@@ -130,42 +134,58 @@ public final class Sound implements AutoCloseable {
         return this;
     }
 
-    /** Loops from {@code startSeconds} to the end of the sound, playing everything before it once as an intro. */
+    /**
+     * Loops from {@code startSeconds} to the end of the sound, playing everything before it once as an intro.
+     */
     public Sound loopFrom(float startSeconds) {
         return loopPoints(startSeconds, 0f);
     }
 
-    /** Plays once at a position in the world. See {@link Playback#position}. Starts already positioned, so there is no moment at the wrong place. */
+    /**
+     * Plays once at a position in the world. See {@link Playback#position}. Starts already positioned, so there is no moment at the wrong place.
+     */
     public Playback playAt(float x, float y, float z) {
         return start(1f, false, new float[]{x, y, z});
     }
 
-    /** {@link #playAt(float, float, float)} for a 2D game: plays at (x, y) on the plane {@code z = 0}. */
+    /**
+     * {@link #playAt(float, float, float)} for a 2D game: plays at (x, y) on the plane {@code z = 0}.
+     */
     public Playback playAt(float x, float y) {
         return playAt(x, y, 0f);
     }
 
-    /** Plays once at a position in the world, at {@code volume}. */
+    /**
+     * Plays once at a position in the world, at {@code volume}.
+     */
     public Playback playAt(float x, float y, float z, float volume) {
         return start(volume, false, new float[]{x, y, z});
     }
 
-    /** Plays repeatedly at a position in the world, for example a campfire or a waterfall. */
+    /**
+     * Plays repeatedly at a position in the world, for example a campfire or a waterfall.
+     */
     public Playback loopAt(float x, float y, float z) {
         return start(1f, true, new float[]{x, y, z});
     }
 
-    /** Plays once at full volume. */
+    /**
+     * Plays once at full volume.
+     */
     public Playback play() {
         return play(1f);
     }
 
-    /** Plays once at {@code volume}. */
+    /**
+     * Plays once at {@code volume}.
+     */
     public Playback play(float volume) {
         return start(volume, false);
     }
 
-    /** Plays repeatedly until you {@link Playback#stop()} it. */
+    /**
+     * Plays repeatedly until you {@link Playback#stop()} it.
+     */
     public Playback loop() {
         return start(1f, true);
     }
@@ -180,7 +200,9 @@ public final class Sound implements AutoCloseable {
         return Playback.start(new Playback.Spec(this, channel, buffer, channels, null, volume, loop, 0, 0, position));
     }
 
-    /** Length in seconds (0 when there is no audio device). */
+    /**
+     * Length in seconds (0 when there is no audio device).
+     */
     public float getDuration() {
         return duration;
     }
@@ -189,7 +211,9 @@ public final class Sound implements AutoCloseable {
         return name;
     }
 
-    /** Stops every playback of this sound and frees its memory. The sound cannot be played afterwards. */
+    /**
+     * Stops every playback of this sound and frees its memory. The sound cannot be played afterwards.
+     */
     @Override
     public void close() {
         synchronized (Audio.LOCK) {

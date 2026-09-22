@@ -5,8 +5,7 @@ import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.overlays.ProgressBarOverlay;
 
 /**
- * The looping "working on it, no idea how long" animation for a {@link
- * ProgressBarOverlay}: a segment of the fill color bounces back and forth across the
+ * The looping animation for a {@link ProgressBarOverlay}: a segment of the fill color bounces back and forth across the
  * track, reversing direction at each end, until {@link #stop()} is called. Reached through {@link
  * ProgressBarOverlay#setIndeterminate}. Unlike most transitions it never finishes on
  * its own, and it draws its own segment in {@link #render} rather than changing the
@@ -21,7 +20,9 @@ public class SweepTransition implements Transition {
     private float elapsed;
     private boolean finished;
 
-    /** @param periodSeconds how long one full there-and-back cycle takes */
+    /**
+     * @param periodSeconds how long one full there-and-back cycle takes
+     */
     public SweepTransition(float periodSeconds) {
         this.periodSeconds = Math.max(0.05f, periodSeconds);
     }

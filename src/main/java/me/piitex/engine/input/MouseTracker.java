@@ -23,7 +23,8 @@ public final class MouseTracker {
     private static volatile double y = -1;
     private static volatile boolean inWindow = false;
 
-    private MouseTracker() {}
+    private MouseTracker() {
+    }
 
     static void update(double x, double y) {
         MouseTracker.x = x;
@@ -40,17 +41,23 @@ public final class MouseTracker {
         MouseTracker.inWindow = inWindow;
     }
 
-    /** The mouse's last known X, in absolute window coordinates in logical points. The value is stale, and should not be used, while {@link #isInWindow()} is false. */
+    /**
+     * The mouse's last known X, in absolute window coordinates in logical points. The value is stale, and should not be used, while {@link #isInWindow()} is false.
+     */
     public static double getX() {
         return x;
     }
 
-    /** As {@link #getX()}, for Y. */
+    /**
+     * As {@link #getX()}, for Y.
+     */
     public static double getY() {
         return y;
     }
 
-    /** Whether the mouse is currently over the window at all. See {@link me.piitex.engine.input.InputEvent.Type#MOUSE_ENTER}. This goes false once the mouse leaves, so a stale last-known position does not keep acting as though the mouse is still there. */
+    /**
+     * Whether the mouse is currently over the window at all. See {@link me.piitex.engine.input.InputEvent.Type#MOUSE_ENTER}. This goes false once the mouse leaves, so a stale last-known position does not keep acting as though the mouse is still there.
+     */
     public static boolean isInWindow() {
         return inWindow;
     }

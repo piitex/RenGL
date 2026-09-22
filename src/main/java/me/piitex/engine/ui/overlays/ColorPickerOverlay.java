@@ -76,28 +76,38 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
 
     /* Value */
 
-    /** The current color, converted from hue/saturation/brightness/opacity. */
+    /**
+     * The current color, converted from hue/saturation/brightness/opacity.
+     */
     public Color getColor() {
         return fromHsv(hue, sat, val, alphaEnabled ? alpha : 1f);
     }
 
-    /** Sets the color programmatically. {@link #onChange} does not fire. Alpha is ignored while opacity is disabled. */
+    /**
+     * Sets the color programmatically. {@link #onChange} does not fire. Alpha is ignored while opacity is disabled.
+     */
     public void setColor(Color color) {
         setFromColor(color == null ? Color.BLACK : color);
         if (popup != null) popup.syncHex();
     }
 
-    /** Fired with the new color whenever the USER changes it (dragging, typing a hex code, picking a preset). One listener is held at a time. */
+    /**
+     * Fired with the new color whenever the USER changes it (dragging, typing a hex code, picking a preset). One listener is held at a time.
+     */
     public void onChange(Consumer<Color> onChange) {
         this.onChange = onChange;
     }
 
-    /** {@code "#RRGGBB"}, or {@code "#RRGGBBAA"} when opacity is enabled and the color is translucent. */
+    /**
+     * {@code "#RRGGBB"}, or {@code "#RRGGBBAA"} when opacity is enabled and the color is translucent.
+     */
     public String getHex() {
         return toHex(getColor(), alphaEnabled);
     }
 
-    /** Whether the panel offers an opacity bar and accepts 8-digit hex codes. Default true. */
+    /**
+     * Whether the panel offers an opacity bar and accepts 8-digit hex codes. Default true.
+     */
     public void setAlphaEnabled(boolean alphaEnabled) {
         this.alphaEnabled = alphaEnabled;
         close();
@@ -107,12 +117,16 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         return alphaEnabled;
     }
 
-    /** Whether the closed box shows the hex code next to the swatch (otherwise the swatch fills the box). Default true. */
+    /**
+     * Whether the closed box shows the hex code next to the swatch (otherwise the swatch fills the box). Default true.
+     */
     public void setShowHex(boolean showHex) {
         this.showHex = showHex;
     }
 
-    /** The swatches in the panel's bottom rows; pass none to hide the presets. Eight per row. */
+    /**
+     * The swatches in the panel's bottom rows; pass none to hide the presets. Eight per row.
+     */
     public void setPresets(Color... presets) {
         this.presets = presets == null ? new Color[0] : presets.clone();
         close();
@@ -152,7 +166,8 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
     }
 
     public void toggleOpen() {
-        if (isOpen()) close(); else open();
+        if (isOpen()) close();
+        else open();
     }
 
     public void open() {
@@ -197,18 +212,38 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         float x = c * (1f - Math.abs(hp % 2f - 1f));
         float r = 0, g = 0, b = 0;
         switch ((int) hp) {
-            case 0 -> { r = c; g = x; }
-            case 1 -> { r = x; g = c; }
-            case 2 -> { g = c; b = x; }
-            case 3 -> { g = x; b = c; }
-            case 4 -> { r = x; b = c; }
-            default -> { r = c; b = x; }
+            case 0 -> {
+                r = c;
+                g = x;
+            }
+            case 1 -> {
+                r = x;
+                g = c;
+            }
+            case 2 -> {
+                g = c;
+                b = x;
+            }
+            case 3 -> {
+                g = x;
+                b = c;
+            }
+            case 4 -> {
+                r = x;
+                b = c;
+            }
+            default -> {
+                r = c;
+                b = x;
+            }
         }
         float m = v - c;
         return new Color(r + m, g + m, b + m, a);
     }
 
-    /** Sets HSV from {@code c}, keeping the current hue (and saturation) where the color is grey or black and so has none. */
+    /**
+     * Sets HSV from {@code c}, keeping the current hue (and saturation) where the color is grey or black and so has none.
+     */
     private void setFromColor(Color c) {
         float max = Math.max(c.getR(), Math.max(c.getG(), c.getB()));
         float min = Math.min(c.getR(), Math.min(c.getG(), c.getB()));
@@ -233,7 +268,9 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         return s;
     }
 
-    /** Parses {@code #RGB}, {@code #RRGGBB} or {@code #RRGGBBAA} (the '#' is optional), or null if it is not one of those. */
+    /**
+     * Parses {@code #RGB}, {@code #RRGGBB} or {@code #RRGGBBAA} (the '#' is optional), or null if it is not one of those.
+     */
     static Color parseHex(String text, boolean allowAlpha) {
         if (text == null) return null;
         String s = text.trim();
@@ -258,7 +295,9 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         return null;
     }
 
-    /** A light and dark grey checkerboard, clipped to the rectangle, which a translucent color is shown over. */
+    /**
+     * A light and dark grey checkerboard, clipped to the rectangle, which a translucent color is shown over.
+     */
     static void drawChecker(Renderer renderer, float x, float y, float w, float h) {
         Color light = new Color(0.97f, 0.97f, 0.97f, 1f), dark = new Color(0.78f, 0.78f, 0.78f, 1f);
         float cell = 6f;
@@ -333,13 +372,16 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
     /* Keyboard */
 
     @Override
-    public void onFocusGained() {}
+    public void onFocusGained() {
+    }
 
     @Override
-    public void onFocusLost() {}
+    public void onFocusLost() {
+    }
 
     @Override
-    public void onCharTyped(int codepoint) {}
+    public void onCharTyped(int codepoint) {
+    }
 
     @Override
     public void onKeyPressed(int key, int action, int mods) {
@@ -470,7 +512,9 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
                 }
                 case HUE -> owner.hue = fx * 360f;
                 case ALPHA -> owner.alpha = fx;
-                default -> { return; }
+                default -> {
+                    return;
+                }
             }
             syncHex();
             owner.changedByUser();

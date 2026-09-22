@@ -71,7 +71,9 @@ public class MenuBarOverlay extends Overlay implements Themeable {
         ThemeManager.register(this);
     }
 
-    /** A 28px-tall bar of the given width. */
+    /**
+     * A 28px-tall bar of the given width.
+     */
     public MenuBarOverlay(double width) {
         this(width, 28);
     }
@@ -90,12 +92,16 @@ public class MenuBarOverlay extends Overlay implements Themeable {
         return useNativeMenuBar;
     }
 
-    /** True when this bar is currently shown in the system menu bar instead of the window. */
+    /**
+     * True when this bar is currently shown in the system menu bar instead of the window.
+     */
     public boolean isNative() {
         return useNativeMenuBar && NativeMenuBar.isSupported();
     }
 
-    /** 0 while {@link #isNative() native}, since the bar takes no room in the window then. */
+    /**
+     * 0 while {@link #isNative() native}, since the bar takes no room in the window then.
+     */
     @Override
     public double getHeight() {
         return isNative() ? 0 : super.getHeight();
@@ -108,7 +114,9 @@ public class MenuBarOverlay extends Overlay implements Themeable {
 
     /* Menus */
 
-    /** Adds a menu under {@code title}. Returns {@code menu} for chaining. */
+    /**
+     * Adds a menu under {@code title}. Returns {@code menu} for chaining.
+     */
     public PopupMenu addMenu(String title, PopupMenu menu) {
         titles.add(title == null ? "" : title);
         menus.add(menu);
@@ -120,7 +128,9 @@ public class MenuBarOverlay extends Overlay implements Themeable {
         return menu;
     }
 
-    /** Adds a menu under {@code title} built from {@code items}. */
+    /**
+     * Adds a menu under {@code title} built from {@code items}.
+     */
     public PopupMenu addMenu(String title, MenuItem... items) {
         return addMenu(title, new PopupMenu(items));
     }
@@ -129,7 +139,9 @@ public class MenuBarOverlay extends Overlay implements Themeable {
         return java.util.Collections.unmodifiableList(menus);
     }
 
-    /** Index of the menu currently open, or -1. */
+    /**
+     * Index of the menu currently open, or -1.
+     */
     public int getOpenIndex() {
         return openIndex;
     }
@@ -180,7 +192,9 @@ public class MenuBarOverlay extends Overlay implements Themeable {
         layoutDirty = false;
     }
 
-    /** Index of the title under window X (assuming the pointer's vertical position is already known to be on the bar), or -1. */
+    /**
+     * Index of the title under window X (assuming the pointer's vertical position is already known to be on the bar), or -1.
+     */
     private int titleAt(double windowX) {
         ensureLayout();
         double local = windowX - getAbsoluteX();
@@ -218,7 +232,9 @@ public class MenuBarOverlay extends Overlay implements Themeable {
         return textColor.get();
     }
 
-    /** Pins the title color against theme switches. See {@link Overridable}. */
+    /**
+     * Pins the title color against theme switches. See {@link Overridable}.
+     */
     public void setTextColor(Color color) {
         textColor.set(color);
     }

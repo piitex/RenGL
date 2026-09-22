@@ -9,9 +9,13 @@ import me.piitex.engine.ui.containers.ResizableContainer;
  * slider's label and tick labels) exposes all of them, in a fixed order.
  */
 public interface FontScalable {
-    /** The current size of each font this element draws with, in points. Same length and order every call. */
+    /**
+     * The current size of each font this element draws with, in points. Same length and order every call.
+     */
     float[] getFontSizes();
 
-    /** Sets the sizes, in the same order as {@link #getFontSizes()}. */
+    /**
+     * Sets the sizes, in the same order as {@link #getFontSizes()}.
+     */
     void setFontSizes(float[] sizes);
 }

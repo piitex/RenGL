@@ -11,10 +11,14 @@ import me.piitex.engine.Window;
  */
 public interface Focusable {
 
-    /** Called once when this Element becomes {@link Window#getFocusedElement()}. */
+    /**
+     * Called once when this Element becomes {@link Window#getFocusedElement()}.
+     */
     void onFocusGained();
 
-    /** Called once when focus moves away from this Element (including on click-away). */
+    /**
+     * Called once when focus moves away from this Element (including on click-away).
+     */
     void onFocusLost();
 
     /**

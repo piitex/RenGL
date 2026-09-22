@@ -46,11 +46,16 @@ import static org.lwjgl.util.nfd.NativeFileDialog.*;
 public final class FileDialog {
     private static final Logger log = LogManager.getLogger("Engine");
 
-    /** What the dialog is for. */
+    /**
+     * What the dialog is for.
+     */
     private enum Kind {OPEN, OPEN_MULTIPLE, SAVE, PICK_FOLDER}
 
-    /** A filter row in the dialog's type drop-down: a display name plus the extensions it matches, without dots. */
-    private record Filter(String name, String extensions) {}
+    /**
+     * A filter row in the dialog's type drop-down: a display name plus the extensions it matches, without dots.
+     */
+    private record Filter(String name, String extensions) {
+    }
 
     private static final Queue<FileDialog> requests = new ConcurrentLinkedQueue<>();
     private static final Queue<Runnable> results = new ConcurrentLinkedQueue<>();
@@ -71,22 +76,30 @@ public final class FileDialog {
         this.kind = kind;
     }
 
-    /** A dialog that picks one existing file. */
+    /**
+     * A dialog that picks one existing file.
+     */
     public static FileDialog open() {
         return new FileDialog(Kind.OPEN);
     }
 
-    /** A dialog that picks one or more existing files. */
+    /**
+     * A dialog that picks one or more existing files.
+     */
     public static FileDialog openMultiple() {
         return new FileDialog(Kind.OPEN_MULTIPLE);
     }
 
-    /** A dialog that picks where to write a file. The file may not exist yet. */
+    /**
+     * A dialog that picks where to write a file. The file may not exist yet.
+     */
     public static FileDialog save() {
         return new FileDialog(Kind.SAVE);
     }
 
-    /** A dialog that picks a folder. */
+    /**
+     * A dialog that picks a folder.
+     */
     public static FileDialog pickFolder() {
         return new FileDialog(Kind.PICK_FOLDER);
     }
@@ -103,13 +116,17 @@ public final class FileDialog {
         return this;
     }
 
-    /** The folder the dialog opens in. Should exist; otherwise the OS picks. */
+    /**
+     * The folder the dialog opens in. Should exist; otherwise the OS picks.
+     */
     public FileDialog defaultPath(Path path) {
         this.defaultPath = path == null ? null : path.toAbsolutePath().toString();
         return this;
     }
 
-    /** The suggested file name in a {@link #save()} dialog. Ignored by the other kinds. */
+    /**
+     * The suggested file name in a {@link #save()} dialog. Ignored by the other kinds.
+     */
     public FileDialog defaultName(String name) {
         this.defaultName = name;
         return this;
@@ -124,13 +141,17 @@ public final class FileDialog {
         return this;
     }
 
-    /** Called once with every chosen path. For the single-choice kinds the list has one entry. */
+    /**
+     * Called once with every chosen path. For the single-choice kinds the list has one entry.
+     */
     public FileDialog onSelectAll(Consumer<List<Path>> onSelectAll) {
         this.onSelectAll = onSelectAll;
         return this;
     }
 
-    /** Called when the user closes the dialog without choosing. */
+    /**
+     * Called when the user closes the dialog without choosing.
+     */
     public FileDialog onCancel(Runnable onCancel) {
         this.onCancel = onCancel;
         return this;
@@ -145,17 +166,23 @@ public final class FileDialog {
         return this;
     }
 
-    /** Queues the dialog and returns immediately. Safe to call from any thread. */
+    /**
+     * Queues the dialog and returns immediately. Safe to call from any thread.
+     */
     public void show() {
         requests.add(this);
     }
 
-    /** True from the moment a dialog opens until its result has been queued for delivery. */
+    /**
+     * True from the moment a dialog opens until its result has been queued for delivery.
+     */
     public static boolean isShowing() {
         return showing;
     }
 
-    /** Main thread only. Opens the next queued dialog, blocking until the user closes it. Call once per Engine main-loop iteration. */
+    /**
+     * Main thread only. Opens the next queued dialog, blocking until the user closes it. Call once per Engine main-loop iteration.
+     */
     public static void pump() {
         FileDialog next = requests.poll();
         if (next == null) return;
@@ -168,7 +195,9 @@ public final class FileDialog {
         }
     }
 
-    /** Render thread only. Runs the callbacks of dialogs that have finished. Call once per frame. */
+    /**
+     * Render thread only. Runs the callbacks of dialogs that have finished. Call once per frame.
+     */
     public static void drainCallbacks() {
         Runnable result;
         while ((result = results.poll()) != null) {
@@ -176,7 +205,9 @@ public final class FileDialog {
         }
     }
 
-    /** Main thread only. Releases the native library. Call once after the main loop ends. */
+    /**
+     * Main thread only. Releases the native library. Call once after the main loop ends.
+     */
     public static void shutdown() {
         if (initialised) {
             NFD_Quit();
@@ -253,7 +284,9 @@ public final class FileDialog {
         return paths;
     }
 
-    /** Queues the selection callbacks for the render thread. */
+    /**
+     * Queues the selection callbacks for the render thread.
+     */
     private void deliver(List<Path> paths) {
         if (onSelectAll != null) {
             results.add(() -> onSelectAll.accept(paths));

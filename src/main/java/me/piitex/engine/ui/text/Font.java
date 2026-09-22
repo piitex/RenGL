@@ -39,9 +39,12 @@ public final class Font {
     private static volatile Typeface defaultTypeface;
     private static File defaultFont;
 
-    private Font() {}
+    private Font() {
+    }
 
-    /** Loads (or returns the cached) Typeface for the given font file. */
+    /**
+     * Loads (or returns the cached) Typeface for the given font file.
+     */
     public static Typeface load(File fontFile) {
         String key = fontFile.getAbsolutePath();
         return cache.computeIfAbsent(key, path -> {
@@ -56,14 +59,17 @@ public final class Font {
         });
     }
 
-    /** Loads (or returns the cached) Typeface for the given path string. */
+    /**
+     * Loads (or returns the cached) Typeface for the given path string.
+     */
     public static Typeface load(String fontFilePath) {
         return load(new File(fontFilePath));
     }
 
-    /** The platform's default typeface, loaded once and reused. */
+    /**
+     * The platform's default typeface, loaded once and reused.
+     */
     // In FontCache.java
-
     public static Typeface systemDefault() {
         Typeface t = defaultTypeface;
         if (t == null) {

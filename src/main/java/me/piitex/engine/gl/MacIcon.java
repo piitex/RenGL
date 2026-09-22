@@ -29,7 +29,9 @@ final class MacIcon {
     private MacIcon() {
     }
 
-    /** {@code encoded} is an image file's bytes (PNG, JPEG, ...); AppKit does the decoding. */
+    /**
+     * {@code encoded} is an image file's bytes (PNG, JPEG, ...); AppKit does the decoding.
+     */
     static void set(byte[] encoded) {
         ByteBuffer buffer = memAlloc(encoded.length).put(encoded).flip();
         try {

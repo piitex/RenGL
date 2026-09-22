@@ -19,16 +19,22 @@ import java.util.Deque;
 public final class TextUndoHistory {
     private static final long COALESCE_WINDOW_NANOS = 1_000_000_000L;
 
-    /** What produced an edit; only the first three kinds ever merge with a previous edit. */
+    /**
+     * What produced an edit; only the first three kinds ever merge with a previous edit.
+     */
     public enum EditKind {
         TYPING,
         BACKSPACE,
         DELETE,
-        /** Paste, cut, replacing a selection, and similar edits. Each is always its own undo step. */
+        /**
+         * Paste, cut, replacing a selection, and similar edits. Each is always its own undo step.
+         */
         OTHER
     }
 
-    /** The editable state needed to put a field back exactly as it was. {@code selectionAnchor} is -1 when nothing was selected. */
+    /**
+     * The editable state needed to put a field back exactly as it was. {@code selectionAnchor} is -1 when nothing was selected.
+     */
     public record Snapshot(String text, int cursorIndex, int selectionAnchor) {
     }
 
@@ -103,7 +109,9 @@ public final class TextUndoHistory {
         seal();
     }
 
-    /** Maximum number of undo steps kept; the oldest are dropped first. Defaults to 200. */
+    /**
+     * Maximum number of undo steps kept; the oldest are dropped first. Defaults to 200.
+     */
     public int getLimit() {
         return limit;
     }

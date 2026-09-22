@@ -86,7 +86,9 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     private float blinkTimer = 0f;
     private float scrollOffset = 0f;
 
-    /** Consecutive presses landing within the double-click time and distance of each other: 1 for a fresh click, 2 for a double, 3 or more for a triple. */
+    /**
+     * Consecutive presses landing within the double-click time and distance of each other: 1 for a fresh click, 2 for a double, 3 or more for a triple.
+     */
     private int clickCount = 0;
     private long lastPressTimeNanos = Long.MIN_VALUE;
     private double lastPressX, lastPressY;
@@ -376,7 +378,9 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         return new TextUndoHistory.Snapshot(text.toString(), cursorIndex, selectionAnchor);
     }
 
-    /** Must be called just before every user edit mutates {@link #text}. */
+    /**
+     * Must be called just before every user edit mutates {@link #text}.
+     */
     private void recordEdit(EditKind kind) {
         if (!options.isUndoEnabled()) {
             history.clear();
@@ -523,7 +527,8 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
                     return;
                 }
                 case GLFW.GLFW_KEY_Z -> {
-                    if ((mods & GLFW.GLFW_MOD_SHIFT) != 0) redo(); else undo();
+                    if ((mods & GLFW.GLFW_MOD_SHIFT) != 0) redo();
+                    else undo();
                     return;
                 }
                 case GLFW.GLFW_KEY_Y -> {
@@ -743,7 +748,9 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         this.password = password;
     }
 
-    /** Whether the user is blocked from changing the text. See {@link TextEditingOptions#isReadOnly()}. */
+    /**
+     * Whether the user is blocked from changing the text. See {@link TextEditingOptions#isReadOnly()}.
+     */
     public boolean isReadOnly() {
         return options.isReadOnly();
     }
@@ -752,7 +759,9 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         options.setReadOnly(readOnly);
     }
 
-    /** Whether Ctrl/Cmd+Z and Ctrl/Cmd+Y are active. See {@link TextEditingOptions#isUndoEnabled()}. Turning it off also forgets the existing history. */
+    /**
+     * Whether Ctrl/Cmd+Z and Ctrl/Cmd+Y are active. See {@link TextEditingOptions#isUndoEnabled()}. Turning it off also forgets the existing history.
+     */
     public boolean isUndoEnabled() {
         return options.isUndoEnabled();
     }
@@ -772,7 +781,9 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         return history;
     }
 
-    /** What's drawn/measured on screen: the text itself, or one {@code *} per char in {@link #isPassword() password} mode (so every index into it still lines up with {@link #text}). */
+    /**
+     * What's drawn/measured on screen: the text itself, or one {@code *} per char in {@link #isPassword() password} mode (so every index into it still lines up with {@link #text}).
+     */
     private String displayText() {
         return password ? "*".repeat(text.length()) : text.toString();
     }
@@ -799,7 +810,9 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         this.rightAligned = rightAligned;
     }
 
-    /** How far right-alignment shifts the text from its left-aligned position; 0 when off, empty, or overflowing. */
+    /**
+     * How far right-alignment shifts the text from its left-aligned position; 0 when off, empty, or overflowing.
+     */
     private float alignShift() {
         float fraction = textAlignH(rightAligned ? 1f : 0f);
         if (fraction == 0f || text.length() == 0) return 0f;

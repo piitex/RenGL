@@ -27,9 +27,12 @@ public final class ThemeManager {
     private static volatile Theme current = new LightTheme();
     private static final Set<Themeable> registry = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
-    private ThemeManager() {}
+    private ThemeManager() {
+    }
 
-    /** The theme every {@link Themeable} Element is currently styled with. Never null. */
+    /**
+     * The theme every {@link Themeable} Element is currently styled with. Never null.
+     */
     public static Theme getCurrent() {
         return current;
     }
@@ -51,7 +54,9 @@ public final class ThemeManager {
         }
     }
 
-    /** Registers {@code themeable} for future {@link #setCurrent} calls, and immediately applies the current theme to it. A no-op if {@code themeable} is null. */
+    /**
+     * Registers {@code themeable} for future {@link #setCurrent} calls, and immediately applies the current theme to it. A no-op if {@code themeable} is null.
+     */
     public static void register(Themeable themeable) {
         if (themeable == null) return;
         registry.add(themeable);

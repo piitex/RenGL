@@ -16,7 +16,9 @@ public class InputProcessor {
     private double absoluteMouseX = 0.0;
     private double absoluteMouseY = 0.0;
     private boolean mouseInWindow = true;
-    /** The Element a Draggable press started on, or null between drags. See {@link Draggable}. */
+    /**
+     * The Element a Draggable press started on, or null between drags. See {@link Draggable}.
+     */
     private Element dragTarget;
 
     public void processEvents(Window window) {
@@ -109,7 +111,9 @@ public class InputProcessor {
         }
     }
 
-    /** Sets hovered on {@code container} and its whole subtree: true for {@code hit} and every Container on the path to it, false for everything else. Returns whether {@code container} itself is on that path. */
+    /**
+     * Sets hovered on {@code container} and its whole subtree: true for {@code hit} and every Container on the path to it, false for everything else. Returns whether {@code container} itself is on that path.
+     */
     private boolean applyHover(Container container, Element hit) {
         boolean onPath = container == hit;
         for (Element child : container.getElements().values()) {

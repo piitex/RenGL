@@ -9,7 +9,9 @@ public class InputEvent {
         KEY,
         MOUSE_ENTER,
         CHAR,
-        /** Mouse wheel or trackpad scroll. {@code x} and {@code y} hold the raw GLFW xoffset and yoffset rather than a cursor position. */
+        /**
+         * Mouse wheel or trackpad scroll. {@code x} and {@code y} hold the raw GLFW xoffset and yoffset rather than a cursor position.
+         */
         SCROLL
     }
 
@@ -19,7 +21,9 @@ public class InputEvent {
     public final double y;
     public final int buttonOrKey;
     public final int action;
-    /** GLFW modifier bitmask (GLFW_MOD_SHIFT/CONTROL/ALT/SUPER). Only meaningful for KEY events; 0 for every other type. */
+    /**
+     * GLFW modifier bitmask (GLFW_MOD_SHIFT/CONTROL/ALT/SUPER). Only meaningful for KEY events; 0 for every other type.
+     */
     public final int mods;
 
     public InputEvent(Type type, long timestampNanos, double x, double y, int buttonOrKey, int action) {

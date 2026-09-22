@@ -103,7 +103,9 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
         return checkColor.get();
     }
 
-    /** Pins the checkmark color against every future theme switch. See {@link Overridable}. */
+    /**
+     * Pins the checkmark color against every future theme switch. See {@link Overridable}.
+     */
     public void setCheckColor(Color checkColor) {
         this.checkColor.set(checkColor);
     }

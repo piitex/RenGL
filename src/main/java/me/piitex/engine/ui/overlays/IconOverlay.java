@@ -44,7 +44,9 @@ public class IconOverlay extends ImageOverlay {
         super(IconCache.loadResource(asset.resourcePath(), (int) Math.round(width), (int) Math.round(height)), width, height);
     }
 
-    /** Same as {@link #IconOverlay(IconAsset, double, double)}, sized to {@link #DEFAULT_SIZE}x{@link #DEFAULT_SIZE}. */
+    /**
+     * Same as {@link #IconOverlay(IconAsset, double, double)}, sized to {@link #DEFAULT_SIZE}x{@link #DEFAULT_SIZE}.
+     */
     public IconOverlay(IconAsset asset) {
         this(asset, DEFAULT_SIZE, DEFAULT_SIZE);
     }

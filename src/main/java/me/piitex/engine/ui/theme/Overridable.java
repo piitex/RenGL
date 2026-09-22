@@ -41,20 +41,26 @@ public final class Overridable<T> {
         return value;
     }
 
-    /** An explicit, application-driven set. This pins {@code value} against every future {@link #applyTheme} call. */
+    /**
+     * An explicit, application-driven set. This pins {@code value} against every future {@link #applyTheme} call.
+     */
     public void set(T value) {
         this.value = value;
         this.explicit = true;
     }
 
-    /** A Theme-driven set. This is a no-op once {@link #set} has pinned this property. */
+    /**
+     * A Theme-driven set. This is a no-op once {@link #set} has pinned this property.
+     */
     public void applyTheme(T value) {
         if (!explicit) {
             this.value = value;
         }
     }
 
-    /** Whether {@link #set} has pinned this property against theme changes. */
+    /**
+     * Whether {@link #set} has pinned this property against theme changes.
+     */
     public boolean isExplicit() {
         return explicit;
     }

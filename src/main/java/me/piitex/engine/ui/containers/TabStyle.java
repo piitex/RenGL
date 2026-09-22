@@ -34,7 +34,9 @@ public class TabStyle {
     private final Overridable<Color> indicatorColor = new Overridable<>(Color.BLUE);
     private final Overridable<Color> dividerColor = new Overridable<>(new Color(0.5f, 0.5f, 0.5f, 1f));
 
-    /** Point size of the tab titles. */
+    /**
+     * Point size of the tab titles.
+     */
     public float getFontSize() {
         return fontSize;
     }
@@ -55,7 +57,9 @@ public class TabStyle {
         this.tabHeight = Math.max(0f, tabHeight);
     }
 
-    /** Space above and below a title when {@link #getTabHeight()} is automatic. */
+    /**
+     * Space above and below a title when {@link #getTabHeight()} is automatic.
+     */
     public float getVerticalPadding() {
         return verticalPadding;
     }
@@ -64,7 +68,9 @@ public class TabStyle {
         this.verticalPadding = Math.max(0f, verticalPadding);
     }
 
-    /** Space between a tab's edge and its title (and its close button). */
+    /**
+     * Space between a tab's edge and its title (and its close button).
+     */
     public float getHorizontalPadding() {
         return horizontalPadding;
     }
@@ -73,7 +79,9 @@ public class TabStyle {
         this.horizontalPadding = Math.max(0f, horizontalPadding);
     }
 
-    /** Tabs are never squeezed narrower than this when the strip runs out of room; past that the strip scrolls. */
+    /**
+     * Tabs are never squeezed narrower than this when the strip runs out of room; past that the strip scrolls.
+     */
     public float getMinTabWidth() {
         return minTabWidth;
     }
@@ -82,7 +90,9 @@ public class TabStyle {
         this.minTabWidth = Math.max(0f, minTabWidth);
     }
 
-    /** A tab never grows wider than this, however long its title is; longer titles are cut with an ellipsis. */
+    /**
+     * A tab never grows wider than this, however long its title is; longer titles are cut with an ellipsis.
+     */
     public float getMaxTabWidth() {
         return maxTabWidth;
     }
@@ -91,7 +101,9 @@ public class TabStyle {
         this.maxTabWidth = Math.max(0f, maxTabWidth);
     }
 
-    /** Gap between neighbouring tabs. */
+    /**
+     * Gap between neighbouring tabs.
+     */
     public float getSpacing() {
         return spacing;
     }
@@ -100,7 +112,9 @@ public class TabStyle {
         this.spacing = Math.max(0f, spacing);
     }
 
-    /** Corner radius of a tab's hover/selected fill. */
+    /**
+     * Corner radius of a tab's hover/selected fill.
+     */
     public float getCornerRadius() {
         return cornerRadius;
     }
@@ -109,7 +123,9 @@ public class TabStyle {
         this.cornerRadius = Math.max(0f, cornerRadius);
     }
 
-    /** Thickness of the bar under (or over, for a bottom strip) the selected tab. 0 hides it. */
+    /**
+     * Thickness of the bar under (or over, for a bottom strip) the selected tab. 0 hides it.
+     */
     public float getIndicatorThickness() {
         return indicatorThickness;
     }
@@ -118,7 +134,9 @@ public class TabStyle {
         this.indicatorThickness = Math.max(0f, indicatorThickness);
     }
 
-    /** Side length of the square hit area of a closable tab's close button; the drawn cross is smaller. */
+    /**
+     * Side length of the square hit area of a closable tab's close button; the drawn cross is smaller.
+     */
     public float getCloseButtonSize() {
         return closeButtonSize;
     }
@@ -127,7 +145,9 @@ public class TabStyle {
         this.closeButtonSize = Math.max(0f, closeButtonSize);
     }
 
-    /** Width of each of the two arrow buttons that appear at the ends of the strip when the tabs do not fit. */
+    /**
+     * Width of each of the two arrow buttons that appear at the ends of the strip when the tabs do not fit.
+     */
     public float getScrollButtonWidth() {
         return scrollButtonWidth;
     }
@@ -136,7 +156,9 @@ public class TabStyle {
         this.scrollButtonWidth = Math.max(0f, scrollButtonWidth);
     }
 
-    /** Fill of an idle, unselected tab. */
+    /**
+     * Fill of an idle, unselected tab.
+     */
     public Color getTabColor() {
         return tabColor.get();
     }
@@ -145,7 +167,9 @@ public class TabStyle {
         tabColor.set(color);
     }
 
-    /** Fill of an unselected tab while the cursor is over it. */
+    /**
+     * Fill of an unselected tab while the cursor is over it.
+     */
     public Color getHoverColor() {
         return hoverColor.get();
     }
@@ -154,7 +178,9 @@ public class TabStyle {
         hoverColor.set(color);
     }
 
-    /** Fill of the selected tab. */
+    /**
+     * Fill of the selected tab.
+     */
     public Color getSelectedColor() {
         return selectedColor.get();
     }
@@ -163,7 +189,9 @@ public class TabStyle {
         selectedColor.set(color);
     }
 
-    /** Title color of unselected tabs. Follows the theme's text color, same as the selected tab's, so only the fill changes on selection. */
+    /**
+     * Title color of unselected tabs. Follows the theme's text color, same as the selected tab's, so only the fill changes on selection.
+     */
     public Color getTextColor() {
         return textColor.get();
     }
@@ -172,7 +200,9 @@ public class TabStyle {
         textColor.set(color);
     }
 
-    /** Title color of the selected tab. */
+    /**
+     * Title color of the selected tab.
+     */
     public Color getSelectedTextColor() {
         return selectedTextColor.get();
     }
@@ -181,7 +211,9 @@ public class TabStyle {
         selectedTextColor.set(color);
     }
 
-    /** Color of the bar marking the selected tab, and of the focus outline around it. */
+    /**
+     * Color of the bar marking the selected tab, and of the focus outline around it.
+     */
     public Color getIndicatorColor() {
         return indicatorColor.get();
     }
@@ -190,7 +222,9 @@ public class TabStyle {
         indicatorColor.set(color);
     }
 
-    /** Color of the thin line separating the strip from the content. */
+    /**
+     * Color of the thin line separating the strip from the content.
+     */
     public Color getDividerColor() {
         return dividerColor.get();
     }
@@ -199,7 +233,9 @@ public class TabStyle {
         dividerColor.set(color);
     }
 
-    /** Applies {@code theme} to every color that hasn't been set explicitly. See {@link Overridable}. */
+    /**
+     * Applies {@code theme} to every color that hasn't been set explicitly. See {@link Overridable}.
+     */
     void applyTheme(Theme theme) {
         Color selection = theme.getSelection();
         tabColor.applyTheme(Color.TRANSPARENT);

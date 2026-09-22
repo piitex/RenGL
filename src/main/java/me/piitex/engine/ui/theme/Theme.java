@@ -41,10 +41,14 @@ public interface Theme {
      */
     Color getText();
 
-    /** A {@link me.piitex.engine.ui.overlays.TextFieldOverlay}'s background at rest. */
+    /**
+     * A {@link me.piitex.engine.ui.overlays.TextFieldOverlay}'s background at rest.
+     */
     Color getFieldBackground();
 
-    /** A {@link me.piitex.engine.ui.overlays.TextFieldOverlay}'s background while hovered. */
+    /**
+     * A {@link me.piitex.engine.ui.overlays.TextFieldOverlay}'s background while hovered.
+     */
     Color getFieldHoverBackground();
 
     Color getFieldBorder();
@@ -55,10 +59,14 @@ public interface Theme {
 
     Color getSelection();
 
-    /** A {@link ButtonOverlay}'s background at rest. */
+    /**
+     * A {@link ButtonOverlay}'s background at rest.
+     */
     Color getButtonBackground();
 
-    /** A {@link ButtonOverlay}'s background while hovered. */
+    /**
+     * A {@link ButtonOverlay}'s background while hovered.
+     */
     Color getButtonHoverBackground();
 
     Color getButtonBorder();
@@ -92,13 +100,19 @@ public interface Theme {
      */
     Paint getWindowBackground();
 
-    /** Shared corner radius for every themed control's box. */
+    /**
+     * Shared corner radius for every themed control's box.
+     */
     float getCornerRadius();
 
-    /** Shared border thickness for every themed control's box. */
+    /**
+     * Shared border thickness for every themed control's box.
+     */
     float getBorderThickness();
 
-    /** Fill of the bubble {@link me.piitex.engine.ui.Element#getTooltip()} shows. */
+    /**
+     * Fill of the bubble {@link me.piitex.engine.ui.Element#getTooltip()} shows.
+     */
     Color getTooltipBackground();
 
     Color getTooltipBorder();

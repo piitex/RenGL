@@ -47,7 +47,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
     private String cachedText;
     private List<TextSpan> cachedSpans = List.of();
 
-    /** How long the text must sit unchanged before it is sent to the checker. */
+    /**
+     * How long the text must sit unchanged before it is sent to the checker.
+     */
     public static final long CHECK_DEBOUNCE_MS = 400;
 
     private static final ScheduledExecutorService CHECK_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -59,7 +61,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
     private static final Color SPELLING_COLOR = new Color(0.9f, 0.2f, 0.2f, 1f);
     private static final Color GRAMMAR_COLOR = new Color(0.25f, 0.5f, 0.95f, 1f);
 
-    /** The text a batch of issues was computed for, together with those issues, so stale ones can be told apart. */
+    /**
+     * The text a batch of issues was computed for, together with those issues, so stale ones can be told apart.
+     */
     private record CheckResult(String text, List<TextIssue> issues) {
     }
 
@@ -102,7 +106,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         return styler;
     }
 
-    /** Sets the styler, or clears it when passed null. See the class docs. This takes effect on the next render; spans are recomputed lazily whenever the text has changed since the last draw, rather than on every frame. */
+    /**
+     * Sets the styler, or clears it when passed null. See the class docs. This takes effect on the next render; spans are recomputed lazily whenever the text has changed since the last draw, rather than on every frame.
+     */
     public void setStyler(TextSpanStyler styler) {
         this.styler = styler;
         cachedText = null; // force a recompute on the next draw regardless of whether the text itself changed
@@ -112,7 +118,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         return checker;
     }
 
-    /** Sets the spell and grammar checker, or clears it when passed null. See the class docs. */
+    /**
+     * Sets the spell and grammar checker, or clears it when passed null. See the class docs.
+     */
     public void setChecker(TextChecker checker) {
         this.checker = checker;
         this.checkResult = new CheckResult("", List.of());
@@ -134,7 +142,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         if (activeChecker != null) drawIssues(renderer, lineText, lineStart, x, y, font);
     }
 
-    /** The still-valid issue whose word is at window-space (x, y), or null. This uses the same staleness rule as {@link #drawIssues}. */
+    /**
+     * The still-valid issue whose word is at window-space (x, y), or null. This uses the same staleness rule as {@link #drawIssues}.
+     */
     private TextIssue issueAt(double x, double y) {
         CheckResult result = checkResult;
         String current = getText();
@@ -149,7 +159,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         return null;
     }
 
-    /** Shows the correction list for a flagged word under (x, y), if there is one. */
+    /**
+     * Shows the correction list for a flagged word under (x, y), if there is one.
+     */
     private void openSuggestions(double x, double y) {
         TextChecker activeChecker = checker;
         Window window = getWindow();
@@ -160,7 +172,8 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
 
         String current = getText();
         List<String> suggestions = activeChecker.suggest(current, issue);
-        if (suggestions.size() > SuggestionPopup.MAX_ROWS) suggestions = suggestions.subList(0, SuggestionPopup.MAX_ROWS);
+        if (suggestions.size() > SuggestionPopup.MAX_ROWS)
+            suggestions = suggestions.subList(0, SuggestionPopup.MAX_ROWS);
 
         SuggestionPopup popup = new SuggestionPopup(issue, current.substring(issue.start(), issue.end()), suggestions);
         float w = popup.preferredWidth();
@@ -253,7 +266,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         }
     }
 
-    /** (Re)starts the debounce timer whenever the text differs from the last text handed to the checker. */
+    /**
+     * (Re)starts the debounce timer whenever the text differs from the last text handed to the checker.
+     */
     private void scheduleCheckIfNeeded(TextChecker activeChecker, String text) {
         if (text.equals(lastScheduledText)) return;
         lastScheduledText = text;
@@ -280,7 +295,8 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
             if (issue.end() <= lineStart || issue.start() >= lineEnd) continue;
             // Results lag edits by the debounce, so only draw an issue whose word is still exactly what was checked.
             int len = issue.end() - issue.start();
-            if (issue.end() > current.length() || !current.regionMatches(issue.start(), result.text(), issue.start(), len)) continue;
+            if (issue.end() > current.length() || !current.regionMatches(issue.start(), result.text(), issue.start(), len))
+                continue;
 
             int start = Math.max(issue.start(), lineStart);
             int end = Math.min(issue.end(), lineEnd);
@@ -290,7 +306,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         }
     }
 
-    /** A zigzag underline from {@code x0} to {@code x1} centered on {@code y}. */
+    /**
+     * A zigzag underline from {@code x0} to {@code x1} centered on {@code y}.
+     */
     private void drawSquiggle(Renderer renderer, float x0, float x1, float y, Color color) {
         final float step = 2.5f, amplitude = 1.5f;
         float px = x0, py = y;
@@ -351,7 +369,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         }
     }
 
-    /** Draws {@code run} at {@code x} (a no-op if empty or {@code color} is null, matching every other draw-if-non-null convention in this engine) and returns the x position right after it, for the next run to continue from. */
+    /**
+     * Draws {@code run} at {@code x} (a no-op if empty or {@code color} is null, matching every other draw-if-non-null convention in this engine) and returns the x position right after it, for the next run to continue from.
+     */
     private float drawRun(Renderer renderer, String run, float x, float y, org.jetbrains.skia.Font font, Paint color) {
         if (run.isEmpty() || color == null) return x;
         renderer.drawText(run, x, y, font, color);

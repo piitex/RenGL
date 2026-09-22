@@ -28,9 +28,12 @@ public final class TooltipManager {
     private static org.jetbrains.skia.Font font;
     private static Typeface fontTypeface;
 
-    private TooltipManager() {}
+    private TooltipManager() {
+    }
 
-    /** Advances the hover timer; restarts it whenever the tooltip-bearing Element under the cursor changes. */
+    /**
+     * Advances the hover timer; restarts it whenever the tooltip-bearing Element under the cursor changes.
+     */
     public static void update(Window window, float delta) {
         Element found = MouseTracker.isInWindow() ? findTarget(window) : null;
         if (found != target) {
@@ -41,7 +44,9 @@ public final class TooltipManager {
         }
     }
 
-    /** Draws the current tooltip, if its delay has elapsed. */
+    /**
+     * Draws the current tooltip, if its delay has elapsed.
+     */
     public static void render(Renderer renderer, Window window) {
         if (target == null || hoverTime < target.getTooltipDelay()) return;
         String text = target.getTooltip();
@@ -83,7 +88,9 @@ public final class TooltipManager {
         return font;
     }
 
-    /** The deepest hovered Element with a tooltip, in the topmost Container that has one. */
+    /**
+     * The deepest hovered Element with a tooltip, in the topmost Container that has one.
+     */
     private static Element findTarget(Window window) {
         Element best = null;
         for (Container container : window.getContainers().values()) {

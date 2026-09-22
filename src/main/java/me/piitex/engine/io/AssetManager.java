@@ -23,6 +23,7 @@ public class AssetManager {
 
     /**
      * Mounts a .pak (zip) file into the virtual file system.
+     *
      * @return The newly created {@link FileSystem} for the asset pack.
      */
     public FileSystem mountPack(String fallBackDirectory) throws IOException {
@@ -120,7 +121,9 @@ public class AssetManager {
         }
     }
 
-    /** Like {@link #loadConfig}, but returns an empty config if the file does not exist yet. */
+    /**
+     * Like {@link #loadConfig}, but returns an empty config if the file does not exist yet.
+     */
     public Config loadConfigOrEmpty(String assetName) {
         try {
             resolveConfigPath(assetName);

@@ -73,7 +73,9 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         items.add(item);
     }
 
-    /** Replaces every item and clears the selection (without firing {@link #onSelect}). */
+    /**
+     * Replaces every item and clears the selection (without firing {@link #onSelect}).
+     */
     public void setItems(Collection<? extends T> newItems) {
         close();
         items.clear();
@@ -85,7 +87,9 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         return java.util.Collections.unmodifiableList(items);
     }
 
-    /** The chosen item, or null if nothing is selected. */
+    /**
+     * The chosen item, or null if nothing is selected.
+     */
     public T getSelected() {
         return selectedIndex >= 0 && selectedIndex < items.size() ? items.get(selectedIndex) : null;
     }
@@ -94,32 +98,44 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         return selectedIndex;
     }
 
-    /** Selects {@code item} (or clears with null / an unknown item) without firing {@link #onSelect}. */
+    /**
+     * Selects {@code item} (or clears with null / an unknown item) without firing {@link #onSelect}.
+     */
     public void setSelected(T item) {
         selectedIndex = item == null ? -1 : items.indexOf(item);
     }
 
-    /** Selects by index, or clears if out of range, without firing {@link #onSelect}. */
+    /**
+     * Selects by index, or clears if out of range, without firing {@link #onSelect}.
+     */
     public void setSelectedIndex(int index) {
         selectedIndex = index >= 0 && index < items.size() ? index : -1;
     }
 
-    /** Fired with the new item whenever the USER picks one (click or keyboard), not on programmatic setSelected. */
+    /**
+     * Fired with the new item whenever the USER picks one (click or keyboard), not on programmatic setSelected.
+     */
     public void onSelect(Consumer<T> onSelect) {
         this.onSelect = onSelect;
     }
 
-    /** How each item is turned into text. Defaults to {@code String.valueOf}. */
+    /**
+     * How each item is turned into text. Defaults to {@code String.valueOf}.
+     */
     public void setLabelProvider(Function<T, String> labelProvider) {
         this.labelProvider = labelProvider == null ? String::valueOf : labelProvider;
     }
 
-    /** Text shown in the closed box while nothing is selected. */
+    /**
+     * Text shown in the closed box while nothing is selected.
+     */
     public void setPlaceholder(String placeholder) {
         this.placeholder = placeholder == null ? "" : placeholder;
     }
 
-    /** Rows shown before the open list scrolls. Default 8. */
+    /**
+     * Rows shown before the open list scrolls. Default 8.
+     */
     public void setMaxVisibleRows(int maxVisibleRows) {
         this.maxVisibleRows = Math.max(1, maxVisibleRows);
     }
@@ -147,7 +163,9 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         return textColor.get();
     }
 
-    /** Pins the text color against theme switches. See {@link Overridable}. */
+    /**
+     * Pins the text color against theme switches. See {@link Overridable}.
+     */
     public void setTextColor(Color color) {
         textColor.set(color);
     }
@@ -159,7 +177,8 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
     }
 
     public void toggleOpen() {
-        if (isOpen()) close(); else open();
+        if (isOpen()) close();
+        else open();
     }
 
     public void open() {
@@ -267,13 +286,16 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
     /* Keyboard */
 
     @Override
-    public void onFocusGained() {}
+    public void onFocusGained() {
+    }
 
     @Override
-    public void onFocusLost() {}
+    public void onFocusLost() {
+    }
 
     @Override
-    public void onCharTyped(int codepoint) {}
+    public void onCharTyped(int codepoint) {
+    }
 
     @Override
     public void onKeyPressed(int key, int action, int mods) {

@@ -33,14 +33,16 @@ public final class Music implements AutoCloseable {
     /**
      * Loads a track from a file path or classpath resource. Only the compressed file is read here.
      *
-     * @throws java.io.UncheckedIOException     if the file cannot be found or read
-     * @throws IllegalArgumentException if the format is unsupported or the file is corrupt
+     * @throws java.io.UncheckedIOException if the file cannot be found or read
+     * @throws IllegalArgumentException     if the format is unsupported or the file is corrupt
      */
     public static Music load(String path) {
         return new Music(path, AudioDecoder.read(path));
     }
 
-    /** Loads a track through an {@link AssetManager}, so it can come out of a mounted {@code .pak}. */
+    /**
+     * Loads a track through an {@link AssetManager}, so it can come out of a mounted {@code .pak}.
+     */
     public static Music load(AssetManager assets, String name) {
         return new Music(name, AudioDecoder.read(assets, name));
     }
@@ -66,27 +68,37 @@ public final class Music implements AutoCloseable {
         return this;
     }
 
-    /** Loops from {@code startSeconds} to the end of the track, playing everything before it once as an intro. */
+    /**
+     * Loops from {@code startSeconds} to the end of the track, playing everything before it once as an intro.
+     */
     public Music loopFrom(float startSeconds) {
         return loopPoints(startSeconds, 0f);
     }
 
-    /** Plays once from the start. */
+    /**
+     * Plays once from the start.
+     */
     public Playback play() {
         return start(0f, false);
     }
 
-    /** Plays once, fading in over {@code fadeInSeconds}. */
+    /**
+     * Plays once, fading in over {@code fadeInSeconds}.
+     */
     public Playback play(float fadeInSeconds) {
         return start(fadeInSeconds, false);
     }
 
-    /** Plays repeatedly until stopped. */
+    /**
+     * Plays repeatedly until stopped.
+     */
     public Playback loop() {
         return start(0f, true);
     }
 
-    /** Plays repeatedly, fading in over {@code fadeInSeconds}. */
+    /**
+     * Plays repeatedly, fading in over {@code fadeInSeconds}.
+     */
     public Playback loop(float fadeInSeconds) {
         return start(fadeInSeconds, true);
     }
@@ -106,7 +118,9 @@ public final class Music implements AutoCloseable {
         return name;
     }
 
-    /** Stops every playback of this track. The track cannot be played afterwards. */
+    /**
+     * Stops every playback of this track. The track cannot be played afterwards.
+     */
     @Override
     public void close() {
         synchronized (Audio.LOCK) {

@@ -91,7 +91,9 @@ public class Window implements Themeable {
         return windowOptions.getStyle();
     }
 
-    /** Keeps the window above other windows, or stops doing so. Safe from any thread. */
+    /**
+     * Keeps the window above other windows, or stops doing so. Safe from any thread.
+     */
     public void setAlwaysOnTop(boolean alwaysOnTop) {
         windowOptions.setAlwaysOnTop(alwaysOnTop);
         if (glfWindow != null) {
@@ -99,21 +101,27 @@ public class Window implements Themeable {
         }
     }
 
-    /** Resizes the window (in screen coordinates). Only works once the engine has started. Safe from any thread. */
+    /**
+     * Resizes the window (in screen coordinates). Only works once the engine has started. Safe from any thread.
+     */
     public void setSize(int width, int height) {
         if (glfWindow != null) {
             glfWindow.runOnMainThread(() -> glfWindow.applySize(width, height));
         }
     }
 
-    /** Centers the window on the primary monitor. Only works once the engine has started. Safe from any thread. */
+    /**
+     * Centers the window on the primary monitor. Only works once the engine has started. Safe from any thread.
+     */
     public void center() {
         if (glfWindow != null) {
             glfWindow.runOnMainThread(glfWindow::applyCenter);
         }
     }
 
-    /** Changes the OS window title. Only works once the engine has started. Safe from any thread. */
+    /**
+     * Changes the OS window title. Only works once the engine has started. Safe from any thread.
+     */
     public void setTitle(String title) {
         windowOptions.setTitle(title);
         if (glfWindow != null) {
@@ -132,7 +140,9 @@ public class Window implements Themeable {
         }
     }
 
-    /** Allows or forbids the user resizing the window. {@link #setSize} still works. Safe from any thread. */
+    /**
+     * Allows or forbids the user resizing the window. {@link #setSize} still works. Safe from any thread.
+     */
     public void setResizable(boolean resizable) {
         windowOptions.setResizable(resizable);
         if (glfWindow != null) {
@@ -157,21 +167,27 @@ public class Window implements Themeable {
         return windowOptions.isFullscreen();
     }
 
-    /** Moves the window's top-left corner to {@code x, y} in screen coordinates. Safe from any thread. */
+    /**
+     * Moves the window's top-left corner to {@code x, y} in screen coordinates. Safe from any thread.
+     */
     public void setPosition(int x, int y) {
         if (glfWindow != null) {
             glfWindow.runOnMainThread(() -> glfWindow.applyPosition(x, y));
         }
     }
 
-    /** Limits how small or large the user can resize the window. A negative value means no limit on that side. Safe from any thread. */
+    /**
+     * Limits how small or large the user can resize the window. A negative value means no limit on that side. Safe from any thread.
+     */
     public void setSizeLimits(int minWidth, int minHeight, int maxWidth, int maxHeight) {
         if (glfWindow != null) {
             glfWindow.runOnMainThread(() -> glfWindow.applySizeLimits(minWidth, minHeight, maxWidth, maxHeight));
         }
     }
 
-    /** Whole-window opacity from 0 (invisible) to 1. Not every platform supports it. Safe from any thread. */
+    /**
+     * Whole-window opacity from 0 (invisible) to 1. Not every platform supports it. Safe from any thread.
+     */
     public void setOpacity(float opacity) {
         float clamped = Math.max(0f, Math.min(1f, opacity));
         if (glfWindow != null) {
@@ -179,7 +195,9 @@ public class Window implements Themeable {
         }
     }
 
-    /** Shows or hides the OS cursor over the window. It still moves freely. Safe from any thread. */
+    /**
+     * Shows or hides the OS cursor over the window. It still moves freely. Safe from any thread.
+     */
     public void setCursorVisible(boolean visible) {
         windowOptions.setShowCursor(visible);
         if (glfWindow != null) {
@@ -187,32 +205,44 @@ public class Window implements Themeable {
         }
     }
 
-    /** See {@link WindowOptions#setVsync}. Picked up on the next frame. Safe from any thread. */
+    /**
+     * See {@link WindowOptions#setVsync}. Picked up on the next frame. Safe from any thread.
+     */
     public void setVsync(boolean vsync) {
         windowOptions.setVsync(vsync);
     }
 
-    /** See {@link WindowOptions#setMaxFPS}. Only used while vsync is off. Safe from any thread. */
+    /**
+     * See {@link WindowOptions#setMaxFPS}. Only used while vsync is off. Safe from any thread.
+     */
     public void setMaxFPS(int maxFPS) {
         windowOptions.setMaxFPS(maxFPS);
     }
 
-    /** Minimizes to the Dock or taskbar. Safe from any thread. */
+    /**
+     * Minimizes to the Dock or taskbar. Safe from any thread.
+     */
     public void minimize() {
         if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyMinimize);
     }
 
-    /** Maximizes the window. Does nothing if it isn't resizable. Safe from any thread. */
+    /**
+     * Maximizes the window. Does nothing if it isn't resizable. Safe from any thread.
+     */
     public void maximize() {
         if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyMaximize);
     }
 
-    /** Undoes {@link #minimize()} or {@link #maximize()}. Safe from any thread. */
+    /**
+     * Undoes {@link #minimize()} or {@link #maximize()}. Safe from any thread.
+     */
     public void restore() {
         if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyRestore);
     }
 
-    /** {@code true} minimizes, {@code false} un-minimizes. Does nothing if the window is already in that state. Safe from any thread. */
+    /**
+     * {@code true} minimizes, {@code false} un-minimizes. Does nothing if the window is already in that state. Safe from any thread.
+     */
     public void setMinimized(boolean minimized) {
         if (glfWindow != null) glfWindow.runOnMainThread(() -> glfWindow.applyMinimized(minimized));
     }
@@ -225,7 +255,9 @@ public class Window implements Themeable {
         if (glfWindow != null) glfWindow.runOnMainThread(() -> glfWindow.applyMaximized(maximized));
     }
 
-    /** Brings the window to the front and gives it OS focus. Safe from any thread. */
+    /**
+     * Brings the window to the front and gives it OS focus. Safe from any thread.
+     */
     public void focus() {
         if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyFocus);
     }
@@ -242,23 +274,31 @@ public class Window implements Themeable {
         if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyHide);
     }
 
-    /** Shows the window again after {@link #hide()}. Safe from any thread. */
+    /**
+     * Shows the window again after {@link #hide()}. Safe from any thread.
+     */
     public void show() {
         hidden = false;
         if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyShow);
     }
 
-    /** True between a {@link #hide()} and the next {@link #show()}. */
+    /**
+     * True between a {@link #hide()} and the next {@link #show()}.
+     */
     public boolean isHidden() {
         return hidden;
     }
 
-    /** Runs when the window is minimized, by the user or by {@link #minimize()}. Runs on the render thread. Pass null to remove. */
+    /**
+     * Runs when the window is minimized, by the user or by {@link #minimize()}. Runs on the render thread. Pass null to remove.
+     */
     public void onMinimize(Runnable listener) {
         this.minimizeListener = listener;
     }
 
-    /** Runs when the window is maximized, by the user or by {@link #maximize()}. Runs on the render thread. Pass null to remove. */
+    /**
+     * Runs when the window is maximized, by the user or by {@link #maximize()}. Runs on the render thread. Pass null to remove.
+     */
     public void onMaximize(Runnable listener) {
         this.maximizeListener = listener;
     }
@@ -288,7 +328,9 @@ public class Window implements Themeable {
         this.closeListener = listener;
     }
 
-    /** Called by the engine once, after the loop has ended. */
+    /**
+     * Called by the engine once, after the loop has ended.
+     */
     void notifyClosing() {
         Runnable listener = closeListener;
         if (listener == null) return;
@@ -307,13 +349,17 @@ public class Window implements Themeable {
         return maximized;
     }
 
-    /** Main thread, from the GLFW callback. Updates the state now and delivers the listener on the render thread. */
+    /**
+     * Main thread, from the GLFW callback. Updates the state now and delivers the listener on the render thread.
+     */
     private void notifyMinimized(boolean nowMinimized) {
         minimized = nowMinimized;
         fire(nowMinimized ? minimizeListener : restoreListener);
     }
 
-    /** Main thread, from the GLFW callback. See {@link #notifyMinimized}. */
+    /**
+     * Main thread, from the GLFW callback. See {@link #notifyMinimized}.
+     */
     private void notifyMaximized(boolean nowMaximized) {
         maximized = nowMaximized;
         fire(nowMaximized ? maximizeListener : restoreListener);
@@ -323,7 +369,9 @@ public class Window implements Themeable {
         if (listener != null) Scheduler.runLater(listener);
     }
 
-    /** Ends the engine loop, as if the user had clicked the close button. Safe from any thread. */
+    /**
+     * Ends the engine loop, as if the user had clicked the close button. Safe from any thread.
+     */
     public void close() {
         if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyClose);
     }
@@ -332,12 +380,16 @@ public class Window implements Themeable {
         return inputManager;
     }
 
-    /** Renders the whole window (backdrop plus every enabled container) into a {@link Snapshot}. See {@link Snapshot#of(Window, float)}. */
+    /**
+     * Renders the whole window (backdrop plus every enabled container) into a {@link Snapshot}. See {@link Snapshot#of(Window, float)}.
+     */
     public Snapshot takeSnapshot(float scale) {
         return Snapshot.of(this, scale);
     }
 
-    /** Captures at the start of the next frame and calls {@code callback} on the render thread. Safe from any thread. */
+    /**
+     * Captures at the start of the next frame and calls {@code callback} on the render thread. Safe from any thread.
+     */
     public void takeSnapshotAsync(float scale, java.util.function.Consumer<Snapshot> callback) {
         Snapshot.ofAsync(this, scale, callback);
     }
@@ -369,7 +421,9 @@ public class Window implements Themeable {
         this.backgroundColor.set(backgroundColor == null ? Color.WHITE : backgroundColor);
     }
 
-    /** Applies {@code theme}'s window token as a baseline. This is a no-op once {@link #setBackgroundColor} has pinned the background. It is called automatically at construction and on every {@link ThemeManager#setCurrent}, since this Window registers itself. See the class docs. */
+    /**
+     * Applies {@code theme}'s window token as a baseline. This is a no-op once {@link #setBackgroundColor} has pinned the background. It is called automatically at construction and on every {@link ThemeManager#setCurrent}, since this Window registers itself. See the class docs.
+     */
     @Override
     public void applyTheme(Theme theme) {
         Paint windowBackground = theme.getWindowBackground();
@@ -396,7 +450,9 @@ public class Window implements Themeable {
         }
     }
 
-    /** As {@link #addContainers(Collection)}: {@code window.addContainers(background, main, hud)}. */
+    /**
+     * As {@link #addContainers(Collection)}: {@code window.addContainers(background, main, hud)}.
+     */
     public void addContainers(Container... containers) {
         addContainers(Arrays.asList(containers));
     }
@@ -454,7 +510,9 @@ public class Window implements Themeable {
         addContainer(popup);
     }
 
-    /** Closes the current popup, if any, firing its dismiss callback. */
+    /**
+     * Closes the current popup, if any, firing its dismiss callback.
+     */
     public void closePopup() {
         if (popup == null) return;
         Container closing = popup;
@@ -479,7 +537,9 @@ public class Window implements Themeable {
         addContainer(modal);
     }
 
-    /** Closes the current modal, if any, and clears focus. */
+    /**
+     * Closes the current modal, if any, and clears focus.
+     */
     public void closeModal() {
         if (modal == null) return;
         ModalContainer closing = modal;
@@ -489,17 +549,23 @@ public class Window implements Themeable {
         closing.notifyClosed();
     }
 
-    /** The currently shown modal, or null. */
+    /**
+     * The currently shown modal, or null.
+     */
     public ModalContainer getModal() {
         return modal;
     }
 
-    /** The currently open popup, or null. */
+    /**
+     * The currently open popup, or null.
+     */
     public Container getPopup() {
         return popup;
     }
 
-    /** The Element currently receiving KEY/CHAR input, or null if nothing is focused. */
+    /**
+     * The Element currently receiving KEY/CHAR input, or null if nothing is focused.
+     */
     public Element getFocusedElement() {
         return focusedElement;
     }
@@ -536,7 +602,9 @@ public class Window implements Themeable {
         moveFocus(1);
     }
 
-    /** As {@link #focusNext()}, but backwards, wrapping from the first stop to the last. Called on Shift+Tab. */
+    /**
+     * As {@link #focusNext()}, but backwards, wrapping from the first stop to the last. Called on Shift+Tab.
+     */
     public void focusPrevious() {
         moveFocus(-1);
     }

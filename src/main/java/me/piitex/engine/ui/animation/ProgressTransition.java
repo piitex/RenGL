@@ -34,7 +34,9 @@ public class ProgressTransition implements Transition {
         this.onComplete = onComplete;
     }
 
-    /** Stops this tween where it is, without firing {@code onComplete}. */
+    /**
+     * Stops this tween where it is, without firing {@code onComplete}.
+     */
     @Override
     public boolean stop() {
         if (finished) return false;
@@ -42,7 +44,9 @@ public class ProgressTransition implements Transition {
         return true;
     }
 
-    /** Same as {@link #stop()}. */
+    /**
+     * Same as {@link #stop()}.
+     */
     public void cancel() {
         stop();
     }

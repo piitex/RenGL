@@ -24,12 +24,18 @@ public interface Draggable {
         return true;
     }
 
-    /** The button was just pressed down on this Element, at (x, y) in window coordinates. */
+    /**
+     * The button was just pressed down on this Element, at (x, y) in window coordinates.
+     */
     void onDragStart(double x, double y);
 
-    /** The mouse moved to (x, y) while the button from {@link #onDragStart} is still held. */
+    /**
+     * The mouse moved to (x, y) while the button from {@link #onDragStart} is still held.
+     */
     void onDragUpdate(double x, double y);
 
-    /** The button was released at (x, y), ending the drag started by {@link #onDragStart}. */
+    /**
+     * The button was released at (x, y), ending the drag started by {@link #onDragStart}.
+     */
     void onDragEnd(double x, double y);
 }

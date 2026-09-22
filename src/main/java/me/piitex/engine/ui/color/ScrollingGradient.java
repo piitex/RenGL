@@ -25,7 +25,9 @@ public class ScrollingGradient extends LinearGradient implements AnimatedPaint {
         offset += speed * deltaSeconds;
     }
 
-    /** Current scroll offset in pixels, to be added to the gradient's coordinates when building the shader. */
+    /**
+     * Current scroll offset in pixels, to be added to the gradient's coordinates when building the shader.
+     */
     public float getOffset() {
         return offset;
     }

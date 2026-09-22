@@ -105,7 +105,9 @@ public class DownloadDemo {
         new Engine().start(window);
     }
 
-    /** A row of controls, right of the start button, that edit {@link #STRIPES}. */
+    /**
+     * A row of controls, right of the start button, that edit {@link #STRIPES}.
+     */
     private static void addStripeControls() {
         CheckBoxOverlay enabled = new CheckBoxOverlay(20, STRIPES.isEnabled());
         enabled.setPosition(210, 82);

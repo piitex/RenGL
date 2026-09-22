@@ -37,8 +37,10 @@ import java.util.List;
  * broken mid-word rather than overflowing.
  */
 public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggable {
-    /** Horizontal placement of each wrapped line within the box. */
-    public enum TextAlign { LEFT, CENTER, RIGHT }
+    /**
+     * Horizontal placement of each wrapped line within the box.
+     */
+    public enum TextAlign {LEFT, CENTER, RIGHT}
 
     private static final String ELLIPSIS = "…";
 
@@ -92,7 +94,9 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         return lineSpacing;
     }
 
-    /** Extra vertical gap between lines, in pixels, on top of the font's own line height. */
+    /**
+     * Extra vertical gap between lines, in pixels, on top of the font's own line height.
+     */
     public void setLineSpacing(float lineSpacing) {
         this.lineSpacing = Math.max(0f, lineSpacing);
         updateComputedSize();
@@ -102,7 +106,9 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         return padding;
     }
 
-    /** Inset between the box's edge and the text, on all four sides. */
+    /**
+     * Inset between the box's edge and the text, on all four sides.
+     */
     public void setPadding(float padding) {
         this.padding = Math.max(0f, padding);
         updateComputedSize();
@@ -112,7 +118,9 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         return maxLines;
     }
 
-    /** Caps the number of lines shown; the last one ends in an ellipsis if text was cut. 0 (default) means no cap. */
+    /**
+     * Caps the number of lines shown; the last one ends in an ellipsis if text was cut. 0 (default) means no cap.
+     */
     public void setMaxLines(int maxLines) {
         this.maxLines = Math.max(0, maxLines);
         updateComputedSize();
@@ -122,7 +130,9 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         return autoHeight;
     }
 
-    /** When true (default) the height tracks the wrapped text; when false it stays whatever {@link #setHeight} last set and overflow is clipped. */
+    /**
+     * When true (default) the height tracks the wrapped text; when false it stays whatever {@link #setHeight} last set and overflow is clipped.
+     */
     public void setAutoHeight(boolean autoHeight) {
         this.autoHeight = autoHeight;
         updateComputedSize();
@@ -132,7 +142,9 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         return maxHeight;
     }
 
-    /** With auto-height on, caps how tall the box grows; past it the text scrolls. 0 (default) means no cap. */
+    /**
+     * With auto-height on, caps how tall the box grows; past it the text scrolls. 0 (default) means no cap.
+     */
     public void setMaxHeight(float maxHeight) {
         this.maxHeight = Math.max(0f, maxHeight);
         updateComputedSize();
@@ -142,7 +154,9 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         return scrollSpeed;
     }
 
-    /** Logical points scrolled per unit of raw wheel offset. Larger is faster. */
+    /**
+     * Logical points scrolled per unit of raw wheel offset. Larger is faster.
+     */
     public void setScrollSpeed(float scrollSpeed) {
         this.scrollSpeed = scrollSpeed;
     }
@@ -151,12 +165,16 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         return scrollbarVisible;
     }
 
-    /** Whether the thumb is drawn/draggable. Wheel scrolling still works when false. */
+    /**
+     * Whether the thumb is drawn/draggable. Wheel scrolling still works when false.
+     */
     public void setScrollbarVisible(boolean scrollbarVisible) {
         this.scrollbarVisible = scrollbarVisible;
     }
 
-    /** Thumb and track colors and geometry, using the same style object {@link me.piitex.engine.ui.scroll.ScrollContainer} uses. */
+    /**
+     * Thumb and track colors and geometry, using the same style object {@link me.piitex.engine.ui.scroll.ScrollContainer} uses.
+     */
     public ScrollBarStyle getScrollBarStyle() {
         return scrollBarStyle;
     }
@@ -192,21 +210,27 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         scrollBarStyle.applyThemeThumbColor(theme.getScrollThumb());
     }
 
-    /** A fixed-height box's height is the caller's; re-wrap since the scrollbar may now be needed. */
+    /**
+     * A fixed-height box's height is the caller's; re-wrap since the scrollbar may now be needed.
+     */
     @Override
     public void setHeight(double height) {
         super.setHeight(height);
         if (ready && !autoHeight) updateComputedSize();
     }
 
-    /** Changing the width re-wraps the text. */
+    /**
+     * Changing the width re-wraps the text.
+     */
     @Override
     public void setWidth(double width) {
         super.setWidth(width);
         if (ready) updateComputedSize();
     }
 
-    /** Re-wraps to the current width/font/text, and (if auto-height) resizes the box to match. */
+    /**
+     * Re-wraps to the current width/font/text, and (if auto-height) resizes the box to match.
+     */
     @Override
     protected void updateComputedSize() {
         if (!ready) return;

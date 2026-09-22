@@ -49,9 +49,13 @@ public class PopupMenu {
     private Runnable onClose;
 
     private MenuPopup popup;
-    /** Set by {@link MenuBarOverlay}: called with -1/+1 when Left/Right is pressed with no submenu to enter or leave. */
+    /**
+     * Set by {@link MenuBarOverlay}: called with -1/+1 when Left/Right is pressed with no submenu to enter or leave.
+     */
     IntConsumer sidewaysListener;
-    /** Set by {@link MenuBarOverlay} to learn when this menu closes, alongside the user's {@link #onClose}. */
+    /**
+     * Set by {@link MenuBarOverlay} to learn when this menu closes, alongside the user's {@link #onClose}.
+     */
     Runnable closeListener;
 
     public PopupMenu(MenuItem... items) {
@@ -63,7 +67,9 @@ public class PopupMenu {
         return this;
     }
 
-    /** Shorthand for {@code add(new MenuItem(label, action))}. */
+    /**
+     * Shorthand for {@code add(new MenuItem(label, action))}.
+     */
     public PopupMenu add(String label, Runnable action) {
         return add(new MenuItem(label, action));
     }
@@ -72,7 +78,9 @@ public class PopupMenu {
         return add(MenuItem.separator());
     }
 
-    /** The live item list, which can be edited freely between shows. */
+    /**
+     * The live item list, which can be edited freely between shows.
+     */
     public List<MenuItem> getItems() {
         return items;
     }
@@ -81,12 +89,16 @@ public class PopupMenu {
         items.clear();
     }
 
-    /** Runs just before every show, so items can be enabled/disabled or rebuilt to match current state. */
+    /**
+     * Runs just before every show, so items can be enabled/disabled or rebuilt to match current state.
+     */
     public void onOpen(Consumer<PopupMenu> onOpen) {
         this.onOpen = onOpen;
     }
 
-    /** Runs whenever the menu closes, by any route (choice, outside click, Escape). */
+    /**
+     * Runs whenever the menu closes, by any route (choice, outside click, Escape).
+     */
     public void onClose(Runnable onClose) {
         this.onClose = onClose;
     }
@@ -117,12 +129,16 @@ public class PopupMenu {
         this.minWidth = minWidth;
     }
 
-    /** Pins the panel background instead of following the theme; null goes back to the theme. */
+    /**
+     * Pins the panel background instead of following the theme; null goes back to the theme.
+     */
     public void setBackgroundColor(Color color) {
         this.backgroundColor = color;
     }
 
-    /** Pins the highlight behind the hovered/active row; null goes back to the theme. */
+    /**
+     * Pins the highlight behind the hovered/active row; null goes back to the theme.
+     */
     public void setHoverColor(Color color) {
         this.hoverColor = color;
     }
@@ -189,17 +205,23 @@ public class PopupMenu {
         popup = p; // after showPopup, whose closePopup() of a previous menu would otherwise clear this
     }
 
-    /** Opens the menu where the mouse pointer currently is, which is what a right-click handler needs. */
+    /**
+     * Opens the menu where the mouse pointer currently is, which is what a right-click handler needs.
+     */
     public void showAtMouse(Window window) {
         show(window, MouseTracker.getX(), MouseTracker.getY());
     }
 
-    /** Opens the menu just under {@code anchor} with their left edges aligned, as for a "more" button. */
+    /**
+     * Opens the menu just under {@code anchor} with their left edges aligned, as for a "more" button.
+     */
     public void showBelow(Element anchor) {
         show(anchor.getWindow(), anchor.getAbsoluteX(), anchor.getAbsoluteY() + anchor.getHeight());
     }
 
-    /** Closes the menu (and any open submenus) if it is showing. */
+    /**
+     * Closes the menu (and any open submenus) if it is showing.
+     */
     public void close() {
         MenuPopup p = popup;
         if (p == null) return;

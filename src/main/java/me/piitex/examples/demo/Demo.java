@@ -227,7 +227,9 @@ public class Demo {
 
     // ---- helpers --------------------------------------------------------------------------------
 
-    /** A transparent column, so the tab container's own panel shows through. */
+    /**
+     * A transparent column, so the tab container's own panel shows through.
+     */
     private static VerticalLayout page(float spacing) {
         VerticalLayout page = new VerticalLayout(100, 100);
         page.setPadding(16);

@@ -42,7 +42,9 @@ public class AnimatedDotBackground extends AbstractBackground {
         return spacing;
     }
 
-    /** Distance between dots, in points. */
+    /**
+     * Distance between dots, in points.
+     */
     public void setSpacing(float spacing) {
         this.spacing = Math.max(4f, spacing);
     }
@@ -59,7 +61,9 @@ public class AnimatedDotBackground extends AbstractBackground {
         return maxRadius;
     }
 
-    /** Radius of a dot at the crest of a wave. Keep at or below half of {@link #getSpacing()} to avoid dots overlapping. */
+    /**
+     * Radius of a dot at the crest of a wave. Keep at or below half of {@link #getSpacing()} to avoid dots overlapping.
+     */
     public void setMaxRadius(float maxRadius) {
         this.maxRadius = Math.max(0f, maxRadius);
     }
@@ -68,7 +72,9 @@ public class AnimatedDotBackground extends AbstractBackground {
         return speed;
     }
 
-    /** Animation speed multiplier (default 1). Negative runs the waves backwards. */
+    /**
+     * Animation speed multiplier (default 1). Negative runs the waves backwards.
+     */
     public void setSpeed(float speed) {
         this.speed = speed;
     }
@@ -77,7 +83,9 @@ public class AnimatedDotBackground extends AbstractBackground {
         return intensity;
     }
 
-    /** How strongly the waves drive dot size and hue, clamped to [0, 2] (default 1). */
+    /**
+     * How strongly the waves drive dot size and hue, clamped to [0, 2] (default 1).
+     */
     public void setIntensity(float intensity) {
         this.intensity = Math.max(0f, Math.min(2f, intensity));
     }
@@ -86,7 +94,9 @@ public class AnimatedDotBackground extends AbstractBackground {
         return hueSpan;
     }
 
-    /** Fraction of the colour wheel the waves sweep through, [0, 1] (default 1 = full rainbow). */
+    /**
+     * Fraction of the colour wheel the waves sweep through, [0, 1] (default 1 = full rainbow).
+     */
     public void setHueSpan(float hueSpan) {
         this.hueSpan = Math.max(0f, Math.min(1f, hueSpan));
     }
@@ -119,7 +129,9 @@ public class AnimatedDotBackground extends AbstractBackground {
         return waveLength;
     }
 
-    /** Distance in points between wave crests. Smaller values look busier, larger ones slow and rolling. */
+    /**
+     * Distance in points between wave crests. Smaller values look busier, larger ones slow and rolling.
+     */
     public void setWaveLength(float waveLength) {
         this.waveLength = Math.max(20f, waveLength);
     }
@@ -161,7 +173,9 @@ public class AnimatedDotBackground extends AbstractBackground {
         renderer.popClip();
     }
 
-    /** HSV to {@link Color}; {@code hue} is in turns and wraps, so any float is valid. */
+    /**
+     * HSV to {@link Color}; {@code hue} is in turns and wraps, so any float is valid.
+     */
     private static Color hsv(float hue, float s, float v, float a) {
         float h = (hue - (float) Math.floor(hue)) * 6f;
         int sector = (int) h;

@@ -36,9 +36,20 @@ final class OpusStream implements PcmStream {
         chunk = memAllocShort(CHUNK_FRAMES * channels);
     }
 
-    @Override public int channels() { return channels; }
-    @Override public int sampleRate() { return 48000; }
-    @Override public long totalFrames() { return op_pcm_total(handle, -1); }
+    @Override
+    public int channels() {
+        return channels;
+    }
+
+    @Override
+    public int sampleRate() {
+        return 48000;
+    }
+
+    @Override
+    public long totalFrames() {
+        return op_pcm_total(handle, -1);
+    }
 
     @Override
     public int read(short[] dst, int off, int len) {
@@ -47,7 +58,8 @@ final class OpusStream implements PcmStream {
         do {
             frames = channels == 1 ? op_read(handle, chunk, null) : op_read_stereo(handle, chunk);
         } while (frames == OP_HOLE);
-        if (frames <= 0) return 0; // end of stream, or a decode error, which ends playback rather than throwing mid-song
+        if (frames <= 0)
+            return 0; // end of stream, or a decode error, which ends playback rather than throwing mid-song
         chunk.get(0, dst, off, frames * channels);
         return frames * channels;
     }

@@ -106,12 +106,16 @@ public class GLFWindow {
         }
     }
 
-    /** Called on the main thread with true when the window is minimized and false when it is un-minimized. Set before {@link #createWindow}. */
+    /**
+     * Called on the main thread with true when the window is minimized and false when it is un-minimized. Set before {@link #createWindow}.
+     */
     public void setIconifyHandler(Consumer<Boolean> handler) {
         this.iconifyHandler = handler;
     }
 
-    /** Called on the main thread with true when the window is maximized and false when it is un-maximized. Set before {@link #createWindow}. */
+    /**
+     * Called on the main thread with true when the window is maximized and false when it is un-maximized. Set before {@link #createWindow}.
+     */
     public void setMaximizeHandler(Consumer<Boolean> handler) {
         this.maximizeHandler = handler;
     }
@@ -241,13 +245,17 @@ public class GLFWindow {
         }
     }
 
-    /** Sets the window icon from an image file on disk or the classpath. A missing or undecodable file only logs. MAIN THREAD ONLY. */
+    /**
+     * Sets the window icon from an image file on disk or the classpath. A missing or undecodable file only logs. MAIN THREAD ONLY.
+     */
     public void applyIcon(String iconPath) {
         byte[] bytes = readIconBytes(iconPath);
         if (bytes != null) applyIconBytes(bytes, iconPath);
     }
 
-    /** Sets the window icon from an already decoded image, such as one from {@code ImageCache.load}. MAIN THREAD ONLY. */
+    /**
+     * Sets the window icon from an already decoded image, such as one from {@code ImageCache.load}. MAIN THREAD ONLY.
+     */
     public void applyIcon(Image image) {
         if (image == null) return;
         org.jetbrains.skia.Data data = image.encodeToData(EncodedImageFormat.PNG, 100, 100);
@@ -288,7 +296,9 @@ public class GLFWindow {
         }
     }
 
-    /** The icon file's bytes from disk or, failing that, the classpath; null (after a warning) if it can't be read. */
+    /**
+     * The icon file's bytes from disk or, failing that, the classpath; null (after a warning) if it can't be read.
+     */
     private static byte[] readIconBytes(String iconPath) {
         try {
             Path path = Path.of(iconPath);
@@ -362,32 +372,44 @@ public class GLFWindow {
         }
     }
 
-    /** Safe from any thread: runs {@code task} on the main thread, on the next {@link #pollEventsHighFrequency()}. */
+    /**
+     * Safe from any thread: runs {@code task} on the main thread, on the next {@link #pollEventsHighFrequency()}.
+     */
     public void runOnMainThread(Runnable task) {
         mainThreadTasks.add(task);
     }
 
-    /** MAIN THREAD ONLY. Adds or removes the OS frame (title bar, title and window controls) of the live window. */
+    /**
+     * MAIN THREAD ONLY. Adds or removes the OS frame (title bar, title and window controls) of the live window.
+     */
     public void applyStyle(WindowStyle style) {
         glfwSetWindowAttrib(window, GLFW_DECORATED, style == WindowStyle.STANDARD ? GLFW_TRUE : GLFW_FALSE);
     }
 
-    /** MAIN THREAD ONLY. */
+    /**
+     * MAIN THREAD ONLY.
+     */
     public void applyAlwaysOnTop(boolean alwaysOnTop) {
         glfwSetWindowAttrib(window, GLFW_FLOATING, alwaysOnTop ? GLFW_TRUE : GLFW_FALSE);
     }
 
-    /** MAIN THREAD ONLY. The size/resize callbacks the engine registered pick up the new size. */
+    /**
+     * MAIN THREAD ONLY. The size/resize callbacks the engine registered pick up the new size.
+     */
     public void applySize(int width, int height) {
         glfwSetWindowSize(window, width, height);
     }
 
-    /** MAIN THREAD ONLY. */
+    /**
+     * MAIN THREAD ONLY.
+     */
     public void applyTitle(String title) {
         glfwSetWindowTitle(window, title);
     }
 
-    /** MAIN THREAD ONLY. Centers the window in the primary monitor's usable area. */
+    /**
+     * MAIN THREAD ONLY. Centers the window in the primary monitor's usable area.
+     */
     public void applyCenter() {
         long monitor = glfwGetPrimaryMonitor();
         if (monitor == NULL) return;
@@ -400,43 +422,59 @@ public class GLFWindow {
         }
     }
 
-    /** MAIN THREAD ONLY. */
+    /**
+     * MAIN THREAD ONLY.
+     */
     public void applyResizable(boolean resizable) {
         glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable ? GLFW_TRUE : GLFW_FALSE);
     }
 
-    /** MAIN THREAD ONLY. */
+    /**
+     * MAIN THREAD ONLY.
+     */
     public void applyPosition(int x, int y) {
         glfwSetWindowPos(window, x, y);
     }
 
-    /** MAIN THREAD ONLY. A negative value means no limit on that side. */
+    /**
+     * MAIN THREAD ONLY. A negative value means no limit on that side.
+     */
     public void applySizeLimits(int minW, int minH, int maxW, int maxH) {
         glfwSetWindowSizeLimits(window, minW < 0 ? GLFW_DONT_CARE : minW, minH < 0 ? GLFW_DONT_CARE : minH,
                 maxW < 0 ? GLFW_DONT_CARE : maxW, maxH < 0 ? GLFW_DONT_CARE : maxH);
     }
 
-    /** MAIN THREAD ONLY. */
+    /**
+     * MAIN THREAD ONLY.
+     */
     public void applyOpacity(float opacity) {
         glfwSetWindowOpacity(window, opacity);
     }
 
-    /** MAIN THREAD ONLY. Hidden keeps the cursor free-moving, unlike a captured cursor. */
+    /**
+     * MAIN THREAD ONLY. Hidden keeps the cursor free-moving, unlike a captured cursor.
+     */
     public void applyCursorVisible(boolean visible) {
         glfwSetInputMode(window, GLFW_CURSOR, visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
     }
 
-    /** MAIN THREAD ONLY. */
+    /**
+     * MAIN THREAD ONLY.
+     */
     public void applyMinimize() {
         glfwIconifyWindow(window);
     }
 
-    /** MAIN THREAD ONLY. */
+    /**
+     * MAIN THREAD ONLY.
+     */
     public void applyMaximize() {
         glfwMaximizeWindow(window);
     }
 
-    /** MAIN THREAD ONLY. Minimizes or un-minimizes; a no-op if the window is already in the requested state. */
+    /**
+     * MAIN THREAD ONLY. Minimizes or un-minimizes; a no-op if the window is already in the requested state.
+     */
     public void applyMinimized(boolean minimized) {
         boolean iconified = glfwGetWindowAttrib(window, GLFW_ICONIFIED) == GLFW_TRUE;
         if (minimized && !iconified) {
@@ -446,7 +484,9 @@ public class GLFWindow {
         }
     }
 
-    /** MAIN THREAD ONLY. Maximizes or un-maximizes; a no-op if already so. Never un-minimizes when asked to un-maximize. */
+    /**
+     * MAIN THREAD ONLY. Maximizes or un-maximizes; a no-op if already so. Never un-minimizes when asked to un-maximize.
+     */
     public void applyMaximized(boolean maximized) {
         boolean iconified = glfwGetWindowAttrib(window, GLFW_ICONIFIED) == GLFW_TRUE;
         boolean isMaximized = glfwGetWindowAttrib(window, GLFW_MAXIMIZED) == GLFW_TRUE;
@@ -457,32 +497,44 @@ public class GLFWindow {
         }
     }
 
-    /** MAIN THREAD ONLY. Undoes minimize or maximize. */
+    /**
+     * MAIN THREAD ONLY. Undoes minimize or maximize.
+     */
     public void applyRestore() {
         glfwRestoreWindow(window);
     }
 
-    /** MAIN THREAD ONLY. */
+    /**
+     * MAIN THREAD ONLY.
+     */
     public void applyFocus() {
         glfwFocusWindow(window);
     }
 
-    /** MAIN THREAD ONLY. Hides the window (no taskbar or Dock entry on most platforms) without ending the app. */
+    /**
+     * MAIN THREAD ONLY. Hides the window (no taskbar or Dock entry on most platforms) without ending the app.
+     */
     public void applyHide() {
         glfwHideWindow(window);
     }
 
-    /** MAIN THREAD ONLY. Shows a hidden window again. */
+    /**
+     * MAIN THREAD ONLY. Shows a hidden window again.
+     */
     public void applyShow() {
         glfwShowWindow(window);
     }
 
-    /** MAIN THREAD ONLY. Asks the engine loop to end, as if the user had clicked the close button. */
+    /**
+     * MAIN THREAD ONLY. Asks the engine loop to end, as if the user had clicked the close button.
+     */
     public void applyClose() {
         glfwSetWindowShouldClose(window, true);
     }
 
-    /** The native GLFW window handle, as returned by {@link #createWindow}. */
+    /**
+     * The native GLFW window handle, as returned by {@link #createWindow}.
+     */
     public long getWindow() {
         return window;
     }

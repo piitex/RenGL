@@ -2,13 +2,17 @@ package me.piitex.engine.utils;
 
 import java.util.Locale;
 
-/** The operating system family the JVM is running on. */
+/**
+ * The operating system family the JVM is running on.
+ */
 public enum Platform {
     WINDOWS, MACOS, LINUX, OTHER;
 
     private static final Platform CURRENT = detect(System.getProperty("os.name", ""));
 
-    /** The platform this JVM is running on. Detected once. */
+    /**
+     * The platform this JVM is running on. Detected once.
+     */
     public static Platform getCurrent() {
         return CURRENT;
     }

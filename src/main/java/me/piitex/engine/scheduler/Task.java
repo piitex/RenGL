@@ -9,7 +9,9 @@ public class Task {
     private volatile boolean cancelled;
     private volatile boolean done;
 
-    /** Stops the task from running again. Has no effect on a run already in progress. */
+    /**
+     * Stops the task from running again. Has no effect on a run already in progress.
+     */
     public void cancel() {
         cancelled = true;
     }
@@ -18,7 +20,9 @@ public class Task {
         return cancelled;
     }
 
-    /** True once a one-shot task has run (or been cancelled). A repeating timer is done only once cancelled. */
+    /**
+     * True once a one-shot task has run (or been cancelled). A repeating timer is done only once cancelled.
+     */
     public boolean isDone() {
         return done || cancelled;
     }

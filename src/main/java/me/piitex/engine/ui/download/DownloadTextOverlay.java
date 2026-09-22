@@ -40,17 +40,23 @@ public class DownloadTextOverlay extends TextOverlay {
         return download;
     }
 
-    /** The status-part switches (percent, size, speed, ETA). Ignored if a {@link #setFormatter} function is set. */
+    /**
+     * The status-part switches (percent, size, speed, ETA). Ignored if a {@link #setFormatter} function is set.
+     */
     public DownloadFormat getFormat() {
         return format;
     }
 
-    /** Whether the file name leads the line. Default true. */
+    /**
+     * Whether the file name leads the line. Default true.
+     */
     public void setShowName(boolean showName) {
         this.showName = showName;
     }
 
-    /** Replaces the whole line with your own text, or null to go back to the built-in format. */
+    /**
+     * Replaces the whole line with your own text, or null to go back to the built-in format.
+     */
     public void setFormatter(Function<Download, String> formatter) {
         this.formatter = formatter;
     }

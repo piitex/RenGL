@@ -44,7 +44,9 @@ public class DownloadManager {
         pump();
     }
 
-    /** Queues {@code download} and starts it as soon as a slot is free. */
+    /**
+     * Queues {@code download} and starts it as soon as a slot is free.
+     */
     public Download add(Download download) {
         download.markQueued();
         download.addListener(pump);
@@ -57,19 +59,25 @@ public class DownloadManager {
         return add(new Download(url, target));
     }
 
-    /** Queues a download of {@code url} to {@code directory/fileName}. */
+    /**
+     * Queues a download of {@code url} to {@code directory/fileName}.
+     */
     public Download add(URI url, Path directory, String fileName) {
         return add(new Download(url, directory.resolve(fileName)));
     }
 
-    /** Puts a paused, failed or cancelled download back in the queue. */
+    /**
+     * Puts a paused, failed or cancelled download back in the queue.
+     */
     public void resume(Download download) {
         if (!downloads.contains(download)) return;
         download.markQueued();
         pump();
     }
 
-    /** Stops tracking {@code download}. It is cancelled first if still running. */
+    /**
+     * Stops tracking {@code download}. It is cancelled first if still running.
+     */
     public void remove(Download download) {
         if (!download.getState().isFinished()) download.cancel();
         download.removeListener(pump);
@@ -77,7 +85,9 @@ public class DownloadManager {
         pump();
     }
 
-    /** Stops tracking every completed, failed or cancelled download. */
+    /**
+     * Stops tracking every completed, failed or cancelled download.
+     */
     public void clearFinished() {
         for (Download d : downloads) {
             if (d.getState().isFinished()) {
@@ -87,7 +97,9 @@ public class DownloadManager {
         }
     }
 
-    /** Pauses everything running or waiting; {@link #resume} brings individual downloads back. */
+    /**
+     * Pauses everything running or waiting; {@link #resume} brings individual downloads back.
+     */
     public void pauseAll() {
         for (Download d : downloads) d.pause();
     }
@@ -98,7 +110,9 @@ public class DownloadManager {
         }
     }
 
-    /** A snapshot, in the order added. */
+    /**
+     * A snapshot, in the order added.
+     */
     public List<Download> getDownloads() {
         return List.copyOf(downloads);
     }
@@ -109,7 +123,9 @@ public class DownloadManager {
         return n;
     }
 
-    /** Combined speed of every running download, in bytes per second. */
+    /**
+     * Combined speed of every running download, in bytes per second.
+     */
     public double getTotalBytesPerSecond() {
         double sum = 0;
         for (Download d : downloads) sum += d.getBytesPerSecond();
@@ -130,7 +146,9 @@ public class DownloadManager {
         return all == 0 ? 0 : (double) done / all;
     }
 
-    /** True when at least one download is queued or running. */
+    /**
+     * True when at least one download is queued or running.
+     */
     public boolean isBusy() {
         for (Download d : downloads) {
             DownloadState s = d.getState();

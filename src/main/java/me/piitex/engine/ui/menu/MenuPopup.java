@@ -37,7 +37,9 @@ final class MenuPopup extends Container implements PopupKeyListener {
         float[] rowH;
         boolean checkCol, shortcutCol, arrowCol;
         float labelW, shortcutW;
-        /** The row whose submenu is open, or the keyboard-highlighted row; -1 for none. */
+        /**
+         * The row whose submenu is open, or the keyboard-highlighted row; -1 for none.
+         */
         int active = -1;
 
         Panel(List<MenuItem> items) {
@@ -48,7 +50,9 @@ final class MenuPopup extends Container implements PopupKeyListener {
             return px >= x && px <= x + w && py >= y && py <= y + h;
         }
 
-        /** Row index under window point (px, py), or -1 for padding/outside. */
+        /**
+         * Row index under window point (px, py), or -1 for padding/outside.
+         */
         int rowAt(double px, double py) {
             if (!contains(px, py)) return -1;
             double local = py - y;
@@ -65,7 +69,9 @@ final class MenuPopup extends Container implements PopupKeyListener {
     private final org.jetbrains.skia.Font font;
     private boolean closed;
 
-    /** True after a key press, until the mouse moves again: the keyboard highlight then wins over hover. */
+    /**
+     * True after a key press, until the mouse moves again: the keyboard highlight then wins over hover.
+     */
     private boolean keyboardMode;
     private double lastMouseX = Double.NaN, lastMouseY = Double.NaN;
     private int pendingPanel = -1, pendingRow = -1;
@@ -131,7 +137,9 @@ final class MenuPopup extends Container implements PopupKeyListener {
         return panel;
     }
 
-    /** Opens the submenu of {@code row} in panel {@code p} beside it, closing anything deeper. */
+    /**
+     * Opens the submenu of {@code row} in panel {@code p} beside it, closing anything deeper.
+     */
     private void openChild(int p, int row, boolean selectFirst) {
         truncate(p + 1);
         Panel parent = panels.get(p);
@@ -159,7 +167,9 @@ final class MenuPopup extends Container implements PopupKeyListener {
         return !item.isSeparator() && item.isEnabled();
     }
 
-    /** The next selectable row from {@code from} in direction {@code dir} (wrapping), or -1 if there is none. */
+    /**
+     * The next selectable row from {@code from} in direction {@code dir} (wrapping), or -1 if there is none.
+     */
     private static int step(Panel panel, int from, int dir) {
         int n = panel.items.size();
         if (n == 0) return -1;
@@ -247,7 +257,9 @@ final class MenuPopup extends Container implements PopupKeyListener {
         }
     }
 
-    /** Mouse-driven hover: highlights follow the pointer at once; opening/closing submenus is delayed. */
+    /**
+     * Mouse-driven hover: highlights follow the pointer at once; opening/closing submenus is delayed.
+     */
     @Override
     public void update(float delta) {
         super.update(delta);

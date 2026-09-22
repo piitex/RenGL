@@ -79,7 +79,9 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         }
     }
 
-    /** Package-private: only {@link RadioGroup} sets this directly, so it can select the chosen button and deselect its siblings in one pass. Everything else goes through {@link #select()}. */
+    /**
+     * Package-private: only {@link RadioGroup} sets this directly, so it can select the chosen button and deselect its siblings in one pass. Everything else goes through {@link #select()}.
+     */
     void setSelectedInternal(boolean selected) {
         this.selected = selected;
     }
@@ -91,7 +93,9 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         return group;
     }
 
-    /** Package-private: only {@link RadioGroup#add} and {@link RadioGroup#remove} set this. */
+    /**
+     * Package-private: only {@link RadioGroup#add} and {@link RadioGroup#remove} set this.
+     */
     void setGroupInternal(RadioGroup group) {
         this.group = group;
     }
@@ -100,7 +104,9 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         return dotColor.get();
     }
 
-    /** Pins the inner dot color against every future theme switch. See {@link Overridable}. */
+    /**
+     * Pins the inner dot color against every future theme switch. See {@link Overridable}.
+     */
     public void setDotColor(Color dotColor) {
         this.dotColor.set(dotColor);
     }

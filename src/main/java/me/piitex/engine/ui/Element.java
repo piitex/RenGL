@@ -51,7 +51,9 @@ public class Element {
     private float opacity = 1f;
     private String tooltip;
     private PopupMenu contextMenu;
-    /** Set by {@link Container#addElement}; lets an Element find its Window without a back-reference from callers. */
+    /**
+     * Set by {@link Container#addElement}; lets an Element find its Window without a back-reference from callers.
+     */
     public Container owner;
     private float tooltipDelay = 0.5f;
 
@@ -151,7 +153,9 @@ public class Element {
         return x + (owner != null ? owner.getContentOriginX() : 0);
     }
 
-    /** The y coordinate in the window. See {@link #getAbsoluteX()}. */
+    /**
+     * The y coordinate in the window. See {@link #getAbsoluteX()}.
+     */
     public double getAbsoluteY() {
         return y + (owner != null ? owner.getContentOriginY() : 0);
     }
@@ -164,7 +168,9 @@ public class Element {
         return windowX - (getAbsoluteX() - x);
     }
 
-    /** As {@link #toLocalX(double)}, for y. */
+    /**
+     * As {@link #toLocalX(double)}, for y.
+     */
     public double toLocalY(double windowY) {
         return windowY - (getAbsoluteY() - y);
     }
@@ -310,7 +316,9 @@ public class Element {
         this.tooltip = tooltip;
     }
 
-    /** Seconds the cursor must rest on this Element before {@link #getTooltip()} appears. Default 0.5. */
+    /**
+     * Seconds the cursor must rest on this Element before {@link #getTooltip()} appears. Default 0.5.
+     */
     public float getTooltipDelay() {
         return tooltipDelay;
     }
@@ -445,12 +453,16 @@ public class Element {
         this.textAlignment = textAlignment;
     }
 
-    /** Horizontal fraction of the free space to place before the text (0 left, 0.5 center, 1 right): the explicit alignment, else {@code natural}. */
+    /**
+     * Horizontal fraction of the free space to place before the text (0 left, 0.5 center, 1 right): the explicit alignment, else {@code natural}.
+     */
     protected float textAlignH(float natural) {
         return textAlignment != null ? textAlignment.horizontal() : natural;
     }
 
-    /** Vertical counterpart of {@link #textAlignH}. */
+    /**
+     * Vertical counterpart of {@link #textAlignH}.
+     */
     protected float textAlignV(float natural) {
         return textAlignment != null ? textAlignment.vertical() : natural;
     }
@@ -572,12 +584,16 @@ public class Element {
         return takeSnapshot(1f);
     }
 
-    /** As {@link #takeSnapshot()}, at {@code scale} pixels per point: 2 is retina-sharp, 0.25 a small thumbnail. */
+    /**
+     * As {@link #takeSnapshot()}, at {@code scale} pixels per point: 2 is retina-sharp, 0.25 a small thumbnail.
+     */
     public Snapshot takeSnapshot(float scale) {
         return Snapshot.of(this, scale);
     }
 
-    /** Captures at the start of the next frame and calls {@code callback} on the render thread. Safe from any thread. */
+    /**
+     * Captures at the start of the next frame and calls {@code callback} on the render thread. Safe from any thread.
+     */
     public void takeSnapshotAsync(float scale, java.util.function.Consumer<Snapshot> callback) {
         Snapshot.ofAsync(this, scale, callback);
     }
@@ -596,67 +612,89 @@ public class Element {
         this.opacity = Math.max(0f, Math.min(1f, opacity));
     }
 
-    /** Attaches a {@link Transition} that the engine will drive from the next {@link #update}/{@link #renderWithTransitions} onward until it reports {@link Transition#isFinished()}. Several can run at once. */
+    /**
+     * Attaches a {@link Transition} that the engine will drive from the next {@link #update}/{@link #renderWithTransitions} onward until it reports {@link Transition#isFinished()}. Several can run at once.
+     */
     public void playTransition(Transition transition) {
         if (transition != null) {
             transitions.add(transition);
         }
     }
 
-    /** Whether this Element currently has at least one {@link Transition} running. */
+    /**
+     * Whether this Element currently has at least one {@link Transition} running.
+     */
     public boolean isTransitioning() {
         return !transitions.isEmpty();
     }
 
-    /** Fades this Element in from fully transparent to fully opaque over {@code durationSeconds}. See {@link FadeTransition}. */
+    /**
+     * Fades this Element in from fully transparent to fully opaque over {@code durationSeconds}. See {@link FadeTransition}.
+     */
     public FadeTransition fadeIn(float durationSeconds) {
         return fadeIn(durationSeconds, (Runnable) null);
     }
 
-    /** As {@link #fadeIn(float)}, firing {@code onComplete} once the fade finishes. */
+    /**
+     * As {@link #fadeIn(float)}, firing {@code onComplete} once the fade finishes.
+     */
     public FadeTransition fadeIn(float durationSeconds, Runnable onComplete) {
         FadeTransition fade = new FadeTransition(durationSeconds, FadeTransition.Direction.IN, onComplete);
         playFade(fade);
         return fade;
     }
 
-    /** As {@link #fadeIn(float)}, but dissolving from solid {@code fromColor} into this Element instead of from plain transparency. See {@link FadeTransition}'s class docs. */
+    /**
+     * As {@link #fadeIn(float)}, but dissolving from solid {@code fromColor} into this Element instead of from plain transparency. See {@link FadeTransition}'s class docs.
+     */
     public FadeTransition fadeIn(Color fromColor, float durationSeconds) {
         return fadeIn(fromColor, durationSeconds, null);
     }
 
-    /** As {@link #fadeIn(Color, float)}, firing {@code onComplete} once the fade finishes. */
+    /**
+     * As {@link #fadeIn(Color, float)}, firing {@code onComplete} once the fade finishes.
+     */
     public FadeTransition fadeIn(Color fromColor, float durationSeconds, Runnable onComplete) {
         FadeTransition fade = new FadeTransition(durationSeconds, FadeTransition.Direction.IN, fromColor, onComplete);
         playFade(fade);
         return fade;
     }
 
-    /** Fades this Element out from fully opaque to fully transparent over {@code durationSeconds}. See {@link FadeTransition}. */
+    /**
+     * Fades this Element out from fully opaque to fully transparent over {@code durationSeconds}. See {@link FadeTransition}.
+     */
     public FadeTransition fadeOut(float durationSeconds) {
         return fadeOut(durationSeconds, (Runnable) null);
     }
 
-    /** As {@link #fadeOut(float)}, firing {@code onComplete} once the fade finishes. */
+    /**
+     * As {@link #fadeOut(float)}, firing {@code onComplete} once the fade finishes.
+     */
     public FadeTransition fadeOut(float durationSeconds, Runnable onComplete) {
         FadeTransition fade = new FadeTransition(durationSeconds, FadeTransition.Direction.OUT, onComplete);
         playFade(fade);
         return fade;
     }
 
-    /** As {@link #fadeOut(float)}, but dissolving from this Element into solid {@code toColor} instead of into plain transparency. See {@link FadeTransition}'s class docs. */
+    /**
+     * As {@link #fadeOut(float)}, but dissolving from this Element into solid {@code toColor} instead of into plain transparency. See {@link FadeTransition}'s class docs.
+     */
     public FadeTransition fadeOut(Color toColor, float durationSeconds) {
         return fadeOut(toColor, durationSeconds, null);
     }
 
-    /** As {@link #fadeOut(Color, float)}, firing {@code onComplete} once the fade finishes. */
+    /**
+     * As {@link #fadeOut(Color, float)}, firing {@code onComplete} once the fade finishes.
+     */
     public FadeTransition fadeOut(Color toColor, float durationSeconds, Runnable onComplete) {
         FadeTransition fade = new FadeTransition(durationSeconds, FadeTransition.Direction.OUT, toColor, onComplete);
         playFade(fade);
         return fade;
     }
 
-    /** Like {@link #playTransition}, but first drops any {@link FadeTransition} already running on this Element. Without that, a fade started while another is still in flight, such as a click mid-fade, would stack, and both would write to {@link #setOpacity} every frame instead of the new one taking over. */
+    /**
+     * Like {@link #playTransition}, but first drops any {@link FadeTransition} already running on this Element. Without that, a fade started while another is still in flight, such as a click mid-fade, would stack, and both would write to {@link #setOpacity} every frame instead of the new one taking over.
+     */
     private void playFade(FadeTransition fade) {
         transitions.removeIf(t -> t instanceof FadeTransition);
         playTransition(fade);

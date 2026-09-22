@@ -54,11 +54,16 @@ public final class NativeMenuBar {
     private static final Logger log = LogManager.getLogger("Engine");
     private static final boolean MAC = System.getProperty("os.name").toLowerCase().contains("mac");
 
-    /** One immutable row of a menu, copied from a {@link MenuItem} on the render thread. */
+    /**
+     * One immutable row of a menu, copied from a {@link MenuItem} on the render thread.
+     */
     record Node(String label, String shortcut, boolean enabled, boolean checked, boolean checkable,
-                boolean separator, List<Node> children, MenuItem source) {}
+                boolean separator, List<Node> children, MenuItem source) {
+    }
 
-    /** Every menu of the bar, in order. Records compare deeply, so equal snapshots mean nothing visible changed. */
+    /**
+     * Every menu of the bar, in order. Records compare deeply, so equal snapshots mean nothing visible changed.
+     */
     record Snapshot(List<String> titles, List<List<Node>> menus) {
         static final Snapshot EMPTY = new Snapshot(List.of(), List.of());
     }
@@ -68,9 +73,12 @@ public final class NativeMenuBar {
     private static Object owner;          // render thread: the bar currently driving the native menu
     private static Snapshot lastSent;     // render thread: what was last handed over
 
-    private NativeMenuBar() {}
+    private NativeMenuBar() {
+    }
 
-    /** Whether this platform has a system menu bar this class can drive (macOS only). */
+    /**
+     * Whether this platform has a system menu bar this class can drive (macOS only).
+     */
     public static boolean isSupported() {
         return MAC;
     }
@@ -93,7 +101,9 @@ public final class NativeMenuBar {
         pending.set(snapshot);
     }
 
-    /** Render thread. Removes {@code owner}'s menus from the system menu bar and frees it for another bar. */
+    /**
+     * Render thread. Removes {@code owner}'s menus from the system menu bar and frees it for another bar.
+     */
     public static void release(Object owner) {
         if (!MAC || NativeMenuBar.owner != owner) return;
         NativeMenuBar.owner = null;
@@ -110,7 +120,9 @@ public final class NativeMenuBar {
         return out;
     }
 
-    /** Main thread, once per loop iteration: applies the newest submitted snapshot to the system menu bar. */
+    /**
+     * Main thread, once per loop iteration: applies the newest submitted snapshot to the system menu bar.
+     */
     public static void pump() {
         if (!MAC) return;
         Snapshot snapshot = pending.getAndSet(null);
@@ -122,7 +134,9 @@ public final class NativeMenuBar {
         }
     }
 
-    /** Render thread, once per frame: runs the callbacks of items chosen in the system menu bar. */
+    /**
+     * Render thread, once per frame: runs the callbacks of items chosen in the system menu bar.
+     */
     public static void drainActions() {
         Runnable action;
         while ((action = actions.poll()) != null) {
@@ -194,7 +208,9 @@ public final class NativeMenuBar {
             return objc_getClass(name);
         }
 
-        /** An autoreleased NSString; the arena only has to outlive the copy AppKit makes. */
+        /**
+         * An autoreleased NSString; the arena only has to outlive the copy AppKit makes.
+         */
         private static long nsString(String s, Arena arena) {
             return send(cls("NSString"), "stringWithUTF8String:", arena.allocateFrom(s == null ? "" : s).address());
         }
@@ -248,7 +264,9 @@ public final class NativeMenuBar {
             ADD_METHOD.invokeExact(cls, selector, imp, types);
         }
 
-        /** The IMP behind {@code -menuAction:}. Runs on the main thread, so it only queues the callback. */
+        /**
+         * The IMP behind {@code -menuAction:}. Runs on the main thread, so it only queues the callback.
+         */
         @SuppressWarnings("unused") // reached through the upcall stub
         private static void onAction(long self, long selector, long sender) {
             try {
@@ -290,7 +308,9 @@ public final class NativeMenuBar {
             }
         }
 
-        /** Only used if GLFW did not create a main menu: a bare application menu with Quit. */
+        /**
+         * Only used if GLFW did not create a main menu: a bare application menu with Quit.
+         */
         private static long createMainMenu(long app, Arena arena) {
             long menu = send(send(cls("NSMenu"), "alloc"), "initWithTitle:", nsString("", arena));
             long appItem = send(send(cls("NSMenuItem"), "alloc"), "initWithTitle:action:keyEquivalent:",
@@ -305,7 +325,9 @@ public final class NativeMenuBar {
             return send(app, "mainMenu");
         }
 
-        /** Builds an NSMenu (owned, +1) from {@code nodes}; the caller releases it after attaching it. */
+        /**
+         * Builds an NSMenu (owned, +1) from {@code nodes}; the caller releases it after attaching it.
+         */
         private static long buildMenu(List<Node> nodes, String title, Arena arena) {
             long menu = send(send(cls("NSMenu"), "alloc"), "initWithTitle:", nsString(title, arena));
             send(menu, "setAutoenablesItems:", 0L); // enabled state comes from the model, not from responder-chain checks
@@ -340,8 +362,11 @@ public final class NativeMenuBar {
         }
     }
 
-    /** A key equivalent: the key and its NSEventModifierFlags mask. */
-    record Key(String character, long mask) {}
+    /**
+     * A key equivalent: the key and its NSEventModifierFlags mask.
+     */
+    record Key(String character, long mask) {
+    }
 
     /**
      * Turns display text like {@code "Ctrl+Shift+Z"} into a macOS key equivalent, or null if it has none this can
@@ -361,7 +386,9 @@ public final class NativeMenuBar {
                 case "ctrl", "control", "cmd", "command", "meta", "super" -> mask |= 1L << 20;
                 case "alt", "option", "opt" -> mask |= 1L << 19;
                 case "shift" -> mask |= 1L << 17;
-                default -> { return null; }
+                default -> {
+                    return null;
+                }
             }
         }
         return new Key(key.toLowerCase(), mask);

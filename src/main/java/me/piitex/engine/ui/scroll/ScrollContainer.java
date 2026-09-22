@@ -52,7 +52,9 @@ public class ScrollContainer extends Container implements Scrollable {
         super(x, y, width, height);
     }
 
-    /** Whether the mouse wheel or trackpad scrolls this container vertically. On by default. */
+    /**
+     * Whether the mouse wheel or trackpad scrolls this container vertically. On by default.
+     */
     public void setVerticalScrollEnabled(boolean enabled) {
         this.verticalScrollEnabled = enabled;
     }
@@ -61,7 +63,9 @@ public class ScrollContainer extends Container implements Scrollable {
         return verticalScrollEnabled;
     }
 
-    /** Whether the mouse wheel or trackpad scrolls this container horizontally. Off by default, since most scrollable content, such as lists and forms, needs only vertical scrolling. */
+    /**
+     * Whether the mouse wheel or trackpad scrolls this container horizontally. Off by default, since most scrollable content, such as lists and forms, needs only vertical scrolling.
+     */
     public void setHorizontalScrollEnabled(boolean enabled) {
         this.horizontalScrollEnabled = enabled;
     }
@@ -70,7 +74,9 @@ public class ScrollContainer extends Container implements Scrollable {
         return horizontalScrollEnabled;
     }
 
-    /** Logical points scrolled per unit of raw wheel offset. See {@link Scrollable#onScroll}. Larger is faster. */
+    /**
+     * Logical points scrolled per unit of raw wheel offset. See {@link Scrollable#onScroll}. Larger is faster.
+     */
     public void setScrollSpeed(float scrollSpeed) {
         this.scrollSpeed = scrollSpeed;
     }
@@ -79,7 +85,9 @@ public class ScrollContainer extends Container implements Scrollable {
         return scrollSpeed;
     }
 
-    /** Whether a scrollbar is drawn at all. Wheel and programmatic scrolling still work when this is false; there is just nothing to grab with the mouse. On by default. */
+    /**
+     * Whether a scrollbar is drawn at all. Wheel and programmatic scrolling still work when this is false; there is just nothing to grab with the mouse. On by default.
+     */
     public void setScrollbarVisible(boolean visible) {
         this.scrollbarVisible = visible;
     }
@@ -88,7 +96,9 @@ public class ScrollContainer extends Container implements Scrollable {
         return scrollbarVisible;
     }
 
-    /** The colors, thickness, and corner radius used for both the vertical and horizontal scrollbar. Mutate it in place, or replace it wholesale. See {@link ScrollBarStyle}. */
+    /**
+     * The colors, thickness, and corner radius used for both the vertical and horizontal scrollbar. Mutate it in place, or replace it wholesale. See {@link ScrollBarStyle}.
+     */
     public ScrollBarStyle getScrollBarStyle() {
         return scrollBarStyle;
     }
@@ -121,7 +131,9 @@ public class ScrollContainer extends Container implements Scrollable {
         return Math.max(0, rightmostEdge - getWidth());
     }
 
-    /** How much further this can scroll down, in logical points. This is the vertical counterpart of {@link #getMaxScrollX()}. */
+    /**
+     * How much further this can scroll down, in logical points. This is the vertical counterpart of {@link #getMaxScrollX()}.
+     */
     public double getMaxScrollY() {
         if (getElements().isEmpty()) return 0;
         double bottomEdge = -Double.MAX_VALUE;
@@ -131,12 +143,16 @@ public class ScrollContainer extends Container implements Scrollable {
         return Math.max(0, bottomEdge - getHeight());
     }
 
-    /** Scrolls by (dx, dy) logical points relative to the current offset, clamped to the content's range. This is the same calculation {@link #onScroll} and thumb-dragging use. It is a no-op on an axis not enabled through {@link #setVerticalScrollEnabled} or {@link #setHorizontalScrollEnabled}. */
+    /**
+     * Scrolls by (dx, dy) logical points relative to the current offset, clamped to the content's range. This is the same calculation {@link #onScroll} and thumb-dragging use. It is a no-op on an axis not enabled through {@link #setVerticalScrollEnabled} or {@link #setHorizontalScrollEnabled}.
+     */
     public void scrollBy(double dx, double dy) {
         scrollTo(scrollOffsetX + dx, scrollOffsetY + dy);
     }
 
-    /** Scrolls directly to (x, y), clamped to [0, {@link #getMaxScrollX()}]/[0, {@link #getMaxScrollY()}]. A no-op on an axis that's not enabled. */
+    /**
+     * Scrolls directly to (x, y), clamped to [0, {@link #getMaxScrollX()}]/[0, {@link #getMaxScrollY()}]. A no-op on an axis that's not enabled.
+     */
     public void scrollTo(double x, double y) {
         if (horizontalScrollEnabled) setScrollOffsetX(x);
         if (verticalScrollEnabled) setScrollOffsetY(y);
@@ -170,7 +186,9 @@ public class ScrollContainer extends Container implements Scrollable {
         scrollOffsetY = Math.max(0, Math.min(target, getMaxScrollY()));
     }
 
-    /** Scrolling moves the children's space, not the children: it is applied when drawing and hit-testing. */
+    /**
+     * Scrolling moves the children's space, not the children: it is applied when drawing and hit-testing.
+     */
     @Override
     protected double childOffsetX() {
         return -scrollOffsetX;
@@ -181,12 +199,16 @@ public class ScrollContainer extends Container implements Scrollable {
         return -scrollOffsetY;
     }
 
-    /** The total span the vertical thumb represents: everything scrollable plus one full viewport. This is used only for sizing the thumb proportionally; {@link #getMaxScrollY()} is the source of truth for how far this can scroll. */
+    /**
+     * The total span the vertical thumb represents: everything scrollable plus one full viewport. This is used only for sizing the thumb proportionally; {@link #getMaxScrollY()} is the source of truth for how far this can scroll.
+     */
     private double effectiveContentHeight() {
         return getMaxScrollY() + getHeight();
     }
 
-    /** The horizontal counterpart of {@link #effectiveContentHeight()}. */
+    /**
+     * The horizontal counterpart of {@link #effectiveContentHeight()}.
+     */
     private double effectiveContentWidth() {
         return getMaxScrollX() + getWidth();
     }
@@ -268,13 +290,17 @@ public class ScrollContainer extends Container implements Scrollable {
      * Container}'s own drag handling (moving this whole Container around, if {@link
      * #setDraggable} was also turned on) for a press anywhere else.
      */
-    /** True over a scrollbar thumb, so a child overlapping it (e.g. a text block) doesn't take the press. */
+    /**
+     * True over a scrollbar thumb, so a child overlapping it (e.g. a text block) doesn't take the press.
+     */
     @Override
     public boolean interceptsPointer(double px, double py) {
         return thumbAt(px, py);
     }
 
-    /** A press on a thumb is this container's to handle even when it isn't otherwise draggable, so it isn't handed up to an ancestor. */
+    /**
+     * A press on a thumb is this container's to handle even when it isn't otherwise draggable, so it isn't handed up to an ancestor.
+     */
     @Override
     public boolean canDrag(double x, double y) {
         return thumbAt(x, y) || super.canDrag(x, y);

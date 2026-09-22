@@ -56,7 +56,9 @@ public class DownloadListContainer extends VerticalLayout {
         return manager;
     }
 
-    /** Shows or hides the summary line above the cards. Default true. */
+    /**
+     * Shows or hides the summary line above the cards. Default true.
+     */
     public void setShowSummary(boolean showSummary) {
         if (showSummary == this.showSummary) return;
         this.showSummary = showSummary;
@@ -68,12 +70,16 @@ public class DownloadListContainer extends VerticalLayout {
         return summary;
     }
 
-    /** Whether the container's height follows its content. Default true. */
+    /**
+     * Whether the container's height follows its content. Default true.
+     */
     public void setAutoHeight(boolean autoHeight) {
         this.autoHeight = autoHeight;
     }
 
-    /** Called once for each card as it is created: restyle it, change its format or colors. Applies to future cards only. */
+    /**
+     * Called once for each card as it is created: restyle it, change its format or colors. Applies to future cards only.
+     */
     public void setCardCustomizer(java.util.function.Consumer<DownloadBarContainer> customizer) {
         this.cardCustomizer = customizer;
     }

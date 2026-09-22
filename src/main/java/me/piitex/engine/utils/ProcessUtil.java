@@ -25,21 +25,34 @@ public final class ProcessUtil {
     private static final boolean WINDOWS =
             System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
 
-    /** How long to wait for a graceful exit before escalating (when force is enabled). */
+    /**
+     * How long to wait for a graceful exit before escalating (when force is enabled).
+     */
     private static final long GRACE_MILLIS = 3000;
 
-    private ProcessUtil() {}
+    private ProcessUtil() {
+    }
 
     public enum Result {
-        /** The process was found, matched, and is no longer running. */
+        /**
+         * The process was found, matched, and is no longer running.
+         */
         TERMINATED,
-        /** No process with that PID (or name) exists. */
+        /**
+         * No process with that PID (or name) exists.
+         */
         NOT_FOUND,
-        /** The PID exists but its executable name differs from the expected name, or could not be read. */
+        /**
+         * The PID exists but its executable name differs from the expected name, or could not be read.
+         */
         NAME_MISMATCH,
-        /** Refused: the target is this JVM, or a PID the OS reserves (0/1). */
+        /**
+         * Refused: the target is this JVM, or a PID the OS reserves (0/1).
+         */
         REFUSED,
-        /** The process matched but survived (insufficient permission, or force was not requested). */
+        /**
+         * The process matched but survived (insufficient permission, or force was not requested).
+         */
         FAILED
     }
 
@@ -70,7 +83,9 @@ public final class ProcessUtil {
         return terminate(handle, force);
     }
 
-    /** Graceful-only overload of {@link #kill(long, String, boolean)}. */
+    /**
+     * Graceful-only overload of {@link #kill(long, String, boolean)}.
+     */
     public static Result kill(long pid, String name) {
         return kill(pid, name, false);
     }
@@ -93,7 +108,9 @@ public final class ProcessUtil {
         return killed;
     }
 
-    /** Returns all live processes whose executable name matches {@code name}. */
+    /**
+     * Returns all live processes whose executable name matches {@code name}.
+     */
     public static List<ProcessHandle> findByName(String name) {
         return ProcessHandle.allProcesses()
                 .filter(ProcessHandle::isAlive)
@@ -101,7 +118,9 @@ public final class ProcessUtil {
                 .toList();
     }
 
-    /** True if a process with this PID is alive and its executable name matches. */
+    /**
+     * True if a process with this PID is alive and its executable name matches.
+     */
     public static boolean isRunning(long pid, String name) {
         return ProcessHandle.of(pid).filter(ProcessHandle::isAlive).filter(h -> nameMatches(h, name)).isPresent();
     }

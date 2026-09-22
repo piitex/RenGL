@@ -151,7 +151,9 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
         return textColor.get();
     }
 
-    /** Pins this text color against every future theme switch. See {@link Overridable}. */
+    /**
+     * Pins this text color against every future theme switch. See {@link Overridable}.
+     */
     public void setTextColor(Paint textColor) {
         this.textColor.set(textColor);
     }
@@ -285,7 +287,9 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
         }
     }
 
-    /** Themes {@link #getTextColor()} as a baseline. This is a no-op once {@link #setTextColor} has pinned it. See {@link Overridable}. */
+    /**
+     * Themes {@link #getTextColor()} as a baseline. This is a no-op once {@link #setTextColor} has pinned it. See {@link Overridable}.
+     */
     @Override
     public void applyTheme(Theme theme) {
         textColor.applyTheme(theme.getText());

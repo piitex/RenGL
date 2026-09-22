@@ -40,7 +40,9 @@ public class InputManager {
         eventQueue.offer(new InputEvent(InputEvent.Type.MOUSE_ENTER, time, 0, 0, -1, entered ? 1 : 0));
     }
 
-    /** GLFW's scroll callback. {@code xoffset} and {@code yoffset} are wheel notches or trackpad deltas rather than a position, so they are carried in the event's x and y fields rather than as a cursor location. */
+    /**
+     * GLFW's scroll callback. {@code xoffset} and {@code yoffset} are wheel notches or trackpad deltas rather than a position, so they are carried in the event's x and y fields rather than as a cursor location.
+     */
     public void onScroll(long window, double xoffset, double yoffset) {
         long time = System.nanoTime();
         eventQueue.offer(new InputEvent(InputEvent.Type.SCROLL, time, xoffset, yoffset, -1, -1));

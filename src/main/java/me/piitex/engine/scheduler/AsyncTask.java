@@ -20,7 +20,9 @@ public class AsyncTask<T> extends Task {
     private T result;         // guarded by this
     private Throwable error;  // guarded by this
 
-    /** Runs {@code listener} on the render thread with the work's result. Not called if the work failed or was cancelled. */
+    /**
+     * Runs {@code listener} on the render thread with the work's result. Not called if the work failed or was cancelled.
+     */
     public AsyncTask<T> onSuccess(Consumer<T> listener) {
         synchronized (this) {
             if (!finished) {
@@ -34,7 +36,9 @@ public class AsyncTask<T> extends Task {
         return this;
     }
 
-    /** Runs {@code listener} on the render thread if the work threw. Not called if it was cancelled. */
+    /**
+     * Runs {@code listener} on the render thread if the work threw. Not called if it was cancelled.
+     */
     public AsyncTask<T> onError(Consumer<Throwable> listener) {
         synchronized (this) {
             if (!finished) {
@@ -48,7 +52,9 @@ public class AsyncTask<T> extends Task {
         return this;
     }
 
-    /** Cancels the work: interrupts it if it is running, and drops its callbacks. */
+    /**
+     * Cancels the work: interrupts it if it is running, and drops its callbacks.
+     */
     @Override
     public void cancel() {
         super.cancel();
@@ -61,7 +67,9 @@ public class AsyncTask<T> extends Task {
         if (isCancelled()) future.cancel(true);
     }
 
-    /** Worker thread. Records the outcome and queues the matching callbacks for the render thread. */
+    /**
+     * Worker thread. Records the outcome and queues the matching callbacks for the render thread.
+     */
     void complete(T value, Throwable failure) {
         List<Runnable> deliveries = new ArrayList<>();
         synchronized (this) {

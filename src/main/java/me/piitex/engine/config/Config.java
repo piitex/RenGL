@@ -62,14 +62,18 @@ public final class Config {
         return new Config(ConfigParser.parse(text));
     }
 
-    /** Loads a file; throws {@link java.nio.file.NoSuchFileException} if missing. */
+    /**
+     * Loads a file; throws {@link java.nio.file.NoSuchFileException} if missing.
+     */
     public static Config load(Path path) throws IOException {
         Config config = parse(Files.readString(path, StandardCharsets.UTF_8));
         config.sourcePath = path;
         return config;
     }
 
-    /** Loads a file, or returns an empty config if it does not exist yet. */
+    /**
+     * Loads a file, or returns an empty config if it does not exist yet.
+     */
     public static Config loadOrEmpty(Path path) throws IOException {
         if (Files.exists(path)) return load(path);
         Config config = new Config();
@@ -91,17 +95,23 @@ public final class Config {
         return config;
     }
 
-    /** True if nothing is set. A config loaded from a missing file (see {@link #loadOrEmpty}) is empty. */
+    /**
+     * True if nothing is set. A config loaded from a missing file (see {@link #loadOrEmpty}) is empty.
+     */
     public boolean isEmpty() {
         return root.isEmpty();
     }
 
-    /** The file this config saves to with {@link #save()}, or null if it has none. Set by load, save(Path) and the environment. */
+    /**
+     * The file this config saves to with {@link #save()}, or null if it has none. Set by load, save(Path) and the environment.
+     */
     public Path getSourcePath() {
         return sourcePath;
     }
 
-    /** Sets the file {@link #save()} writes to. */
+    /**
+     * Sets the file {@link #save()} writes to.
+     */
     public Config setSourcePath(Path path) {
         this.sourcePath = path;
         return this;
@@ -120,7 +130,9 @@ public final class Config {
         save(sourcePath);
     }
 
-    /** Writes the config, replacing the file atomically so a crash never leaves it half-written. Later {@link #save()} calls use this path. */
+    /**
+     * Writes the config, replacing the file atomically so a crash never leaves it half-written. Later {@link #save()} calls use this path.
+     */
     public void save(Path path) throws IOException {
         this.sourcePath = path;
         Path abs = path.toAbsolutePath();
@@ -136,7 +148,9 @@ public final class Config {
 
     // ---------------------------------------------------------------- reading
 
-    /** Raw value at {@code path} (String, Boolean, Long, Double, List, or a nested section map), or null. */
+    /**
+     * Raw value at {@code path} (String, Boolean, Long, Double, List, or a nested section map), or null.
+     */
     public Object get(String path) {
         Object cur = root;
         for (String part : split(path)) {
@@ -160,7 +174,9 @@ public final class Config {
         return getString(path, null);
     }
 
-    /** The int at {@code path}, or null if missing or not a number. */
+    /**
+     * The int at {@code path}, or null if missing or not a number.
+     */
     public Integer getInt(String path) {
         Long v = getLong(path);
         return v == null ? null : v.intValue();
@@ -171,12 +187,17 @@ public final class Config {
         return v == null ? def : v;
     }
 
-    /** The long at {@code path}, or null if missing or not a number. */
+    /**
+     * The long at {@code path}, or null if missing or not a number.
+     */
     public Long getLong(String path) {
         Object v = get(path);
         if (v instanceof Number n) return n.longValue();
         if (v instanceof String s) {
-            try { return Long.parseLong(s.strip()); } catch (NumberFormatException ignored) { }
+            try {
+                return Long.parseLong(s.strip());
+            } catch (NumberFormatException ignored) {
+            }
         }
         return null;
     }
@@ -186,12 +207,17 @@ public final class Config {
         return v == null ? def : v;
     }
 
-    /** The double at {@code path}, or null if missing or not a number. */
+    /**
+     * The double at {@code path}, or null if missing or not a number.
+     */
     public Double getDouble(String path) {
         Object v = get(path);
         if (v instanceof Number n) return n.doubleValue();
         if (v instanceof String s) {
-            try { return Double.parseDouble(s.strip()); } catch (NumberFormatException ignored) { }
+            try {
+                return Double.parseDouble(s.strip());
+            } catch (NumberFormatException ignored) {
+            }
         }
         return null;
     }
@@ -201,7 +227,9 @@ public final class Config {
         return v == null ? def : v;
     }
 
-    /** The boolean at {@code path}, or null if missing or not {@code true}/{@code false}. */
+    /**
+     * The boolean at {@code path}, or null if missing or not {@code true}/{@code false}.
+     */
     public Boolean getBoolean(String path) {
         Object v = get(path);
         if (v instanceof Boolean b) return b;
@@ -217,7 +245,9 @@ public final class Config {
         return v == null ? def : v;
     }
 
-    /** A list at {@code path}. A single scalar is returned as a one-element list; missing gives an empty list. */
+    /**
+     * A list at {@code path}. A single scalar is returned as a one-element list; missing gives an empty list.
+     */
     public List<Object> getList(String path) {
         Object v = get(path);
         if (v instanceof List<?> l) return Collections.unmodifiableList(new ArrayList<>(l));
@@ -231,13 +261,17 @@ public final class Config {
         return out;
     }
 
-    /** A live view of the nested section at {@code path}; changes write through to this config. */
+    /**
+     * A live view of the nested section at {@code path}; changes write through to this config.
+     */
     @SuppressWarnings("unchecked")
     public Optional<Config> getSection(String path) {
         return get(path) instanceof Map<?, ?> m ? Optional.of(new Config((Map<String, Object>) m)) : Optional.empty();
     }
 
-    /** Keys of this config. Deep returns dotted paths of every leaf value; shallow returns top-level names. */
+    /**
+     * Keys of this config. Deep returns dotted paths of every leaf value; shallow returns top-level names.
+     */
     public Set<String> getKeys(boolean deep) {
         Set<String> out = new LinkedHashSet<>();
         collectKeys(root, "", deep, out);
@@ -283,12 +317,16 @@ public final class Config {
         return this;
     }
 
-    /** Sets a value only if nothing exists at {@code path}; use to seed defaults before saving. */
+    /**
+     * Sets a value only if nothing exists at {@code path}; use to seed defaults before saving.
+     */
     public Config setDefault(String path, Object value) {
         return has(path) ? this : set(path, value);
     }
 
-    /** Ensures a section exists at {@code path} and returns a live view of it. */
+    /**
+     * Ensures a section exists at {@code path} and returns a live view of it.
+     */
     @SuppressWarnings("unchecked")
     public Config createSection(String path) {
         Map<String, Object> cur = root;
