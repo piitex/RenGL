@@ -3,6 +3,7 @@ package me.piitex.engine.gl.renderer;
 import me.piitex.engine.Window;
 import me.piitex.engine.scheduler.Scheduler;
 import me.piitex.engine.ui.Element;
+import me.piitex.engine.ui.background.Background;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.LinearGradient;
 import me.piitex.engine.ui.color.Paint;
@@ -138,6 +139,10 @@ public final class Snapshot implements AutoCloseable {
             renderer.begin();
             if (background instanceof LinearGradient gradient) {
                 renderer.drawGradient(0f, 0f, w, h, gradient, 0f);
+            }
+            Background windowBackground = window.getBackground();
+            if (windowBackground != null) {
+                windowBackground.render(renderer, 0f, 0f, w, h);
             }
             for (Map.Entry<Integer, ? extends Element> entry : window.getContainers().entrySet()) {
                 if (entry.getValue().isEnabled()) {
