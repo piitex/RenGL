@@ -12,6 +12,7 @@ import me.piitex.engine.input.CursorManager;
 import me.piitex.engine.input.FileDialog;
 import me.piitex.engine.input.InputProcessor;
 import me.piitex.engine.scheduler.Scheduler;
+import me.piitex.engine.ui.background.Background;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.text.TooltipManager;
 import me.piitex.engine.ui.color.AnimatedPaint;
@@ -204,6 +205,10 @@ public class Engine {
             if (background instanceof AnimatedPaint animated) {
                 animated.advance(delta);
             }
+            Background windowBackground = window.getBackground();
+            if (windowBackground != null) {
+                windowBackground.update(delta, 0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight());
+            }
 
             NativeMenuBar.drainActions(); // callbacks of items chosen in the macOS system menu bar
             FileDialog.drainCallbacks();  // results of native open/save dialogs
@@ -237,6 +242,10 @@ public class Engine {
                 // ScrollingGradient window background actually scroll.
                 renderer.drawGradient(0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight(),
                         gradient, 0f);
+            }
+
+            if (windowBackground != null) {
+                windowBackground.render(renderer, 0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight());
             }
 
             for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {

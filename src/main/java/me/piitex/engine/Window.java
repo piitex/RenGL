@@ -5,6 +5,7 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.Snapshot;
 import me.piitex.engine.scheduler.Scheduler;
 import me.piitex.engine.input.InputManager;
+import me.piitex.engine.ui.background.Background;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
@@ -46,6 +47,7 @@ public class Window implements Themeable {
     private GLFWindow glfWindow;
     private Element focusedElement;
     private final Overridable<Paint> backgroundColor = new Overridable<>(Color.WHITE);
+    private Background background;
     private Container popup;
     private Runnable popupDismissListener;
     private ModalContainer modal;
@@ -419,6 +421,29 @@ public class Window implements Themeable {
      */
     public void setBackgroundColor(Paint backgroundColor) {
         this.backgroundColor.set(backgroundColor == null ? Color.WHITE : backgroundColor);
+    }
+
+    /**
+     * A drawable, optionally animated effect painted over the flat {@link
+     * #getBackgroundColor()} fill, behind every Container. This is the window-level
+     * counterpart to {@link me.piitex.engine.ui.Element#setBackground}: the same
+     * {@link Background} implementations, such as {@link
+     * me.piitex.engine.ui.background.ConstellationBackground} or {@link
+     * me.piitex.engine.ui.background.DotGridBackground}, work here at the window's own
+     * size instead of a single Element's. Null, the default, draws nothing extra.
+     */
+    public Background getBackground() {
+        return background;
+    }
+
+    /**
+     * Sets the window's attached background effect. Pass null to remove it. Unlike
+     * {@link #setBackgroundColor}, this is independent of theming: it is drawn as-is on
+     * top of whatever {@link #getBackgroundColor()} resolves to, every frame, and is not
+     * affected by {@link ThemeManager#setCurrent}.
+     */
+    public void setBackground(Background background) {
+        this.background = background;
     }
 
     /**
