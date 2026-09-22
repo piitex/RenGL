@@ -44,7 +44,9 @@ public class ResizableContainerDemo {
         new Engine().start(window);
     }
 
-    /** A panel positioned by hand, with every corner draggable. */
+    /**
+     * A panel positioned by hand, with every corner draggable.
+     */
     private static ResizableContainer floatingPanel() {
         ResizableContainer panel = new ResizableContainer(60, 60, 360, 260);
         panel.useTheme();
@@ -68,7 +70,9 @@ public class ResizableContainerDemo {
         return panel;
     }
 
-    /** A plain full-window root holding a layout that centers a resizable panel. */
+    /**
+     * A plain full-window root holding a layout that centers a resizable panel.
+     */
     private static Container rootWithCenteredPanel() {
         Container root = new Container(1280, 720);
         root.getStyling().setBackgroundColor(Color.TRANSPARENT);

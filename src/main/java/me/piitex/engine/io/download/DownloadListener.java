@@ -8,15 +8,21 @@ package me.piitex.engine.io.download;
  * Unlike the engine's single-slot {@code onXxx} hooks, a download holds any number of listeners.
  */
 public interface DownloadListener {
-    /** Fired on every state change, including the first move out of {@link DownloadState#QUEUED}. */
+    /**
+     * Fired on every state change, including the first move out of {@link DownloadState#QUEUED}.
+     */
     default void onStateChanged(Download download, DownloadState state) {
     }
 
-    /** Fired once when the file is complete and verified, after {@link #onStateChanged}. */
+    /**
+     * Fired once when the file is complete and verified, after {@link #onStateChanged}.
+     */
     default void onComplete(Download download) {
     }
 
-    /** Fired once when the download gives up, after {@link #onStateChanged}. */
+    /**
+     * Fired once when the download gives up, after {@link #onStateChanged}.
+     */
     default void onFailed(Download download, Throwable error) {
     }
 }

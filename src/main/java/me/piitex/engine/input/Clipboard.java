@@ -32,14 +32,19 @@ public final class Clipboard {
     private static final AtomicReference<String> pendingWrite = new AtomicReference<>();
     private static final AtomicReference<CompletableFuture<String>> pendingRead = new AtomicReference<>();
 
-    private Clipboard() {}
+    private Clipboard() {
+    }
 
-    /** Main thread only. Call once, right after the GLFW window is created. */
+    /**
+     * Main thread only. Call once, right after the GLFW window is created.
+     */
     public static void attach(long windowHandle) {
         Clipboard.windowHandle = windowHandle;
     }
 
-    /** Safe to call from any thread: queues {@code text} to become the OS clipboard's contents on the next {@link #pump}. */
+    /**
+     * Safe to call from any thread: queues {@code text} to become the OS clipboard's contents on the next {@link #pump}.
+     */
     public static void copy(String text) {
         if (text != null) {
             pendingWrite.set(text);
@@ -71,7 +76,9 @@ public final class Clipboard {
         }
     }
 
-    /** Main thread only. Flushes any pending {@link #copy} or {@link #paste} request. Call once per Engine main-loop iteration. */
+    /**
+     * Main thread only. Flushes any pending {@link #copy} or {@link #paste} request. Call once per Engine main-loop iteration.
+     */
     public static void pump() {
         if (windowHandle == 0L) return;
 

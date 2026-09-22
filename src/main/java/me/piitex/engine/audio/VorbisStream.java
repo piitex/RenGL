@@ -9,7 +9,9 @@ import java.nio.ShortBuffer;
 import static org.lwjgl.stb.STBVorbis.*;
 import static org.lwjgl.system.MemoryUtil.*;
 
-/** Streams an Ogg Vorbis file out of memory with stb_vorbis. */
+/**
+ * Streams an Ogg Vorbis file out of memory with stb_vorbis.
+ */
 final class VorbisStream implements PcmStream {
     private static final int CHUNK = 8192;
 
@@ -41,9 +43,20 @@ final class VorbisStream implements PcmStream {
         chunk = memAllocShort(CHUNK * channels);
     }
 
-    @Override public int channels() { return channels; }
-    @Override public int sampleRate() { return rate; }
-    @Override public long totalFrames() { return stb_vorbis_stream_length_in_samples(handle); }
+    @Override
+    public int channels() {
+        return channels;
+    }
+
+    @Override
+    public int sampleRate() {
+        return rate;
+    }
+
+    @Override
+    public long totalFrames() {
+        return stb_vorbis_stream_length_in_samples(handle);
+    }
 
     @Override
     public int read(short[] dst, int off, int len) {

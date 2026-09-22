@@ -82,7 +82,9 @@ public class SeparatorOverlay extends Overlay implements Themeable {
         return lineColor.get();
     }
 
-    /** Pins the line color against every future theme switch. See {@link Overridable}. */
+    /**
+     * Pins the line color against every future theme switch. See {@link Overridable}.
+     */
     public void setLineColor(Color lineColor) {
         this.lineColor.set(lineColor);
     }

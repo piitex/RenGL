@@ -70,7 +70,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
 
     private final StringBuilder text = new StringBuilder();
     private int cursorIndex = 0;
-    /** The other edge of the selection, or -1 if nothing is selected. {@link #cursorIndex} is always the active edge. */
+    /**
+     * The other edge of the selection, or -1 if nothing is selected. {@link #cursorIndex} is always the active edge.
+     */
     private int selectionAnchor = -1;
 
     private TextEditingOptions options = new TextEditingOptions();
@@ -97,7 +99,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     private boolean draggingThumb = false;
     private double thumbDragAnchorMouseY, thumbDragAnchorOffsetY;
 
-    /** The Line layout, rebuilt lazily by {@link #ensureLayout()}. See that method. */
+    /**
+     * The Line layout, rebuilt lazily by {@link #ensureLayout()}. See that method.
+     */
     private final List<Line> lines = new ArrayList<>();
     private boolean layoutDirty = true;
     private double lastLayoutWidth = -1;
@@ -112,7 +116,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
      */
     private float preferredX = -1f;
 
-    /** Consecutive presses landing within the double-click time and distance of each other: 1 for a fresh click, 2 for a double, 3 or more for a triple. */
+    /**
+     * Consecutive presses landing within the double-click time and distance of each other: 1 for a fresh click, 2 for a double, 3 or more for a triple.
+     */
     private int clickCount = 0;
     private long lastPressTimeNanos = Long.MIN_VALUE;
     private double lastPressX, lastPressY;
@@ -156,7 +162,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         ThemeManager.register(this);
     }
 
-    /** Uses a custom font file (cached via {@link Font}) instead of the system default. */
+    /**
+     * Uses a custom font file (cached via {@link Font}) instead of the system default.
+     */
     public TextAreaOverlay(double x, double y, double width, double height, File fontFile, float fontSize, Paint textColor) {
         setX(x);
         setY(y);
@@ -193,7 +201,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         scrollBarStyle.applyThemeThumbColor(theme.getScrollThumb());
     }
 
-    /** Use a custom font file instead of the system default. Cached by path, so it is cheap to call repeatedly with the same file. */
+    /**
+     * Use a custom font file instead of the system default. Cached by path, so it is cheap to call repeatedly with the same file.
+     */
     public void setFontFile(File fontFile) {
         this.typeface = Font.load(fontFile);
         fontDirty = true;
@@ -204,12 +214,16 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         setFontFile(new File(fontFilePath));
     }
 
-    /** The current contents, newlines included. */
+    /**
+     * The current contents, newlines included.
+     */
     public String getText() {
         return text.toString();
     }
 
-    /** Replaces the contents wholesale and moves the cursor to the end. Does not fire {@link #onTextChanged}. Works on a read-only box, and discards the undo history. */
+    /**
+     * Replaces the contents wholesale and moves the cursor to the end. Does not fire {@link #onTextChanged}. Works on a read-only box, and discards the undo history.
+     */
     public void setText(String newText) {
         history.clear();
         text.setLength(0);
@@ -253,7 +267,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return options;
     }
 
-    /** Replaces this box's options wholesale. Passing null is ignored. */
+    /**
+     * Replaces this box's options wholesale. Passing null is ignored.
+     */
     public void setOptions(TextEditingOptions options) {
         if (options != null) {
             this.options = options;
@@ -268,7 +284,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         options.setTextColor(textColor);
     }
 
-    /** Text shown (in {@link #getPlaceholderColor()}) whenever the box is empty. */
+    /**
+     * Text shown (in {@link #getPlaceholderColor()}) whenever the box is empty.
+     */
     public String getPlaceholder() {
         return options.getPlaceholder();
     }
@@ -314,7 +332,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         layoutDirty = true;
     }
 
-    /** Extra vertical gap, in logical points, between lines, added on top of the font's own line height. */
+    /**
+     * Extra vertical gap, in logical points, between lines, added on top of the font's own line height.
+     */
     public float getLineSpacing() {
         return lineSpacing;
     }
@@ -324,7 +344,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         layoutDirty = true;
     }
 
-    /** Horizontal inset, in logical points, between this box's edges and its text. */
+    /**
+     * Horizontal inset, in logical points, between this box's edges and its text.
+     */
     public float getPaddingX() {
         return paddingX;
     }
@@ -334,7 +356,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         layoutDirty = true;
     }
 
-    /** Vertical inset, in logical points, between this box's top/bottom edges and its text. */
+    /**
+     * Vertical inset, in logical points, between this box's top/bottom edges and its text.
+     */
     public float getPaddingY() {
         return paddingY;
     }
@@ -345,7 +369,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
 
     // --- Scrolling -------------------------------------------------------------------------------
 
-    /** Logical points scrolled per unit of raw wheel offset. See {@link Scrollable#onScroll}. Larger is faster. */
+    /**
+     * Logical points scrolled per unit of raw wheel offset. See {@link Scrollable#onScroll}. Larger is faster.
+     */
     public float getScrollSpeed() {
         return scrollSpeed;
     }
@@ -354,7 +380,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         this.scrollSpeed = scrollSpeed;
     }
 
-    /** Whether a scrollbar thumb is drawn and draggable at all. Wheel and programmatic scrolling still work when this is false; there is just nothing to grab with the mouse. The thumb is also not drawn whenever there is nothing to scroll ({@link #getMaxScrollY()} {@code <= 0}), regardless of this setting. On by default. */
+    /**
+     * Whether a scrollbar thumb is drawn and draggable at all. Wheel and programmatic scrolling still work when this is false; there is just nothing to grab with the mouse. The thumb is also not drawn whenever there is nothing to scroll ({@link #getMaxScrollY()} {@code <= 0}), regardless of this setting. On by default.
+     */
     public boolean isScrollbarVisible() {
         return scrollbarVisible;
     }
@@ -363,7 +391,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         this.scrollbarVisible = scrollbarVisible;
     }
 
-    /** The colors, thickness, and corner radius used for the scrollbar thumb and track. This is the same {@link ScrollBarStyle} class {@link me.piitex.engine.ui.scroll.ScrollContainer} uses. Mutate it in place, or replace it wholesale. */
+    /**
+     * The colors, thickness, and corner radius used for the scrollbar thumb and track. This is the same {@link ScrollBarStyle} class {@link me.piitex.engine.ui.scroll.ScrollContainer} uses. Mutate it in place, or replace it wholesale.
+     */
     public ScrollBarStyle getScrollBarStyle() {
         return scrollBarStyle;
     }
@@ -390,12 +420,16 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return Math.max(0, contentHeight - innerHeight);
     }
 
-    /** Scrolls by {@code dy} logical points relative to the current offset, clamped to {@code [0, getMaxScrollY()]}. */
+    /**
+     * Scrolls by {@code dy} logical points relative to the current offset, clamped to {@code [0, getMaxScrollY()]}.
+     */
     public void scrollBy(double dy) {
         scrollTo(scrollOffsetY + dy);
     }
 
-    /** Scrolls directly to {@code y}, clamped to {@code [0, getMaxScrollY()]}. */
+    /**
+     * Scrolls directly to {@code y}, clamped to {@code [0, getMaxScrollY()]}.
+     */
     public void scrollTo(double y) {
         scrollOffsetY = (float) Math.max(0, Math.min(y, getMaxScrollY()));
     }
@@ -411,7 +445,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         scrollBy(-deltaY * scrollSpeed);
     }
 
-    /** Maximum number of codepoints allowed, or -1 (the default) for unlimited. */
+    /**
+     * Maximum number of codepoints allowed, or -1 (the default) for unlimited.
+     */
     public int getMaxLength() {
         return options.getMaxLength();
     }
@@ -424,17 +460,23 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return focused;
     }
 
-    /** The caret's flat index into {@link #getText()} (the active edge if there's a selection), clamped to the text's bounds. */
+    /**
+     * The caret's flat index into {@link #getText()} (the active edge if there's a selection), clamped to the text's bounds.
+     */
     protected int getCursorIndex() {
         return Math.max(0, Math.min(cursorIndex, getText().length()));
     }
 
-    /** Whether any text is currently selected. */
+    /**
+     * Whether any text is currently selected.
+     */
     public boolean hasSelection() {
         return selectionAnchor >= 0 && selectionAnchor != cursorIndex;
     }
 
-    /** Clears any active selection without changing the cursor position. */
+    /**
+     * Clears any active selection without changing the cursor position.
+     */
     public void clearSelection() {
         selectionAnchor = -1;
     }
@@ -456,7 +498,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         layoutDirty = true;
     }
 
-    /** The currently selected text, or "" if nothing is selected. */
+    /**
+     * The currently selected text, or "" if nothing is selected.
+     */
     public String getSelectedText() {
         return hasSelection() ? text.substring(selectionStart(), selectionEnd()) : "";
     }
@@ -504,7 +548,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return new TextUndoHistory.Snapshot(text.toString(), cursorIndex, selectionAnchor);
     }
 
-    /** Must be called just before every user edit mutates {@link #text}. */
+    /**
+     * Must be called just before every user edit mutates {@link #text}.
+     */
     private void recordEdit(EditKind kind) {
         if (!options.isUndoEnabled()) {
             history.clear();
@@ -537,7 +583,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         if (next != null) restore(next);
     }
 
-    /** Whether the user is blocked from changing the text. See {@link TextEditingOptions#isReadOnly()}. */
+    /**
+     * Whether the user is blocked from changing the text. See {@link TextEditingOptions#isReadOnly()}.
+     */
     public boolean isReadOnly() {
         return options.isReadOnly();
     }
@@ -546,7 +594,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         options.setReadOnly(readOnly);
     }
 
-    /** Whether Ctrl/Cmd+Z and Ctrl/Cmd+Y are active. See {@link TextEditingOptions#isUndoEnabled()}. Turning it off also forgets the existing history. */
+    /**
+     * Whether Ctrl/Cmd+Z and Ctrl/Cmd+Y are active. See {@link TextEditingOptions#isUndoEnabled()}. Turning it off also forgets the existing history.
+     */
     public boolean isUndoEnabled() {
         return options.isUndoEnabled();
     }
@@ -594,17 +644,23 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return sb.toString();
     }
 
-    /** Registers a callback fired with the new text every time it changes through typing, paste, backspace, or delete. A programmatic {@link #setText} does not fire it. Only one listener is held at a time. */
+    /**
+     * Registers a callback fired with the new text every time it changes through typing, paste, backspace, or delete. A programmatic {@link #setText} does not fire it. Only one listener is held at a time.
+     */
     public void onTextChanged(Consumer<String> consumer) {
         this.onTextChangedConsumer = consumer;
     }
 
-    /** Registers a callback fired with the current text when Ctrl/Cmd+Enter is pressed while focused. Plain Enter inserts a newline instead; see {@link #onKeyPressed}. Only one listener is held at a time. */
+    /**
+     * Registers a callback fired with the current text when Ctrl/Cmd+Enter is pressed while focused. Plain Enter inserts a newline instead; see {@link #onKeyPressed}. Only one listener is held at a time.
+     */
     public void onSubmit(Consumer<String> consumer) {
         this.onSubmitConsumer = consumer;
     }
 
-    /** Registers a callback fired with {@code true}/{@code false} when this box gains/loses keyboard focus. Only one listener is held at a time. */
+    /**
+     * Registers a callback fired with {@code true}/{@code false} when this box gains/loses keyboard focus. Only one listener is held at a time.
+     */
     public void onFocusChanged(Consumer<Boolean> consumer) {
         this.onFocusChangedConsumer = consumer;
     }
@@ -645,7 +701,8 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         if (commandModifier) {
             switch (key) {
                 case GLFW.GLFW_KEY_Z -> {
-                    if ((mods & GLFW.GLFW_MOD_SHIFT) != 0) redo(); else undo();
+                    if ((mods & GLFW.GLFW_MOD_SHIFT) != 0) redo();
+                    else undo();
                     return;
                 }
                 case GLFW.GLFW_KEY_Y -> {
@@ -748,13 +805,17 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         resetBlink();
     }
 
-    /** {@link #lineForIndex}'s start, for the line the cursor is currently on. This is what Home targets. */
+    /**
+     * {@link #lineForIndex}'s start, for the line the cursor is currently on. This is what Home targets.
+     */
     private int currentLineStart() {
         ensureLayout();
         return lineForIndex(cursorIndex).start;
     }
 
-    /** {@link #lineForIndex}'s end, for the line the cursor is currently on. This is what End targets. */
+    /**
+     * {@link #lineForIndex}'s end, for the line the cursor is currently on. This is what End targets.
+     */
     private int currentLineEnd() {
         ensureLayout();
         return lineForIndex(cursorIndex).end;
@@ -924,7 +985,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return Math.max(0, getHeight() - 2 * scrollBarStyle.getMargin());
     }
 
-    /** Total span the thumb represents: everything scrollable plus one full viewport. Used only for sizing the thumb proportionally, the same approach {@link me.piitex.engine.ui.scroll.ScrollContainer#effectiveContentHeight} takes. */
+    /**
+     * Total span the thumb represents: everything scrollable plus one full viewport. Used only for sizing the thumb proportionally, the same approach {@link me.piitex.engine.ui.scroll.ScrollContainer#effectiveContentHeight} takes.
+     */
     private double thumbLength() {
         double trackH = trackHeight();
         double contentH = getMaxScrollY() + getHeight();
@@ -998,7 +1061,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         ensureCursorVisible();
     }
 
-    /** Scrolls just enough to bring {@link #cursorIndex}'s current line fully into this box's visible inner height. A no-op if that line is already visible. See {@link #resetBlink()} for where this is called from. */
+    /**
+     * Scrolls just enough to bring {@link #cursorIndex}'s current line fully into this box's visible inner height. A no-op if that line is already visible. See {@link #resetBlink()} for where this is called from.
+     */
     private void ensureCursorVisible() {
         ensureLayout();
         String content = text.toString();
@@ -1020,7 +1085,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
 
     // --- Line layout -----------------------------------------------------------------------------
 
-    /** One visual line: {@code [start, end)} into the flat text, and whether it's terminated by a real {@code '\n'} (a paragraph break) rather than just a word-wrap point. */
+    /**
+     * One visual line: {@code [start, end)} into the flat text, and whether it's terminated by a real {@code '\n'} (a paragraph break) rather than just a word-wrap point.
+     */
     private static final class Line {
         final int start, end;
         final boolean hasNewline;
@@ -1063,7 +1130,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         layoutDirty = false;
     }
 
-    /** Greedy word-wrap of one paragraph ({@code [start, end)}, no {@code '\n'} inside it) into one or more {@link Line}s. */
+    /**
+     * Greedy word-wrap of one paragraph ({@code [start, end)}, no {@code '\n'} inside it) into one or more {@link Line}s.
+     */
     private void layoutParagraph(String content, int start, int end, org.jetbrains.skia.Font font, float innerWidth, boolean hasNewline) {
         if (start == end || !wordWrap) {
             lines.add(new Line(start, end, hasNewline));
@@ -1107,7 +1176,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return lines.get(lines.size() - 1);
     }
 
-    /** Steps through {@code line}'s text one codepoint at a time to find the closest cursor gap to local x-offset {@code x}. This is the same technique {@link TextFieldOverlay#indexForX} uses, scoped to one line and returning an absolute flat index. */
+    /**
+     * Steps through {@code line}'s text one codepoint at a time to find the closest cursor gap to local x-offset {@code x}. This is the same technique {@link TextFieldOverlay#indexForX} uses, scoped to one line and returning an absolute flat index.
+     */
     private int indexForXInLine(Line line, float x, org.jetbrains.skia.Font font) {
         String content = text.toString();
         if (line.start >= line.end || x <= 0) return line.start;
@@ -1129,7 +1200,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return line.end;
     }
 
-    /** The flat text index nearest window-space (x, y), for subclasses that need to know what is under a click. */
+    /**
+     * The flat text index nearest window-space (x, y), for subclasses that need to know what is under a click.
+     */
     protected int indexAtPoint(double windowX, double windowY) {
         return indexForPoint(windowX, windowY);
     }
@@ -1159,7 +1232,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         fireTextChanged();
     }
 
-    /** Converts a window-space (x, y) into a flat cursor index: the line by y, then {@link #indexForXInLine} within it. */
+    /**
+     * Converts a window-space (x, y) into a flat cursor index: the line by y, then {@link #indexForXInLine} within it.
+     */
     private int indexForPoint(double windowX, double windowY) {
         ensureLayout();
         float pitch = linePitch();
@@ -1183,7 +1258,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return skiaFont;
     }
 
-    /** Font line height plus {@link #getLineSpacing()}, the vertical distance between consecutive lines' tops. Shared by every line-index and scroll-geometry calculation so they all agree with what {@link #render} actually draws. */
+    /**
+     * Font line height plus {@link #getLineSpacing()}, the vertical distance between consecutive lines' tops. Shared by every line-index and scroll-geometry calculation so they all agree with what {@link #render} actually draws.
+     */
     private float linePitch() {
         FontMetrics metrics = getOrBuildFont().getMetrics();
         return (-metrics.getAscent() + metrics.getDescent()) + lineSpacing;
@@ -1287,7 +1364,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         renderer.drawText(lineText, x, y, font, resolveTextColor(options.getTextColor()));
     }
 
-    /** Draws the caret per {@link TextEditingOptions#getCaretShape()} at the cursor's current line and position, using the same shape logic as {@link TextFieldOverlay#drawCaret}. */
+    /**
+     * Draws the caret per {@link TextEditingOptions#getCaretShape()} at the cursor's current line and position, using the same shape logic as {@link TextFieldOverlay#drawCaret}.
+     */
     private void drawCaret(Renderer renderer, org.jetbrains.skia.Font font, String content, int clampedCursor, float innerX, float lineY, float lineHeight, float cursorX) {
         Color caretColor = options.getCaretColor();
         if (caretColor == null) return;
@@ -1342,7 +1421,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         }
     }
 
-    /** Releases the native Font this box owns. It does not close the underlying Typeface; see {@link TextFieldOverlay#dispose()}, which this mirrors. */
+    /**
+     * Releases the native Font this box owns. It does not close the underlying Typeface; see {@link TextFieldOverlay#dispose()}, which this mirrors.
+     */
     public void dispose() {
         if (skiaFont != null) {
             skiaFont.close();

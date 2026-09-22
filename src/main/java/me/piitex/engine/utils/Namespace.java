@@ -27,7 +27,9 @@ public enum Namespace {
         this.value = value;
     }
 
-    /** This namespace's packed byte value (0-255), as stored in the top 8 bits of a {@link FormID}. */
+    /**
+     * This namespace's packed byte value (0-255), as stored in the top 8 bits of a {@link FormID}.
+     */
     public int value() {
         return value;
     }

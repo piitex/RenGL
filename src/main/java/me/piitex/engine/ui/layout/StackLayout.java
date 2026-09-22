@@ -25,7 +25,9 @@ public class StackLayout extends Layout {
         super(x, y, width, height);
     }
 
-    /** Overrides the placement of one child; null clears the override so it follows the layout's own alignment again. */
+    /**
+     * Overrides the placement of one child; null clears the override so it follows the layout's own alignment again.
+     */
     public void setChildAlignment(Element child, Alignment alignment) {
         if (alignment == null) childAlignments.remove(child);
         else childAlignments.put(child, alignment);

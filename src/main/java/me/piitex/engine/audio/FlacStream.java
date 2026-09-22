@@ -97,8 +97,10 @@ final class FlacStream implements PcmStream {
             int length = readInt(24);
             int blockStart = bytePosition();
             if (type == 0) {
-                readInt(16); readInt(16);      // min and max block size
-                readInt(24); readInt(24);      // min and max frame size
+                readInt(16);
+                readInt(16);      // min and max block size
+                readInt(24);
+                readInt(24);      // min and max frame size
                 rate = readInt(20);
                 channels = readInt(3) + 1;
                 bitsPerSample = readInt(5) + 1;
@@ -109,19 +111,33 @@ final class FlacStream implements PcmStream {
         } while (!last && !atEnd());
         if (!haveInfo) throw new IllegalArgumentException("FLAC file has no stream info: " + name);
         if (channels > 2) throw AudioDecoder.tooManyChannels(name, channels);
-        if (bitsPerSample > 24) throw new IllegalArgumentException(name + " is " + bitsPerSample + "-bit FLAC; up to 24-bit is supported");
+        if (bitsPerSample > 24)
+            throw new IllegalArgumentException(name + " is " + bitsPerSample + "-bit FLAC; up to 24-bit is supported");
         audioStart = bytePosition();
         if (!decodeFrame()) throw new IllegalArgumentException("FLAC file has no audio frames: " + name);
         outPos = 0;
     }
 
-    @Override public int channels() { return channels; }
-    @Override public int sampleRate() { return rate; }
-    @Override public long totalFrames() { return totalSamples > 0 ? totalSamples : -1; }
+    @Override
+    public int channels() {
+        return channels;
+    }
+
+    @Override
+    public int sampleRate() {
+        return rate;
+    }
+
+    @Override
+    public long totalFrames() {
+        return totalSamples > 0 ? totalSamples : -1;
+    }
 
     // ---- frames -----------------------------------------------------------------------------------------------
 
-    /** Decodes the next frame into {@code out}. Returns false at the end of the stream or at damaged data. */
+    /**
+     * Decodes the next frame into {@code out}. Returns false at the end of the stream or at damaged data.
+     */
     private boolean decodeFrame() {
         if (ended) return false;
         int start = bytePosition();
@@ -219,7 +235,9 @@ final class FlacStream implements PcmStream {
         indexCount++;
     }
 
-    /** A frame or sample number in FLAC's UTF-8 style variable-length coding. Only skipped, never needed. */
+    /**
+     * A frame or sample number in FLAC's UTF-8 style variable-length coding. Only skipped, never needed.
+     */
     private void readUtf8() {
         int first = readInt(8);
         int extra = first < 0x80 ? 0 : first < 0xE0 ? 1 : first < 0xF0 ? 2 : first < 0xF8 ? 3 : first < 0xFC ? 4 : first < 0xFE ? 5 : 6;
@@ -264,7 +282,9 @@ final class FlacStream implements PcmStream {
         return true;
     }
 
-    /** Reads the Rice-coded residual into {@code samples[order..]}; prediction is added afterwards. */
+    /**
+     * Reads the Rice-coded residual into {@code samples[order..]}; prediction is added afterwards.
+     */
     private boolean readResidual(int[] samples, int blockSize, int order) {
         int method = readInt(2);
         if (method > 1) return false;
@@ -297,11 +317,20 @@ final class FlacStream implements PcmStream {
 
     private static void restoreFixed(int[] s, int n, int order) {
         switch (order) {
-            case 1 -> { for (int i = 1; i < n; i++) s[i] += s[i - 1]; }
-            case 2 -> { for (int i = 2; i < n; i++) s[i] += 2 * s[i - 1] - s[i - 2]; }
-            case 3 -> { for (int i = 3; i < n; i++) s[i] += 3 * s[i - 1] - 3 * s[i - 2] + s[i - 3]; }
-            case 4 -> { for (int i = 4; i < n; i++) s[i] += 4 * s[i - 1] - 6 * s[i - 2] + 4 * s[i - 3] - s[i - 4]; }
-            default -> { }
+            case 1 -> {
+                for (int i = 1; i < n; i++) s[i] += s[i - 1];
+            }
+            case 2 -> {
+                for (int i = 2; i < n; i++) s[i] += 2 * s[i - 1] - s[i - 2];
+            }
+            case 3 -> {
+                for (int i = 3; i < n; i++) s[i] += 3 * s[i - 1] - 3 * s[i - 2] + s[i - 3];
+            }
+            case 4 -> {
+                for (int i = 4; i < n; i++) s[i] += 4 * s[i - 1] - 6 * s[i - 2] + 4 * s[i - 3] - s[i - 4];
+            }
+            default -> {
+            }
         }
     }
 

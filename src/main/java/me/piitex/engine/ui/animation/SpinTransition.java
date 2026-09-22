@@ -20,7 +20,9 @@ public class SpinTransition implements Transition {
     private float elapsed;
     private boolean finished;
 
-    /** @param periodSeconds how long one full revolution takes */
+    /**
+     * @param periodSeconds how long one full revolution takes
+     */
     public SpinTransition(float periodSeconds) {
         this.periodSeconds = Math.max(0.05f, periodSeconds);
     }

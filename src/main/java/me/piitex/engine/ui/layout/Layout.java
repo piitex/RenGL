@@ -38,12 +38,16 @@ public abstract class Layout extends Container {
             this.vertical = vertical;
         }
 
-        /** Fraction of the free horizontal space placed before the content: 0 = left, 0.5 = centered, 1 = right. */
+        /**
+         * Fraction of the free horizontal space placed before the content: 0 = left, 0.5 = centered, 1 = right.
+         */
         public float horizontal() {
             return horizontal;
         }
 
-        /** Fraction of the free vertical space placed above the content: 0 = top, 0.5 = centered, 1 = bottom. */
+        /**
+         * Fraction of the free vertical space placed above the content: 0 = top, 0.5 = centered, 1 = bottom.
+         */
         public float vertical() {
             return vertical;
         }
@@ -57,7 +61,9 @@ public abstract class Layout extends Container {
         super(x, y, width, height);
     }
 
-    /** Gap, in logical points, left between consecutive children along the axis this Layout arranges them. */
+    /**
+     * Gap, in logical points, left between consecutive children along the axis this Layout arranges them.
+     */
     public float getSpacing() {
         return spacing;
     }
@@ -66,7 +72,9 @@ public abstract class Layout extends Container {
         this.spacing = spacing;
     }
 
-    /** Inset, in logical points, kept between this Layout's own edges and its children. */
+    /**
+     * Inset, in logical points, kept between this Layout's own edges and its children.
+     */
     public float getPadding() {
         return padding;
     }
@@ -75,7 +83,9 @@ public abstract class Layout extends Container {
         this.padding = padding;
     }
 
-    /** Where the children sit within this Layout. See {@link Alignment}. {@code TOP_LEFT} by default. */
+    /**
+     * Where the children sit within this Layout. See {@link Alignment}. {@code TOP_LEFT} by default.
+     */
     public Alignment getAlignment() {
         return alignment;
     }
@@ -84,7 +94,9 @@ public abstract class Layout extends Container {
         this.alignment = alignment == null ? Alignment.TOP_LEFT : alignment;
     }
 
-    /** Repositions every child per this Layout's rules, in child order (see {@link #getElements()}). */
+    /**
+     * Repositions every child per this Layout's rules, in child order (see {@link #getElements()}).
+     */
     protected abstract void layoutChildren();
 
     /**

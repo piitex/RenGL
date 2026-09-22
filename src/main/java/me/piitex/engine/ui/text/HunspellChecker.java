@@ -26,7 +26,9 @@ import java.util.regex.Pattern;
  * (see {@link #addWord}).
  */
 public class HunspellChecker implements TextChecker {
-    /** A run of letters, allowing apostrophes inside a word ("don't", "it's"). */
+    /**
+     * A run of letters, allowing apostrophes inside a word ("don't", "it's").
+     */
     private static final Pattern WORD = Pattern.compile("\\p{L}+(?:['\u2019]\\p{L}+)*");
 
     private final Hunspell hunspell;
@@ -36,7 +38,9 @@ public class HunspellChecker implements TextChecker {
         this.hunspell = hunspell;
     }
 
-    /** The bundled en_US checker. Throws if the dictionary resources are missing from the classpath. */
+    /**
+     * The bundled en_US checker. Throws if the dictionary resources are missing from the classpath.
+     */
     public static HunspellChecker english() throws IOException {
         try (InputStream aff = open("/dictionaries/en_US.aff");
              InputStream dic = open("/dictionaries/en_US.dic")) {
@@ -58,7 +62,9 @@ public class HunspellChecker implements TextChecker {
         return in;
     }
 
-    /** Stops flagging {@code word}, matched case-insensitively, such as a name the user chose "Add to dictionary" on. */
+    /**
+     * Stops flagging {@code word}, matched case-insensitively, such as a name the user chose "Add to dictionary" on.
+     */
     public void addWord(String word) {
         userWords.add(word.toLowerCase(Locale.ROOT));
     }
@@ -87,14 +93,18 @@ public class HunspellChecker implements TextChecker {
         }
     }
 
-    /** Lucene's Hunspell keeps per-instance scratch buffers, so it is not safe to call concurrently, and check() on the background thread can overlap suggest() on the render thread during a right-click. The lock is held per word, so a suggest never waits on a whole document. */
+    /**
+     * Lucene's Hunspell keeps per-instance scratch buffers, so it is not safe to call concurrently, and check() on the background thread can overlap suggest() on the render thread during a right-click. The lock is held per word, so a suggest never waits on a whole document.
+     */
     private boolean isCorrect(String word) {
         synchronized (hunspell) {
             return hunspell.spell(word);
         }
     }
 
-    /** The dictionaries use a plain apostrophe; typed/pasted text often has the curly one. */
+    /**
+     * The dictionaries use a plain apostrophe; typed/pasted text often has the curly one.
+     */
     private static String normalize(String word) {
         return word.replace('\u2019', '\'');
     }

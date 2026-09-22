@@ -67,7 +67,9 @@ public class SnapshotDemo {
         new Engine().start(window);
     }
 
-    /** A moving scene, so two captures never look the same. */
+    /**
+     * A moving scene, so two captures never look the same.
+     */
     private static Container scene() {
         Container scene = new Container(30, 60, SCENE_W, SCENE_H);
         scene.getStyling().setBackgroundColor(new ScrollingGradient(
@@ -91,7 +93,9 @@ public class SnapshotDemo {
         return scene;
     }
 
-    /** An empty slot: a thumbnail box with a caption under it. */
+    /**
+     * An empty slot: a thumbnail box with a caption under it.
+     */
     private static Container slot(int index) {
         Container box = new Container(710, 70 + index * 178, THUMB_W + 20, THUMB_H + 34);
         box.getStyling().setBackgroundColor(new Color(0f, 0f, 0f, 0.35f));

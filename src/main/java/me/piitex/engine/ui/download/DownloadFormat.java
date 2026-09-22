@@ -42,13 +42,17 @@ public class DownloadFormat {
         return this;
     }
 
-    /** Text placed between parts. Default {@code " - "}. */
+    /**
+     * Text placed between parts. Default {@code " - "}.
+     */
     public DownloadFormat setSeparator(String separator) {
         this.separator = separator;
         return this;
     }
 
-    /** The status text for {@code download} right now. */
+    /**
+     * The status text for {@code download} right now.
+     */
     public String format(Download download) {
         DownloadState state = download.getState();
         switch (state) {
@@ -96,7 +100,9 @@ public class DownloadFormat {
         return second == null ? first : first + separator + second;
     }
 
-    /** {@code 1536} becomes {@code "1.5 KB"}; units are 1024-based (B, KB, MB, GB, TB). A negative size is {@code "?"}. */
+    /**
+     * {@code 1536} becomes {@code "1.5 KB"}; units are 1024-based (B, KB, MB, GB, TB). A negative size is {@code "?"}.
+     */
     public static String bytes(long bytes) {
         if (bytes < 0) return "?";
         if (bytes < 1024) return bytes + " B";
@@ -110,12 +116,16 @@ public class DownloadFormat {
         return String.format(Locale.ROOT, "%.1f %s", value, units[unit]);
     }
 
-    /** {@code bytes(perSecond) + "/s"}. */
+    /**
+     * {@code bytes(perSecond) + "/s"}.
+     */
     public static String speed(double bytesPerSecond) {
         return bytes((long) bytesPerSecond) + "/s";
     }
 
-    /** {@code 75} becomes {@code "1m 15s"}; {@code 3700} becomes {@code "1h 1m"}. */
+    /**
+     * {@code 75} becomes {@code "1m 15s"}; {@code 3700} becomes {@code "1h 1m"}.
+     */
     public static String duration(double seconds) {
         long s = Math.max(0, Math.round(seconds));
         if (s < 60) return s + "s";

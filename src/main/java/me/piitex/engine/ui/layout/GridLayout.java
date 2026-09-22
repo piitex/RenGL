@@ -35,13 +35,17 @@ public class GridLayout extends Layout {
         return columns;
     }
 
-    /** How many children go in each row; values below 1 are treated as 1. */
+    /**
+     * How many children go in each row; values below 1 are treated as 1.
+     */
     public void setColumns(int columns) {
         this.columns = Math.max(1, columns);
         relayout();
     }
 
-    /** Sets both the column gap and the row gap. */
+    /**
+     * Sets both the column gap and the row gap.
+     */
     @Override
     public void setSpacing(float spacing) {
         super.setSpacing(spacing);
@@ -49,7 +53,9 @@ public class GridLayout extends Layout {
         this.rowSpacing = spacing;
     }
 
-    /** Gap, in logical points, between one column and the next. */
+    /**
+     * Gap, in logical points, between one column and the next.
+     */
     public float getColumnSpacing() {
         return columnSpacing;
     }
@@ -58,7 +64,9 @@ public class GridLayout extends Layout {
         this.columnSpacing = columnSpacing;
     }
 
-    /** Gap, in logical points, between one row and the next. */
+    /**
+     * Gap, in logical points, between one row and the next.
+     */
     public float getRowSpacing() {
         return rowSpacing;
     }

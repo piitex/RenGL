@@ -50,7 +50,9 @@ public class Engine {
     private final FrameLimiter frameLimiter = new FrameLimiter();
     private boolean appliedVsync;
 
-    /** With vsync on, a frame faster than this can't have waited on the display (e.g. the window is minimised/occluded and no drawable was available), so the cap is applied as a fallback. */
+    /**
+     * With vsync on, a frame faster than this can't have waited on the display (e.g. the window is minimised/occluded and no drawable was available), so the cap is applied as a fallback.
+     */
     private static final long IMPLAUSIBLY_FAST_FRAME_NANOS = 2_000_000L;
 
     public void start(Window window) {
@@ -70,8 +72,10 @@ public class Engine {
             IntBuffer bw = stack.mallocInt(1), bh = stack.mallocInt(1);
             glfwGetWindowSize(windowHandle, w, h);
             glfwGetFramebufferSize(windowHandle, bw, bh);
-            logicalW = w.get(0); logicalH = h.get(0);
-            fbW = bw.get(0);     fbH = bh.get(0);
+            logicalW = w.get(0);
+            logicalH = h.get(0);
+            fbW = bw.get(0);
+            fbH = bh.get(0);
         }
         // The window may not be the size that was asked for: fullscreen changes it, and the OS can shrink one
         // that doesn't fit the screen. WindowOptions always holds the real size.
@@ -256,7 +260,9 @@ public class Engine {
         }
     }
 
-    /** Render thread. Applies vsync to whichever backend is in use. */
+    /**
+     * Render thread. Applies vsync to whichever backend is in use.
+     */
     private void applyVsync(boolean vsync) {
         if (mac) {
             metalContext.setVsync(vsync);

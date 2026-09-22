@@ -29,7 +29,9 @@ public class MetalSkikoRenderer implements Renderer {
     private Surface surface;
     private Canvas canvas;
 
-    /** Logical (points) size the UI layer draws in. */
+    /**
+     * Logical (points) size the UI layer draws in.
+     */
     private int logicalWidth;
     private int logicalHeight;
     private float scaleX = 1.0f;

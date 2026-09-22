@@ -127,7 +127,9 @@ public interface Renderer {
      */
     void drawGradient(float x, float y, float width, float height, LinearGradient gradient, float cornerRadius);
 
-    /** Same as {@link #drawImage(Image, float, float, float, float, float, float, Color)} with no tint, so the image draws with its own colors unchanged. */
+    /**
+     * Same as {@link #drawImage(Image, float, float, float, float, float, float, Color)} with no tint, so the image draws with its own colors unchanged.
+     */
     default void drawImage(Image image, float x, float y, float width, float height, float cornerRadius, float opacity) {
         drawImage(image, x, y, width, height, cornerRadius, opacity, null);
     }
@@ -188,6 +190,8 @@ public interface Renderer {
      */
     void pushTranslate(float dx, float dy);
 
-    /** Pops the translation most recently pushed by {@link #pushTranslate}. */
+    /**
+     * Pops the translation most recently pushed by {@link #pushTranslate}.
+     */
     void popTranslate();
 }

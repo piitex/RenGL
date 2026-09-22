@@ -42,7 +42,9 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
     private float stripeOffset;
     private StripeTransition activeStripes;
 
-    /** A 200x10 bar at 0%. */
+    /**
+     * A 200x10 bar at 0%.
+     */
     public ProgressBarOverlay() {
         this(200, 10);
     }
@@ -57,18 +59,24 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         ThemeManager.register(this);
     }
 
-    /** Current progress in [0, 1]. Mid-tween, this is the in-between value being drawn. */
+    /**
+     * Current progress in [0, 1]. Mid-tween, this is the in-between value being drawn.
+     */
     public double getProgress() {
         return progress;
     }
 
-    /** Jumps to {@code progress} (clamped to [0, 1]) immediately, cancelling any running {@link #animateTo}. */
+    /**
+     * Jumps to {@code progress} (clamped to [0, 1]) immediately, cancelling any running {@link #animateTo}.
+     */
     public void setProgress(double progress) {
         cancelTween();
         applyAnimatedProgress(progress);
     }
 
-    /** Eases to {@code target} over {@code seconds} with {@link Easing#EASE_IN_OUT}. */
+    /**
+     * Eases to {@code target} over {@code seconds} with {@link Easing#EASE_IN_OUT}.
+     */
     public void animateTo(double target, float seconds) {
         animateTo(target, seconds, Easing.EASE_IN_OUT, null);
     }
@@ -87,12 +95,16 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         playTransition(activeTween);
     }
 
-    /** Whether the looping sweep is running instead of a determinate fill. */
+    /**
+     * Whether the looping sweep is running instead of a determinate fill.
+     */
     public boolean isIndeterminate() {
         return activeSweep != null;
     }
 
-    /** Switches between the looping sweep (true) and the determinate fill (false); either way stops any running {@link #animateTo}. */
+    /**
+     * Switches between the looping sweep (true) and the determinate fill (false); either way stops any running {@link #animateTo}.
+     */
     public void setIndeterminate(boolean indeterminate) {
         if (indeterminate == isIndeterminate()) return;
         if (indeterminate) {
@@ -113,12 +125,16 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         this.progress = Math.max(0, Math.min(1, progress));
     }
 
-    /** Width in points of the fill as currently drawn, for custom transitions that draw along it. */
+    /**
+     * Width in points of the fill as currently drawn, for custom transitions that draw along it.
+     */
     public double getFillWidth() {
         return getWidth() * progress;
     }
 
-    /** Draws animated diagonal stripes in {@code stripeColor} over the fill (which supplies the other color), with the default {@link StripeStyle} width and speed. */
+    /**
+     * Draws animated diagonal stripes in {@code stripeColor} over the fill (which supplies the other color), with the default {@link StripeStyle} width and speed.
+     */
     public void setStripes(Color stripeColor) {
         setStripes(new StripeStyle().setColor(stripeColor));
     }
@@ -152,12 +168,16 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         }
     }
 
-    /** The style being drawn (edit it live), or null if none was set. */
+    /**
+     * The style being drawn (edit it live), or null if none was set.
+     */
     public StripeStyle getStripes() {
         return stripes;
     }
 
-    /** Removes the stripes entirely and goes back to a solid fill. To hide them but keep their settings, use {@code getStripes().setEnabled(false)}. */
+    /**
+     * Removes the stripes entirely and goes back to a solid fill. To hide them but keep their settings, use {@code getStripes().setEnabled(false)}.
+     */
     public void clearStripes() {
         stripes = null;
         if (activeStripes != null) {
@@ -166,12 +186,16 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         }
     }
 
-    /** Whether stripes are set and enabled. */
+    /**
+     * Whether stripes are set and enabled.
+     */
     public boolean isStriped() {
         return stripes != null && stripes.isEnabled();
     }
 
-    /** Moves the stripes on by {@code delta} seconds unless they are frozen. This is what {@link StripeTransition} calls every frame. */
+    /**
+     * Moves the stripes on by {@code delta} seconds unless they are frozen. This is what {@link StripeTransition} calls every frame.
+     */
     public void advanceStripes(float delta) {
         StripeStyle style = stripes;
         if (style == null || !style.isAnimated() || !style.isEnabled()) return;
@@ -191,12 +215,16 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         return fillColor.get();
     }
 
-    /** Pins the fill color against every future theme switch. See {@link Overridable}. */
+    /**
+     * Pins the fill color against every future theme switch. See {@link Overridable}.
+     */
     public void setFillColor(Color fillColor) {
         this.fillColor.set(fillColor);
     }
 
-    /** Themes the track and fill as a baseline, skipping anything already pinned. See {@link Overridable}. */
+    /**
+     * Themes the track and fill as a baseline, skipping anything already pinned. See {@link Overridable}.
+     */
     @Override
     public void applyTheme(Theme theme) {
         getStyling().applyThemeBackgroundColor(theme.getScrollTrack());

@@ -59,7 +59,9 @@ final class AudioDecoder {
         return startsWith(b, "OggS", 0);
     }
 
-    /** An Ogg file whose first packet is an Opus header (Vorbis files start with a Vorbis header instead). */
+    /**
+     * An Ogg file whose first packet is an Opus header (Vorbis files start with a Vorbis header instead).
+     */
     private static boolean isOpus(byte[] b) {
         for (int i = 27; i < Math.min(b.length - 8, 96); i++) {
             if (startsWith(b, "OpusHead", i)) return true;
@@ -71,7 +73,9 @@ final class AudioDecoder {
         return startsWith(b, "fLaC", 0);
     }
 
-    /** An ID3 tag, or an MPEG audio frame header (11 set sync bits). */
+    /**
+     * An ID3 tag, or an MPEG audio frame header (11 set sync bits).
+     */
     private static boolean isMp3(byte[] b) {
         if (startsWith(b, "ID3", 0)) return true;
         return b.length > 2 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xE0) == 0xE0;

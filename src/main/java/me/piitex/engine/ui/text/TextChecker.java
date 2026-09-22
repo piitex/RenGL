@@ -13,10 +13,14 @@ import java.util.List;
  * text, never a fragment.
  */
 public interface TextChecker {
-    /** Returns every issue in {@code text}, in any order; never null. */
+    /**
+     * Returns every issue in {@code text}, in any order; never null.
+     */
     List<TextIssue> check(String text);
 
-    /** Replacement suggestions for the word at {@code issue} in {@code text}, best first. Empty by default. */
+    /**
+     * Replacement suggestions for the word at {@code issue} in {@code text}, best first. Empty by default.
+     */
     default List<String> suggest(String text, TextIssue issue) {
         return List.of();
     }

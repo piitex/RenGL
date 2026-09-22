@@ -25,7 +25,9 @@ public class DotGridBackground extends AbstractBackground {
     private float dotRadius = 1.5f;
     private Color dotColor = new Color(0.5f, 0.5f, 0.5f, 0.35f);
 
-    /** Distance, in points, between one dot and the next, in both directions, so the grid is always square-tiled rather than stretched. */
+    /**
+     * Distance, in points, between one dot and the next, in both directions, so the grid is always square-tiled rather than stretched.
+     */
     public float getSpacing() {
         return spacing;
     }

@@ -28,7 +28,9 @@ public abstract class AbstractBackground implements Background {
     private float fadeElapsedSeconds;
     private Runnable onFadeComplete;
 
-    /** Whether this background renders or updates at all. See {@link #render} and {@link #update}. This is independent of whatever Element it is attached to through {@link Element#setBackground}: disabling that Element already skips this background (see {@link Element#render}), while this turns the background off on its own. */
+    /**
+     * Whether this background renders or updates at all. See {@link #render} and {@link #update}. This is independent of whatever Element it is attached to through {@link Element#setBackground}: disabling that Element already skips this background (see {@link Element#render}), while this turns the background off on its own.
+     */
     public boolean isEnabled() {
         return enabled;
     }
@@ -37,7 +39,9 @@ public abstract class AbstractBackground implements Background {
         this.enabled = enabled;
     }
 
-    /** This background's own opacity in [0, 1], defaulting to 1, applied independently of whatever Element it is attached to. See {@link Element#getOpacity()} for the separate whole-Element version. Setting this directly cancels any {@link #fadeIn} or {@link #fadeOut} in progress. */
+    /**
+     * This background's own opacity in [0, 1], defaulting to 1, applied independently of whatever Element it is attached to. See {@link Element#getOpacity()} for the separate whole-Element version. Setting this directly cancels any {@link #fadeIn} or {@link #fadeOut} in progress.
+     */
     public float getOpacity() {
         return opacity;
     }
@@ -47,22 +51,30 @@ public abstract class AbstractBackground implements Background {
         fadeTargetOpacity = -1f;
     }
 
-    /** Fades this background in from its current opacity to fully opaque over {@code durationSeconds}. */
+    /**
+     * Fades this background in from its current opacity to fully opaque over {@code durationSeconds}.
+     */
     public void fadeIn(float durationSeconds) {
         fadeIn(durationSeconds, null);
     }
 
-    /** As {@link #fadeIn(float)}, firing {@code onComplete} once the fade finishes. */
+    /**
+     * As {@link #fadeIn(float)}, firing {@code onComplete} once the fade finishes.
+     */
     public void fadeIn(float durationSeconds, Runnable onComplete) {
         startFade(1f, durationSeconds, onComplete);
     }
 
-    /** Fades this background out from its current opacity to fully transparent over {@code durationSeconds}. This affects {@link #getOpacity()} only. {@link #isEnabled()} stays true, so {@link #updateEffect}, such as a particle simulation, keeps running underneath. Disable it separately once faded out to stop that work as well. */
+    /**
+     * Fades this background out from its current opacity to fully transparent over {@code durationSeconds}. This affects {@link #getOpacity()} only. {@link #isEnabled()} stays true, so {@link #updateEffect}, such as a particle simulation, keeps running underneath. Disable it separately once faded out to stop that work as well.
+     */
     public void fadeOut(float durationSeconds) {
         fadeOut(durationSeconds, null);
     }
 
-    /** As {@link #fadeOut(float)}, firing {@code onComplete} once the fade finishes. */
+    /**
+     * As {@link #fadeOut(float)}, firing {@code onComplete} once the fade finishes.
+     */
     public void fadeOut(float durationSeconds, Runnable onComplete) {
         startFade(0f, durationSeconds, onComplete);
     }
@@ -114,9 +126,14 @@ public abstract class AbstractBackground implements Background {
         }
     }
 
-    /** A subclass's per-frame update, called from {@link #update} after this class's own enabled and fade bookkeeping. See that method. It defaults to a no-op, which suits a purely static background such as {@link DotGridBackground}. */
-    protected void updateEffect(float delta, float x, float y, float width, float height) {}
+    /**
+     * A subclass's per-frame update, called from {@link #update} after this class's own enabled and fade bookkeeping. See that method. It defaults to a no-op, which suits a purely static background such as {@link DotGridBackground}.
+     */
+    protected void updateEffect(float delta, float x, float y, float width, float height) {
+    }
 
-    /** A subclass's drawing, called from {@link #render} after this class's own enabled and opacity handling. See that method. */
+    /**
+     * A subclass's drawing, called from {@link #render} after this class's own enabled and opacity handling. See that method.
+     */
     protected abstract void renderEffect(Renderer renderer, float x, float y, float width, float height);
 }

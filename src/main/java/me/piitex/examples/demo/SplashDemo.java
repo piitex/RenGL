@@ -94,7 +94,9 @@ public class SplashDemo {
         return container;
     }
 
-    /** Fills the bar, then hands over to the main window. The completion callback fires on the render thread, and every Window call used here is safe from any thread. */
+    /**
+     * Fills the bar, then hands over to the main window. The completion callback fires on the render thread, and every Window call used here is safe from any thread.
+     */
     private static void startLoading() {
         progress.setProgress(0);
         progress.animateTo(1.0, 3f, me.piitex.engine.ui.animation.Easing.LINEAR, SplashDemo::showMain);

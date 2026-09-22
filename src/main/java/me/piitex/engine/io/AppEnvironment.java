@@ -42,7 +42,7 @@ import java.util.function.Consumer;
 public final class AppEnvironment {
     private static final Logger log = LogManager.getLogger("Engine");
 
-    public enum Mode { DEV, RELEASE }
+    public enum Mode {DEV, RELEASE}
 
     private final String name;
     private final Mode mode;
@@ -59,7 +59,9 @@ public final class AppEnvironment {
         log.info("Environment '{}' running in {} mode (data: {}, assets: {})", name, mode, dataDirectory, assetDirectory);
     }
 
-    /** Detects the mode and uses the default locations. */
+    /**
+     * Detects the mode and uses the default locations.
+     */
     public static AppEnvironment create(String appName) throws IOException {
         return builder(appName).build();
     }
@@ -68,7 +70,9 @@ public final class AppEnvironment {
         return new Builder(appName);
     }
 
-    /** Detects the mode: the {@code rengl.mode} system property wins, otherwise jar/launcher means release. */
+    /**
+     * Detects the mode: the {@code rengl.mode} system property wins, otherwise jar/launcher means release.
+     */
     public static Mode detectMode() {
         String forced = System.getProperty("rengl.mode");
         if (forced != null) {
@@ -103,32 +107,44 @@ public final class AppEnvironment {
         return mode == Mode.DEV;
     }
 
-    /** The writable per-user root. Always exists. */
+    /**
+     * The writable per-user root. Always exists.
+     */
     public Path getDataDirectory() {
         return dataDirectory;
     }
 
-    /** The read-only shipped-files root. May not exist if the app ships no loose assets. */
+    /**
+     * The read-only shipped-files root. May not exist if the app ships no loose assets.
+     */
     public Path getAssetDirectory() {
         return assetDirectory;
     }
 
-    /** A subfolder of the data directory, created if missing. */
+    /**
+     * A subfolder of the data directory, created if missing.
+     */
     public Path getDirectory(String first, String... more) throws IOException {
         return Files.createDirectories(dataDirectory.resolve(Path.of(first, more)).normalize());
     }
 
-    /** A path inside the data directory. Nothing is created. */
+    /**
+     * A path inside the data directory. Nothing is created.
+     */
     public Path getDataPath(String relative) {
         return inside(dataDirectory, relative);
     }
 
-    /** A path inside the asset directory (e.g. {@code "logo.png"}). Nothing is checked or created. */
+    /**
+     * A path inside the asset directory (e.g. {@code "logo.png"}). Nothing is checked or created.
+     */
     public Path getAssetPath(String relative) {
         return inside(assetDirectory, relative);
     }
 
-    /** An {@link AssetManager} over the asset directory, for pack (.pak) and buffer loading. */
+    /**
+     * An {@link AssetManager} over the asset directory, for pack (.pak) and buffer loading.
+     */
     public AssetManager getAssets() {
         return assets;
     }
@@ -143,7 +159,9 @@ public final class AppEnvironment {
         return config.setSourcePath(saved); // even a shipped default saves to the data directory
     }
 
-    /** True if the user already has a saved copy of this config. False on a first run, even if a shipped default exists. */
+    /**
+     * True if the user already has a saved copy of this config. False on a first run, even if a shipped default exists.
+     */
     public boolean hasSavedConfig(String relative) {
         return Files.exists(getDataPath(relative));
     }
@@ -193,19 +211,25 @@ public final class AppEnvironment {
             this.name = name;
         }
 
-        /** Forces a mode instead of detecting it. */
+        /**
+         * Forces a mode instead of detecting it.
+         */
         public Builder mode(Mode mode) {
             this.mode = mode;
             return this;
         }
 
-        /** Overrides the data directory in <i>every</i> mode. To change only DEV, use {@link #devDataDirectory}. */
+        /**
+         * Overrides the data directory in <i>every</i> mode. To change only DEV, use {@link #devDataDirectory}.
+         */
         public Builder dataDirectory(Path dir) {
             this.dataDirectory = dir.toAbsolutePath().normalize();
             return this;
         }
 
-        /** Overrides the asset directory in <i>every</i> mode. To change only DEV, use {@link #devAssetDirectory}. */
+        /**
+         * Overrides the asset directory in <i>every</i> mode. To change only DEV, use {@link #devAssetDirectory}.
+         */
         public Builder assetDirectory(Path dir) {
             this.assetDirectory = dir.toAbsolutePath().normalize();
             return this;
@@ -219,13 +243,17 @@ public final class AppEnvironment {
             return devDataDirectory(dir).devAssetDirectory(dir);
         }
 
-        /** Sets the data directory in DEV mode only. Release keeps its default. */
+        /**
+         * Sets the data directory in DEV mode only. Release keeps its default.
+         */
         public Builder devDataDirectory(Path dir) {
             this.devDataDirectory = dir.toAbsolutePath().normalize();
             return this;
         }
 
-        /** Sets the asset directory in DEV mode only. Release keeps its default. */
+        /**
+         * Sets the asset directory in DEV mode only. Release keeps its default.
+         */
         public Builder devAssetDirectory(Path dir) {
             this.devAssetDirectory = dir.toAbsolutePath().normalize();
             return this;

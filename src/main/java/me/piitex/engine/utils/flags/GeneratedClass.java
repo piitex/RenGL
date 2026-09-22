@@ -12,6 +12,8 @@ import java.lang.annotation.Target;
 @Target(value = ElementType.TYPE)
 public @interface GeneratedClass {
     String prompter();
+
     String model();
+
     boolean reviewed();
 }

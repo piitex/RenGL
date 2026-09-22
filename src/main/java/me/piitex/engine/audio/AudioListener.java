@@ -28,7 +28,9 @@ public final class AudioListener {
     AudioListener() {
     }
 
-    /** Moves the listener. */
+    /**
+     * Moves the listener.
+     */
     public AudioListener setPosition(float x, float y, float z) {
         synchronized (Audio.LOCK) {
             this.x = x;
@@ -39,12 +41,16 @@ public final class AudioListener {
         return this;
     }
 
-    /** {@link #setPosition(float, float, float)} for a 2D game: moves to (x, y) on the plane {@code z = 0}. */
+    /**
+     * {@link #setPosition(float, float, float)} for a 2D game: moves to (x, y) on the plane {@code z = 0}.
+     */
     public AudioListener setPosition(float x, float y) {
         return setPosition(x, y, 0f);
     }
 
-    /** Sets how fast the listener is moving, in world units per second, for the Doppler effect. */
+    /**
+     * Sets how fast the listener is moving, in world units per second, for the Doppler effect.
+     */
     public AudioListener setVelocity(float x, float y, float z) {
         synchronized (Audio.LOCK) {
             vx = x;
@@ -90,7 +96,9 @@ public final class AudioListener {
         }
     }
 
-    /** Pushes the stored state to OpenAL once the device is open. Holds {@link Audio#LOCK}. */
+    /**
+     * Pushes the stored state to OpenAL once the device is open. Holds {@link Audio#LOCK}.
+     */
     void apply() {
         alListener3f(AL_POSITION, x, y, z);
         alListener3f(AL_VELOCITY, vx, vy, vz);

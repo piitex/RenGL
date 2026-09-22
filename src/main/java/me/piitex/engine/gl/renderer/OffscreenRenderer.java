@@ -20,7 +20,9 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
 
     private float clearR = 0f, clearG = 0f, clearB = 0f, clearA = 0f;
 
-    /** @param width  logical width in points; @param scale pixels per point (2 for a retina-sharp capture) */
+    /**
+     * @param width logical width in points; @param scale pixels per point (2 for a retina-sharp capture)
+     */
     public OffscreenRenderer(int width, int height, float scale) {
         this.scale = scale;
         int pw = Math.max(1, Math.round(width * scale));
@@ -41,7 +43,9 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
         canvas.restore();
     }
 
-    /** Colour {@link #begin()} clears to. Defaults to fully transparent, so rounded corners stay transparent in the capture. */
+    /**
+     * Colour {@link #begin()} clears to. Defaults to fully transparent, so rounded corners stay transparent in the capture.
+     */
     @Override
     public void clear(float r, float g, float b, float a) {
         this.clearR = r;
@@ -54,12 +58,16 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
         return ((int) (a * 255) << 24) | ((int) (r * 255) << 16) | ((int) (g * 255) << 8) | (int) (b * 255);
     }
 
-    /** No-op: an offscreen surface has no viewport. */
+    /**
+     * No-op: an offscreen surface has no viewport.
+     */
     @Override
     public void setViewport(int x, int y, int width, int height) {
     }
 
-    /** Copies what has been drawn so far into an independent image. Call after {@link #end()}. */
+    /**
+     * Copies what has been drawn so far into an independent image. Call after {@link #end()}.
+     */
     public Image makeImage() {
         return surface.makeImageSnapshot();
     }

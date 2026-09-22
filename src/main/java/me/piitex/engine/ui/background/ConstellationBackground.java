@@ -130,7 +130,9 @@ public class ConstellationBackground extends AbstractBackground {
         this.particleColor = particleColor;
     }
 
-    /** The line color's own alpha is the line's opacity at zero distance. See {@link #getLinkDistance()} for how it fades from there. */
+    /**
+     * The line color's own alpha is the line's opacity at zero distance. See {@link #getLinkDistance()} for how it fades from there.
+     */
     public Color getLineColor() {
         return lineColor;
     }
@@ -158,7 +160,9 @@ public class ConstellationBackground extends AbstractBackground {
         this.mouseInteractionEnabled = mouseInteractionEnabled;
     }
 
-    /** How close the mouse has to be to a particle, in points, before it starts pushing it. The push strengthens smoothly from zero at this distance up to {@link #getRepelStrength()} at zero distance. This only applies when {@link #isMouseInteractionEnabled()}. */
+    /**
+     * How close the mouse has to be to a particle, in points, before it starts pushing it. The push strengthens smoothly from zero at this distance up to {@link #getRepelStrength()} at zero distance. This only applies when {@link #isMouseInteractionEnabled()}.
+     */
     public float getRepelRadius() {
         return repelRadius;
     }
@@ -167,7 +171,9 @@ public class ConstellationBackground extends AbstractBackground {
         this.repelRadius = Math.max(0f, repelRadius);
     }
 
-    /** How hard the mouse pushes a particle at zero distance, in points per second. This is the same unit as {@link #setSpeedRange}, so the two can be compared to judge how forceful a push is relative to the field's ambient drift. This only applies when {@link #isMouseInteractionEnabled()}. */
+    /**
+     * How hard the mouse pushes a particle at zero distance, in points per second. This is the same unit as {@link #setSpeedRange}, so the two can be compared to judge how forceful a push is relative to the field's ambient drift. This only applies when {@link #isMouseInteractionEnabled()}.
+     */
     public float getRepelStrength() {
         return repelStrength;
     }
@@ -199,22 +205,30 @@ public class ConstellationBackground extends AbstractBackground {
         }
     }
 
-    /** Unregisters {@code obstacle}. See {@link #addObstacle}. A no-op if it was not registered. */
+    /**
+     * Unregisters {@code obstacle}. See {@link #addObstacle}. A no-op if it was not registered.
+     */
     public void removeObstacle(Container obstacle) {
         obstacles.remove(obstacle);
     }
 
-    /** Un-registers every Container added via {@link #addObstacle}. */
+    /**
+     * Un-registers every Container added via {@link #addObstacle}.
+     */
     public void clearObstacles() {
         obstacles.clear();
     }
 
-    /** The Containers particles are currently pushed away from. See {@link #addObstacle}. This is the live list, not a copy. */
+    /**
+     * The Containers particles are currently pushed away from. See {@link #addObstacle}. This is the live list, not a copy.
+     */
     public List<Container> getObstacles() {
         return obstacles;
     }
 
-    /** As {@link #getRepelRadius()}, but for the push away from a registered {@link #addObstacle}'s edge rather than the mouse. It defaults much tighter, at 16pt, so particles are nudged at the box's boundary instead of held off at a wide gap. */
+    /**
+     * As {@link #getRepelRadius()}, but for the push away from a registered {@link #addObstacle}'s edge rather than the mouse. It defaults much tighter, at 16pt, so particles are nudged at the box's boundary instead of held off at a wide gap.
+     */
     public float getObstacleRepelRadius() {
         return obstacleRepelRadius;
     }
@@ -223,7 +237,9 @@ public class ConstellationBackground extends AbstractBackground {
         this.obstacleRepelRadius = Math.max(0f, obstacleRepelRadius);
     }
 
-    /** As {@link #getRepelStrength()}, but for {@link #addObstacle} pushes. */
+    /**
+     * As {@link #getRepelStrength()}, but for {@link #addObstacle} pushes.
+     */
     public float getObstacleRepelStrength() {
         return obstacleRepelStrength;
     }
@@ -377,7 +393,9 @@ public class ConstellationBackground extends AbstractBackground {
         renderer.popClip();
     }
 
-    /** One drifting dot: position, velocity in points per second baked in at seed time, and a fixed per-particle size multiplier. */
+    /**
+     * One drifting dot: position, velocity in points per second baked in at seed time, and a fixed per-particle size multiplier.
+     */
     private static final class Particle {
         float x, y, vx, vy;
         float radiusScale;

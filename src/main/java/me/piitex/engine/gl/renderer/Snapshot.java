@@ -38,7 +38,9 @@ public final class Snapshot implements AutoCloseable {
         this.scale = scale;
     }
 
-    /** Pixel width of the picture: the element's width in points times the capture scale. */
+    /**
+     * Pixel width of the picture: the element's width in points times the capture scale.
+     */
     public int getWidth() {
         return image.getWidth();
     }
@@ -47,17 +49,23 @@ public final class Snapshot implements AutoCloseable {
         return image.getHeight();
     }
 
-    /** Pixels per point this snapshot was captured at. */
+    /**
+     * Pixels per point this snapshot was captured at.
+     */
     public float getScale() {
         return scale;
     }
 
-    /** The underlying Skia image, still owned by this snapshot. */
+    /**
+     * The underlying Skia image, still owned by this snapshot.
+     */
     public Image getImage() {
         return image;
     }
 
-    /** The picture encoded as PNG, transparency preserved. */
+    /**
+     * The picture encoded as PNG, transparency preserved.
+     */
     public byte[] toPngBytes() {
         var data = image.encodeToData(EncodedImageFormat.PNG, 100, 0);
         if (data == null) throw new IllegalStateException("PNG encoding failed");
@@ -68,7 +76,9 @@ public final class Snapshot implements AutoCloseable {
         }
     }
 
-    /** Writes the picture to {@code file} as PNG, creating missing parent directories. */
+    /**
+     * Writes the picture to {@code file} as PNG, creating missing parent directories.
+     */
     public void savePng(Path file) throws IOException {
         if (file.getParent() != null) Files.createDirectories(file.getParent());
         Files.write(file, toPngBytes());
@@ -97,7 +107,8 @@ public final class Snapshot implements AutoCloseable {
         checkScale(scale);
         int w = (int) Math.ceil(element.getWidth());
         int h = (int) Math.ceil(element.getHeight());
-        if (w <= 0 || h <= 0) throw new IllegalArgumentException("Cannot snapshot an element with no size: " + w + "x" + h);
+        if (w <= 0 || h <= 0)
+            throw new IllegalArgumentException("Cannot snapshot an element with no size: " + w + "x" + h);
 
         try (OffscreenRenderer renderer = new OffscreenRenderer(w, h, scale)) {
             renderer.begin();
@@ -146,7 +157,9 @@ public final class Snapshot implements AutoCloseable {
         Scheduler.runLater(() -> callback.accept(of(element, scale)));
     }
 
-    /** As {@link #ofAsync(Element, float, Consumer)}, for a whole window. */
+    /**
+     * As {@link #ofAsync(Element, float, Consumer)}, for a whole window.
+     */
     public static void ofAsync(Window window, float scale, Consumer<Snapshot> callback) {
         Scheduler.runLater(() -> callback.accept(of(window, scale)));
     }

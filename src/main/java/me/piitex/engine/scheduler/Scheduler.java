@@ -42,7 +42,9 @@ public final class Scheduler {
     private Scheduler() {
     }
 
-    /** Runs {@code action} on the render thread at the start of the next frame. Safe from any thread. */
+    /**
+     * Runs {@code action} on the render thread at the start of the next frame. Safe from any thread.
+     */
     public static Task runLater(Runnable action) {
         Task task = new Task();
         queue.add(() -> {
@@ -53,17 +55,23 @@ public final class Scheduler {
         return task;
     }
 
-    /** Runs {@code action} once on the render thread after {@code seconds}, for example to leave a splash screen. */
+    /**
+     * Runs {@code action} once on the render thread after {@code seconds}, for example to leave a splash screen.
+     */
     public static Task after(float seconds, Runnable action) {
         return schedule(seconds, 0f, action);
     }
 
-    /** Runs {@code action} on the render thread every {@code seconds}, starting {@code seconds} from now, until cancelled. */
+    /**
+     * Runs {@code action} on the render thread every {@code seconds}, starting {@code seconds} from now, until cancelled.
+     */
     public static Task every(float seconds, Runnable action) {
         return every(seconds, seconds, action);
     }
 
-    /** As {@link #every(float, Runnable)}, but the first run comes after {@code initialDelay}. */
+    /**
+     * As {@link #every(float, Runnable)}, but the first run comes after {@code initialDelay}.
+     */
     public static Task every(float initialDelay, float interval, Runnable action) {
         if (interval <= 0f) throw new IllegalArgumentException("interval must be positive: " + interval);
         return schedule(initialDelay, interval, action);
@@ -85,7 +93,9 @@ public final class Scheduler {
         return task;
     }
 
-    /** As {@link #async(Supplier)} for work with no result. {@link AsyncTask#onSuccess} then receives null. */
+    /**
+     * As {@link #async(Supplier)} for work with no result. {@link AsyncTask#onSuccess} then receives null.
+     */
     public static AsyncTask<Void> async(Runnable work) {
         return async(() -> {
             work.run();
@@ -118,7 +128,9 @@ public final class Scheduler {
         return pool;
     }
 
-    /** Render thread, once per frame. Runs queued callbacks, then advances the timers by {@code delta} seconds. */
+    /**
+     * Render thread, once per frame. Runs queued callbacks, then advances the timers by {@code delta} seconds.
+     */
     public static void update(float delta) {
         // Only what was queued when the frame began, so a callback that re-queues itself can't stall the frame.
         for (int n = queue.size(); n > 0; n--) {
@@ -153,7 +165,9 @@ public final class Scheduler {
         }
     }
 
-    /** Engine shutdown: drops everything pending and stops the worker threads. */
+    /**
+     * Engine shutdown: drops everything pending and stops the worker threads.
+     */
     public static void shutdown() {
         queue.clear();
         incoming.clear();

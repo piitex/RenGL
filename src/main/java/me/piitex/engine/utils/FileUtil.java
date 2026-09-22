@@ -23,9 +23,12 @@ import java.util.function.Function;
  * The plain getters never touch the disk; the overloads taking an application name create the directory.
  */
 public final class FileUtil {
-    private FileUtil() {}
+    private FileUtil() {
+    }
 
-    /** The user's home directory. */
+    /**
+     * The user's home directory.
+     */
     public static Path getHome() {
         String home = System.getProperty("user.home");
         if (home == null || home.isBlank()) {
@@ -34,7 +37,9 @@ public final class FileUtil {
         return Path.of(home).toAbsolutePath().normalize();
     }
 
-    /** The directory the process was started from ({@code user.dir}), which can differ from where the app is installed. */
+    /**
+     * The directory the process was started from ({@code user.dir}), which can differ from where the app is installed.
+     */
     public static Path getWorkingDirectory() {
         return Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
     }
@@ -57,27 +62,37 @@ public final class FileUtil {
         return getWorkingDirectory();
     }
 
-    /** The per-user, roaming settings folder for this OS (see the class table). */
+    /**
+     * The per-user, roaming settings folder for this OS (see the class table).
+     */
     public static Path getAppData() {
         return resolveAppData(Platform.getCurrent(), System::getenv, getHome(), false);
     }
 
-    /** The per-user, machine-local data folder for this OS (see the class table). */
+    /**
+     * The per-user, machine-local data folder for this OS (see the class table).
+     */
     public static Path getLocalAppData() {
         return resolveAppData(Platform.getCurrent(), System::getenv, getHome(), true);
     }
 
-    /** The system temporary directory. */
+    /**
+     * The system temporary directory.
+     */
     public static Path getTempDirectory() {
         return Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().normalize();
     }
 
-    /** {@code getAppData()/appName}, created if it does not exist. */
+    /**
+     * {@code getAppData()/appName}, created if it does not exist.
+     */
     public static Path getAppData(String appName) throws IOException {
         return Files.createDirectories(getAppData().resolve(checkName(appName)));
     }
 
-    /** {@code getLocalAppData()/appName}, created if it does not exist. */
+    /**
+     * {@code getLocalAppData()/appName}, created if it does not exist.
+     */
     public static Path getLocalAppData(String appName) throws IOException {
         return Files.createDirectories(getLocalAppData().resolve(checkName(appName)));
     }

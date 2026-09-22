@@ -51,7 +51,9 @@ public class ImageOverlay extends Overlay {
         return new ImageOverlay(image, width, height);
     }
 
-    /** Loads {@code imageFile} and sizes this overlay to the image's natural pixel dimensions. */
+    /**
+     * Loads {@code imageFile} and sizes this overlay to the image's natural pixel dimensions.
+     */
     public ImageOverlay(File imageFile) {
         this.image = ImageLoader.load(imageFile);
         setWidth(image.getWidth());
@@ -59,7 +61,9 @@ public class ImageOverlay extends Overlay {
         applyDefaultStyling();
     }
 
-    /** Loads {@code imageFile}, scaled to the given bounds instead of its natural size. */
+    /**
+     * Loads {@code imageFile}, scaled to the given bounds instead of its natural size.
+     */
     public ImageOverlay(File imageFile, double width, double height) {
         this.image = ImageLoader.load(imageFile);
         setWidth(width);
@@ -84,7 +88,9 @@ public class ImageOverlay extends Overlay {
         getStyling().applyThemeBorderThickness(0f);
     }
 
-    /** Swaps the displayed image without changing this overlay's current width/height. */
+    /**
+     * Swaps the displayed image without changing this overlay's current width/height.
+     */
     public void setImageFile(File imageFile) {
         this.image = ImageLoader.load(imageFile);
     }
@@ -93,28 +99,38 @@ public class ImageOverlay extends Overlay {
         setImageFile(new File(imageFilePath));
     }
 
-    /** The underlying decoded Skia image, for advanced use (e.g. building a shader from it). */
+    /**
+     * The underlying decoded Skia image, for advanced use (e.g. building a shader from it).
+     */
     public org.jetbrains.skia.Image getImage() {
         return image;
     }
 
-    /** The image's natural pixel width, independent of whatever {@link #getWidth()} is currently set to. */
+    /**
+     * The image's natural pixel width, independent of whatever {@link #getWidth()} is currently set to.
+     */
     public int getNaturalWidth() {
         return image.getWidth();
     }
 
-    /** The image's natural pixel height, independent of whatever {@link #getHeight()} is currently set to. */
+    /**
+     * The image's natural pixel height, independent of whatever {@link #getHeight()} is currently set to.
+     */
     public int getNaturalHeight() {
         return image.getHeight();
     }
 
-    /** Resizes this overlay to the image's natural pixel dimensions, undoing any explicit size override. */
+    /**
+     * Resizes this overlay to the image's natural pixel dimensions, undoing any explicit size override.
+     */
     public void resetToNaturalSize() {
         setWidth(image.getWidth());
         setHeight(image.getHeight());
     }
 
-    /** Uniform opacity in [0, 1] (default 1 = fully opaque) the image is faded to; values outside that range are clamped at draw time. */
+    /**
+     * Uniform opacity in [0, 1] (default 1 = fully opaque) the image is faded to; values outside that range are clamped at draw time.
+     */
     public float getOpacity() {
         return opacity;
     }

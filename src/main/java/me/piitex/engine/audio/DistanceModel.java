@@ -11,19 +11,33 @@ import static org.lwjgl.openal.AL11.*;
  * inside it, and stop getting quieter beyond the {@code max distance}.
  */
 public enum DistanceModel {
-    /** No fading: distance does not change the volume (direction still does). */
+    /**
+     * No fading: distance does not change the volume (direction still does).
+     */
     NONE(AL_NONE),
-    /** Realistic falloff, like sound in open air. Never quite reaches silence. */
+    /**
+     * Realistic falloff, like sound in open air. Never quite reaches silence.
+     */
     INVERSE(AL_INVERSE_DISTANCE),
-    /** {@link #INVERSE}, clamped. The default. */
+    /**
+     * {@link #INVERSE}, clamped. The default.
+     */
     INVERSE_CLAMPED(AL_INVERSE_DISTANCE_CLAMPED),
-    /** Fades in a straight line to silence at the max distance. Easy to reason about in games. */
+    /**
+     * Fades in a straight line to silence at the max distance. Easy to reason about in games.
+     */
     LINEAR(AL_LINEAR_DISTANCE),
-    /** {@link #LINEAR}, clamped. */
+    /**
+     * {@link #LINEAR}, clamped.
+     */
     LINEAR_CLAMPED(AL_LINEAR_DISTANCE_CLAMPED),
-    /** Fades with a power curve controlled by the rolloff. */
+    /**
+     * Fades with a power curve controlled by the rolloff.
+     */
     EXPONENT(AL_EXPONENT_DISTANCE),
-    /** {@link #EXPONENT}, clamped. */
+    /**
+     * {@link #EXPONENT}, clamped.
+     */
     EXPONENT_CLAMPED(AL_EXPONENT_DISTANCE_CLAMPED);
 
     final int alValue;

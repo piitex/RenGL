@@ -43,7 +43,7 @@ import me.piitex.engine.ui.overlays.TextOverlay;
 public class DownloadBarContainer extends VerticalLayout {
     private static final double BUTTON_WIDTH = 58;
 
-    private enum Look { WAITING, DOWNLOADING, DONE, FAILED, PAUSED }
+    private enum Look {WAITING, DOWNLOADING, DONE, FAILED, PAUSED}
 
     private final Download download;
     private final DownloadFormat format = new DownloadFormat();
@@ -108,7 +108,9 @@ public class DownloadBarContainer extends VerticalLayout {
         return row;
     }
 
-    /** Sizes the rows, the bar and the card itself from the current width, padding and spacing. */
+    /**
+     * Sizes the rows, the bar and the card itself from the current width, padding and spacing.
+     */
     private void fitLayout() {
         double inner = getWidth() - 2 * getPadding();
         titleRow.setWidth(inner);
@@ -145,7 +147,9 @@ public class DownloadBarContainer extends VerticalLayout {
         }
     }
 
-    /** Shows or hides the Pause/Resume and Cancel buttons; the bar stretches to fill the freed space. Default true. */
+    /**
+     * Shows or hides the Pause/Resume and Cancel buttons; the bar stretches to fill the freed space. Default true.
+     */
     public void setShowControls(boolean show) {
         if (show == showControls) return;
         showControls = show;
@@ -159,7 +163,9 @@ public class DownloadBarContainer extends VerticalLayout {
         fitLayout();
     }
 
-    /** The manager the download belongs to, so Resume/Retry re-queue through it. Null (default) restarts the download directly. */
+    /**
+     * The manager the download belongs to, so Resume/Retry re-queue through it. Null (default) restarts the download directly.
+     */
     public void setManager(DownloadManager manager) {
         this.manager = manager;
     }
@@ -176,7 +182,9 @@ public class DownloadBarContainer extends VerticalLayout {
         return download;
     }
 
-    /** Which status-line parts show (percent, size, speed, ETA). */
+    /**
+     * Which status-line parts show (percent, size, speed, ETA).
+     */
     public DownloadFormat getFormat() {
         return format;
     }
@@ -193,7 +201,9 @@ public class DownloadBarContainer extends VerticalLayout {
         return statsText;
     }
 
-    /** Fill color while downloading, under the stripes. Default: green. */
+    /**
+     * Fill color while downloading, under the stripes. Default: green.
+     */
     public void setActiveColor(Color color) {
         this.activeColor = color;
         if (look == Look.DOWNLOADING) bar.setFillColor(color);
@@ -217,32 +227,44 @@ public class DownloadBarContainer extends VerticalLayout {
         if (look == Look.DOWNLOADING) bar.setStripes(style);
     }
 
-    /** Shows or hides the stripes while downloading (a solid {@link #setActiveColor} bar when off). Default on. */
+    /**
+     * Shows or hides the stripes while downloading (a solid {@link #setActiveColor} bar when off). Default on.
+     */
     public void setStripesEnabled(boolean enabled) {
         stripeStyle.setEnabled(enabled);
     }
 
-    /** Whether the stripes move while downloading; off leaves them static. Default on. */
+    /**
+     * Whether the stripes move while downloading; off leaves them static. Default on.
+     */
     public void setStripesAnimated(boolean animated) {
         stripeStyle.setAnimated(animated);
     }
 
-    /** Color of the stripes while downloading. Default: light gray. */
+    /**
+     * Color of the stripes while downloading. Default: light gray.
+     */
     public void setStripeColor(Color color) {
         stripeStyle.setColor(color);
     }
 
-    /** Fill color once completed. Default: green. */
+    /**
+     * Fill color once completed. Default: green.
+     */
     public void setDoneColor(Color color) {
         this.doneColor = color;
     }
 
-    /** Fill color after a failure. Default: red. */
+    /**
+     * Fill color after a failure. Default: red.
+     */
     public void setFailedColor(Color color) {
         this.failedColor = color;
     }
 
-    /** Fill color while paused. Default: orange. */
+    /**
+     * Fill color while paused. Default: orange.
+     */
     public void setPausedColor(Color color) {
         this.pausedColor = color;
     }

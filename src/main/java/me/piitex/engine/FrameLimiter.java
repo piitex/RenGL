@@ -16,7 +16,9 @@ import java.util.concurrent.locks.LockSupport;
  * Render thread only.
  */
 final class FrameLimiter {
-    /** How long before the deadline to stop sleeping and start spinning. */
+    /**
+     * How long before the deadline to stop sleeping and start spinning.
+     */
     private static final long SPIN_NANOS = 2_000_000L;
 
     private long deadline = 0L;
@@ -49,7 +51,9 @@ final class FrameLimiter {
         }
     }
 
-    /** Forgets the current deadline, so the next {@link #limit} starts a fresh time slot. */
+    /**
+     * Forgets the current deadline, so the next {@link #limit} starts a fresh time slot.
+     */
     void reset() {
         deadline = 0L;
     }

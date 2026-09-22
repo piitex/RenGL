@@ -3,9 +3,12 @@ package me.piitex.engine.ui.overlays;
 import me.piitex.engine.Window;
 import me.piitex.engine.ui.Element;
 
-/** Where a floating panel of a given size goes relative to the Element that opened it. */
+/**
+ * Where a floating panel of a given size goes relative to the Element that opened it.
+ */
 final class PopupPlacement {
-    private PopupPlacement() {}
+    private PopupPlacement() {
+    }
 
     /**
      * Just below {@code anchor}, left edges aligned; above it instead if there is no room below but there is

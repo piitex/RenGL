@@ -142,7 +142,9 @@ public class FadeTransition implements Transition {
         // No-op; see renderBackground for the optional color crossfade.
     }
 
-    /** Stops the fade where it is, leaving the Element at its current opacity, without firing {@code onComplete}. */
+    /**
+     * Stops the fade where it is, leaving the Element at its current opacity, without firing {@code onComplete}.
+     */
     @Override
     public boolean stop() {
         if (finished) return false;

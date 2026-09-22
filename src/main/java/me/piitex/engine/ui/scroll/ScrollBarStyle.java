@@ -27,7 +27,9 @@ public class ScrollBarStyle {
     private final Overridable<Color> thumbColor = new Overridable<>(new Color(0f, 0f, 0f, 0.35f));
     private Color thumbActiveColor = new Color(0f, 0f, 0f, 0.55f);
 
-    /** How thick the bar is (its width for a vertical bar, height for a horizontal one), in logical points. */
+    /**
+     * How thick the bar is (its width for a vertical bar, height for a horizontal one), in logical points.
+     */
     public float getThickness() {
         return thickness;
     }
@@ -36,7 +38,9 @@ public class ScrollBarStyle {
         this.thickness = thickness;
     }
 
-    /** Gap kept between the bar and the container's own edges, on every side. */
+    /**
+     * Gap kept between the bar and the container's own edges, on every side.
+     */
     public float getMargin() {
         return margin;
     }
@@ -45,7 +49,9 @@ public class ScrollBarStyle {
         this.margin = margin;
     }
 
-    /** Corner radius applied to both the track and the thumb. */
+    /**
+     * Corner radius applied to both the track and the thumb.
+     */
     public float getCornerRadius() {
         return cornerRadius;
     }
@@ -54,7 +60,9 @@ public class ScrollBarStyle {
         this.cornerRadius = cornerRadius;
     }
 
-    /** The thumb never draws shorter than this, in logical points, no matter how much taller the content is than the viewport. This keeps it grabbable for very long content. */
+    /**
+     * The thumb never draws shorter than this, in logical points, no matter how much taller the content is than the viewport. This keeps it grabbable for very long content.
+     */
     public float getMinThumbLength() {
         return minThumbLength;
     }
@@ -63,7 +71,9 @@ public class ScrollBarStyle {
         this.minThumbLength = minThumbLength;
     }
 
-    /** The bar's background strip, drawn full-length behind the thumb. Null draws no track (just a floating thumb). */
+    /**
+     * The bar's background strip, drawn full-length behind the thumb. Null draws no track (just a floating thumb).
+     */
     public Color getTrackColor() {
         return trackColor.get();
     }
@@ -72,12 +82,16 @@ public class ScrollBarStyle {
         this.trackColor.set(trackColor);
     }
 
-    /** Theme-facing counterpart to {@link #setTrackColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setTrackColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeTrackColor(Color trackColor) {
         this.trackColor.applyTheme(trackColor);
     }
 
-    /** The draggable thumb's color while idle, meaning not being dragged. Null draws no thumb at all, leaving no visible scrollbar, though wheel and programmatic scrolling still work. */
+    /**
+     * The draggable thumb's color while idle, meaning not being dragged. Null draws no thumb at all, leaving no visible scrollbar, though wheel and programmatic scrolling still work.
+     */
     public Color getThumbColor() {
         return thumbColor.get();
     }
@@ -86,12 +100,16 @@ public class ScrollBarStyle {
         this.thumbColor.set(thumbColor);
     }
 
-    /** Theme-facing counterpart to {@link #setThumbColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setThumbColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeThumbColor(Color thumbColor) {
         this.thumbColor.applyTheme(thumbColor);
     }
 
-    /** The thumb's color while actively being dragged, in place of {@link #getThumbColor()}. */
+    /**
+     * The thumb's color while actively being dragged, in place of {@link #getThumbColor()}.
+     */
     public Color getThumbActiveColor() {
         return thumbActiveColor;
     }

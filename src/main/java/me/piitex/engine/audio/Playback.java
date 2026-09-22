@@ -133,7 +133,7 @@ public final class Playback {
         }
         return p;
     }
-    
+
     /**
      * Sets this playback's own volume (0 is silent, 1 is full). Combined with its channel and master volume. Cancels any fade in progress.
      */
@@ -236,7 +236,9 @@ public final class Playback {
         return this;
     }
 
-    /** True if this playback has a world {@link #position} rather than being flat or {@linkplain #pan panned}. */
+    /**
+     * True if this playback has a world {@link #position} rather than being flat or {@linkplain #pan panned}.
+     */
     public boolean isPositional() {
         synchronized (Audio.LOCK) {
             return positional;
@@ -405,7 +407,8 @@ public final class Playback {
         alSourcei(source, AL_SOURCE_RELATIVE, AL_TRUE);
         alSource3f(source, AL_VELOCITY, 0f, 0f, 0f);
         alSourcef(source, AL_ROLLOFF_FACTOR, 0f);
-        if (spatialize) alSourcei(source, SOFTSourceSpatialize.AL_SOURCE_SPATIALIZE_SOFT, SOFTSourceSpatialize.AL_AUTO_SOFT);
+        if (spatialize)
+            alSourcei(source, SOFTSourceSpatialize.AL_SOURCE_SPATIALIZE_SOFT, SOFTSourceSpatialize.AL_AUTO_SOFT);
         if (channels == 1) {
             alSource3f(source, AL_POSITION, pan, 0f, -(float) Math.sqrt(1f - pan * pan));
         } else {

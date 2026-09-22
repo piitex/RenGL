@@ -17,20 +17,30 @@ import me.piitex.engine.ui.theme.Overridable;
  */
 public class TextEditingOptions {
 
-    /** How the blinking caret is drawn. */
+    /**
+     * How the blinking caret is drawn.
+     */
     public enum CaretShape {
-        /** A thin vertical bar between two characters, the conventional text-cursor look. */
+        /**
+         * A thin vertical bar between two characters, the conventional text-cursor look.
+         */
         LINE,
-        /** A solid block spanning the glyph under the cursor, terminal/insert-mode style. */
+        /**
+         * A solid block spanning the glyph under the cursor, terminal/insert-mode style.
+         */
         BLOCK,
-        /** A thin horizontal bar under the glyph under the cursor. */
+        /**
+         * A thin horizontal bar under the glyph under the cursor.
+         */
         UNDERSCORE
     }
 
     private boolean selectionEnabled = true;
     private boolean copyEnabled = true;
     private boolean pasteEnabled = true;
-    /** Maximum number of codepoints allowed, or -1 (the default) for unlimited. */
+    /**
+     * Maximum number of codepoints allowed, or -1 (the default) for unlimited.
+     */
     private int maxLength = -1;
     private boolean readOnly = false;
     private boolean undoEnabled = true;
@@ -42,9 +52,13 @@ public class TextEditingOptions {
 
     private final Overridable<Color> caretColor = new Overridable<>(Color.BLACK);
     private CaretShape caretShape = CaretShape.LINE;
-    /** Logical-point width for {@link CaretShape#LINE}, or thickness for {@link CaretShape#UNDERSCORE}. Ignored by {@link CaretShape#BLOCK}, which always spans the full glyph width. */
+    /**
+     * Logical-point width for {@link CaretShape#LINE}, or thickness for {@link CaretShape#UNDERSCORE}. Ignored by {@link CaretShape#BLOCK}, which always spans the full glyph width.
+     */
     private float caretWidth = 2f;
-    /** 0-1 fraction of the line height the caret spans (LINE/BLOCK, anchored at the top of the line). Ignored by UNDERSCORE, which always sits at the bottom. */
+    /**
+     * 0-1 fraction of the line height the caret spans (LINE/BLOCK, anchored at the top of the line). Ignored by UNDERSCORE, which always sits at the bottom.
+     */
     private float caretHeightRatio = 1f;
 
     private final Overridable<Color> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
@@ -75,7 +89,9 @@ public class TextEditingOptions {
         this.undoEnabled = undoEnabled;
     }
 
-    /** Maximum number of undo steps each overlay keeps; the oldest are dropped first. Defaults to 200. */
+    /**
+     * Maximum number of undo steps each overlay keeps; the oldest are dropped first. Defaults to 200.
+     */
     public int getUndoLimit() {
         return undoLimit;
     }
@@ -84,7 +100,9 @@ public class TextEditingOptions {
         this.undoLimit = Math.max(1, undoLimit);
     }
 
-    /** Whether the user can select any text at all. Disabling this also prevents copy and cut, since there is never a selection to act on. */
+    /**
+     * Whether the user can select any text at all. Disabling this also prevents copy and cut, since there is never a selection to act on.
+     */
     public boolean isSelectionEnabled() {
         return selectionEnabled;
     }
@@ -93,7 +111,9 @@ public class TextEditingOptions {
         this.selectionEnabled = selectionEnabled;
     }
 
-    /** Whether Ctrl/Cmd+C (and the copy half of Ctrl/Cmd+X) are allowed to put the selection on the OS clipboard. */
+    /**
+     * Whether Ctrl/Cmd+C (and the copy half of Ctrl/Cmd+X) are allowed to put the selection on the OS clipboard.
+     */
     public boolean isCopyEnabled() {
         return copyEnabled;
     }
@@ -102,7 +122,9 @@ public class TextEditingOptions {
         this.copyEnabled = copyEnabled;
     }
 
-    /** Whether Ctrl/Cmd+V is allowed to insert the OS clipboard's contents. */
+    /**
+     * Whether Ctrl/Cmd+V is allowed to insert the OS clipboard's contents.
+     */
     public boolean isPasteEnabled() {
         return pasteEnabled;
     }
@@ -111,7 +133,9 @@ public class TextEditingOptions {
         this.pasteEnabled = pasteEnabled;
     }
 
-    /** Maximum number of codepoints the text can hold, or -1 (the default) for unlimited. A typed character or paste that would exceed this is truncated/rejected rather than erroring. */
+    /**
+     * Maximum number of codepoints the text can hold, or -1 (the default) for unlimited. A typed character or paste that would exceed this is truncated/rejected rather than erroring.
+     */
     public int getMaxLength() {
         return maxLength;
     }
@@ -120,7 +144,9 @@ public class TextEditingOptions {
         this.maxLength = maxLength;
     }
 
-    /** A plain {@link Color} for a solid fill, or a {@link me.piitex.engine.ui.color.LinearGradient}/{@link me.piitex.engine.ui.color.ScrollingGradient} for a gradient/animated fill. */
+    /**
+     * A plain {@link Color} for a solid fill, or a {@link me.piitex.engine.ui.color.LinearGradient}/{@link me.piitex.engine.ui.color.ScrollingGradient} for a gradient/animated fill.
+     */
     public Paint getTextColor() {
         return textColor.get();
     }
@@ -129,12 +155,16 @@ public class TextEditingOptions {
         this.textColor.set(textColor);
     }
 
-    /** Theme-facing counterpart to {@link #setTextColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setTextColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeTextColor(Paint textColor) {
         this.textColor.applyTheme(textColor);
     }
 
-    /** Text shown (in {@link #getPlaceholderColor()}) whenever the field is empty. */
+    /**
+     * Text shown (in {@link #getPlaceholderColor()}) whenever the field is empty.
+     */
     public String getPlaceholder() {
         return placeholder;
     }
@@ -151,7 +181,9 @@ public class TextEditingOptions {
         this.placeholderColor.set(placeholderColor);
     }
 
-    /** Theme-facing counterpart to {@link #setPlaceholderColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setPlaceholderColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemePlaceholderColor(Paint placeholderColor) {
         this.placeholderColor.applyTheme(placeholderColor);
     }
@@ -164,7 +196,9 @@ public class TextEditingOptions {
         this.caretColor.set(caretColor);
     }
 
-    /** Theme-facing counterpart to {@link #setCaretColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setCaretColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeCaretColor(Color caretColor) {
         this.caretColor.applyTheme(caretColor);
     }
@@ -201,7 +235,9 @@ public class TextEditingOptions {
         this.selectionColor.set(selectionColor);
     }
 
-    /** Theme-facing counterpart to {@link #setSelectionColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setSelectionColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeSelectionColor(Color selectionColor) {
         this.selectionColor.applyTheme(selectionColor);
     }

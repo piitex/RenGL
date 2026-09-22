@@ -9,7 +9,9 @@ import javazoom.jl.decoder.SampleBuffer;
 
 import java.io.ByteArrayInputStream;
 
-/** Decodes an MP3 frame by frame with JLayer. */
+/**
+ * Decodes an MP3 frame by frame with JLayer.
+ */
 final class Mp3Stream implements PcmStream {
     private final String name;
     private final byte[] bytes;
@@ -34,7 +36,9 @@ final class Mp3Stream implements PcmStream {
         pendingPos = pendingLen = 0;
     }
 
-    /** Decodes the next frame into {@code pending}. Returns false at the end of the file. */
+    /**
+     * Decodes the next frame into {@code pending}. Returns false at the end of the file.
+     */
     private boolean decodeFrame() {
         try {
             Header header = bitstream.readFrame();
@@ -52,8 +56,15 @@ final class Mp3Stream implements PcmStream {
         }
     }
 
-    @Override public int channels() { return channels; }
-    @Override public int sampleRate() { return rate; }
+    @Override
+    public int channels() {
+        return channels;
+    }
+
+    @Override
+    public int sampleRate() {
+        return rate;
+    }
 
     @Override
     public int read(short[] dst, int off, int len) {
@@ -68,7 +79,9 @@ final class Mp3Stream implements PcmStream {
         return n;
     }
 
-    /** MP3 has no sample index, so this restarts and decodes forward. Fine for loop points, slow for huge files. */
+    /**
+     * MP3 has no sample index, so this restarts and decodes forward. Fine for loop points, slow for huge files.
+     */
     @Override
     public void seek(long frame) {
         closeBitstream();
@@ -89,5 +102,8 @@ final class Mp3Stream implements PcmStream {
         }
     }
 
-    @Override public void close() { closeBitstream(); }
+    @Override
+    public void close() {
+        closeBitstream();
+    }
 }

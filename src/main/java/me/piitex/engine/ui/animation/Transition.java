@@ -24,7 +24,9 @@ import me.piitex.engine.ui.containers.Container;
  */
 public interface Transition {
 
-    /** Advances this transition by {@code delta} seconds, applying whatever effect it has on {@code target} (its opacity, a position, ...). */
+    /**
+     * Advances this transition by {@code delta} seconds, applying whatever effect it has on {@code target} (its opacity, a position, ...).
+     */
     void update(Element target, float delta);
 
     /**
@@ -33,7 +35,8 @@ public interface Transition {
      * color-crossfading {@link FadeTransition} dissolves from and to. This is a no-op by
      * default, since most transitions do not need it.
      */
-    default void renderBackground(Renderer renderer, Element target) {}
+    default void renderBackground(Renderer renderer, Element target) {
+    }
 
     /**
      * Draws this transition's own visual effect for the current frame, if it has one.
@@ -52,6 +55,8 @@ public interface Transition {
         return false;
     }
 
-    /** Whether this transition has run its course and should be removed from its Element after this frame's {@link #render}. */
+    /**
+     * Whether this transition has run its course and should be removed from its Element after this frame's {@link #render}.
+     */
     boolean isFinished();
 }

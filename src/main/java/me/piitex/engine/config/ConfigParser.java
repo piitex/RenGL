@@ -8,15 +8,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/** Parser for the {@link Config} text format. Package-private; use {@link Config#parse(String)}. */
+/**
+ * Parser for the {@link Config} text format. Package-private; use {@link Config#parse(String)}.
+ */
 final class ConfigParser {
     private static final Pattern NUMBER = Pattern.compile("-?(\\d+\\.\\d*|\\.\\d+|\\d+)([eE][+-]?\\d+)?");
     private static final Pattern INTEGER = Pattern.compile("-?\\d+");
 
-    private record Frame(int indent, Object container) {}
-    private record Pending(Map<String, Object> parent, String key, int indent) {}
+    private record Frame(int indent, Object container) {
+    }
 
-    private ConfigParser() {}
+    private record Pending(Map<String, Object> parent, String key, int indent) {
+    }
+
+    private ConfigParser() {
+    }
 
     static Map<String, Object> parse(String text) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -60,13 +66,17 @@ final class ConfigParser {
                 list.add(value);
                 continue;
             }
-            if (!(frame.container instanceof Map<?, ?>)) throw new ConfigException(n, "expected a list item ('- value')");
+            if (!(frame.container instanceof Map<?, ?>))
+                throw new ConfigException(n, "expected a list item ('- value')");
             @SuppressWarnings("unchecked") Map<String, Object> map = (Map<String, Object>) frame.container;
 
             int sep = -1;
             for (int i = 0; i < content.length(); i++) {
                 char c = content.charAt(i);
-                if (c == '=' || c == ':') { sep = i; break; }
+                if (c == '=' || c == ':') {
+                    sep = i;
+                    break;
+                }
             }
             if (sep <= 0) throw new ConfigException(n, "expected 'key=value' or 'key: value'");
             String key = content.substring(0, sep).strip();
@@ -105,7 +115,9 @@ final class ConfigParser {
         return s;
     }
 
-    /** Parses one value: quoted string, inline list, or plain scalar. */
+    /**
+     * Parses one value: quoted string, inline list, or plain scalar.
+     */
     private static Object parseValue(String raw, int line) {
         String s = raw.stripLeading();
         if (s.isEmpty()) return "";
@@ -122,7 +134,10 @@ final class ConfigParser {
             while (true) {
                 while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
                 if (i >= s.length()) throw new ConfigException(line, "unterminated list, missing ']'");
-                if (s.charAt(i) == ']') { i++; break; }
+                if (s.charAt(i) == ']') {
+                    i++;
+                    break;
+                }
                 if (s.charAt(i) == '"' || s.charAt(i) == '\'') {
                     StringBuilder out = new StringBuilder();
                     i = readQuoted(s, i, out, line);
@@ -141,7 +156,9 @@ final class ConfigParser {
         return scalar(stripComment(s).strip());
     }
 
-    /** Reads a quoted string starting at {@code start}; returns the index just past the closing quote. */
+    /**
+     * Reads a quoted string starting at {@code start}; returns the index just past the closing quote.
+     */
     private static int readQuoted(String s, int start, StringBuilder out, int line) {
         char quote = s.charAt(start);
         for (int i = start + 1; i < s.length(); i++) {
@@ -156,8 +173,10 @@ final class ConfigParser {
                     default -> throw new ConfigException(line, "unknown escape '\\" + e + "'");
                 }
             } else if (c == quote) {
-                if (quote == '\'' && i + 1 < s.length() && s.charAt(i + 1) == '\'') { out.append('\''); i++; }
-                else return i + 1;
+                if (quote == '\'' && i + 1 < s.length() && s.charAt(i + 1) == '\'') {
+                    out.append('\'');
+                    i++;
+                } else return i + 1;
             } else {
                 out.append(c);
             }

@@ -40,12 +40,16 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
     private final Overridable<Color> onColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 1f));
     private final Overridable<Color> knobColor = new Overridable<>(Color.WHITE);
 
-    /** An off 44x24 switch. */
+    /**
+     * An off 44x24 switch.
+     */
     public ToggleSwitchOverlay() {
         this(44, 24);
     }
 
-    /** An off switch of the given size; the knob is as tall as the track less a small inset. */
+    /**
+     * An off switch of the given size; the knob is as tall as the track less a small inset.
+     */
     public ToggleSwitchOverlay(double width, double height) {
         this(width, height, false);
     }
@@ -69,19 +73,25 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         return on;
     }
 
-    /** Sets the state programmatically: the knob jumps straight there and {@link #onToggle} does NOT fire. */
+    /**
+     * Sets the state programmatically: the knob jumps straight there and {@link #onToggle} does NOT fire.
+     */
     public void setOn(boolean on) {
         this.on = on;
         this.position = on ? 1f : 0f;
     }
 
-    /** Flips the switch, with animation, and fires {@link #onToggle} with the new state. This is what a click runs. */
+    /**
+     * Flips the switch, with animation, and fires {@link #onToggle} with the new state. This is what a click runs.
+     */
     public void toggle() {
         on = !on;
         if (onToggle != null) onToggle.accept(on);
     }
 
-    /** Fired with the new state whenever the USER flips the switch (click or keyboard). One listener is held at a time. */
+    /**
+     * Fired with the new state whenever the USER flips the switch (click or keyboard). One listener is held at a time.
+     */
     public void onToggle(Consumer<Boolean> onToggle) {
         this.onToggle = onToggle;
     }
@@ -90,7 +100,9 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         return offColor.get();
     }
 
-    /** Pins the off-track color against theme switches. See {@link Overridable}. */
+    /**
+     * Pins the off-track color against theme switches. See {@link Overridable}.
+     */
     public void setOffColor(Color color) {
         offColor.set(color);
     }
@@ -99,7 +111,9 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         return onColor.get();
     }
 
-    /** Pins the on-track color against theme switches. */
+    /**
+     * Pins the on-track color against theme switches.
+     */
     public void setOnColor(Color color) {
         onColor.set(color);
     }
@@ -170,7 +184,8 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
     }
 
     @Override
-    public void onCharTyped(int codepoint) {}
+    public void onCharTyped(int codepoint) {
+    }
 
     @Override
     public void onKeyPressed(int key, int action, int mods) {

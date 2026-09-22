@@ -33,13 +33,17 @@ public class ModalContainer extends Container {
     private float fadeSeconds = 0.15f;
     private Runnable onClose;
 
-    /** A modal whose content is a new themed {@code width} by {@code height} panel. Add children through {@link #getContent()}. */
+    /**
+     * A modal whose content is a new themed {@code width} by {@code height} panel. Add children through {@link #getContent()}.
+     */
     public ModalContainer(double width, double height) {
         this(new Container(width, height));
         content.useTheme();
     }
 
-    /** A modal presenting {@code content} (e.g. a {@link me.piitex.engine.ui.layout.VerticalLayout}) as its panel. Call {@code content.useTheme()} yourself if you want the themed panel look. */
+    /**
+     * A modal presenting {@code content} (e.g. a {@link me.piitex.engine.ui.layout.VerticalLayout}) as its panel. Call {@code content.useTheme()} yourself if you want the themed panel look.
+     */
     public ModalContainer(Container content) {
         super(0, 0);
         this.content = content;
@@ -55,7 +59,9 @@ public class ModalContainer extends Container {
         });
     }
 
-    /** The centered panel. */
+    /**
+     * The centered panel.
+     */
     public Container getContent() {
         return content;
     }
@@ -64,7 +70,9 @@ public class ModalContainer extends Container {
         return backdropColor;
     }
 
-    /** The color drawn over the whole window behind the panel. Default 55% black. */
+    /**
+     * The color drawn over the whole window behind the panel. Default 55% black.
+     */
     public void setBackdropColor(Color backdropColor) {
         this.backdropColor = backdropColor;
     }
@@ -73,7 +81,9 @@ public class ModalContainer extends Container {
         return dismissOnBackdropClick;
     }
 
-    /** Whether clicking outside the panel closes the modal. Default true. */
+    /**
+     * Whether clicking outside the panel closes the modal. Default true.
+     */
     public void setDismissOnBackdropClick(boolean dismissOnBackdropClick) {
         this.dismissOnBackdropClick = dismissOnBackdropClick;
     }
@@ -82,17 +92,23 @@ public class ModalContainer extends Container {
         return dismissOnEscape;
     }
 
-    /** Whether Escape closes the modal. Default true. */
+    /**
+     * Whether Escape closes the modal. Default true.
+     */
     public void setDismissOnEscape(boolean dismissOnEscape) {
         this.dismissOnEscape = dismissOnEscape;
     }
 
-    /** Fade-in duration on show; 0 for none. Default 0.15s. */
+    /**
+     * Fade-in duration on show; 0 for none. Default 0.15s.
+     */
     public void setFadeSeconds(float fadeSeconds) {
         this.fadeSeconds = Math.max(0f, fadeSeconds);
     }
 
-    /** Runs whenever the modal closes, by any route. */
+    /**
+     * Runs whenever the modal closes, by any route.
+     */
     public void onClose(Runnable onClose) {
         this.onClose = onClose;
     }
@@ -102,14 +118,18 @@ public class ModalContainer extends Container {
         return window != null && window.getModal() == this;
     }
 
-    /** Shows this modal over everything in {@code window}. */
+    /**
+     * Shows this modal over everything in {@code window}.
+     */
     public void show(Window window) {
         window.showModal(this);
         fitToWindow(window);
         if (fadeSeconds > 0f) fadeIn(fadeSeconds);
     }
 
-    /** Closes this modal if it's showing. */
+    /**
+     * Closes this modal if it's showing.
+     */
     public void close() {
         Window window = getWindow();
         if (window != null && window.getModal() == this) {
@@ -117,7 +137,9 @@ public class ModalContainer extends Container {
         }
     }
 
-    /** Called by {@link Window#closeModal()} once the modal has been removed. Not meant to be called directly. */
+    /**
+     * Called by {@link Window#closeModal()} once the modal has been removed. Not meant to be called directly.
+     */
     public void notifyClosed() {
         if (onClose != null) onClose.run();
     }

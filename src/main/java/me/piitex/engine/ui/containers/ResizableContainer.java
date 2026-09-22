@@ -62,12 +62,16 @@ public class ResizableContainer extends Container {
             this.cursor = cursor;
         }
 
-        /** The cursor shown while hovering or dragging this handle. */
+        /**
+         * The cursor shown while hovering or dragging this handle.
+         */
         public CursorMode getCursorMode() {
             return cursor;
         }
 
-        /** The handle on side ({@code sideX}, {@code sideY}), each -1, 0 or 1; null for (0, 0). */
+        /**
+         * The handle on side ({@code sideX}, {@code sideY}), each -1, 0 or 1; null for (0, 0).
+         */
         private static Handle of(int sideX, int sideY) {
             for (Handle handle : values()) {
                 if (handle.sideX == sideX && handle.sideY == sideY) return handle;
@@ -106,11 +110,15 @@ public class ResizableContainer extends Container {
     private double fontScale = 1.0;
     private final Map<Element, FontState> fontStates = new WeakHashMap<>();
 
-    /** What this container last set an element's fonts to, and the sizes at scale 1 those came from. */
+    /**
+     * What this container last set an element's fonts to, and the sizes at scale 1 those came from.
+     */
     private record FontState(float[] base, float[] applied) {
     }
 
-    /** One resize, as the numbers {@link #scaleElement} needs. */
+    /**
+     * One resize, as the numbers {@link #scaleElement} needs.
+     */
     private record Transform(double sx, double sy, double oldFontScale, double newFontScale) {
     }
 
@@ -124,14 +132,18 @@ public class ResizableContainer extends Container {
 
     // ------------------------------------------------------------------------------------------ limits
 
-    /** The smallest size this container will shrink to. 0 (the default) means no minimum. Applies right away. */
+    /**
+     * The smallest size this container will shrink to. 0 (the default) means no minimum. Applies right away.
+     */
     public void setMinSize(double minWidth, double minHeight) {
         this.minWidth = Math.max(0, minWidth);
         this.minHeight = Math.max(0, minHeight);
         resizeTo(getWidth(), getHeight());
     }
 
-    /** The largest size this container will grow to. {@code Double.POSITIVE_INFINITY} (the default) means no maximum. Applies right away. */
+    /**
+     * The largest size this container will grow to. {@code Double.POSITIVE_INFINITY} (the default) means no maximum. Applies right away.
+     */
     public void setMaxSize(double maxWidth, double maxHeight) {
         this.maxWidth = Math.max(0, maxWidth);
         this.maxHeight = Math.max(0, maxHeight);
@@ -156,7 +168,9 @@ public class ResizableContainer extends Container {
 
     // ------------------------------------------------------------------------------------------ what scales
 
-    /** Whether children are scaled along with this container (default true). */
+    /**
+     * Whether children are scaled along with this container (default true).
+     */
     public void setScaleChildren(boolean scaleChildren) {
         this.scaleChildren = scaleChildren;
     }
@@ -165,7 +179,9 @@ public class ResizableContainer extends Container {
         return scaleChildren;
     }
 
-    /** Whether text is scaled along with the container (default true). Only has an effect while children are scaled. */
+    /**
+     * Whether text is scaled along with the container (default true). Only has an effect while children are scaled.
+     */
     public void setScaleFonts(boolean scaleFonts) {
         this.scaleFonts = scaleFonts;
     }
@@ -199,7 +215,9 @@ public class ResizableContainer extends Container {
 
     // ------------------------------------------------------------------------------------------ following the window
 
-    /** Whether a top-level container tracks the window's size (default true). See the class docs. */
+    /**
+     * Whether a top-level container tracks the window's size (default true). See the class docs.
+     */
     public void setResizeWithWindow(boolean resizeWithWindow) {
         this.resizeWithWindow = resizeWithWindow;
         hasReference = false;
@@ -265,24 +283,32 @@ public class ResizableContainer extends Container {
         setResizeHandles(userResizable ? Handle.CORNERS : Collections.emptySet());
     }
 
-    /** Whether any handle is enabled. */
+    /**
+     * Whether any handle is enabled.
+     */
     public boolean isUserResizable() {
         return !handles.isEmpty();
     }
 
-    /** Chooses exactly which handles the user can drag; none turns user resizing off. e.g. {@code setResizeHandles(Handle.SOUTH_EAST)}. */
+    /**
+     * Chooses exactly which handles the user can drag; none turns user resizing off. e.g. {@code setResizeHandles(Handle.SOUTH_EAST)}.
+     */
     public void setResizeHandles(Handle... enabled) {
         setResizeHandles(Arrays.asList(enabled));
     }
 
-    /** As {@link #setResizeHandles(Handle...)}, e.g. {@code setResizeHandles(Handle.EDGES)}. */
+    /**
+     * As {@link #setResizeHandles(Handle...)}, e.g. {@code setResizeHandles(Handle.EDGES)}.
+     */
     public void setResizeHandles(Collection<Handle> enabled) {
         handles.clear();
         handles.addAll(enabled);
         if (handles.isEmpty()) activeHandle = null;
     }
 
-    /** How many points inside the border a handle reaches (default 10). */
+    /**
+     * How many points inside the border a handle reaches (default 10).
+     */
     public void setResizeGrip(double grip) {
         this.grip = Math.max(1, grip);
     }
@@ -303,7 +329,9 @@ public class ResizableContainer extends Container {
         return showHandles;
     }
 
-    /** The enabled handle under (px, py), or null. A corner wins over the edges it overlaps. */
+    /**
+     * The enabled handle under (px, py), or null. A corner wins over the edges it overlaps.
+     */
     public Handle handleAt(double px, double py) {
         if (handles.isEmpty() || !contains(px, py)) return null;
 
@@ -321,7 +349,9 @@ public class ResizableContainer extends Container {
         return null;
     }
 
-    /** The handle being dragged, or else the one under the mouse. */
+    /**
+     * The handle being dragged, or else the one under the mouse.
+     */
     private Handle currentHandle() {
         if (activeHandle != null) return activeHandle;
         return MouseTracker.isInWindow() ? handleAt(MouseTracker.getX(), MouseTracker.getY()) : null;

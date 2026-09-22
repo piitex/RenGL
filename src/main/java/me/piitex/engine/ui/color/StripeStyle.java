@@ -17,7 +17,9 @@ public class StripeStyle {
     private boolean animated = true;
     private boolean enabled = true;
 
-    /** The stripe color; the bar's fill color shows in the gaps between stripes. Light gray by default. */
+    /**
+     * The stripe color; the bar's fill color shows in the gaps between stripes. Light gray by default.
+     */
     public Color getColor() {
         return color;
     }
@@ -27,7 +29,9 @@ public class StripeStyle {
         return this;
     }
 
-    /** Width in points of each stripe, measured along the bar; the gap between stripes is the same. Default 8. */
+    /**
+     * Width in points of each stripe, measured along the bar; the gap between stripes is the same. Default 8.
+     */
     public float getWidth() {
         return width;
     }
@@ -37,7 +41,9 @@ public class StripeStyle {
         return this;
     }
 
-    /** Points per second the stripes move to the right; negative moves them left. Default 30. */
+    /**
+     * Points per second the stripes move to the right; negative moves them left. Default 30.
+     */
     public float getSpeed() {
         return speed;
     }
@@ -47,7 +53,9 @@ public class StripeStyle {
         return this;
     }
 
-    /** Whether the stripes move. When false they hold still where they are (and resume from there). Default true. */
+    /**
+     * Whether the stripes move. When false they hold still where they are (and resume from there). Default true.
+     */
     public boolean isAnimated() {
         return animated;
     }
@@ -57,7 +65,9 @@ public class StripeStyle {
         return this;
     }
 
-    /** Whether the stripes are drawn at all. Turning them off keeps every other setting. Default true. */
+    /**
+     * Whether the stripes are drawn at all. Turning them off keeps every other setting. Default true.
+     */
     public boolean isEnabled() {
         return enabled;
     }

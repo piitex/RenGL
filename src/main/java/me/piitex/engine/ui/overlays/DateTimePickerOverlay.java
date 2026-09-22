@@ -63,8 +63,10 @@ import java.util.function.Consumer;
  */
 public class DateTimePickerOverlay extends Overlay implements Themeable, Focusable, FontScalable {
 
-    /** What the picker edits. */
-    public enum Mode { DATE, TIME, DATE_TIME }
+    /**
+     * What the picker edits.
+     */
+    public enum Mode {DATE, TIME, DATE_TIME}
 
     private Mode mode;
     private LocalDate date;
@@ -111,43 +113,59 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         close();
     }
 
-    /** The chosen date, or null. */
+    /**
+     * The chosen date, or null.
+     */
     public LocalDate getDate() {
         return date;
     }
 
-    /** Sets the date programmatically. {@link #onChange} does not fire. Null clears it. */
+    /**
+     * Sets the date programmatically. {@link #onChange} does not fire. Null clears it.
+     */
     public void setDate(LocalDate date) {
         this.date = date;
     }
 
-    /** The chosen time (to the minute), or null. */
+    /**
+     * The chosen time (to the minute), or null.
+     */
     public LocalTime getTime() {
         return time;
     }
 
-    /** Sets the time programmatically. {@link #onChange} does not fire. Null clears it, and seconds are dropped. */
+    /**
+     * Sets the time programmatically. {@link #onChange} does not fire. Null clears it, and seconds are dropped.
+     */
     public void setTime(LocalTime time) {
         this.time = time == null ? null : time.truncatedTo(ChronoUnit.MINUTES);
     }
 
-    /** Date and time together, or null unless both are set. */
+    /**
+     * Date and time together, or null unless both are set.
+     */
     public LocalDateTime getDateTime() {
         return date != null && time != null ? LocalDateTime.of(date, time) : null;
     }
 
-    /** Sets both parts programmatically. {@link #onChange} does not fire. Null clears both. */
+    /**
+     * Sets both parts programmatically. {@link #onChange} does not fire. Null clears both.
+     */
     public void setDateTime(LocalDateTime dateTime) {
         this.date = dateTime == null ? null : dateTime.toLocalDate();
         setTime(dateTime == null ? null : dateTime.toLocalTime());
     }
 
-    /** Fired (with this picker, read the value from it) whenever the USER changes the value. One listener is held at a time. */
+    /**
+     * Fired (with this picker, read the value from it) whenever the USER changes the value. One listener is held at a time.
+     */
     public void onChange(Consumer<DateTimePickerOverlay> onChange) {
         this.onChange = onChange;
     }
 
-    /** Earliest pickable date, or null for no limit. */
+    /**
+     * Earliest pickable date, or null for no limit.
+     */
     public void setMinDate(LocalDate minDate) {
         this.minDate = minDate;
     }
@@ -156,7 +174,9 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         return minDate;
     }
 
-    /** Latest pickable date, or null for no limit. */
+    /**
+     * Latest pickable date, or null for no limit.
+     */
     public void setMaxDate(LocalDate maxDate) {
         this.maxDate = maxDate;
     }
@@ -165,7 +185,9 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         return maxDate;
     }
 
-    /** 24-hour clock (default) or 12-hour with an AM/PM control. Also changes the default time format. */
+    /**
+     * 24-hour clock (default) or 12-hour with an AM/PM control. Also changes the default time format.
+     */
     public void setUse24Hour(boolean use24Hour) {
         this.use24Hour = use24Hour;
         close();
@@ -175,7 +197,9 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         return use24Hour;
     }
 
-    /** How many minutes the minute arrows move by (1, 5, 15, ...). Default 1. */
+    /**
+     * How many minutes the minute arrows move by (1, 5, 15, ...). Default 1.
+     */
     public void setMinuteStep(int minuteStep) {
         this.minuteStep = Math.max(1, Math.min(30, minuteStep));
     }
@@ -184,33 +208,45 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         return minuteStep;
     }
 
-    /** Whether the panel has a "Clear" button that empties the value. Default false. */
+    /**
+     * Whether the panel has a "Clear" button that empties the value. Default false.
+     */
     public void setClearable(boolean clearable) {
         this.clearable = clearable;
         close();
     }
 
-    /** The first column of the calendar. Defaults to the system locale's (Sunday in the US, Monday in most of Europe). */
+    /**
+     * The first column of the calendar. Defaults to the system locale's (Sunday in the US, Monday in most of Europe).
+     */
     public void setFirstDayOfWeek(DayOfWeek firstDay) {
         this.firstDay = firstDay == null ? DayOfWeek.MONDAY : firstDay;
     }
 
-    /** Text shown in the closed box while nothing is chosen. */
+    /**
+     * Text shown in the closed box while nothing is chosen.
+     */
     public void setPlaceholder(String placeholder) {
         this.placeholder = placeholder == null ? "" : placeholder;
     }
 
-    /** How the date reads in the closed box. Default {@code yyyy-MM-dd}. */
+    /**
+     * How the date reads in the closed box. Default {@code yyyy-MM-dd}.
+     */
     public void setDateFormatter(DateTimeFormatter dateFormatter) {
         this.dateFormatter = dateFormatter;
     }
 
-    /** How the time reads in the closed box. Default {@code HH:mm}, or {@code h:mm a} with a 12-hour clock. */
+    /**
+     * How the time reads in the closed box. Default {@code HH:mm}, or {@code h:mm a} with a 12-hour clock.
+     */
     public void setTimeFormatter(DateTimeFormatter timeFormatter) {
         this.timeFormatter = timeFormatter;
     }
 
-    /** The text the closed box shows for the current value, or null when it would show the placeholder. */
+    /**
+     * The text the closed box shows for the current value, or null when it would show the placeholder.
+     */
     public String getDisplayText() {
         DateTimeFormatter df = dateFormatter != null ? dateFormatter : DateTimeFormatter.ofPattern("yyyy-MM-dd");
         DateTimeFormatter tf = timeFormatter != null ? timeFormatter
@@ -286,7 +322,8 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     }
 
     public void toggleOpen() {
-        if (isOpen()) close(); else open();
+        if (isOpen()) close();
+        else open();
     }
 
     public void open() {
@@ -374,13 +411,16 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     /* Keyboard (closed box) */
 
     @Override
-    public void onFocusGained() {}
+    public void onFocusGained() {
+    }
 
     @Override
-    public void onFocusLost() {}
+    public void onFocusLost() {
+    }
 
     @Override
-    public void onCharTyped(int codepoint) {}
+    public void onCharTyped(int codepoint) {
+    }
 
     @Override
     public void onKeyPressed(int key, int action, int mods) {
@@ -534,7 +574,9 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             return use24Hour ? 2 : 3;
         }
 
-        /** {col, zone} for a point in the clock (zone +1 = up arrow, 0 = value, -1 = down arrow), or null. */
+        /**
+         * {col, zone} for a point in the clock (zone +1 = up arrow, 0 = value, -1 = down arrow), or null.
+         */
         private int[] timeHit(double lx, double ly) {
             if (!hasTime || ly < timeY || ly >= timeY + TIME_H) return null;
             for (int c = 0; c < colCount(); c++) {
@@ -621,7 +663,8 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                     case GLFW.GLFW_KEY_RIGHT -> timeCol = Math.floorMod(timeCol + 1, colCount());
                     case GLFW.GLFW_KEY_UP -> adjustTime(timeCol, 1);
                     case GLFW.GLFW_KEY_DOWN -> adjustTime(timeCol, -1);
-                    default -> { }
+                    default -> {
+                    }
                 }
                 return;
             }
@@ -690,9 +733,12 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                         boolean selected = d.equals(owner.date);
                         boolean hover = ok && mouseOn && mx >= PAD + c * CELL_W && mx < PAD + (c + 1) * CELL_W
                                 && my >= gridY + r * CELL_H && my < gridY + (r + 1) * CELL_H;
-                        if (selected) renderer.drawQuad(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, owner.selectionColor.get(), radius);
-                        else if (hover) renderer.drawQuad(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, hoverFill, radius);
-                        if (d.equals(today)) renderer.drawBorder(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, border, 1.5f, radius);
+                        if (selected)
+                            renderer.drawQuad(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, owner.selectionColor.get(), radius);
+                        else if (hover)
+                            renderer.drawQuad(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, hoverFill, radius);
+                        if (d.equals(today))
+                            renderer.drawBorder(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, border, 1.5f, radius);
                         if (keyboardMode && !focusTime && d.equals(cursor)) {
                             renderer.drawBorder(cx + 1f, cy + 1f, CELL_W - 2f, CELL_H - 2f, text, 2f, radius + 1f);
                         }
@@ -723,7 +769,8 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                         renderer.drawBorder(cx, cy + ARROW_H, COL_W, VALUE_H, text, 2f, radius);
                     }
                     String value = switch (c) {
-                        case 0 -> String.format("%02d", use24Hour ? t.getHour() : (t.getHour() % 12 == 0 ? 12 : t.getHour() % 12));
+                        case 0 ->
+                                String.format("%02d", use24Hour ? t.getHour() : (t.getHour() % 12 == 0 ? 12 : t.getHour() % 12));
                         case 1 -> String.format("%02d", t.getMinute());
                         default -> t.getHour() < 12 ? "AM" : "PM";
                     };
@@ -755,7 +802,9 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             renderer.drawText(label, x + (w - lw) / 2f, y + (FOOT_H - textH) / 2f, f, text);
         }
 
-        /** {@code count} left- or right-pointing chevrons ({@code dir} -1 = left) centered on (cx, cy). */
+        /**
+         * {@code count} left- or right-pointing chevrons ({@code dir} -1 = left) centered on (cx, cy).
+         */
         private void drawChevrons(Renderer renderer, float cx, float cy, int count, int dir, Color color) {
             float gap = 5f;
             float start = cx - (count - 1) * gap / 2f;
@@ -766,7 +815,9 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             }
         }
 
-        /** A small up ({@code dir} -1) or down (+1) chevron. */
+        /**
+         * A small up ({@code dir} -1) or down (+1) chevron.
+         */
         private void drawChevronVertical(Renderer renderer, float cx, float cy, int dir, Color color) {
             renderer.drawLine(cx - 5f, cy - dir * 2.5f, cx, cy + dir * 2.5f, color, 1.8f);
             renderer.drawLine(cx, cy + dir * 2.5f, cx + 5f, cy - dir * 2.5f, color, 1.8f);

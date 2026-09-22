@@ -10,6 +10,8 @@ package me.piitex.engine.ui;
  */
 public interface PopupKeyListener {
 
-    /** A GLFW key code pressed or repeated while this popup is open; {@code mods} is the GLFW modifier bitmask. */
+    /**
+     * A GLFW key code pressed or repeated while this popup is open; {@code mods} is the GLFW modifier bitmask.
+     */
     void onPopupKey(int key, int mods);
 }

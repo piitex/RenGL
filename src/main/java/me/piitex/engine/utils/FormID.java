@@ -48,7 +48,9 @@ public final class FormID {
         return new FormID(namespace, category, localId, label);
     }
 
-    /** The packed numeric value: namespace in bits 32-39, category in bits 24-31, and local ID in bits 0-23. Use this for fast equality, hashing, and storage, and {@link #getLabel()} for anything a person needs to read. */
+    /**
+     * The packed numeric value: namespace in bits 32-39, category in bits 24-31, and local ID in bits 0-23. Use this for fast equality, hashing, and storage, and {@link #getLabel()} for anything a person needs to read.
+     */
     public long rawValue() {
         return id;
     }
@@ -65,12 +67,16 @@ public final class FormID {
         return (int) (id & 0xFFFFFF);
     }
 
-    /** A human-readable form such as {@code "ELEMENT:Button#42"}, made up of the namespace name, the class's simple name rather than its fully qualified one, and a decimal local ID. */
+    /**
+     * A human-readable form such as {@code "ELEMENT:Button#42"}, made up of the namespace name, the class's simple name rather than its fully qualified one, and a decimal local ID.
+     */
     public String getLabel() {
         return label;
     }
 
-    /** The packed numeric value as zero-padded hex, such as {@code "0x0100002A"}, for low-level and debugging contexts that need the raw bits rather than {@link #getLabel()}. */
+    /**
+     * The packed numeric value as zero-padded hex, such as {@code "0x0100002A"}, for low-level and debugging contexts that need the raw bits rather than {@link #getLabel()}.
+     */
     public String toHexString() {
         return String.format("0x%010X", id);
     }
@@ -88,7 +94,9 @@ public final class FormID {
         return Long.hashCode(id);
     }
 
-    /** Returns {@link #getLabel()}. The human-readable form is the default for anything printing a FormID, such as a log line or a debugger's toString. Use {@link #toHexString()} for the raw packed bits. */
+    /**
+     * Returns {@link #getLabel()}. The human-readable form is the default for anything printing a FormID, such as a log line or a debugger's toString. Use {@link #toHexString()} for the raw packed bits.
+     */
     @Override
     public String toString() {
         return label;

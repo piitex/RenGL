@@ -42,9 +42,12 @@ public final class IconCache {
     private static final float OVERSAMPLE = 2f;
     private static final Map<String, org.jetbrains.skia.Image> cache = new ConcurrentHashMap<>();
 
-    private IconCache() {}
+    private IconCache() {
+    }
 
-    /** Loads (or returns the cached) rasterized Image for {@code svgFile} at {@code width}x{@code height} logical points. */
+    /**
+     * Loads (or returns the cached) rasterized Image for {@code svgFile} at {@code width}x{@code height} logical points.
+     */
     public static org.jetbrains.skia.Image load(File svgFile, int width, int height) {
         String key = "file:" + svgFile.getAbsolutePath() + "@" + width + "x" + height;
         return cache.computeIfAbsent(key, k -> rasterize(readFile(svgFile), svgFile.getAbsolutePath(), width, height));

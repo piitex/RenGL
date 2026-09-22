@@ -35,19 +35,26 @@ public final class CursorManager {
     private static volatile CursorMode pendingMode = CursorMode.DEFAULT;
     private static CursorMode lastAppliedMode = null; // null forces the very first pump() to actually apply DEFAULT
 
-    private CursorManager() {}
+    private CursorManager() {
+    }
 
-    /** Main thread only. Call once, right after the GLFW window is created. */
+    /**
+     * Main thread only. Call once, right after the GLFW window is created.
+     */
     public static void attach(long windowHandle) {
         CursorManager.windowHandle = windowHandle;
     }
 
-    /** Safe to call from any thread (typically the render thread, from hover detection): requests the OS cursor become {@code mode} on the next {@link #pump}. Null is treated as {@link CursorMode#DEFAULT}. */
+    /**
+     * Safe to call from any thread (typically the render thread, from hover detection): requests the OS cursor become {@code mode} on the next {@link #pump}. Null is treated as {@link CursorMode#DEFAULT}.
+     */
     public static void request(CursorMode mode) {
         pendingMode = mode == null ? CursorMode.DEFAULT : mode;
     }
 
-    /** Main thread only. Applies the most recently requested cursor if it changed. Call once per Engine main-loop iteration. */
+    /**
+     * Main thread only. Applies the most recently requested cursor if it changed. Call once per Engine main-loop iteration.
+     */
     public static void pump() {
         if (windowHandle == 0L) return;
 

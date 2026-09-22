@@ -28,7 +28,9 @@ public class MenuItem {
     private Consumer<Boolean> onToggle;
     private final List<MenuItem> children = new ArrayList<>();
 
-    /** An action item. {@code action} may be null (an inert row). */
+    /**
+     * An action item. {@code action} may be null (an inert row).
+     */
     public MenuItem(String label, Runnable action) {
         this(label, action, false, false);
     }
@@ -40,12 +42,16 @@ public class MenuItem {
         this.checkable = checkable;
     }
 
-    /** A divider line between groups of items. */
+    /**
+     * A divider line between groups of items.
+     */
     public static MenuItem separator() {
         return new MenuItem("", null, true, false);
     }
 
-    /** An item with a tick that flips on every choice; {@code onToggle} gets the new state. */
+    /**
+     * An item with a tick that flips on every choice; {@code onToggle} gets the new state.
+     */
     public static MenuItem check(String label, boolean checked, Consumer<Boolean> onToggle) {
         MenuItem item = new MenuItem(label, null, false, true);
         item.checked = checked;
@@ -53,7 +59,9 @@ public class MenuItem {
         return item;
     }
 
-    /** An item that opens {@code children} as a cascading submenu. */
+    /**
+     * An item that opens {@code children} as a cascading submenu.
+     */
     public static MenuItem submenu(String label, MenuItem... children) {
         MenuItem item = new MenuItem(label, null);
         Collections.addAll(item.children, children);
@@ -68,7 +76,9 @@ public class MenuItem {
         this.label = label == null ? "" : label;
     }
 
-    /** The accelerator text shown right-aligned, such as {@code "Ctrl+S"}, or null. This is display only and does not bind a key. */
+    /**
+     * The accelerator text shown right-aligned, such as {@code "Ctrl+S"}, or null. This is display only and does not bind a key.
+     */
     public String getShortcut() {
         return shortcut;
     }
@@ -81,7 +91,9 @@ public class MenuItem {
         return enabled;
     }
 
-    /** A disabled item is drawn dimmed and ignores hover and clicks. */
+    /**
+     * A disabled item is drawn dimmed and ignores hover and clicks.
+     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
@@ -98,7 +110,9 @@ public class MenuItem {
         return checked;
     }
 
-    /** Sets the tick without firing the toggle callback. Only meaningful for {@link #check} items. */
+    /**
+     * Sets the tick without firing the toggle callback. Only meaningful for {@link #check} items.
+     */
     public void setChecked(boolean checked) {
         this.checked = checked;
     }
@@ -115,7 +129,9 @@ public class MenuItem {
         return !children.isEmpty();
     }
 
-    /** The submenu rows; add to it to grow the submenu. Empty for anything that isn't a {@link #submenu}. */
+    /**
+     * The submenu rows; add to it to grow the submenu. Empty for anything that isn't a {@link #submenu}.
+     */
     public List<MenuItem> getChildren() {
         return children;
     }

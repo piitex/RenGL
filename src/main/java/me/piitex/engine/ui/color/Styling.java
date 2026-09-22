@@ -29,7 +29,9 @@ public class Styling {
         this.borderColor.set(borderColor);
     }
 
-    /** Theme-facing counterpart to {@link #setBorderColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setBorderColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeBorderColor(Paint borderColor) {
         this.borderColor.applyTheme(borderColor);
     }
@@ -42,12 +44,16 @@ public class Styling {
         this.backgroundColor.set(backgroundColor);
     }
 
-    /** Theme-facing counterpart to {@link #setBackgroundColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setBackgroundColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeBackgroundColor(Paint backgroundColor) {
         this.backgroundColor.applyTheme(backgroundColor);
     }
 
-    /** The color used while hovered. While {@link #setHoverFollowsBackground following the background} it is the background. */
+    /**
+     * The color used while hovered. While {@link #setHoverFollowsBackground following the background} it is the background.
+     */
     public Paint getHoverColor() {
         return hoverFollowsBackground ? backgroundColor.get() : hoverColor.get();
     }
@@ -66,18 +72,24 @@ public class Styling {
         this.hoverFollowsBackground = follows;
     }
 
-    /** Theme-facing counterpart to {@link #setHoverColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setHoverColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeHoverColor(Paint hoverColor) {
         this.hoverFollowsBackground = false;
         this.hoverColor.applyTheme(hoverColor);
     }
 
-    /** The text color used while hovered, or null (the default) to keep the normal text color. Independent of {@link #getHoverColor()}, which paints the background. */
+    /**
+     * The text color used while hovered, or null (the default) to keep the normal text color. Independent of {@link #getHoverColor()}, which paints the background.
+     */
     public Paint getTextHoverColor() {
         return textHoverColor;
     }
 
-    /** Sets the text color shown while the element is hovered. Pass null to go back to the normal text color. */
+    /**
+     * Sets the text color shown while the element is hovered. Pass null to go back to the normal text color.
+     */
     public void setTextHoverColor(Paint textHoverColor) {
         this.textHoverColor = textHoverColor;
     }
@@ -90,7 +102,9 @@ public class Styling {
         this.borderThickness.set(borderThickness);
     }
 
-    /** Theme-facing counterpart to {@link #setBorderThickness}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setBorderThickness}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeBorderThickness(float borderThickness) {
         this.borderThickness.applyTheme(borderThickness);
     }
@@ -103,7 +117,9 @@ public class Styling {
         this.cornerRadius.set(cornerRadius);
     }
 
-    /** Theme-facing counterpart to {@link #setCornerRadius}. It is a no-op once that setter has pinned this property. See {@link Overridable}. */
+    /**
+     * Theme-facing counterpart to {@link #setCornerRadius}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
+     */
     public void applyThemeCornerRadius(float cornerRadius) {
         this.cornerRadius.applyTheme(cornerRadius);
     }

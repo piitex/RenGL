@@ -104,7 +104,9 @@ public class AudioDemo {
         return y + 40;
     }
 
-    /** A 0-100 slider; a null channel drives the master volume. */
+    /**
+     * A 0-100 slider; a null channel drives the master volume.
+     */
     private static void slider(Container root, String label, int y, AudioChannel channel) {
         TextOverlay text = new TextOverlay(label, 16, Color.WHITE);
         text.setPosition(20, y + 6);

@@ -78,7 +78,9 @@ public class Download {
     private volatile boolean discardOnStop;
     private volatile InputStream activeStream;
 
-    /** Downloads {@code url} to {@code target}; the parent folders are created when the transfer begins. */
+    /**
+     * Downloads {@code url} to {@code target}; the parent folders are created when the transfer begins.
+     */
     public Download(URI url, Path target) {
         this.url = url;
         this.target = target;
@@ -92,7 +94,9 @@ public class Download {
 
     // ---------------------------------------------------------------- configuration
 
-    /** Adds a request header, e.g. {@code Authorization}. Takes effect on the next attempt. */
+    /**
+     * Adds a request header, e.g. {@code Authorization}. Takes effect on the next attempt.
+     */
     public Download setHeader(String name, String value) {
         synchronized (headers) {
             headers.put(name, value);
@@ -100,19 +104,25 @@ public class Download {
         return this;
     }
 
-    /** Lowercase or uppercase hex SHA-256 the finished file must match, or null to skip verification. */
+    /**
+     * Lowercase or uppercase hex SHA-256 the finished file must match, or null to skip verification.
+     */
     public Download setExpectedSha256(String sha256) {
         this.expectedSha256 = sha256 == null ? null : sha256.trim().toLowerCase();
         return this;
     }
 
-    /** How many times a dropped connection is retried before failing; the count resets whenever an attempt made progress. Default 3. */
+    /**
+     * How many times a dropped connection is retried before failing; the count resets whenever an attempt made progress. Default 3.
+     */
     public Download setMaxRetries(int maxRetries) {
         this.maxRetries = Math.max(0, maxRetries);
         return this;
     }
 
-    /** The name displays show. Defaults to the target's file name. */
+    /**
+     * The name displays show. Defaults to the target's file name.
+     */
     public Download setDisplayName(String displayName) {
         this.displayName = displayName;
         return this;
@@ -153,12 +163,16 @@ public class Download {
         return state;
     }
 
-    /** Bytes on disk so far, including any resumed from an earlier attempt. */
+    /**
+     * Bytes on disk so far, including any resumed from an earlier attempt.
+     */
     public long getDownloadedBytes() {
         return downloaded;
     }
 
-    /** Total size in bytes, or -1 while unknown. */
+    /**
+     * Total size in bytes, or -1 while unknown.
+     */
     public long getTotalBytes() {
         return total;
     }
@@ -167,7 +181,9 @@ public class Download {
         return total > 0;
     }
 
-    /** Fraction complete in [0, 1]; 0 while the size is unknown (check {@link #isSizeKnown()}); 1 once completed. */
+    /**
+     * Fraction complete in [0, 1]; 0 while the size is unknown (check {@link #isSizeKnown()}); 1 once completed.
+     */
     public double getProgress() {
         if (state == DownloadState.COMPLETED) return 1.0;
         long t = total;
@@ -175,21 +191,27 @@ public class Download {
         return Math.min(1.0, (double) downloaded / t);
     }
 
-    /** Smoothed speed in bytes per second; 0 when not downloading or when no data has arrived for two seconds. */
+    /**
+     * Smoothed speed in bytes per second; 0 when not downloading or when no data has arrived for two seconds.
+     */
     public double getBytesPerSecond() {
         if (state != DownloadState.DOWNLOADING) return 0;
         if (System.nanoTime() - lastSampleNanos > STALL_NANOS) return 0;
         return bytesPerSecond;
     }
 
-    /** Estimated seconds remaining, or -1 if the size or speed is unknown. */
+    /**
+     * Estimated seconds remaining, or -1 if the size or speed is unknown.
+     */
     public double getEtaSeconds() {
         double speed = getBytesPerSecond();
         if (total <= 0 || speed < 1) return -1;
         return Math.max(0, (total - downloaded) / speed);
     }
 
-    /** Why the download failed, or null. */
+    /**
+     * Why the download failed, or null.
+     */
     public Throwable getError() {
         return error;
     }
@@ -209,7 +231,9 @@ public class Download {
         Thread.ofVirtual().name("download-" + displayName).start(this::run);
     }
 
-    /** Stops the transfer but keeps the partial file; {@link #start()} resumes it. A queued download becomes paused too. */
+    /**
+     * Stops the transfer but keeps the partial file; {@link #start()} resumes it. A queued download becomes paused too.
+     */
     public void pause() {
         if (state == DownloadState.QUEUED) {
             setState(DownloadState.PAUSED);
@@ -218,7 +242,9 @@ public class Download {
         stop(false);
     }
 
-    /** Stops the transfer and deletes the partial file. Also works on a queued or paused download. */
+    /**
+     * Stops the transfer and deletes the partial file. Also works on a queued or paused download.
+     */
     public void cancel() {
         if (!state.isActive()) {
             if (state == DownloadState.QUEUED || state == DownloadState.PAUSED) {
@@ -243,7 +269,9 @@ public class Download {
         }
     }
 
-    /** Package-private: puts a not-running download back in line for a {@link DownloadManager}. */
+    /**
+     * Package-private: puts a not-running download back in line for a {@link DownloadManager}.
+     */
     synchronized void markQueued() {
         if (!state.isActive() && state != DownloadState.COMPLETED) {
             setState(DownloadState.QUEUED);
@@ -456,7 +484,9 @@ public class Download {
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    /** Unwinds the transfer loop when {@link #pause()}/{@link #cancel()} was requested. */
+    /**
+     * Unwinds the transfer loop when {@link #pause()}/{@link #cancel()} was requested.
+     */
     private static final class StopException extends IOException {
         StopException() {
             super("stopped");

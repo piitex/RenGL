@@ -61,7 +61,9 @@ import java.util.function.Predicate;
  */
 public class TabContainer extends Layout {
 
-    /** Which edge of the container the tab strip sits on. */
+    /**
+     * Which edge of the container the tab strip sits on.
+     */
     public enum TabPosition {
         TOP, BOTTOM
     }
@@ -97,7 +99,9 @@ public class TabContainer extends Layout {
             changed();
         }
 
-        /** The element shown while this tab is selected. */
+        /**
+         * The element shown while this tab is selected.
+         */
         public Element getContent() {
             return content;
         }
@@ -106,7 +110,9 @@ public class TabContainer extends Layout {
             return closable;
         }
 
-        /** Whether the tab shows a close button. False by default. */
+        /**
+         * Whether the tab shows a close button. False by default.
+         */
         public void setClosable(boolean closable) {
             this.closable = closable;
             changed();
@@ -116,7 +122,9 @@ public class TabContainer extends Layout {
             return enabled;
         }
 
-        /** A disabled tab is drawn dimmed and cannot be selected by the user. Code can still select it. */
+        /**
+         * A disabled tab is drawn dimmed and cannot be selected by the user. Code can still select it.
+         */
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
         }
@@ -125,12 +133,16 @@ public class TabContainer extends Layout {
             return tooltip;
         }
 
-        /** Text shown when the cursor rests on the tab. Null (the default) shows the full title, but only when it had to be cut short. */
+        /**
+         * Text shown when the cursor rests on the tab. Null (the default) shows the full title, but only when it had to be cut short.
+         */
         public void setTooltip(String tooltip) {
             this.tooltip = tooltip;
         }
 
-        /** The container this tab belongs to, or null once it has been removed. */
+        /**
+         * The container this tab belongs to, or null once it has been removed.
+         */
         public TabContainer getContainer() {
             return container;
         }
@@ -176,7 +188,9 @@ public class TabContainer extends Layout {
         return addTab(tabs.size(), title, content);
     }
 
-    /** As {@link #addTab(String, Element)}, inserting the tab at {@code index} (0 = leftmost). */
+    /**
+     * As {@link #addTab(String, Element)}, inserting the tab at {@code index} (0 = leftmost).
+     */
     public Tab addTab(int index, String title, Element content) {
         Objects.requireNonNull(content, "content");
         if (index < 0 || index > tabs.size()) {
@@ -213,7 +227,9 @@ public class TabContainer extends Layout {
         return true;
     }
 
-    /** As {@link #removeTab(Tab)}, by position. Returns the removed tab. */
+    /**
+     * As {@link #removeTab(Tab)}, by position. Returns the removed tab.
+     */
     public Tab removeTab(int index) {
         Tab tab = tabs.get(index);
         detach(tab);
@@ -232,7 +248,9 @@ public class TabContainer extends Layout {
         return true;
     }
 
-    /** The tabs in display order. A read-only view of the live list. */
+    /**
+     * The tabs in display order. A read-only view of the live list.
+     */
     public List<Tab> getTabs() {
         return Collections.unmodifiableList(tabs);
     }
@@ -241,22 +259,30 @@ public class TabContainer extends Layout {
         return tabs.size();
     }
 
-    /** The selected tab, or null while there are no tabs. */
+    /**
+     * The selected tab, or null while there are no tabs.
+     */
     public Tab getSelectedTab() {
         return selected;
     }
 
-    /** Position of the selected tab, or -1 while there are no tabs. */
+    /**
+     * Position of the selected tab, or -1 while there are no tabs.
+     */
     public int getSelectedIndex() {
         return selected == null ? -1 : tabs.indexOf(selected);
     }
 
-    /** Selects {@code tab}, firing {@link #onTabSelected} if that is a change. Ignores tabs of other containers. */
+    /**
+     * Selects {@code tab}, firing {@link #onTabSelected} if that is a change. Ignores tabs of other containers.
+     */
     public void selectTab(Tab tab) {
         if (tab != null && tab.container == this) select(tab);
     }
 
-    /** As {@link #selectTab(Tab)}, by position. */
+    /**
+     * As {@link #selectTab(Tab)}, by position.
+     */
     public void selectTab(int index) {
         select(tabs.get(index));
     }
@@ -265,18 +291,24 @@ public class TabContainer extends Layout {
         return position;
     }
 
-    /** Puts the strip above ({@link TabPosition#TOP}, the default) or below the content. */
+    /**
+     * Puts the strip above ({@link TabPosition#TOP}, the default) or below the content.
+     */
     public void setTabPosition(TabPosition position) {
         this.position = position == null ? TabPosition.TOP : position;
         relayout();
     }
 
-    /** The colors and sizes of the tab strip. Mutate it in place. */
+    /**
+     * The colors and sizes of the tab strip. Mutate it in place.
+     */
     public TabStyle getTabStyle() {
         return style;
     }
 
-    /** Registers the callback fired with the tab that has just become selected. Only one is held at a time. */
+    /**
+     * Registers the callback fired with the tab that has just become selected. Only one is held at a time.
+     */
     public void onTabSelected(Consumer<Tab> onTabSelected) {
         this.onTabSelected = onTabSelected;
     }
@@ -290,12 +322,16 @@ public class TabContainer extends Layout {
         this.onTabCloseRequested = onTabCloseRequested;
     }
 
-    /** Registers the callback fired with a tab after it was closed (see {@link #closeTab}). Only one is held at a time. */
+    /**
+     * Registers the callback fired with a tab after it was closed (see {@link #closeTab}). Only one is held at a time.
+     */
     public void onTabClosed(Consumer<Tab> onTabClosed) {
         this.onTabClosed = onTabClosed;
     }
 
-    /** Tabs own their content; use {@link #addTab}. */
+    /**
+     * Tabs own their content; use {@link #addTab}.
+     */
     @Override
     public void addElement(Element element) {
         throw new UnsupportedOperationException("Use addTab");
@@ -306,7 +342,9 @@ public class TabContainer extends Layout {
         throw new UnsupportedOperationException("Use addTab");
     }
 
-    /** Removing a tab's content removes the tab. The tab strip itself cannot be removed. */
+    /**
+     * Removing a tab's content removes the tab. The tab strip itself cannot be removed.
+     */
     @Override
     public Element removeElement(int index) {
         Element element = getElements().get(index);
@@ -398,7 +436,9 @@ public class TabContainer extends Layout {
         tabsChanged();
     }
 
-    /** The tab to fall back on when the one at {@code index} was just removed: the next enabled one, else the previous. */
+    /**
+     * The tab to fall back on when the one at {@code index} was just removed: the next enabled one, else the previous.
+     */
     private Tab neighbour(int index) {
         for (int i = index; i < tabs.size(); i++) {
             if (tabs.get(i).enabled) return tabs.get(i);
@@ -409,7 +449,9 @@ public class TabContainer extends Layout {
         return null;
     }
 
-    /** Clears keyboard focus if it is on {@code content} or something inside it, which is about to stop being reachable. */
+    /**
+     * Clears keyboard focus if it is on {@code content} or something inside it, which is about to stop being reachable.
+     */
     private void releaseFocusWithin(Element content) {
         Window window = getWindow();
         if (window == null) return;
@@ -421,7 +463,9 @@ public class TabContainer extends Layout {
         }
     }
 
-    /** Selects the nearest enabled tab in {@code direction} (-1 or 1) from the selection. No wrap-around. */
+    /**
+     * Selects the nearest enabled tab in {@code direction} (-1 or 1) from the selection. No wrap-around.
+     */
     private void selectRelative(int direction) {
         int from = getSelectedIndex();
         for (int i = from + direction; i >= 0 && i < tabs.size(); i += direction) {
@@ -432,7 +476,9 @@ public class TabContainer extends Layout {
         }
     }
 
-    /** Selects the first (or last) enabled tab. */
+    /**
+     * Selects the first (or last) enabled tab.
+     */
     private void selectEdge(boolean last) {
         for (int n = 0; n < tabs.size(); n++) {
             Tab tab = tabs.get(last ? tabs.size() - 1 - n : n);
@@ -497,7 +543,9 @@ public class TabContainer extends Layout {
             return Math.ceil(lineHeight() + 2 * style.getVerticalPadding());
         }
 
-        /** Space between a tab's right edge and its title: the padding, or room for the close button. */
+        /**
+         * Space between a tab's right edge and its title: the padding, or room for the close button.
+         */
         private float rightInset(Tab tab) {
             float padding = style.getHorizontalPadding();
             return tab.closable ? padding / 2 + style.getCloseButtonSize() + CLOSE_GAP : padding;
@@ -511,7 +559,9 @@ public class TabContainer extends Layout {
             return tab.naturalWidth;
         }
 
-        /** Positions every tab within the strip, squeezing them to fit if needed, and keeps the scroll offset valid. */
+        /**
+         * Positions every tab within the strip, squeezing them to fit if needed, and keeps the scroll offset valid.
+         */
         void layout() {
             double available = getWidth();
             double gaps = tabs.isEmpty() ? 0 : style.getSpacing() * (tabs.size() - 1);
@@ -546,7 +596,9 @@ public class TabContainer extends Layout {
             scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
         }
 
-        /** The tab under window x {@code px}, or -1. Points over the arrow buttons or outside the strip hit no tab. */
+        /**
+         * The tab under window x {@code px}, or -1. Points over the arrow buttons or outside the strip hit no tab.
+         */
         private int tabAt(double px) {
             double local = px - getAbsoluteX();
             if (local < viewportLeft || local >= viewportLeft + viewportWidth) return -1;
@@ -565,7 +617,9 @@ public class TabContainer extends Layout {
             return strip >= closeLeft - CLOSE_SLOP;
         }
 
-        /** -1 or 1 if window x {@code px} is over the left or right arrow button, else 0. */
+        /**
+         * -1 or 1 if window x {@code px} is over the left or right arrow button, else 0.
+         */
         private int arrowAt(double px) {
             if (!overflowing) return 0;
             double local = px - getAbsoluteX();
@@ -756,7 +810,9 @@ public class TabContainer extends Layout {
             renderer.popClip();
         }
 
-        /** One of the two scroll buttons: a chevron, dimmed when there is nothing more to scroll to that way. */
+        /**
+         * One of the two scroll buttons: a chevron, dimmed when there is nothing more to scroll to that way.
+         */
         private void drawArrow(Renderer renderer, int direction, float x, float top, float height) {
             float width = style.getScrollButtonWidth();
             boolean enabled = canScroll(direction);
@@ -787,7 +843,9 @@ public class TabContainer extends Layout {
             renderer.drawLine(centerX - reach, centerY + reach, centerX + reach, centerY - reach, color, 1.5f);
         }
 
-        /** {@code text}, cut short with an ellipsis if it is wider than {@code maxWidth}. */
+        /**
+         * {@code text}, cut short with an ellipsis if it is wider than {@code maxWidth}.
+         */
         private static String fit(String text, org.jetbrains.skia.Font font, float maxWidth) {
             if (maxWidth <= 0) return "";
             if (font.measureTextWidth(text) <= maxWidth) return text;

@@ -51,7 +51,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
     private boolean empty;
     private Consumer<Double> onValueChange;
 
-    /** A 0-100 whole-number spinner, {@code width} x {@code height} points, starting at 0. */
+    /**
+     * A 0-100 whole-number spinner, {@code width} x {@code height} points, starting at 0.
+     */
     public SpinnerOverlay(double width, double height) {
         this(width, height, 0, 100, 0);
     }
@@ -96,7 +98,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         syncText();
     }
 
-    /** The text field showing the value, for setting the placeholder, font, padding, and so on. Its own {@code onTextChanged} and {@code onSubmit} hooks are free for the application to use. */
+    /**
+     * The text field showing the value, for setting the placeholder, font, padding, and so on. Its own {@code onTextChanged} and {@code onSubmit} hooks are free for the application to use.
+     */
     public TextFieldOverlay getField() {
         return field;
     }
@@ -105,19 +109,25 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         return value;
     }
 
-    /** Sets the value, clamped to {@code [min, max]} and rounded to {@link #getDecimals()}. Does NOT fire {@link #onValueChange}. */
+    /**
+     * Sets the value, clamped to {@code [min, max]} and rounded to {@link #getDecimals()}. Does NOT fire {@link #onValueChange}.
+     */
     public void setValue(double value) {
         this.value = normalize(value);
         empty = false;
         syncText();
     }
 
-    /** A permanent label anchored at the field's far left in the lighter placeholder color, with the number anchored at the far right. {@code setLabel("Age")} renders as "Age ......... 25", and the label stays visible as the value changes. */
+    /**
+     * A permanent label anchored at the field's far left in the lighter placeholder color, with the number anchored at the far right. {@code setLabel("Age")} renders as "Age ......... 25", and the label stays visible as the value changes.
+     */
     public void setLabel(String label) {
         field.setPrefix(label == null || label.isEmpty() ? "" : label + " ");
     }
 
-    /** The hint shown, in the theme's lighter placeholder color, while the spinner is {@link #isEmpty() empty}, for example {@code "Age 25"}. This is the same as {@code getField().setPlaceholder(...)}. */
+    /**
+     * The hint shown, in the theme's lighter placeholder color, while the spinner is {@link #isEmpty() empty}, for example {@code "Age 25"}. This is the same as {@code getField().setPlaceholder(...)}.
+     */
     public void setPlaceholder(String placeholder) {
         field.setPlaceholder(placeholder);
     }
@@ -136,7 +146,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         return empty;
     }
 
-    /** Empties the field so the placeholder shows. A no-op without a placeholder. Does NOT fire {@link #onValueChange}. */
+    /**
+     * Empties the field so the placeholder shows. A no-op without a placeholder. Does NOT fire {@link #onValueChange}.
+     */
     public void clear() {
         String placeholder = field.getPlaceholder();
         if (placeholder == null || placeholder.isEmpty()) return;
@@ -148,7 +160,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         return min;
     }
 
-    /** Also re-clamps the current value into the new range. */
+    /**
+     * Also re-clamps the current value into the new range.
+     */
     public void setMin(double min) {
         this.min = min;
         if (max < min) max = min;
@@ -159,7 +173,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         return max;
     }
 
-    /** Also re-clamps the current value into the new range. */
+    /**
+     * Also re-clamps the current value into the new range.
+     */
     public void setMax(double max) {
         this.max = max;
         if (min > max) min = max;
@@ -170,7 +186,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         return step;
     }
 
-    /** How much one button click/arrow key/wheel notch changes the value by. Non-positive values are ignored. Also sets {@link #getDecimals()} to as many places as {@code step} has, unless {@link #setDecimals} was called. */
+    /**
+     * How much one button click/arrow key/wheel notch changes the value by. Non-positive values are ignored. Also sets {@link #getDecimals()} to as many places as {@code step} has, unless {@link #setDecimals} was called.
+     */
     public void setStep(double step) {
         if (step <= 0 || !Double.isFinite(step)) return;
         this.step = step;
@@ -180,7 +198,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         }
     }
 
-    /** How many decimal places the value is rounded to and displayed with. */
+    /**
+     * How many decimal places the value is rounded to and displayed with.
+     */
     public int getDecimals() {
         return decimals;
     }
@@ -191,19 +211,25 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         reclamp();
     }
 
-    /** Registers the callback fired with the new value whenever the user changes it. Only one is held at a time. */
+    /**
+     * Registers the callback fired with the new value whenever the user changes it. Only one is held at a time.
+     */
     public void onValueChange(Consumer<Double> onValueChange) {
         this.onValueChange = onValueChange;
     }
 
-    /** Wheel notches adjust the value while the field is focused; ignored otherwise. */
+    /**
+     * Wheel notches adjust the value while the field is focused; ignored otherwise.
+     */
     @Override
     public void onScroll(double deltaX, double deltaY) {
         if (!field.isFocused() || deltaY == 0) return;
         stepBy(deltaY > 0 ? 1 : -1, 1);
     }
 
-    /** Re-normalizes the current value after a range/precision change, without leaving the empty state. */
+    /**
+     * Re-normalizes the current value after a range/precision change, without leaving the empty state.
+     */
     private void reclamp() {
         value = normalize(value);
         syncText();
@@ -215,7 +241,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         applyUserValue(empty ? value : value + direction * step * multiplier);
     }
 
-    /** Parses the field text into the value, or reverts the text if it isn't a number. */
+    /**
+     * Parses the field text into the value, or reverts the text if it isn't a number.
+     */
     private void commitText() {
         String placeholder = field.getPlaceholder();
         if (field.getText().isBlank() && placeholder != null && !placeholder.isEmpty()) {
@@ -255,7 +283,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         field.setText(empty ? "" : String.format(Locale.ROOT, "%." + decimals + "f", value));
     }
 
-    /** The text field, with number-only typing and the spinner's keyboard/commit behavior layered on. */
+    /**
+     * The text field, with number-only typing and the spinner's keyboard/commit behavior layered on.
+     */
     private final class SpinnerField extends TextFieldOverlay {
         SpinnerField(double width, double height) {
             super(width, height);
@@ -297,7 +327,9 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
         }
     }
 
-    /** A themed button whose label is a chevron drawn as lines, since a text arrow glyph may be missing from the app's font. */
+    /**
+     * A themed button whose label is a chevron drawn as lines, since a text arrow glyph may be missing from the app's font.
+     */
     private static final class ArrowButton extends ButtonOverlay {
         private final boolean up;
 
