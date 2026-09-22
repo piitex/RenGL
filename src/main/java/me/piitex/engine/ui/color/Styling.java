@@ -11,11 +11,9 @@ import me.piitex.engine.ui.theme.Overridable;
  * {@link Overridable}'s own docs for the exact rule.
  */
 public class Styling {
-
-    // Default all to white
-    private final Overridable<Paint> borderColor = new Overridable<>(new Color(1f));
-    private final Overridable<Paint> backgroundColor = new Overridable<>(new Color(1f));
-    private final Overridable<Paint> hoverColor = new Overridable<>(new Color(1f));
+    private final Overridable<Paint> borderColor = new Overridable<>(Color.TRANSPARENT);
+    private final Overridable<Paint> backgroundColor = new Overridable<>(Color.TRANSPARENT);
+    private final Overridable<Paint> hoverColor = new Overridable<>(Color.TRANSPARENT);
     private boolean hoverFollowsBackground;
     private Paint textHoverColor;
     private final Overridable<Float> borderThickness = new Overridable<>(1f);
