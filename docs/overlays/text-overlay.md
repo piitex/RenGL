@@ -72,6 +72,20 @@ badge.getStyling().setCornerRadius(6f);
 The background is drawn at the overlay's own bounds, which are exactly the text's size, so add your own
 padding by placing the text inside a container or layout.
 
+## Weight and slant (bold and italic)
+
+```java
+TextOverlay heading = new TextOverlay("Section Title", 20f, Color.BLACK);
+heading.setBold(true);
+heading.setItalic(true); // both can be on at once
+```
+
+`setBold`/`setItalic` synthesize the weight/slant on whatever typeface is already loaded (Skia's font
+embolden and skew), instead of requiring a separate bold or italic cut of the font file. It won't look quite
+as clean as a real bold font, but works with any typeface — including one you only ever loaded a single
+Regular file for. This is what [`FormattedTextOverlay`](formatted-text-overlay.md) uses internally to draw
+headings bold without asking for a second font.
+
 ## Text is one line
 
 `TextOverlay` does not wrap and does not interpret `\n`. For multiple lines use several overlays in a
@@ -114,6 +128,8 @@ title.dispose(); // release the native Font when permanently discarding this ove
 | `getFontSize()/setFontSize(float)` | Point size |
 | `setFontFile(File)` / `setFontFile(String)` | Custom font file |
 | `getTextColor()/setTextColor(Paint)` | Solid or gradient fill; setting pins it |
+| `isBold()/setBold(boolean)` | Synthesized bold weight, no separate font file needed |
+| `isItalic()/setItalic(boolean)` | Synthesized oblique slant, no separate font file needed |
 | `render(Renderer)`, `update(float)` | Overridable; `update` also advances an animated text paint |
 | `dispose()` | Releases the native `Font` |
 | Protected | `drawText(Renderer)`, `getOrBuildFont()`, `updateComputedSize()` (used by [`ButtonOverlay`](button-overlay.md)) |
