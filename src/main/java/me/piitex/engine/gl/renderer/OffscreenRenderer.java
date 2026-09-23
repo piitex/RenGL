@@ -127,6 +127,35 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
     }
 
     @Override
+    public void drawPolyline(float[] points, int pointCount, Color color, float thickness) {
+        if (color == null || thickness <= 0 || pointCount < 2) return;
+
+        try (PathBuilder builder = new PathBuilder();
+             org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
+            builder.moveTo(points[0], points[1]);
+            for (int i = 1; i < pointCount; i++) {
+                builder.lineTo(points[i * 2], points[i * 2 + 1]);
+            }
+            paint.setColor(color.toARGB());
+            paint.setMode(PaintMode.STROKE);
+            paint.setStrokeWidth(thickness);
+            paint.setStrokeCap(PaintStrokeCap.ROUND);
+            paint.setStrokeJoin(PaintStrokeJoin.ROUND);
+            paint.setAntiAlias(true);
+            // Closed through its Managed superclass rather than try-with-resources or path.close():
+            // any member lookup on Path makes javac load its Kotlin marker interface, and
+            // kotlin-stdlib is only on the runtime classpath.
+            org.jetbrains.skia.Path path = builder.detach();
+            org.jetbrains.skia.impl.Managed pathHandle = path;
+            try {
+                canvas.drawPath(path, paint);
+            } finally {
+                pathHandle.close();
+            }
+        }
+    }
+
+    @Override
     public void drawCircle(float x, float y, float radius, Color color) {
         if (color == null || radius <= 0) return;
 
@@ -226,6 +255,12 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
     public void pushClip(float x, float y, float width, float height) {
         canvas.save();
         canvas.clipRect(Rect.makeXYWH(x, y, width, height), ClipMode.INTERSECT, true);
+    }
+
+    @Override
+    public void pushClip(float x, float y, float width, float height, float cornerRadius) {
+        canvas.save();
+        canvas.clipRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), ClipMode.INTERSECT, true);
     }
 
     @Override
