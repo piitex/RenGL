@@ -92,6 +92,24 @@ public interface Renderer {
     void drawLine(float x0, float y0, float x1, float y1, Color color, float thickness);
 
     /**
+     * Draws a connected, open line through the first {@code pointCount} points of
+     * {@code points}, packed as {@code x0, y0, x1, y1, ...}, with round joins and caps.
+     * Unlike a chain of {@link #drawLine} calls, a thick translucent polyline has no
+     * notches or doubled alpha where segments meet, which matters for jagged shapes such
+     * as {@link me.piitex.engine.ui.background.ElectricNodeBackground}'s lightning. A null
+     * {@code color}, a {@code thickness <= 0}, or fewer than two points is a no-op.
+     * <p>
+     * The default implementation falls back to one {@link #drawLine} per segment, so a
+     * custom Renderer keeps working without overriding this.
+     */
+    default void drawPolyline(float[] points, int pointCount, Color color, float thickness) {
+        if (color == null || thickness <= 0 || pointCount < 2) return;
+        for (int i = 1; i < pointCount; i++) {
+            drawLine(points[i * 2 - 2], points[i * 2 - 1], points[i * 2], points[i * 2 + 1], color, thickness);
+        }
+    }
+
+    /**
      * Draws a solid-color filled circle centered at (x, y) with the given {@code
      * radius}. A null {@code color} or a non-positive {@code radius} is a no-op, the
      * same convention {@link #drawQuad} uses for a null color.
@@ -175,6 +193,14 @@ public interface Renderer {
      * the canvas's clip state wrong for the rest of the frame.
      */
     void pushClip(float x, float y, float width, float height);
+
+    /**
+     * As {@link #pushClip(float, float, float, float)} with rounded corners. Pair it with {@link #popClip()}.
+     * Renderers that can't round the clip fall back to the plain rectangle.
+     */
+    default void pushClip(float x, float y, float width, float height, float cornerRadius) {
+        pushClip(x, y, width, height);
+    }
 
     /**
      * Pops the clip most recently pushed by {@link #pushClip}, restoring the canvas
