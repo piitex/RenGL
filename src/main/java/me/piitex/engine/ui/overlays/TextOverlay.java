@@ -41,6 +41,15 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
     private boolean fontDirty = true;
     private boolean fixedWidth;
     private boolean sizing;
+    private boolean bold;
+    private boolean italic;
+
+    /**
+     * Slant applied to {@link #getOrBuildFont()} when {@link #isItalic()} is true: a
+     * synthetic skew rather than a separate italic typeface, matching how {@link
+     * #setBold} synthesizes weight instead of requiring a bold font file.
+     */
+    private static final float ITALIC_SKEW = -0.25f;
 
     /**
      * Text with a 16pt black {@link Font#getDefault() default} font.
@@ -134,6 +143,38 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
         updateComputedSize();
     }
 
+    public boolean isBold() {
+        return bold;
+    }
+
+    /**
+     * Synthesizes a bolder weight of the current typeface via Skia's {@code
+     * Font.setEmboldened}, rather than requiring a separate bold font file. This does
+     * not look quite as clean as a real bold cut of the same family, but works with any
+     * typeface, which matters for something like {@link
+     * me.piitex.engine.ui.overlays.FormattedTextOverlay} drawing a heading in whatever
+     * font the app already loaded, without needing a second file for it.
+     */
+    public void setBold(boolean bold) {
+        this.bold = bold;
+        fontDirty = true;
+        updateComputedSize();
+    }
+
+    public boolean isItalic() {
+        return italic;
+    }
+
+    /**
+     * Synthesizes an oblique slant via Skia's {@code Font.setSkewX}, the same
+     * no-separate-file trade-off as {@link #setBold}.
+     */
+    public void setItalic(boolean italic) {
+        this.italic = italic;
+        fontDirty = true;
+        updateComputedSize();
+    }
+
     @Override
     public float[] getFontSizes() {
         return new float[]{fontSize};
@@ -217,6 +258,8 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
                 skiaFont.close(); // native resource, so release the old one
             }
             skiaFont = new org.jetbrains.skia.Font(typeface, fontSize);
+            skiaFont.setEmboldened(bold);
+            skiaFont.setSkewX(italic ? ITALIC_SKEW : 0f);
             fontDirty = false;
         }
         return skiaFont;
