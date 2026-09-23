@@ -10,6 +10,7 @@ panes, so nest one split inside another to get more.
 SplitContainer split = new SplitContainer(SplitContainer.Orientation.HORIZONTAL, 20, 100, 600, 320);
 split.setDividerPosition(0.4);
 split.setMinPaneSize(80);
+split.setMaxPaneSize(220); // caps the first pane only, e.g. a sidebar
 split.onDividerMoved(p -> System.out.println("Split: " + Math.round(p * 100) + "%"));
 
 split.setFirst(pane("Left"));
@@ -70,6 +71,7 @@ double p = split.getDividerPosition();
 
 split.setDividerThickness(8f); // width of the bar and of its grab area (min 1)
 split.setMinPaneSize(60f); // neither pane can be dragged smaller than this (points)
+split.setMaxPaneSize(300f); // the FIRST pane can't be dragged larger than this; non-positive disables it
 split.onDividerMoved(pos -> System.out.println(pos)); // fires while the *user* drags
 ```
 
@@ -78,10 +80,18 @@ split.onDividerMoved(pos -> System.out.println(pos)); // fires while the *user* 
 | Divider position | `0.5` |
 | Divider thickness | `6` |
 | Minimum pane size | `40` |
+| Maximum pane size | none (`-1`, disabled) |
 
 The position is stored as a fraction, so the divider keeps its proportion when the split container itself is
 resized. The divider gets a resize cursor on hover, and its colors follow the theme (`scrollTrack` at rest,
 `scrollThumb` on hover).
+
+`minPaneSize` protects **both** panes from being dragged too small. `maxPaneSize` only bounds the **first** pane —
+there is no ceiling on the second. This fits the common case of a sidebar-style first pane that shouldn't grow
+without limit while a main/content second pane is expected to take whatever space is left; a symmetric maximum
+would also have capped that main pane, which is rarely what you want. If the available space is too small to
+satisfy `minPaneSize` and `maxPaneSize` at once, each bound relaxes toward the midpoint instead of producing an
+inverted range.
 
 ## Nesting for more than two panes
 
