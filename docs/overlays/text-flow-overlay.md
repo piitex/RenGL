@@ -93,5 +93,10 @@ blurb.scrollTo(0); // programmatic scrolling, clamped
 | `getScrollBarStyle()` | Thumb/track colors and geometry |
 | `getMaxScrollY()`, `scrollBy(double)`, `scrollTo(double)` | Programmatic scrolling |
 
-Everything else (`setText`, `setFontSize`, `setFontFile`, `setTextColor`, `dispose()`, ...) is inherited from
-[`TextOverlay`](text-overlay.md). Call `dispose()` when permanently discarding the overlay.
+Everything else (`setText`, `setFontSize`, `setFontFile`, `setTextColor`, `setBold`/`setItalic`, `dispose()`,
+...) is inherited from [`TextOverlay`](text-overlay.md). Call `dispose()` when permanently discarding the
+overlay.
+
+For a document mixing multiple heading sizes and body text in one scrollable block (a whole `TextFlowOverlay`
+only ever draws at one size), see [`FormattedTextOverlay`](formatted-text-overlay.md), which stacks several of
+these, one per heading/paragraph, built from Markdown or bracket-tag source.

@@ -14,6 +14,7 @@ Every widget in RenGL is an [`Overlay`](../core/overlay.md) (an [`Element`](../c
 | [`TextFlowOverlay`](text-flow-overlay.md) | Read-only wrapped text in a fixed-width box, with alignment and an optional max height that scrolls |
 | [`TextAreaOverlay`](text-area-overlay.md) | A multi-line editable box with word wrap and its own scrollbar |
 | [`RichTextAreaOverlay`](rich-text-area-overlay.md) | A [`TextAreaOverlay`](text-area-overlay.md) plus app-defined colored runs and offline spell checking |
+| [`FormattedTextOverlay`](formatted-text-overlay.md) | Scrollable headings-and-paragraphs text parsed from Markdown or bracket-tag source via a pluggable `TextFormatPreset` |
 
 ## Controls
 
