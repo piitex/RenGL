@@ -84,6 +84,20 @@ public class FadeTransition implements Transition {
         return elapsed / durationSeconds;
     }
 
+    /**
+     * The opacity this transition starts at, before any time has elapsed: 0 for {@link
+     * Direction#IN}, 1 for {@link Direction#OUT}. {@link Element#playTransition} applies
+     * this synchronously the moment a fade is attached, so the target already reflects
+     * it even if this frame's {@link #update} does not run before the next render (e.g.
+     * a fade started from inside another Element's own {@code update}, after this
+     * Element's turn in the same pass has already gone by). Without that, the target
+     * would render one frame at whatever opacity it already had — 1 for a freshly built
+     * Element fading in — before the first real tick snapped it down, a visible flash.
+     */
+    public float startOpacity() {
+        return direction == Direction.IN ? 0f : 1f;
+    }
+
     public Direction getDirection() {
         return direction;
     }

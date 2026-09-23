@@ -697,6 +697,7 @@ public class Element {
      */
     private void playFade(FadeTransition fade) {
         transitions.removeIf(t -> t instanceof FadeTransition);
+        setOpacity(fade.startOpacity());
         playTransition(fade);
     }
 
