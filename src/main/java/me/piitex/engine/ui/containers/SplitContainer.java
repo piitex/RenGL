@@ -28,7 +28,11 @@ import java.util.function.Consumer;
  * <p>
  * The divider is tracked as a fraction of the space, {@link #getDividerPosition()}, so
  * it keeps its proportion when this container is resized. Neither pane can be dragged
- * smaller than {@link #getMinPaneSize()}.
+ * smaller than {@link #getMinPaneSize()}. The first pane additionally cannot be dragged
+ * larger than {@link #getMaxPaneSize()}, if set — the second pane has no such ceiling, so
+ * a sidebar-style first pane can be capped while the main pane still takes whatever space
+ * that leaves. If the available space is too small to satisfy a bound, it relaxes toward
+ * the midpoint rather than producing an inverted range.
  */
 public class SplitContainer extends Layout {
 
@@ -52,6 +56,7 @@ public class SplitContainer extends Layout {
     private double dividerPosition = 0.5;
     private float dividerThickness = 6f;
     private float minPaneSize = 40f;
+    private float maxPaneSize = -1f;
     private Consumer<Double> onDividerMoved;
 
     public SplitContainer(Orientation orientation, double width, double height) {
@@ -175,6 +180,25 @@ public class SplitContainer extends Layout {
     }
 
     /**
+     * The largest size, in points along the split axis, the first pane can be dragged up
+     * to, or non-positive (the default) for no maximum. Unlike {@link #getMinPaneSize()},
+     * this bounds only the first pane — a sidebar-style pane is typically the one that
+     * should not grow without limit, while the second pane is expected to take whatever
+     * space that leaves.
+     */
+    public float getMaxPaneSize() {
+        return maxPaneSize;
+    }
+
+    /**
+     * @param maxPaneSize a non-positive value disables the maximum entirely.
+     */
+    public void setMaxPaneSize(float maxPaneSize) {
+        this.maxPaneSize = maxPaneSize;
+        relayout();
+    }
+
+    /**
      * Registers the callback fired with the new {@link #getDividerPosition()} as the user drags the divider. Only one is held at a time.
      */
     public void onDividerMoved(Consumer<Double> onDividerMoved) {
@@ -190,12 +214,29 @@ public class SplitContainer extends Layout {
     }
 
     /**
-     * Size of the first pane along the split axis, after the minimum-size limits.
+     * Size of the first pane along the split axis, after the min/max-size limits.
      */
     private double firstSize() {
         double available = available();
+        return clampFirstSize(dividerPosition * available, available);
+    }
+
+    /**
+     * Clamps a candidate first-pane size to {@link #minPaneSize} on both panes (relaxed
+     * toward the midpoint of {@code available} if it alone would not fit) and additionally
+     * to {@link #maxPaneSize} on the first pane only — see {@link #getMaxPaneSize()} for
+     * why that bound is one-sided. If {@code maxPaneSize} is set below the minimum the
+     * first pane is already held to, it is relaxed up to that minimum instead of producing
+     * an inverted range.
+     */
+    private double clampFirstSize(double candidate, double available) {
         double min = Math.min(minPaneSize, available / 2.0);
-        return Math.max(min, Math.min(available - min, dividerPosition * available));
+        double lower = min;
+        double upper = available - min;
+        if (maxPaneSize > 0) {
+            upper = Math.min(upper, Math.max(maxPaneSize, lower));
+        }
+        return Math.max(lower, Math.min(upper, candidate));
     }
 
     @Override
@@ -265,8 +306,7 @@ public class SplitContainer extends Layout {
             double origin = (orientation == Orientation.HORIZONTAL ? SplitContainer.this.getAbsoluteX() : SplitContainer.this.getAbsoluteY()) + getPadding();
             double mouse = orientation == Orientation.HORIZONTAL ? x : y;
             double desired = mouse - grabOffset - origin;
-            double min = Math.min(minPaneSize, available / 2.0);
-            double clamped = Math.max(min, Math.min(available - min, desired));
+            double clamped = clampFirstSize(desired, available);
             double next = clamped / available;
             if (next != dividerPosition) {
                 dividerPosition = next;
