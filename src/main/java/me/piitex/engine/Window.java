@@ -55,6 +55,7 @@ public class Window implements Themeable {
     private volatile boolean minimized, maximized;
     private volatile Runnable closeListener;
     private volatile Runnable minimizeListener, maximizeListener, restoreListener;
+    private volatile java.util.function.BiConsumer<Integer, Integer> resizeListener;
 
 
     public Window(WindowOptions windowOptions) {
@@ -104,9 +105,14 @@ public class Window implements Themeable {
     }
 
     /**
-     * Resizes the window (in screen coordinates). Only works once the engine has started. Safe from any thread.
+     * Resizes the window (in screen coordinates). Before {@link Engine#start} this just
+     * records the size the window will open at, the same as {@link #setTitle} and the
+     * other pre-start setters; once running, it also resizes the live window, which
+     * fires {@link #onResize} on the next frame the same as a user drag-resize would.
+     * Safe from any thread.
      */
     public void setSize(int width, int height) {
+        windowOptions.setDimensions(width, height);
         if (glfWindow != null) {
             glfWindow.runOnMainThread(() -> glfWindow.applySize(width, height));
         }
@@ -315,6 +321,19 @@ public class Window implements Themeable {
     }
 
     /**
+     * Runs whenever the window's logical size (screen coordinates, the same units as
+     * {@link WindowOptions#getWidth()}/{@link WindowOptions#getHeight()}) changes,
+     * whether from the user dragging the border or from {@link #setSize}. Fires with the
+     * new width and height, after {@link WindowOptions} has already been updated, so a
+     * layout can be resized or repositioned to match. Not fired for a pure DPI/monitor
+     * change that leaves the logical size the same. Runs on the render thread. Pass null
+     * to remove.
+     */
+    public void onResize(java.util.function.BiConsumer<Integer, Integer> listener) {
+        this.resizeListener = listener;
+    }
+
+    /**
      * Runs once when the window is closing, by the user's close button, {@link #close()}, or the engine
      * stopping, after rendering has stopped and before {@link Engine#start} returns (so before the JVM exits
      * if that is the last thing {@code main} does). Use it for cleanup: saving state, closing files and
@@ -369,6 +388,15 @@ public class Window implements Themeable {
 
     private static void fire(Runnable listener) {
         if (listener != null) Scheduler.runLater(listener);
+    }
+
+    /**
+     * Main thread, from the GLFW window-size callback (not the framebuffer-size one).
+     * See {@link #onResize}.
+     */
+    void notifyResized(int width, int height) {
+        java.util.function.BiConsumer<Integer, Integer> listener = resizeListener;
+        fire(listener == null ? null : () -> listener.accept(width, height));
     }
 
     /**

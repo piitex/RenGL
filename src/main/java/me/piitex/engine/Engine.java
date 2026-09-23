@@ -104,6 +104,7 @@ public class Engine {
             logicalH = newH;
             options.setDimensions(newW, newH); // keep WindowOptions in step with the real size (mouse clamping, modal centering, etc.)
             sizeDirty = true;
+            window.notifyResized(newW, newH);
         });
 
         glfwSetWindowFocusCallback(windowHandle, (w, focused) -> {
