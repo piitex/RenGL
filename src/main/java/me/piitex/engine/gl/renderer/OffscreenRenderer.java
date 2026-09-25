@@ -278,4 +278,17 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
     public void popTranslate() {
         canvas.restore();
     }
+
+    @Override
+    public void pushScale(float scale, float pivotX, float pivotY) {
+        canvas.save();
+        canvas.translate(pivotX, pivotY);
+        canvas.scale(scale, scale);
+        canvas.translate(-pivotX, -pivotY);
+    }
+
+    @Override
+    public void popScale() {
+        canvas.restore();
+    }
 }

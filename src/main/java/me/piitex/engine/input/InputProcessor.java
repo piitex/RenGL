@@ -322,7 +322,7 @@ public class InputProcessor {
 
         if (event.buttonOrKey == GLFW.GLFW_KEY_ESCAPE && event.action == GLFW.GLFW_PRESS
                 && window.getModal() != null && window.getModal().isDismissOnEscape()) {
-            window.closeModal();
+            window.getModal().close();
             return;
         }
 
