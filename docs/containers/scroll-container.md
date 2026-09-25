@@ -85,6 +85,8 @@ style.setThumbActiveColor(Color.GRAY); // while being dragged
 ```
 
 One `ScrollBarStyle` covers both bars. Assign a different instance with `setScrollBarStyle(...)` to restyle.
+On a container with a corner radius, each bar is shortened at both ends just enough to stay inside the rounded
+corners, so a small margin never lets the bar poke past the curve.
 Scrollbar colors follow the theme (`scrollThumb`, `scrollTrack`) unless you set them. Colors are plain
 [`Color`](../styling/colors-and-paints.md#color), not [`Paint`](../styling/colors-and-paints.md), so a gradient scrollbar is not supported.
 

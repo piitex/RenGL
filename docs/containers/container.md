@@ -67,7 +67,7 @@ automatically, so the panel you pick up comes to the front.
 ## Clipping
 
 By default children are clipped to the container's box, so a child dragged or scrolled outside it is cut
-off at the edge.
+off at the edge. With a corner radius set, the clip follows the rounded corners too.
 
 ```java
 panel.setClipping(false); // let a badge hang outside its parent

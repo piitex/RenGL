@@ -213,6 +213,20 @@ public class ScrollContainer extends Container implements Scrollable {
         return getMaxScrollX() + getWidth();
     }
 
+    /**
+     * How far each end of a scrollbar track sits from the ends of its edge: the style's margin, or more when this
+     * Container's rounded corners would otherwise cut into the bar, so the bar stays inside the curve.
+     */
+    private double trackEndInset() {
+        double margin = scrollBarStyle.getMargin();
+        // Skia shrinks a radius larger than half the box the same way when it draws the rounded clip.
+        double radius = Math.min(getStyling().getCornerRadius(), Math.min(getWidth(), getHeight()) / 2.0);
+        if (margin >= radius) return margin;
+        // The bar's outer edge runs margin in from the side, and clears the corner's arc this far along it.
+        double dx = radius - margin;
+        return Math.max(margin, radius - Math.sqrt(radius * radius - dx * dx));
+    }
+
     // --- Vertical scrollbar geometry -------------------------------------------------------------
 
     private double verticalTrackX() {
@@ -220,11 +234,11 @@ public class ScrollContainer extends Container implements Scrollable {
     }
 
     private double verticalTrackY() {
-        return getY() + scrollBarStyle.getMargin();
+        return getY() + trackEndInset();
     }
 
     private double verticalTrackHeight() {
-        return Math.max(0, getHeight() - 2 * scrollBarStyle.getMargin());
+        return Math.max(0, getHeight() - 2 * trackEndInset());
     }
 
     private double verticalThumbLength() {
@@ -251,7 +265,7 @@ public class ScrollContainer extends Container implements Scrollable {
     // --- Horizontal scrollbar geometry -----------------------------------------------------------
 
     private double horizontalTrackX() {
-        return getX() + scrollBarStyle.getMargin();
+        return getX() + trackEndInset();
     }
 
     private double horizontalTrackY() {
@@ -259,7 +273,7 @@ public class ScrollContainer extends Container implements Scrollable {
     }
 
     private double horizontalTrackWidth() {
-        return Math.max(0, getWidth() - 2 * scrollBarStyle.getMargin());
+        return Math.max(0, getWidth() - 2 * trackEndInset());
     }
 
     private double horizontalThumbLength() {
@@ -371,7 +385,7 @@ public class ScrollContainer extends Container implements Scrollable {
 
         renderBackground(renderer);
 
-        renderer.pushClip((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight());
+        pushChildClip(renderer);
         renderChildren(renderer);
         renderer.popClip();
 

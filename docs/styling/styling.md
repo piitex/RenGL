@@ -110,9 +110,9 @@ overlay.setOpacity(0.5f); // everything, as one unit
 
 ## Rounded corners and clipping
 
-Rounded corners only affect the element's own fill and border. Children are clipped to a *rectangle*, not the
-rounded shape, so square children can poke past rounded corners of a container. Add padding to a layout to
-keep them inside the curve.
+A container with a corner radius clips its children to the **rounded** shape, so a child filling the container
+(an image, a header strip) follows its rounded corners. The clip is the container's outer edge, so a child drawn
+right up to the edge covers the border there; add padding to a layout to keep children inside the border.
 
 ## Method reference
 
