@@ -15,8 +15,8 @@ import java.util.function.Consumer;
 
 /**
  * Decides <i>where things live</i> so the rest of the program never has to know whether it is running
- * from the IDE or from an installed build. No launch flags: the mode is detected from how the code was
- * loaded (a jar or jpackage launcher means {@link Mode#RELEASE}, a folder of classes means {@link Mode#DEV}).
+ * from the IDE or from an installed build. No launch flags: the mode is detected from how the application's own
+ * code was loaded (a jar or jpackage launcher means {@link Mode#RELEASE}, a folder of classes means {@link Mode#DEV}).
  * <p>
  * Two roots, with the same meaning in both modes:
  * <ul>
@@ -71,7 +71,10 @@ public final class AppEnvironment {
     }
 
     /**
-     * Detects the mode: the {@code rengl.mode} system property wins, otherwise jar/launcher means release.
+     * Detects the mode: the {@code rengl.mode} system property wins, otherwise the application's own code decides.
+     * It looks at where the class that asked for the environment was loaded from, not at where the engine was, since
+     * the engine is a jar in both modes when it comes in as a dependency. A jar (or a jpackage launcher) means
+     * release, a folder of classes means dev.
      */
     public static Mode detectMode() {
         String forced = System.getProperty("rengl.mode");
@@ -83,16 +86,24 @@ public final class AppEnvironment {
             }
         }
         if (System.getProperty("jpackage.app-path") != null) return Mode.RELEASE;
+        return StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE).walk(frames -> frames
+                .map(StackWalker.StackFrame::getDeclaringClass)
+                .filter(type -> !type.getName().startsWith(AppEnvironment.class.getName()))
+                .map(AppEnvironment::locationOf)
+                .filter(location -> location != null)
+                .findFirst()
+                .map(location -> Files.isRegularFile(location) ? Mode.RELEASE : Mode.DEV)
+                .orElse(Mode.DEV));
+    }
+
+    // Null for classes with no location, like the ones the JDK loads itself.
+    private static Path locationOf(Class<?> type) {
         try {
-            CodeSource source = AppEnvironment.class.getProtectionDomain().getCodeSource();
-            if (source != null && source.getLocation() != null
-                    && Files.isRegularFile(Path.of(source.getLocation().toURI()))) {
-                return Mode.RELEASE;
-            }
-        } catch (URISyntaxException | RuntimeException ignored) {
-            // treat as dev
+            CodeSource source = type.getProtectionDomain().getCodeSource();
+            return source != null && source.getLocation() != null ? Path.of(source.getLocation().toURI()) : null;
+        } catch (URISyntaxException | RuntimeException e) {
+            return null;
         }
-        return Mode.DEV;
     }
 
     public String getName() {
