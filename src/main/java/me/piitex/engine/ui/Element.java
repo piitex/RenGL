@@ -51,6 +51,9 @@ public class Element {
     private Styling styling = new Styling();
     private final List<Transition> transitions = new ArrayList<>();
     private float opacity = 1f;
+    // Drawn scaled around scaleOriginX/Y, in the same space as x and y. NaN is the Element's center.
+    private float scale = 1f;
+    private double scaleOriginX = Double.NaN, scaleOriginY = Double.NaN;
     private String tooltip;
     private PopupMenu contextMenu;
     /**
@@ -579,6 +582,12 @@ public class Element {
         }
 
         if (opacity > 0f) {
+            boolean scaled = scale != 1f;
+            if (scaled) {
+                float pivotX = Double.isNaN(scaleOriginX) ? (float) (x + width / 2.0) : (float) scaleOriginX;
+                float pivotY = Double.isNaN(scaleOriginY) ? (float) (y + height / 2.0) : (float) scaleOriginY;
+                renderer.pushScale(scale, pivotX, pivotY);
+            }
             if (opacity < 1f) {
                 renderer.pushOpacityLayer((float) x, (float) y, (float) width, (float) height, opacity);
                 render(renderer);
@@ -586,6 +595,7 @@ public class Element {
             } else {
                 render(renderer);
             }
+            if (scaled) renderer.popScale();
         }
 
         for (Transition transition : transitions) {
@@ -627,6 +637,34 @@ public class Element {
 
     public void setOpacity(float opacity) {
         this.opacity = Math.max(0f, Math.min(1f, opacity));
+    }
+
+    public float getScale() {
+        return scale;
+    }
+
+    /**
+     * Draws this Element, children included, at {@code scale} times its size around its {@link #setScaleOrigin origin}.
+     * Default 1. It is only how it's drawn: hit testing, layout and the size stay the same, so it suits an animation,
+     * see {@link me.piitex.engine.ui.animation.ScaleTransition}, more than a permanently smaller Element.
+     */
+    public void setScale(float scale) {
+        this.scale = Math.max(0f, scale);
+    }
+
+    /**
+     * The point {@link #setScale} scales around, in the same coordinate space as {@link #getX()} and {@link #getY()}.
+     */
+    public void setScaleOrigin(double x, double y) {
+        scaleOriginX = x;
+        scaleOriginY = y;
+    }
+
+    /**
+     * Back to scaling around the Element's center, the default.
+     */
+    public void clearScaleOrigin() {
+        scaleOriginX = scaleOriginY = Double.NaN;
     }
 
     /**

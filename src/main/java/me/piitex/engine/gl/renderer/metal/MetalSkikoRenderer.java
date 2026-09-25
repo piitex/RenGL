@@ -328,6 +328,21 @@ public class MetalSkikoRenderer implements Renderer {
         canvas.restore();
     }
 
+    @Override
+    public void pushScale(float scale, float pivotX, float pivotY) {
+        if (!frameValid) return;
+        canvas.save();
+        canvas.translate(pivotX, pivotY);
+        canvas.scale(scale, scale);
+        canvas.translate(-pivotX, -pivotY);
+    }
+
+    @Override
+    public void popScale() {
+        if (!frameValid) return;
+        canvas.restore();
+    }
+
     public Canvas getCanvas() {
         return canvas;
     }

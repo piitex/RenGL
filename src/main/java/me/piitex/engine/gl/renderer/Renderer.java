@@ -220,4 +220,16 @@ public interface Renderer {
      * Pops the translation most recently pushed by {@link #pushTranslate}.
      */
     void popTranslate();
+
+    /**
+     * Scales everything drawn after this call by {@code scale} around the point ({@code pivotX}, {@code pivotY}), in the
+     * current coordinate space, until the matching {@link #popScale()}. The pivot stays where it is on screen. Nests,
+     * and must be paired with exactly one {@link #popScale()}.
+     */
+    void pushScale(float scale, float pivotX, float pivotY);
+
+    /**
+     * Pops the scale most recently pushed by {@link #pushScale}.
+     */
+    void popScale();
 }

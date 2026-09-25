@@ -2,6 +2,8 @@ package me.piitex.engine.ui.containers;
 
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
+import me.piitex.engine.ui.animation.Easing;
+import me.piitex.engine.ui.animation.ScaleTransition;
 import me.piitex.engine.ui.color.Color;
 
 /**
@@ -32,6 +34,10 @@ public class ModalContainer extends Container {
     private boolean dismissOnBackdropClick = true;
     private boolean dismissOnEscape = true;
     private float fadeSeconds = 0.15f;
+    // How it animates on close, null closes instantly.
+    private CloseAnimation closeAnimation;
+    // True while the fade-out is running, so a second close doesn't restart it.
+    private boolean closing = false;
     private Runnable onClose;
     // Where the panel was centered last frame, so an offset the user dragged it to can be told from the centre.
     private double lastCenterX = Double.NaN, lastCenterY = Double.NaN;
@@ -111,6 +117,26 @@ public class ModalContainer extends Container {
         this.fadeSeconds = Math.max(0f, fadeSeconds);
     }
 
+    public CloseAnimation getCloseAnimation() {
+        return closeAnimation;
+    }
+
+    /**
+     * Plays {@code animation} on {@link #close()}, a backdrop click or Escape before the modal is removed; null closes
+     * instantly, the default. The modal keeps blocking the rest of the UI until the animation is done.
+     * {@link #closeImmediately()} skips it. See {@link CloseAnimation} for the built in ones.
+     */
+    public void setCloseAnimation(CloseAnimation animation) {
+        this.closeAnimation = animation;
+    }
+
+    /**
+     * Shorthand for {@code setCloseAnimation(CloseAnimation.fade(seconds))}, or no animation for 0.
+     */
+    public void setFadeOutSeconds(float seconds) {
+        closeAnimation = seconds > 0f ? CloseAnimation.fade(seconds) : null;
+    }
+
     /**
      * Limits the modal to part of the window, in window coordinates. The backdrop is drawn there, the panel is centered
      * there, and only presses inside it are blocked, so the rest of the window (a sidebar, say) stays usable. Set it
@@ -150,15 +176,33 @@ public class ModalContainer extends Container {
      */
     public void show(Window window) {
         window.showModal(this);
+        closing = false;
+        // Put it back the way it started, in case a close animation ran on an earlier show.
+        setOpacity(1f);
+        content.setScale(1f);
+        content.clearScaleOrigin();
         lastCenterX = lastCenterY = Double.NaN;
         fitToWindow(window);
         if (fadeSeconds > 0f) fadeIn(fadeSeconds);
     }
 
     /**
-     * Closes this modal if it's showing.
+     * Closes this modal if it's showing, playing its {@link #setCloseAnimation close animation} first if it has one.
      */
     public void close() {
+        if (closeAnimation == null) {
+            closeImmediately();
+            return;
+        }
+        if (closing || !isShowing()) return;
+        closing = true;
+        closeAnimation.play(this, this::closeImmediately);
+    }
+
+    /**
+     * Closes this modal right away if it's showing, with no fade-out.
+     */
+    public void closeImmediately() {
         Window window = getWindow();
         if (window != null && window.getModal() == this) {
             window.closeModal();
@@ -200,5 +244,35 @@ public class ModalContainer extends Container {
         if (area == null) renderer.drawQuad((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(), backdropColor, 0f);
         else renderer.drawQuad((float) area[0], (float) area[1], (float) area[2], (float) area[3], backdropColor, 0f);
         renderChildren(renderer);
+    }
+
+    /**
+     * What plays when a modal closes. It has to call {@code onFinished} once it's done, which removes the modal.
+     * Anything can go in here, an animation on the modal or on its {@link #getContent() panel}, so a custom one is
+     * just a lambda. {@link #fade} and {@link #shrink} are ready made.
+     */
+    @FunctionalInterface
+    public interface CloseAnimation {
+        void play(ModalContainer modal, Runnable onFinished);
+
+        /**
+         * The whole modal, backdrop included, fades out.
+         */
+        static CloseAnimation fade(float seconds) {
+            return (modal, onFinished) -> modal.fadeOut(seconds, onFinished);
+        }
+
+        /**
+         * The panel shrinks to {@code endScale} times its size toward the point ({@code targetX}, {@code targetY}) in the
+         * window while everything fades out, like a folder closing back into its icon on macOS or GNOME.
+         */
+        static CloseAnimation shrink(float seconds, double targetX, double targetY, float endScale) {
+            return (modal, onFinished) -> {
+                Container panel = modal.getContent();
+                panel.setScaleOrigin(targetX, targetY);
+                panel.playTransition(new ScaleTransition(1f, endScale, seconds, Easing.EASE_IN_OUT, null));
+                modal.fadeOut(seconds, onFinished);
+            };
+        }
     }
 }

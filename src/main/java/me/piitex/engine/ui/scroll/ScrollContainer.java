@@ -306,7 +306,10 @@ public class ScrollContainer extends Container implements Scrollable {
         return thumbAt(x, y) || super.canDrag(x, y);
     }
 
-    private boolean thumbAt(double windowX, double windowY) {
+    /**
+     * Whether a scrollbar thumb is under the window point.
+     */
+    protected boolean thumbAt(double windowX, double windowY) {
         if (!scrollbarVisible) return false;
         double localX = toLocalX(windowX), localY = toLocalY(windowY);
         return verticalThumbContains(localX, localY) || horizontalThumbContains(localX, localY);
