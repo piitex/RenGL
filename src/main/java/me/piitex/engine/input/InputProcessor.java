@@ -7,6 +7,7 @@ import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.PopupKeyListener;
 import me.piitex.engine.ui.scroll.Scrollable;
+import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.events.MouseClickEvent;
 import org.lwjgl.glfw.GLFW;
 
@@ -103,8 +104,13 @@ public class InputProcessor {
         // or something hovered that specifies no mode, falls back to CursorMode.DEFAULT.
         // While a drag is in progress the dragged Element keeps the cursor, even once
         // the mouse has left it, as when a container is resized past its own edge.
-        Element cursorSource = dragTarget != null ? dragTarget : hit;
-        CursorManager.request(cursorSource != null ? cursorSource.getCursorMode() : null);
+        // An Element with no cursor of its own takes the one of the nearest ancestor that has one, so hovering a
+        // label inside a pointer-cursor row still shows the pointer.
+        CursorMode cursor = null;
+        for (Element e = dragTarget != null ? dragTarget : hit; e != null && cursor == null; e = e.owner) {
+            cursor = e.getCursorMode();
+        }
+        CursorManager.request(cursor);
 
         if (dragTarget instanceof Draggable draggable) {
             draggable.onDragUpdate(absoluteMouseX, absoluteMouseY);
@@ -158,6 +164,8 @@ public class InputProcessor {
 
     private void handleMouseButton(Window window, InputEvent event) {
         if (event.action == GLFW.GLFW_RELEASE) {
+            // Only the button that began a drag (always the left one) ends it; releasing a right-click mid-drag must not.
+            if (event.buttonOrKey != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
             if (dragTarget instanceof Draggable draggable) {
                 draggable.onDragEnd(absoluteMouseX, absoluteMouseY);
             }
@@ -183,8 +191,13 @@ public class InputProcessor {
             if (!container.isEnabled() || !container.contains(absoluteMouseX, absoluteMouseY)) continue;
 
             hitElement = findTopmostHit(container, absoluteMouseX, absoluteMouseY);
-            if (hitElement != null && hitElement.getMouseClickListenerConsumer() != null) {
-                hitElement.getMouseClickListenerConsumer().accept(clickEvent);
+            // The click goes to the nearest Element at or above the hit one that listens for it, so pressing on the
+            // label or icon inside a clickable row or button counts as pressing the row or button.
+            for (Element e = hitElement; e != null; e = e.owner) {
+                if (e.getMouseClickListenerConsumer() != null) {
+                    e.getMouseClickListenerConsumer().accept(clickEvent);
+                    break;
+                }
             }
             break;
         }
@@ -203,17 +216,26 @@ public class InputProcessor {
         // clicking anything else, including empty space, clears focus.
         window.requestFocus(hitElement instanceof Focusable ? hitElement : null);
 
-        // A container that doesn't want the drag (typically a layout filling a draggable/resizable parent)
-        // passes it up to the nearest ancestor container that does.
+        // Only the left button drags; a right-click opens a context menu and must not start a drag or a text selection.
+        if (event.buttonOrKey != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
+
+        // The press goes to the nearest Draggable at or above the hit Element. A container that doesn't want the
+        // drag (typically a layout filling a draggable/resizable parent) and a plain child that is not Draggable at
+        // all (a label or image sitting on a draggable card) both hand it up to their owner.
         Element dragCandidate = hitElement;
-        while (dragCandidate instanceof Container container && !container.canDrag(absoluteMouseX, absoluteMouseY)) {
-            dragCandidate = container.getParent();
+        while (dragCandidate != null && !acceptsDrag(dragCandidate)) {
+            dragCandidate = dragCandidate.owner;
         }
 
         if (dragCandidate instanceof Draggable draggable) {
             dragTarget = dragCandidate;
             draggable.onDragStart(absoluteMouseX, absoluteMouseY);
         }
+    }
+
+    private boolean acceptsDrag(Element element) {
+        if (!(element instanceof Draggable)) return false;
+        return !(element instanceof Container container) || container.canDrag(absoluteMouseX, absoluteMouseY);
     }
 
     /**
