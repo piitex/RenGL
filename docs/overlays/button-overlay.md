@@ -58,6 +58,7 @@ For an animated look you can also use a gradient background:
 
 ```java
 button.getStyling().setBackgroundColor(new ScrollingGradient(Color.BLUE, Color.PURPLE, 80f));
+button.getStyling().setBorderColor(new RainbowColor()); // RGB-cycling border
 ```
 
 ## Changing the label

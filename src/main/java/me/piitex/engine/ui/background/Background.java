@@ -9,7 +9,8 @@ import me.piitex.engine.ui.Element;
  * {@link me.piitex.engine.ui.color.Paint}, which is a single solid or gradient fill that
  * {@link Element#render} draws itself, a Background owns its whole draw routine and,
  * through {@link #update}, its own per-frame state. {@link ConstellationBackground}'s
- * particle simulation and {@link DotGridBackground}'s tiled dot grid are examples.
+ * particle simulation, {@link ElectricNodeBackground}'s bouncing lightning orbs, and
+ * {@link DotGridBackground}'s tiled dot grid are examples.
  * <p>
  * Bounds are passed in on every call rather than owned by the Background, so the same
  * instance works no matter which Element it is attached to. That is also why a

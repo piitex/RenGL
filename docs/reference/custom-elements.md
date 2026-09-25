@@ -57,6 +57,7 @@ All coordinates are logical points, top-left origin.
 | `drawQuad(x, y, w, h, Color, cornerRadius)` | Filled (rounded) rectangle |
 | `drawBorder(x, y, w, h, Color, thickness, cornerRadius)` | Stroked outline |
 | `drawLine(x0, y0, x1, y1, Color, thickness)` | Line segment |
+| `drawPolyline(float[] points, pointCount, Color, thickness)` | Connected open line through packed `x0, y0, x1, y1, ...` points, with round joins and caps (no notches or doubled alpha at the joints) |
 | `drawCircle(x, y, radius, Color)` | Filled circle centered at (x, y) |
 | `drawText(text, x, y, Font, Paint)` | One line of text; (x, y) is its top-left |
 | `drawGradient(x, y, w, h, LinearGradient, cornerRadius)` | Gradient-filled rectangle. Pass the *original* gradient object so a [`ScrollingGradient`](../styling/colors-and-paints.md#scrolling-animated-gradients) keeps scrolling |

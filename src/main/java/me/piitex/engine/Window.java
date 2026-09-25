@@ -432,7 +432,8 @@ public class Window implements Themeable {
      * {@link me.piitex.engine.ui.color.LinearGradient} or
      * {@link me.piitex.engine.ui.color.ScrollingGradient} gives a gradient backdrop,
      * which Engine draws as a full-window quad each frame instead, since Skia's canvas
-     * clear takes only a single flat color. This follows the active
+     * clear takes only a single flat color. A {@link me.piitex.engine.ui.color.RainbowColor}
+     * is a Color, so it is cleared directly too and cycles through the colour wheel. This follows the active
      * {@link Theme#getWindowBackground()} by default (see {@link #applyTheme}), so it
      * does not need to be set just to follow a theme switch. Never null.
      */
@@ -443,12 +444,21 @@ public class Window implements Themeable {
     /**
      * Sets the window backdrop, pinning it against future theme switches the same way
      * every other themed property in this engine pins an explicit set (see {@link
-     * Overridable}). Pass null to reset to white. There is no way to unpin it and go
-     * back to following the theme; construct a fresh Window instead, as elsewhere in
-     * this toolkit.
+     * Overridable}). Pass null to reset to white. Call {@link #followThemeBackground()}
+     * to unpin it and follow the theme again.
      */
     public void setBackgroundColor(Paint backgroundColor) {
         this.backgroundColor.set(backgroundColor == null ? Color.WHITE : backgroundColor);
+    }
+
+    /**
+     * Undoes {@link #setBackgroundColor}: the backdrop follows the current {@link Theme}'s window
+     * color again, now and on every later {@link ThemeManager#setCurrent}. Does nothing visible if
+     * it was never pinned.
+     */
+    public void followThemeBackground() {
+        backgroundColor.clearExplicit();
+        applyTheme(ThemeManager.getCurrent());
     }
 
     /**
@@ -456,7 +466,8 @@ public class Window implements Themeable {
      * #getBackgroundColor()} fill, behind every Container. This is the window-level
      * counterpart to {@link me.piitex.engine.ui.Element#setBackground}: the same
      * {@link Background} implementations, such as {@link
-     * me.piitex.engine.ui.background.ConstellationBackground} or {@link
+     * me.piitex.engine.ui.background.ConstellationBackground}, {@link
+     * me.piitex.engine.ui.background.ElectricNodeBackground}, or {@link
      * me.piitex.engine.ui.background.DotGridBackground}, work here at the window's own
      * size instead of a single Element's. Null, the default, draws nothing extra.
      */
