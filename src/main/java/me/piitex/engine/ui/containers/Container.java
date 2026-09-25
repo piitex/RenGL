@@ -589,11 +589,24 @@ public class Container extends Element implements Themeable, Draggable {
         renderBackground(renderer);
 
         if (clipping) {
-            renderer.pushClip((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight());
+            pushChildClip(renderer);
             renderChildren(renderer);
             renderer.popClip();
         } else {
             renderChildren(renderer);
+        }
+    }
+
+    /**
+     * Clips what is drawn next to this Container's box, rounded by its {@link me.piitex.engine.ui.color.Styling#getCornerRadius() corner
+     * radius} so children stay inside rounded corners. Pair it with exactly one {@link Renderer#popClip()}.
+     */
+    protected void pushChildClip(Renderer renderer) {
+        float radius = getStyling().getCornerRadius();
+        if (radius > 0f) {
+            renderer.pushClip((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(), radius);
+        } else {
+            renderer.pushClip((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight());
         }
     }
 

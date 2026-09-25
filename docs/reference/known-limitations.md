@@ -49,9 +49,6 @@ source. If you hit something not listed here, please add it.
   explicit content-height.
 - **Scrollbars overlay the content** on the right/bottom edge instead of reserving a gutter, in both
   `ScrollContainer` and [`TextAreaOverlay`](../overlays/text-area-overlay.md).
-- **Clipping is rectangular.** Children of a rounded container are clipped to its bounding rectangle, not to the
-  rounded shape. A custom element can clip to a rounded rectangle itself with
-  `Renderer.pushClip(x, y, w, h, cornerRadius)`.
 
 ## ResizableContainer
 
