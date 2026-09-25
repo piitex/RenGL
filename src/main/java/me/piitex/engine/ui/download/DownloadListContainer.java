@@ -45,7 +45,7 @@ public class DownloadListContainer extends VerticalLayout {
         this.manager = manager;
         setPadding(4f);
         setSpacing(6f);
-        // Just a stack of cards: no panel of its own (a bare Container is opaque white with a border).
+        // Just a stack of cards: no panel of its own. Set explicitly so the list stays bare even if it is themed.
         getStyling().setBackgroundColor(Color.TRANSPARENT);
         getStyling().setHoverColor(Color.TRANSPARENT);
         getStyling().setBorderThickness(0f);

@@ -21,8 +21,8 @@ import java.io.File;
  * Element; the baseline offset Skia's drawString() needs is handled inside the renderer
  * rather than here.
  * <p>
- * The background and border are transparent and zero-thickness by default, where Element
- * defaults them to opaque white, since text overlays usually sit on top of something
+ * The background and border are transparent and zero-thickness by default, and stay that
+ * way under a theme, since text overlays usually sit on top of something
  * else rather than behind their own filled box. Use getStyling() as usual to add a
  * background behind the text.
  */

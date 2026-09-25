@@ -510,7 +510,7 @@ public class TabContainer extends Layout {
         private boolean focused;
 
         TabBar() {
-            // Element's default is an opaque white box. Non-pinning baseline, like the other composites.
+            // Transparent as a baseline: the strip draws its own tabs. Non-pinning, like the other composites.
             getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
             getStyling().applyThemeHoverColor(Color.TRANSPARENT);
             getStyling().applyThemeBorderThickness(0f);

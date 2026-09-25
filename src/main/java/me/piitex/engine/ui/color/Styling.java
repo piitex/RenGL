@@ -62,8 +62,8 @@ public class Styling {
     }
 
     /**
-     * Makes the hover color track the background color, so an element with no hover feedback does not flash the
-     * default white when the mouse passes over it. Containers start this way. Any explicit {@link #setHoverColor}
+     * Makes the hover color track the background color, so an element given only a background color does not
+     * switch to the separate hover color when the mouse passes over it. Containers start this way. Any explicit {@link #setHoverColor}
      * or theme hover color ends it.
      */
     public void setHoverFollowsBackground(boolean follows) {
