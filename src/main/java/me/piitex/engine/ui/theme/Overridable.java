@@ -59,6 +59,14 @@ public final class Overridable<T> {
     }
 
     /**
+     * Releases a pin made by {@link #set}, so this property follows the theme again from the next
+     * {@link #applyTheme}. The current value stays until then.
+     */
+    public void clearExplicit() {
+        this.explicit = false;
+    }
+
+    /**
      * Whether {@link #set} has pinned this property against theme changes.
      */
     public boolean isExplicit() {
