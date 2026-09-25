@@ -8,7 +8,7 @@ The classes every program touches, in the order you meet them.
 |---|---|
 | [Engine](engine.md) | `Engine.start`, the render thread, and what happens every frame |
 | [Window and WindowOptions](window.md) | Top-level containers, the window background, focus, popups and modals |
-| [Element](element.md) | Position, size, events, tooltips, styling and transitions. Works on everything drawable |
+| [Element](element.md) | Position, size, events, tooltips, context menus, styling, scale and transitions. Works on everything drawable |
 | [Overlay](overlay.md) | The widget base class, the overlay family, and patterns every widget shares |
 | [Snapshots](snapshots.md) | Capture a container or the window as an image, for example save slot thumbnails |
 

@@ -50,17 +50,16 @@ Every layout inherits these from `Layout`:
 
 ## Styling a layout
 
-A layout is an [`Element`](../core/element.md), and a fresh one is an **opaque white box with a white border**. That is usually
-not what you want.
+A layout is an [`Element`](../core/element.md), and a fresh one is **transparent**: it only positions things and draws
+nothing itself. To make it a visible panel, give it a background or opt it into the theme:
 
 ```java
-// Invisible layout that only positions things:
-layout.getStyling().setBackgroundColor(Color.TRANSPARENT);
-layout.getStyling().setHoverColor(Color.TRANSPARENT);
-layout.getStyling().setBorderThickness(0f);
-
-// Or a themed panel:
+// A themed panel:
 layout.useTheme();
+
+// Or your own colors:
+layout.getStyling().setBackgroundColor(new Color(0.95f, 0.95f, 0.95f, 1f));
+layout.getStyling().setCornerRadius(8f);
 ```
 
 `useTheme()` opts the layout into the current [theme](../styling/theming.md) (panel background, border,
@@ -76,9 +75,6 @@ form.useTheme();
 
 HorizontalLayout nameRow = new HorizontalLayout(320, 28);
 nameRow.setSpacing(8);
-nameRow.getStyling().setBackgroundColor(Color.TRANSPARENT);
-nameRow.getStyling().setHoverColor(Color.TRANSPARENT);
-nameRow.getStyling().setBorderThickness(0f);
 nameRow.addElement(new TextFieldOverlay(150, 28));
 nameRow.addElement(new TextFieldOverlay(150, 28));
 

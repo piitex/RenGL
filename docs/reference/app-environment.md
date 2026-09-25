@@ -53,8 +53,11 @@ resolve to the same file.
 
 1. The system property `-Drengl.mode=dev` or `-Drengl.mode=release`, if set.
 2. `RELEASE` if a jpackage launcher started the process (`jpackage.app-path` is set).
-3. `RELEASE` if the engine was loaded from a jar file. Otherwise `DEV` (a folder of classes, as in the IDE or `mvn`).
+3. Otherwise, where **your application's code** was loaded from: the first class on the call stack outside
+   `AppEnvironment` (the one that called `create` or `detectMode`). A jar file means `RELEASE`, a folder of classes
+   (as in the IDE or `mvn`) means `DEV`, and `DEV` if the location cannot be found.
 
+It looks at your code, not the engine's, because the engine is a jar in both modes when your project depends on it.
 So the IDE gives `DEV` and every packaged build gives `RELEASE` without you doing anything. Use the property when you
 want to test release layout from the IDE.
 

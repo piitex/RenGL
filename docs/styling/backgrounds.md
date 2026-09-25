@@ -12,6 +12,13 @@ root.setBackground(new AnimatedDotBackground());
 root.setBackground(new ElectricNodeBackground());
 ```
 
+The same effects work behind the whole window with `Window.setBackground`. There the effect is drawn over the
+window's flat background color, behind every container, at the window's size:
+
+```java
+window.setBackground(new ConstellationBackground());
+```
+
 ## Why it is not a child element
 
 A [`Layout`](../layouts/README.md) positions every child it has. A full-size decorative effect added as a real child would be caught up in
@@ -239,3 +246,4 @@ things such as the mouse.
 | `ElectricNodeBackground` | node count, radius, speed range, arc rate, arc length range, arc lifetime, jaggedness, branch chance, bolt thickness, node link distance, glow/core colors, sparks, mouse strike, `discharge()` (all listed above) |
 | `ConstellationBackground` | particle count, speed range, radius, link distance, line thickness, colors, mouse repel, obstacles (all listed above) |
 | [`Element`](../core/element.md) | `getBackground()`, `setBackground(Background)` |
+| [`Window`](../core/window.md#background-effects) | `getBackground()`, `setBackground(Background)` |

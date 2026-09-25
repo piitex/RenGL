@@ -15,14 +15,14 @@ Window window = new Window(new WindowOptions("My App").setDimensions(1280, 720))
 A fluent builder. Every setter returns the same `WindowOptions`, so calls chain.
 
 ```java
-WindowOptions options = new WindowOptions("My App") // title is final
+WindowOptions options = new WindowOptions("My App")
         .setDimensions(1280, 720)
         .setResizable(true);
 ```
 
 | Setter | Default | Currently honored by the engine? |
 |---|---|---|
-| `new WindowOptions(title)` | none | Yes, becomes the OS window title |
+| `new WindowOptions(title)` / `setTitle(String)` | none | Yes, becomes the OS window title. Can be changed at runtime with `Window.setTitle` |
 | `setDimensions(width, height)` | `0, 0` | **Yes.** Set this, or you get a zero-size window |
 | `setFullscreen(boolean)` | `false` | **Yes.** Covers the primary monitor (exclusive), creation-time only |
 | `setStyle(WindowStyle)` | `STANDARD` | **Yes.** `BORDERLESS` removes the title bar, title and close/minimize/maximize controls. Can be changed at runtime with `Window.setStyle` |
@@ -94,7 +94,22 @@ window.onMaximize(() -> log.info("maximized"));
 window.onRestore(() -> resumeMusic()); // back to normal size from either state
 ```
 
-They fire whether the user clicked the title bar button or your code called `minimize()` / `maximize()`, and run on the render thread like other callbacks. `isMinimized()` and `isMaximized()` give the current state. Un-minimizing a window that was maximized before returns it to maximized, and fires `onRestore` only, not `onMaximize`. Each listener is a single slot: setting one replaces the previous.
+They fire whether the user clicked the title bar button or your code called `minimize()` / `maximize()`, and run on the render thread like other callbacks. `isMinimized()` and `isMaximized()` give the current state. Un-minimizing a window that was maximized before returns it to maximized, and fires `onRestore` only, not `onMaximize`. Each listener is a single slot: setting one replaces the previous. Pass `null` to remove one.
+
+## Resize event
+
+```java
+window.onResize((width, height) -> {
+    sidebar.setHeight(height);
+    content.setBounds(240, 0, width - 240, height);
+});
+```
+
+Fires with the new size whenever the window's logical size changes, whether the user dragged the border or
+your code called `setSize`. `WindowOptions.getWidth()`/`getHeight()` already hold the new size when it runs.
+It does not fire for a DPI or monitor change that leaves the logical size the same. It runs on the render
+thread, is a single slot, and `null` removes it. [`ResizableContainer`](../containers/resizable-container.md)
+follows the window on its own, so you only need this for layouts you size by hand.
 
 ## Close event
 
@@ -152,6 +167,7 @@ window.addContainer(new Container(1280, 720), 100); // pick an explicit index
 | `removeContainer(int index)` | Removes by index; returns whether something was removed |
 | `removeContainer(Container)` | Removes every index that holds that container |
 | `removeContainer(int index, Container)` | Removes only if that container is at that index |
+| `clear()` | Removes every top-level container |
 | `getContainers()` | The live `ConcurrentSkipListMap<Integer, Container>` |
 
 Adding a container to a window calls `container.setWindow(window)`. That is how a nested element later finds its
@@ -175,16 +191,22 @@ window.setBackgroundColor(new RainbowColor(20f, 0.6f, 0.15f, 1f)); // slow, dark
 - `null` resets to white.
 - `Window` is [`Themeable`](../styling/theming.md) and registers itself, so by default the background follows
   `Theme.getWindowBackground()` on every `ThemeManager.setCurrent(...)`. Calling `setBackgroundColor`
-  yourself **pins** it, exactly like every other themed property, so it survives later theme switches. There
-  is no unpin; construct a fresh `Window` to follow the theme again.
-- **Your root container covers the window background.** [`Element`](element.md) defaults to an opaque white fill, so a
-  full-window container must be made transparent to let the window background show:
+  yourself **pins** it, exactly like every other themed property, so it survives later theme switches.
+  `followThemeBackground()` unpins it and applies the current theme's color right away.
+- **A root container only covers the window background if you give it one.** [`Element`](element.md) defaults to
+  a transparent fill, so a plain full-window `Container` lets the window background show through. A container
+  that has opted into the theme (`useTheme()`), or that you gave a background color, paints over it.
+
+### Background effects
 
 ```java
-root.getStyling().setBackgroundColor(Color.TRANSPARENT);
-root.getStyling().setHoverColor(Color.TRANSPARENT);
-root.getStyling().setBorderThickness(0f);
+window.setBackground(new ConstellationBackground());
+window.setBackground(null); // remove it
 ```
+
+`setBackground` attaches one of the animated [background effects](../styling/backgrounds.md) to the whole
+window. It draws over the flat `setBackgroundColor` fill and behind every container, at the window's size. It is
+independent of theming: a theme switch does not change or remove it.
 
 ## Focus
 
@@ -240,10 +262,11 @@ window.showPopup(menu, () -> System.out.println("menu closed"));
 ```java
 ModalContainer modal = new ModalContainer(320, 160);
 modal.show(window); // calls window.showModal(modal)
-modal.close(); // calls window.closeModal()
+modal.close(); // plays the modal's close animation, if any, then calls window.closeModal()
 ```
 
 `showModal`/`closeModal`/`getModal` exist on `Window`, but you normally use the [`ModalContainer`](../containers/modal-container.md) methods.
+`window.closeModal()` removes the modal at once and skips its close animation.
 Showing a modal closes any popup and any previous modal, and clears focus. See
 [ModalContainer](../containers/modal-container.md).
 

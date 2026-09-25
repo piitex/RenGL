@@ -96,9 +96,6 @@ headings bold without asking for a second font.
 
 ```java
 VerticalLayout lines = new VerticalLayout(20, 20, 300, 80);
-lines.getStyling().setBackgroundColor(Color.TRANSPARENT);
-lines.getStyling().setHoverColor(Color.TRANSPARENT);
-lines.getStyling().setBorderThickness(0f);
 lines.setSpacing(4);
 lines.addElement(new TextOverlay("Line one", 16f, Color.BLACK));
 lines.addElement(new TextOverlay("Line two", 16f, Color.BLACK));

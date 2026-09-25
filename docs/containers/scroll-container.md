@@ -39,9 +39,6 @@ Two consequences:
 
    VerticalLayout rows = new VerticalLayout(20, 20, 280, 12 * 30); // tall enough for 12 rows
    rows.setSpacing(0);
-   rows.getStyling().setBackgroundColor(Color.TRANSPARENT);
-   rows.getStyling().setHoverColor(Color.TRANSPARENT);
-   rows.getStyling().setBorderThickness(0f);
    for (int i = 0; i < 12; i++) {
        rows.addElement(new TextOverlay("Row " + i, 16f, Color.BLACK));
    }

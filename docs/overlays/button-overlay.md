@@ -95,9 +95,6 @@ button.onAction(() -> {
 HorizontalLayout actions = new HorizontalLayout(20, 20, 340, 40);
 actions.setSpacing(10);
 actions.setAlignment(Layout.Alignment.CENTER_LEFT);
-actions.getStyling().setBackgroundColor(Color.TRANSPARENT);
-actions.getStyling().setHoverColor(Color.TRANSPARENT);
-actions.getStyling().setBorderThickness(0f);
 
 ButtonOverlay ok = new ButtonOverlay("OK", 100, 32);
 ok.onAction(() -> System.out.println("ok"));

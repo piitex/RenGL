@@ -53,12 +53,9 @@ public class Hello {
         // 1. The window (title + size).
         Window window = new Window(new WindowOptions("Hello RenGL").setDimensions(1280, 720));
 
-        // 2. A container that fills the window. Element's default background is opaque white,
-        // so make it transparent or it will hide the window's own background.
+        // 2. A container that fills the window. Elements start transparent, so the
+        // window's own background shows through it.
         Container root = new Container(1280, 720);
-        root.getStyling().setBackgroundColor(Color.TRANSPARENT);
-        root.getStyling().setHoverColor(Color.TRANSPARENT);
-        root.getStyling().setBorderThickness(0f);
         window.addContainer(root);
 
         // 3. Elements. x/y is the top-left corner.
@@ -83,7 +80,6 @@ of the window with a text field and a button.
 ```java
 import me.piitex.engine.*;
 import me.piitex.engine.ui.containers.Container;
-import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.layout.Layout;
 import me.piitex.engine.ui.layout.VerticalLayout;
 import me.piitex.engine.ui.overlays.*;
@@ -95,10 +91,7 @@ public class Form {
         ThemeManager.setCurrent(new DarkTheme()); // before building, so everything starts dark
         Window window = new Window(new WindowOptions("Form").setDimensions(800, 600));
 
-        me.piitex.engine.ui.containers.Container root = new Container(800, 600);
-        root.getStyling().setBackgroundColor(Color.TRANSPARENT);
-        root.getStyling().setHoverColor(Color.TRANSPARENT);
-        root.getStyling().setBorderThickness(0f);
+        Container root = new Container(800, 600);
         window.addContainer(root);
 
         VerticalLayout panel = new VerticalLayout(250, 150, 300, 300);

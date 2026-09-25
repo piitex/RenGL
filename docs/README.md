@@ -23,15 +23,16 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | **[Core](core/README.md)** | Engine, Window, Element, Overlay |
 | [Engine](core/engine.md) | Starting the engine and what it does every frame |
 | [Window](core/window.md) | `Window`, `WindowOptions`, popups, modals, focus |
-| [Element](core/element.md) | The base class of everything drawable: position, events, tooltips, transitions |
+| [Element](core/element.md) | The base class of everything drawable: position, events, tooltips, scale, transitions |
 | [Overlay](core/overlay.md) | The base class of every widget, and how to write your own |
 | [Snapshots](core/snapshots.md) | Capture a container or the window as an image (PNG, or an `ImageOverlay`) |
 | [Scheduler](core/scheduler.md) | Timers, `runLater`, and background work with results delivered on the render thread |
-| **[Containers](containers/README.md)** | Container, ScrollContainer, ResizableContainer, ModalContainer |
+| **[Containers](containers/README.md)** | Container, ScrollContainer, ResizableContainer, ModalContainer, ReorderableGrid |
 | [Container](containers/container.md) | Holding children, dragging, collision, clipping |
 | [ScrollContainer](containers/scroll-container.md) | Scrollable, clipped content |
 | [ResizableContainer](containers/resizable-container.md) | Follows the window, scales its contents, drag-to-resize |
 | [ModalContainer](containers/modal-container.md) | Dialogs that block the rest of the UI |
+| [ReorderableGrid](containers/reorderable-grid.md) | Drag-to-rearrange grid of items |
 | **[Layouts](layouts/README.md)** | Automatic positioning |
 | [Layouts overview](layouts/README.md) | How automatic positioning works |
 | [VerticalLayout](layouts/vertical-layout.md) · [HorizontalLayout](layouts/horizontal-layout.md) · [GridLayout](layouts/grid-layout.md) · [StackLayout](layouts/stack-layout.md) · [SplitContainer](containers/split-container.md) · [TabContainer](containers/tab-container.md) | One page per layout |
@@ -53,17 +54,18 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Backgrounds](styling/backgrounds.md) | Constellation, electric-node, and dot-grid effects behind an element |
 | [Fonts](styling/fonts.md) | `Font` and custom fonts |
 | [Images and icons](styling/images-and-icons.md) | `ImageLoader`, `IconCache`, the bundled Feather set |
-| **[Animation](animation/transitions.md)** | `Transition`, fades, easing, custom transitions |
+| **[Animation](animation/transitions.md)** | `Transition`, fades, scaling, easing, custom transitions |
 | **[Input](input/README.md)** | Clicks, drags, scrolling, focus, cursors, tooltips, menus |
 | [Input and focus](input/input-and-focus.md) | Clicks, drags, scrolling, keyboard focus, cursors, clipboard |
 | [Tooltips](input/tooltips.md) | Hover bubbles |
 | [File dialogs](input/file-dialogs.md) | Native open, save and choose-folder dialogs |
+| [Menus](input/menus.md) | Menu bar, popup menus and right-click context menus |
 | **[Text editing](text/README.md)** | Shared text options and spell checking |
 | [TextEditingOptions](text/text-editing-options.md) | Shared knobs for text fields and areas |
 | [Spell checking](text/spell-checking.md) | Offline spell checking in [`RichTextAreaOverlay`](overlays/rich-text-area-overlay.md) |
 | **[Reference](reference/README.md)** | Custom elements, utilities, known limitations |
 | [Writing custom elements](reference/custom-elements.md) | Subclassing [`Element`](core/element.md) / [`Overlay`](core/overlay.md) |
-| [Utilities](reference/utilities.md) | `FormID`, `AssetManager`, the AI-disclosure annotations |
+| [Utilities](reference/utilities.md) | `FormID`, `AssetManager`, `FileUtil`, `ProcessUtil`, the AI-disclosure annotations |
 | [AppEnvironment](reference/app-environment.md) | Dev vs release file locations, chosen automatically |
 | [Downloads](reference/downloads.md) | Background HTTP downloads with progress, speed and ETA displays |
 | [Config](reference/config.md) | Settings files with flat and nested values |

@@ -38,21 +38,24 @@ GLFW callbacks only enqueue events. The render thread drains that queue at the s
 **Practical consequence:** every callback you register (`onAction`, `onTextChanged`, `onUpdate`, ...)
 runs on the render thread, right in the middle of a frame. Don't block in them. If you start your own
 worker threads and want to change the UI from them, be aware the render thread may be reading the same
-element at the same time. Post the work to a queue and apply it from an `onUpdate` callback.
+element at the same time. Post the work with [`Scheduler.runLater`](core/scheduler.md), which runs it on the render
+thread at the start of the next frame.
 
 ## One frame
 
 ```text
  1. Handle window resize                (recreate the drawing surface if needed)
  2. InputProcessor.processEvents        (mouse move, click and scroll, keys, typed chars)
- 3. Advance the window background       (only if it is an animated gradient)
- 4. container.update(delta)             (every enabled top-level container, recursively)
- 5. TooltipManager.update
- 6. Clear the canvas; draw the window background
- 7. container.renderWithTransitions     (every enabled top-level container, in index order)
- 8. TooltipManager.render               (above every container)
- 9. Present
-10. Pace the frame                      (vsync waits for the display; with vsync off, sleep to WindowOptions.maxFPS)
+ 3. Advance the window background       (an animated paint, and the window's Background effect if set)
+ 4. Deliver queued callbacks            (native menu choices, file dialog results)
+ 5. Scheduler.update                    (runLater tasks, timers, async results)
+ 6. container.update(delta)             (every enabled top-level container, recursively)
+ 7. TooltipManager.update
+ 8. Clear the canvas; draw the window background and its Background effect
+ 9. container.renderWithTransitions     (every enabled top-level container, in index order)
+10. TooltipManager.render               (above every container)
+11. Present
+12. Pace the frame                      (vsync waits for the display; with vsync off, sleep to WindowOptions.maxFPS)
 ```
 
 `delta` is the seconds since the previous frame, capped at 0.25 s so a debugger pause or GC stall does not
@@ -94,14 +97,16 @@ The [`InputProcessor`](input/input-and-focus.md#reference-the-input-types) runs 
 
 **Hit-testing.** Starting from the highest-index top-level container that contains the point, it descends
 into children, always preferring the highest-index child that contains the point. The result is the
-*topmost element* under the cursor. The topmost element gets the click. **There is no bubbling.** If you
-click a `Label` inside a `Panel`, only the label's listener fires, not the panel's.
+*topmost element* under the cursor. If that element has no click listener, the click goes up to the nearest
+container above it that has one, so clicking a `Label` inside a clickable `Panel` fires the panel's listener. Only
+one listener runs: if the label has a listener of its own, the panel's does not fire. Drags and the cursor shape
+go up the same way (see the table).
 
 | Input | What happens |
 |---|---|
-| Mouse move | Topmost element becomes `hovered` (and every container on the path to it); the OS cursor follows its [`CursorMode`](input/input-and-focus.md#hover-and-cursor-shape); an active drag receives `onDragUpdate` |
-| Mouse press | Runs the topmost element's `onMouseClick` listener (on **press**, for any button); moves keyboard focus if the element is [`Focusable`](input/input-and-focus.md#keyboard-focus), otherwise clears focus; starts a drag if the element is [`Draggable`](input/input-and-focus.md#dragging) |
-| Mouse release | Ends the drag |
+| Mouse move | Topmost element becomes `hovered` (and every container on the path to it); the OS cursor follows its [`CursorMode`](input/input-and-focus.md#hover-and-cursor-shape), or the nearest ancestor's if it has none; an active drag receives `onDragUpdate` |
+| Mouse press | Runs the `onMouseClick` listener of the topmost element, or of the nearest ancestor with one (on **press**, for any button); moves keyboard focus if the element is [`Focusable`](input/input-and-focus.md#keyboard-focus), otherwise clears focus; with the **left** button, starts a drag on the nearest [`Draggable`](input/input-and-focus.md#dragging) at or above the element |
+| Mouse release | The left button ends the drag; other buttons do not |
 | Scroll | Goes to the innermost [`Scrollable`](input/input-and-focus.md#scrolling) under the cursor, whatever child is directly beneath |
 | Key / char | Goes to the focused `Focusable`, except Tab (focus traversal) and Escape (closes a popup/modal first) |
 
@@ -109,7 +114,7 @@ Two special layers sit above normal containers:
 
 - A **popup** (dropdown list, spell-check suggestions) is one temporary container. A press *outside* it
   closes it, and the press is consumed.
-- A **modal** dims the window and traps clicks, scrolling and Tab inside itself.
+- A **modal** dims the window (or the [area](containers/modal-container.md#limiting-the-modal-to-part-of-the-window) it is limited to) and traps clicks, scrolling and Tab inside itself.
 
 Details on each: [Input and focus](input/input-and-focus.md), [Window](core/window.md),
 [ModalContainer](containers/modal-container.md).
@@ -120,7 +125,7 @@ You never call these directly, but it helps to know what draws your UI:
 
 - **Skia (via Skiko)** is the 2D engine on every platform. All widgets draw through the [`Renderer`](reference/custom-elements.md#the-renderer)
   interface (`drawQuad`, `drawBorder`, `drawLine`, `drawPolyline`, `drawCircle`, `drawText`, `drawGradient`, `drawImage`,
-  clips and opacity layers).
+  clips, translations, scales and opacity layers).
 - **OpenGL 3.3 core** backs Skia on Windows and Linux (`SkikoRenderer`).
 - **Metal** backs Skia on macOS (`MetalSkikoRenderer`). macOS windows are created without an OpenGL
   context.

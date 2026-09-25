@@ -18,25 +18,35 @@ on top of the plain rectangle that [`Element`](element.md) already provides. Eve
 Element
  └─ Overlay
      ├─ TextOverlay
-     ├─ ButtonOverlay
+     │   ├─ ButtonOverlay
+     │   └─ TextFlowOverlay
      ├─ TextFieldOverlay
      ├─ TextAreaOverlay
+     │   └─ RichTextAreaOverlay
      ├─ CheckBoxOverlay
      ├─ RadioButtonOverlay
+     ├─ ToggleSwitchOverlay
      ├─ DropdownOverlay<T>
      ├─ SliderOverlay
+     │   └─ PercentSliderOverlay
+     ├─ ColorPickerOverlay
+     ├─ DateTimePickerOverlay
      ├─ ProgressBarOverlay
      ├─ LoadingSpinnerOverlay
      ├─ SeparatorOverlay
+     ├─ MenuBarOverlay
      └─ ImageOverlay
+         └─ IconOverlay
 
 Container
- └─ Layout
-     └─ HorizontalLayout ─── SpinnerOverlay      (a composite; it is a layout)
+ ├─ Layout
+ │   └─ HorizontalLayout ─── SpinnerOverlay      (a composite; it is a layout)
+ └─ ScrollContainer ─── FormattedTextOverlay     (scrolls its own content)
 ```
 
 [`SpinnerOverlay`](../overlays/spinner-overlay.md) is called an overlay by name but is a [`HorizontalLayout`](../layouts/horizontal-layout.md) (a [`Container`](../containers/container.md)) that wraps a
-text field and two buttons. See [SpinnerOverlay](../overlays/spinner-overlay.md).
+text field and two buttons. See [SpinnerOverlay](../overlays/spinner-overlay.md). Likewise
+[`FormattedTextOverlay`](../overlays/formatted-text-overlay.md) is a [`ScrollContainer`](../containers/scroll-container.md).
 
 The full catalog with one-line descriptions is at [Overlay catalog](../overlays/README.md).
 
@@ -60,8 +70,9 @@ warning.setTextColor(Color.RED); // without this line the theme's text color win
 silently. Only *user* actions fire `onValueChange`, `onToggle`, `onSelect` and `onTextChanged`. This avoids feedback loops
 when you sync UI to your model.
 
-**Built-in click handlers.** `ButtonOverlay`, [`CheckBoxOverlay`](../overlays/checkbox-overlay.md), [`RadioButtonOverlay`](../overlays/radio-button-overlay.md), [`DropdownOverlay`](../overlays/dropdown-overlay.md)
-and [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md) register their own `onMouseClick` handler. Do not replace it. Use the widget's
+**Built-in click handlers.** `ButtonOverlay`, [`CheckBoxOverlay`](../overlays/checkbox-overlay.md), [`RadioButtonOverlay`](../overlays/radio-button-overlay.md), [`DropdownOverlay`](../overlays/dropdown-overlay.md),
+[`ToggleSwitchOverlay`](../overlays/toggle-switch-overlay.md), [`ColorPickerOverlay`](../overlays/color-picker-overlay.md), [`DateTimePickerOverlay`](../overlays/date-time-picker-overlay.md),
+[`MenuBarOverlay`](../input/menus.md) and [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md) register their own `onMouseClick` handler. Do not replace it. Use the widget's
 own callback.
 
 **`dispose()`.** Widgets that own a native Skia `Font` (`TextOverlay` and its subclass `ButtonOverlay`,

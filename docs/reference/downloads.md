@@ -28,12 +28,14 @@ d.start();
 - A dropped connection is retried with backoff, resuming where it stopped (`setMaxRetries`, default 3; the count
   resets whenever an attempt made progress).
 - `setExpectedSize(bytes)` gives a determinate bar when the server sends no `Content-Length`.
+- `setDisplayName(name)` sets the name the displays show. It defaults to the target's file name.
 
 Getters, all safe from any thread: `getState()`, `getProgress()` (0..1), `getDownloadedBytes()`,
 `getTotalBytes()` (-1 unknown), `isSizeKnown()`, `getBytesPerSecond()` (smoothed; 0 when stalled),
 `getEtaSeconds()` (-1 unknown), `getError()`.
 
-`DownloadListener` (`onStateChanged`, `onComplete`, `onFailed`) can be added any number of times. **Its callbacks
+`DownloadListener` (`onStateChanged`, `onComplete`, `onFailed`) can be added any number of times with
+`addListener`, and taken off with `removeListener`. **Its callbacks
 run on the worker thread**, so set a flag and act on it from an `onUpdate` hook instead of touching UI elements.
 
 ## DownloadManager
@@ -46,9 +48,13 @@ manager.add(url1, dir.resolve("a.zip"));
 manager.add(url2, dir.resolve("b.zip"));
 manager.getTotalBytesPerSecond(); manager.getOverallProgress(); manager.isBusy();
 manager.pauseAll(); manager.resume(download); manager.clearFinished();
+manager.cancelAll(); // cancels everything not already finished
+manager.remove(download); // stops tracking it, cancelling it first if it is still running
+manager.setMaxConcurrent(4); // change the limit later
 ```
 
-Use `manager.resume(d)` rather than `d.start()` for a managed download so the limit is respected.
+Use `manager.resume(d)` rather than `d.start()` for a managed download so the limit is respected. `getDownloads()`
+returns a snapshot in the order added, and `getActiveCount()` how many are running.
 
 ## Displays
 
@@ -57,6 +63,10 @@ Use `manager.resume(d)` rather than `d.start()` for a managed download so the li
 ```java
 layout.addElement(new DownloadTextOverlay(download));
 // backend.zip 45% - 18.0 MB / 40.0 MB - 3.2 MB/s - ETA 6s
+
+DownloadTextOverlay line = new DownloadTextOverlay(download, 14f, Color.GRAY); // font size and color
+line.setShowName(false); // drop the leading file name
+line.setFormatter(d -> "Fetching " + Math.round(d.getProgress() * 100) + "%"); // your own text; null = built-in
 ```
 
 **A card** with the name, a progress bar, a status line and **Pause / Resume / Cancel** buttons. The bar sweeps
@@ -70,14 +80,26 @@ card.getFormat().setShowEta(false); // choose which parts the status line shows
 card.setShowControls(false); // hide the buttons
 card.setManager(manager); // if managed: Resume/Retry go back through the queue
 card.getBar().getStyling().setCornerRadius(5f);
+card.setActiveColor(Color.BLUE); // fill while downloading, under the stripes (default green)
+card.setStripeColor(Color.WHITE); // stripe color (default light gray)
+card.setDoneColor(Color.GREEN); card.setFailedColor(Color.RED); card.setPausedColor(Color.ORANGE);
 ```
+
+`setStripeStyle(style)` swaps in a shared [`StripeStyle`](../overlays/progress-bar-overlay.md) so several cards stripe
+in step. `setPadding` and `setSpacing` resize the card's rows.
 
 **A live list** bound to a manager: a card per download plus a summary line, added and removed automatically.
 Put it in a `ScrollContainer`; it sizes its own height to fit:
 
 ```java
-scroll.addElement(new DownloadListContainer(manager, 400));
+DownloadListContainer list = new DownloadListContainer(manager, 400);
+list.setShowSummary(false); // hide the summary line (default shown)
+list.setCardCustomizer(card -> card.setShowControls(false)); // runs once per new card
+scroll.addElement(list);
 ```
+
+`DownloadListContainer(manager, width, height)` gives it a fixed height instead; `setAutoHeight(false)` does the
+same for an existing one.
 
 `DownloadFormat` controls the status text (percent, size, speed, ETA, separator) and has static helpers
 `bytes()`, `speed()` and `duration()` for your own text.

@@ -17,11 +17,12 @@ element.onMouseClick(event -> {
 ```
 
 - Fires on **press** for **every** mouse button. Check `getButton()` if you only care about one.
-- Only the **topmost** element under the cursor gets it. There is no event bubbling. A press on a child never
-  reaches its parent container's listener.
+- The **topmost** element under the cursor gets it if it has a listener. If it has none, the press goes up to the
+  nearest container above it that has one, so a press on the label or icon inside a clickable row counts as a press
+  on the row. Only one listener runs per press: a child with its own listener stops the press there.
 - One listener per element. Setting another replaces it.
-- Widgets with their own click behavior (button, checkbox, radio, dropdown, rich text area) install their handler
-  themselves, so do not replace it. See [Element](../core/element.md#onmouseclick).
+- Widgets with their own click behavior (button, checkbox, radio, toggle switch, dropdown, color and date pickers,
+  menu bar, rich text area) install their handler themselves, so do not replace it. See [Element](../core/element.md#onmouseclick).
 
 ```java
 import org.lwjgl.glfw.GLFW;
@@ -47,7 +48,8 @@ element.setCursorMode(CursorMode.POINTER); // OS cursor while hovered
 
 `CursorMode` values: `DEFAULT`, `TEXT` (I-beam), `POINTER` (hand), `CROSSHAIR`, `RESIZE_HORIZONTAL`,
 `RESIZE_VERTICAL`, `RESIZE_NWSE`, `RESIZE_NESW`, `RESIZE_ALL`, `NOT_ALLOWED`. Set it once per element and it just
-works. A `null` mode falls back to `DEFAULT`. Text fields and areas set `TEXT`, buttons and dropdowns set
+works. A `null` mode takes the cursor of the nearest container above that has one, and `DEFAULT` if none does, so
+children of a `POINTER` row show the pointer too. Text fields and areas set `TEXT`, buttons and dropdowns set
 `POINTER`, and the split divider sets a resize cursor.
 
 When the mouse leaves the window all hover state is cleared.
@@ -73,9 +75,9 @@ An element that implements `Draggable` gets continuous drag events:
 
 ```java
 public interface Draggable {
-    void onDragStart(double x, double y); // press landed on this element (topmost hit)
+    void onDragStart(double x, double y); // left press landed on this element or a child that passed it up
     void onDragUpdate(double x, double y); // mouse moved while the button is held
-    void onDragEnd(double x, double y); // button released
+    void onDragEnd(double x, double y); // left button released
 }
 ```
 
@@ -84,11 +86,15 @@ cursor shape for the whole drag. It fires **independently** of
 `onMouseClick`, so implementing `Draggable` does not consume your click listener. [`Container`](../containers/container.md),
 [`ScrollContainer`](../containers/scroll-container.md), [`TextFieldOverlay`](../overlays/text-field-overlay.md), [`TextAreaOverlay`](../overlays/text-area-overlay.md), [`SliderOverlay`](../overlays/slider-overlay.md) and the split divider implement it.
 
-`Draggable` also has `default boolean canDrag(double x, double y)`, which is only consulted for a
-[`Container`](../containers/container.md). A press that lands on a container returning `false` (a plain layout that
-fills its parent) **passes up** to the nearest ancestor container that returns `true`, instead of being swallowed.
-A non-container element, such as a button, always keeps its own presses. A `Container` returns `true` only after
-`setDraggable(true)`.
+Only the **left** button drags. A right-click never starts a drag or a text selection, and releasing another
+button mid-drag does not end it.
+
+A press goes to the nearest `Draggable` at or above the element under the cursor. An element that is not
+`Draggable` at all (a label, an image, a button) **passes it up** to its container. `Draggable` also has
+`default boolean canDrag(double x, double y)`, which is only consulted for a [`Container`](../containers/container.md):
+a container returning `false` (a plain layout that fills its parent) passes the press up too. A `Container` returns
+`true` only after `setDraggable(true)`. So a press on a button sitting on a draggable panel clicks the button and
+also drags the panel.
 
 A container can also claim the mouse ahead of its children with
 `public boolean interceptsPointer(double x, double y)` (default `false`). `ResizableContainer` uses it for its
@@ -218,6 +224,9 @@ element.setTabIndex(0); // explicit order; -1 (default) = natural order
 - **Tab / Shift+Tab** are consumed for focus traversal before any focused widget sees them.
 - **Escape** first closes an open popup, then an open modal (if it allows dismissing on Escape). Only if neither
   is open does it reach the focused widget.
+- **A popup that implements `PopupKeyListener`** (the [menus](menus.md) do, for arrow-key navigation) gets every key
+  press and repeat first, Tab and Escape included, and nothing else sees them while it is open. Implement
+  `onPopupKey(int key, int mods)` on your own popup container to do the same.
 
 ## Keyboard shortcuts in text widgets
 
@@ -257,4 +266,5 @@ String text = Clipboard.paste(); // blocks briefly while the main thread reads; 
 | `CursorManager` | `input` | Main-thread bridge that applies the requested OS cursor |
 | `Clipboard` | `input` | Main-thread bridge for copy/paste |
 | `Draggable`, `Scrollable`, `Focusable` | `ui` | Opt-in interfaces described above |
+| `PopupKeyListener` | `ui` | Lets an open popup take the keyboard (see [Reserved keys](#reserved-keys)) |
 | `CursorMode` | `ui` | Cursor shapes |

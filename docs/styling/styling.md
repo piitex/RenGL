@@ -7,11 +7,12 @@ appearance:
 
 | Property | Getter / setter | Default (fresh [`Element`](../core/element.md)) |
 |---|---|---|
-| Background color | `getBackgroundColor()` / `setBackgroundColor(Paint)` | White |
-| Hover color | `getHoverColor()` / `setHoverColor(Paint)` | White |
-| Border color | `getBorderColor()` / `setBorderColor(Paint)` | White |
+| Background color | `getBackgroundColor()` / `setBackgroundColor(Paint)` | Transparent |
+| Hover color | `getHoverColor()` / `setHoverColor(Paint)` | Transparent |
+| Border color | `getBorderColor()` / `setBorderColor(Paint)` | Transparent |
 | Border thickness | `getBorderThickness()` / `setBorderThickness(float)` | `1` |
 | Corner radius | `getCornerRadius()` / `setCornerRadius(float)` | `0` |
+| Text hover color | `getTextHoverColor()` / `setTextHoverColor(Paint)` | `null` (text keeps its normal color) |
 
 ```java
 panel.getStyling().setBackgroundColor(new Color(0.12f, 0.12f, 0.14f, 1f));
@@ -34,25 +35,28 @@ Each frame, `Element.render` draws, in this order:
 5. Anything the specific widget draws on top (text, image, ...).
 
 Because hover switches the fill, set the hover color to the same value as the background when an element should
-not react to the mouse (that is what themed containers do).
+not react to the mouse (that is what themed containers do). A [`Container`](../containers/container.md) does this on
+its own: its hover color follows its background until you call `setHoverColor`, so a panel you give only a
+background color never flashes on hover. `setHoverFollowsBackground(true)` gives any element the same behavior.
 
 ## Defaults by type
 
-A fresh [`Element`](../core/element.md) is opaque white with a white border. Most widgets change that:
+A fresh [`Element`](../core/element.md) is fully transparent: transparent background and hover colors, and a 1pt
+border in a transparent color. Most widgets change that:
 
 | Type | Default look |
 |---|---|
-| [`Container`](../containers/container.md), layouts | Opaque white with a white border (**not** transparent) |
+| [`Container`](../containers/container.md), layouts | Transparent, hover follows the background. `useTheme()` gives the themed panel look |
 | [`TextOverlay`](../overlays/text-overlay.md), [`ImageOverlay`](../overlays/image-overlay.md), [`SeparatorOverlay`](../overlays/separator-overlay.md), [`LoadingSpinnerOverlay`](../overlays/loading-spinner-overlay.md) | Transparent, no border |
 | [`ButtonOverlay`](../overlays/button-overlay.md), [`TextFieldOverlay`](../overlays/text-field-overlay.md), [`TextAreaOverlay`](../overlays/text-area-overlay.md), [`CheckBoxOverlay`](../overlays/checkbox-overlay.md), ... | Themed boxes |
 | [`SpinnerOverlay`](../overlays/spinner-overlay.md) | Transparent outer box, themed field and buttons inside |
 
-For a container that only groups children, make it invisible:
+A container that only groups children is therefore invisible without any styling. To give one a look, set a
+background or opt it into the theme:
 
 ```java
-container.getStyling().setBackgroundColor(Color.TRANSPARENT);
-container.getStyling().setHoverColor(Color.TRANSPARENT);
-container.getStyling().setBorderThickness(0f);
+container.getStyling().setBackgroundColor(new Color(0.95f, 0.95f, 0.95f, 1f)); // hover follows it
+container.useTheme(); // or: the theme's panel background, border and radius
 ```
 
 ## Pinning: how styling interacts with themes
@@ -70,6 +74,17 @@ button.getStyling().setBackgroundColor(Color.RED); // pinned red; a theme switch
 
 If you want an element to follow the theme again you have to construct a fresh one. There is no "unpin" method.
 See [Theming](theming.md).
+
+## Text hover color
+
+```java
+link.getStyling().setTextHoverColor(Color.BLUE); // text turns blue while hovered
+link.getStyling().setTextHoverColor(null); // back to the normal text color
+```
+
+Widgets that draw text use this color for their text while hovered, independent of the hover *fill*. `null` (the
+default) keeps the normal text color. It takes any [`Paint`](colors-and-paints.md), and an animated one advances like
+the other styling paints. It is not themed, so a theme switch never changes it.
 
 ## Replacing the whole `Styling`
 
@@ -105,6 +120,8 @@ keep them inside the curve.
 |---|---|
 | `getBackgroundColor` / `setBackgroundColor` | Fill at rest |
 | `getHoverColor` / `setHoverColor` | Fill while hovered |
+| `setHoverFollowsBackground` | Make the hover fill track the background (containers start this way) |
+| `getTextHoverColor` / `setTextHoverColor` | Text color while hovered, or `null` |
 | `getBorderColor` / `setBorderColor` | Border (plain [`Color`](colors-and-paints.md#color) only renders) |
 | `getBorderThickness` / `setBorderThickness` | Border width in points |
 | `getCornerRadius` / `setCornerRadius` | Corner rounding in points |

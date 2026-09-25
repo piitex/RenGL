@@ -7,7 +7,9 @@ source. If you hit something not listed here, please add it.
 
 ## Window and engine
 
-- **Window options other than `setVsync` and `setMaxFPS` apply once,** at window creation. Changing them later does nothing.
+- **`WindowOptions` are read once,** at window creation. Changing them later does nothing, except `setVsync` and
+  `setMaxFPS`. To change a running window use the [`Window` methods](../core/window.md#window-styles-at-runtime)
+  (`setStyle`, `setSize`, `setTitle`, `setFullscreen`, ...) instead.
 - **On macOS `setIcon` / `setIconPath` set the Dock icon, not a window icon**, because macOS windows have none. A packaged app's bundle icon is still what Finder shows.
 - **`setFullscreen`, `setWindowed` and `setHandleFocus` are interpretations.** Fullscreen covers the primary monitor,
   `setWindowed(false)` removes the window border (both together give borderless fullscreen), and `setHandleFocus(true)`
@@ -22,11 +24,12 @@ source. If you hit something not listed here, please add it.
   `WindowOptions` always holds the real size, and the engine logs a warning, but containers keep their size unless
   they are a [`ResizableContainer`](../containers/resizable-container.md).
 - **Contents do not reflow on resize,** except inside a `ResizableContainer`. Other containers keep their size.
-  Resize them yourself in an `onUpdate` hook if you want them to follow the window.
+  Resize them yourself from [`window.onResize`](../core/window.md#resize-event) if you want them to follow the window.
 - **One engine, one window per process.** Several engine helpers are static.
-- **No public stop method.** `Engine.start` returns when the OS window closes.
-- **Callbacks run on the render thread.** There is no built-in way to marshal work from another thread. Use a flag
-  or queue read from an `onUpdate` hook.
+- **No stop method on `Engine`.** `Engine.start` returns when the OS window closes. Call `window.close()` to close
+  it from code.
+- **Callbacks run on the render thread.** To change the UI from another thread, post the work with
+  [`Scheduler.runLater`](../core/scheduler.md), which runs it on the render thread at the start of the next frame.
 
 ## Containers and layouts
 
@@ -47,7 +50,8 @@ source. If you hit something not listed here, please add it.
 - **Scrollbars overlay the content** on the right/bottom edge instead of reserving a gutter, in both
   `ScrollContainer` and [`TextAreaOverlay`](../overlays/text-area-overlay.md).
 - **Clipping is rectangular.** Children of a rounded container are clipped to its bounding rectangle, not to the
-  rounded shape.
+  rounded shape. A custom element can clip to a rounded rectangle itself with
+  `Renderer.pushClip(x, y, w, h, cornerRadius)`.
 
 ## ResizableContainer
 
@@ -74,8 +78,8 @@ source. If you hit something not listed here, please add it.
   renders.
 - **Some parts accept only `Color`, not [`Paint`](../styling/colors-and-paints.md):** caret and selection colors, scrollbars, slider/progress/
   checkbox/radio parts, tooltip colors.
-- **No unpin.** Once a themed property is set explicitly it is pinned for the life of that element. This
-  includes the window background (`Window.setBackgroundColor`), which otherwise follows the theme.
+- **No unpin on elements.** Once an element's themed property is set explicitly it is pinned for the life of that
+  element. The window background is the exception: `Window.followThemeBackground()` unpins it.
 - **Constructor colors on themed widgets are baselines.** The theme's text color replaces them. Use `setTextColor`.
 - **A custom [`AnimatedPaint`](../styling/colors-and-paints.md#animatedpaint) is not drawn by the built-in fill.** Only `Color` and [`LinearGradient`](../styling/colors-and-paints.md#gradients) are.
 
@@ -103,15 +107,20 @@ source. If you hit something not listed here, please add it.
 
 ## Input
 
-- **`onMouseClick` fires on press, not release,** for any mouse button, and only for the topmost element (no bubbling).
+- **`onMouseClick` fires on press, not release,** for any mouse button. Only one listener runs per press: the
+  topmost element's, or the nearest ancestor's if the topmost has none. There is no way to let a press reach
+  both a child and its container.
 - **One listener per hook.** `onMouseClick`, `onUpdate`, `onRender` and most `onXxx` callbacks replace the previous
   listener rather than adding to it.
 - **[`RadioButtonOverlay`](../overlays/radio-button-overlay.md) has no silent select.** `select()` always fires the group's `onChange`.
 - **`Element.getZ()` is reserved** and unused by rendering or hit-testing.
 - **A drag keeps the cursor shape of the dragged element** for its whole duration, including when it is a text field
   selecting text outside its own box.
-- **A press passes up only through containers.** A container that does not want the drag hands it to its parent. A
-  non-container that is not `Draggable`, such as a button, keeps the press and nothing above it is dragged.
+- **A press on any non-draggable child drags its draggable ancestor.** A plain child (a label, image or button)
+  and a container that does not want the drag both hand it up. So pressing a button on a draggable card clicks
+  the button *and* starts dragging the card; a small movement during the click moves the card. Only the left
+  button starts a drag. [`ReorderableGrid`](../containers/reorderable-grid.md) avoids this for its items: a press
+  on a child with a click listener never starts a drag there.
 - **Re-entering the window relies on `WindowOptions` being current.** After macOS drops the "cursor entered" event
   following a live resize, a mouse move that lands inside the window is what re-enables hover and clicks.
 - **The resize cursors come from GLFW's standard cursor set.** They showed correctly on macOS. A platform or GLFW

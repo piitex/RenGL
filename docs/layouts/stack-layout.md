@@ -13,9 +13,6 @@ Each child is placed independently inside the layout's **padded** bounds:
 ```java
 StackLayout stack = new StackLayout(20, 20, 200, 36);
 stack.setAlignment(Layout.Alignment.CENTER);
-stack.getStyling().setBackgroundColor(Color.TRANSPARENT);
-stack.getStyling().setHoverColor(Color.TRANSPARENT);
-stack.getStyling().setBorderThickness(0f);
 
 LoadingSpinnerOverlay spinner = new LoadingSpinnerOverlay(20);
 stack.addElement(new ButtonOverlay("Loading...", 200, 36)); // back
