@@ -7,6 +7,7 @@ import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Focusable;
+import me.piitex.engine.ui.scroll.ScrollBarStyle;
 import me.piitex.engine.ui.scroll.Scrollable;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
@@ -36,7 +37,9 @@ import java.util.function.Function;
  * tokens, text color from {@link Theme#getText()}); the open list reuses this
  * overlay's own {@link #getStyling()} colors, so pinning them here restyles both, with
  * the {@link Theme#getSelection()} color marking the selected row. Only a plain {@link
- * Color} background/border is honored for the list.
+ * Color} background/border is honored for the list. A list with more items than
+ * {@link #setMaxVisibleRows} shows a scrollbar along its right edge (see
+ * {@link #getScrollBarStyle()}); the wheel scrolls it and its thumb can be dragged.
  * <p>
  * This overlay registers its own {@link #onMouseClick} handler to open and close the
  * list; replacing that handler stops the dropdown from opening, so use
@@ -54,6 +57,7 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
     private final Overridable<Color> textColor = new Overridable<>(Color.BLACK);
     private final Overridable<Color> placeholderColor = new Overridable<>(Color.LIGHT_GRAY);
     private final Overridable<Color> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
+    private ScrollBarStyle scrollBarStyle = new ScrollBarStyle();
 
     private org.jetbrains.skia.Font font;
     private Typeface fontTypeface;
@@ -139,6 +143,19 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
      */
     public void setMaxVisibleRows(int maxVisibleRows) {
         this.maxVisibleRows = Math.max(1, maxVisibleRows);
+    }
+
+    /**
+     * The colors, thickness, and corner radius of the open list's scrollbar, shown when it has more items than
+     * {@link #setMaxVisibleRows}. This is the same {@link ScrollBarStyle} class
+     * {@link me.piitex.engine.ui.scroll.ScrollContainer} uses. Mutate it in place, or replace it wholesale.
+     */
+    public ScrollBarStyle getScrollBarStyle() {
+        return scrollBarStyle;
+    }
+
+    public void setScrollBarStyle(ScrollBarStyle scrollBarStyle) {
+        this.scrollBarStyle = scrollBarStyle == null ? new ScrollBarStyle() : scrollBarStyle;
     }
 
     public float getFontSize() {
@@ -229,6 +246,8 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         textColor.applyTheme(theme.getText());
         placeholderColor.applyTheme(theme.getPlaceholderText());
         selectionColor.applyTheme(theme.getSelection());
+        scrollBarStyle.applyThemeTrackColor(theme.getScrollTrack());
+        scrollBarStyle.applyThemeThumbColor(theme.getScrollThumb());
     }
 
     /* Rendering */
@@ -312,15 +331,20 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
     /**
      * The floating list. A Container (so {@link Window#showPopup} and the input
      * system's hit-testing treat it like any top-level Container) that draws and
-     * hit-tests its rows itself rather than holding child Elements.
+     * hit-tests its rows itself rather than holding child Elements. When the rows do not
+     * all fit it reserves a strip on its right edge for a scrollbar, whose thumb can be
+     * dragged and whose track jumps to the pressed spot.
      */
     private class ListPopup extends Container implements Scrollable {
         private float scroll; // in rows' worth of pixels, 0 = top
+        private boolean draggingThumb;
+        private double dragAnchorMouseY, dragAnchorScroll;
 
         ListPopup() {
             super(0, 0);
             setCursorMode(CursorMode.POINTER);
             onMouseClick(event -> {
+                if (onBar(event.getMouseX(), event.getMouseY())) return; // the scrollbar drag handles it
                 int index = rowAt(event.getMouseY());
                 if (index >= 0 && index < items.size()) {
                     choose(index);
@@ -339,6 +363,82 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
 
         private int rowAt(double mouseY) {
             return (int) Math.floor((mouseY - getY() + scroll) / rowHeight());
+        }
+
+        // --- Scrollbar -------------------------------------------------------------------------
+
+        /**
+         * Width of the strip on the right edge the scrollbar takes, or 0 when every row fits.
+         */
+        private float barStrip() {
+            if (maxScroll() <= 0f) return 0f;
+            return scrollBarStyle.getThickness() + 2 * scrollBarStyle.getMargin();
+        }
+
+        private boolean onBar(double px, double py) {
+            return barStrip() > 0f && px >= getX() + getWidth() - barStrip() && contains(px, py);
+        }
+
+        private double trackX() {
+            return getX() + getWidth() - scrollBarStyle.getThickness() - scrollBarStyle.getMargin();
+        }
+
+        private double trackY() {
+            return getY() + scrollBarStyle.getMargin();
+        }
+
+        private double trackHeight() {
+            return Math.max(0, getHeight() - 2 * scrollBarStyle.getMargin());
+        }
+
+        private double thumbLength() {
+            double trackH = trackHeight();
+            double raw = trackH * getHeight() / (items.size() * rowHeight());
+            return Math.max(scrollBarStyle.getMinThumbLength(), Math.min(trackH, raw));
+        }
+
+        private double thumbY() {
+            double travel = trackHeight() - thumbLength();
+            if (maxScroll() <= 0f || travel <= 0) return trackY();
+            return trackY() + travel * (scroll / maxScroll());
+        }
+
+        private void scrollToThumbY(double thumbTop) {
+            double travel = trackHeight() - thumbLength();
+            double ratio = travel > 0 ? (thumbTop - trackY()) / travel : 0;
+            scroll = (float) Math.max(0, Math.min(ratio * maxScroll(), maxScroll()));
+        }
+
+        /**
+         * A press on the scrollbar strip drags the thumb. Anywhere else the press picks a row, so nothing drags.
+         */
+        @Override
+        public boolean canDrag(double x, double y) {
+            return onBar(x, y);
+        }
+
+        @Override
+        public void onDragStart(double x, double y) {
+            double thumbTop = thumbY(), length = thumbLength();
+            if (y < thumbTop || y > thumbTop + length) {
+                scrollToThumbY(y - length / 2); // pressed the track: center the thumb on the pointer, then drag it
+            }
+            draggingThumb = true;
+            dragAnchorMouseY = y;
+            dragAnchorScroll = scroll;
+        }
+
+        @Override
+        public void onDragUpdate(double x, double y) {
+            if (!draggingThumb) return;
+            double travel = trackHeight() - thumbLength();
+            double ratio = travel > 0 ? (y - dragAnchorMouseY) / travel : 0;
+            scroll = (float) Math.max(0, Math.min(dragAnchorScroll + ratio * maxScroll(), maxScroll()));
+        }
+
+        @Override
+        public void onDragEnd(double x, double y) {
+            draggingThumb = false;
         }
 
         void scrollToRevealSelected() {
@@ -367,9 +467,11 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
 
             if (bg instanceof Color c) renderer.drawQuad(x, y, w, h, c, radius);
 
-            renderer.pushClip(x, y, w, h);
-            int hoverRow = MouseTracker.isInWindow() && contains(MouseTracker.getX(), MouseTracker.getY())
-                    ? rowAt(MouseTracker.getY()) : -1;
+            renderer.pushClip(x, y, w, h, radius);
+            float strip = barStrip();
+            renderer.pushClip(x, y, w - strip, h); // rows stop short of the scrollbar
+            double mx = MouseTracker.getX(), my = MouseTracker.getY();
+            int hoverRow = MouseTracker.isInWindow() && contains(mx, my) && !onBar(mx, my) ? rowAt(my) : -1;
             int first = Math.max(0, (int) (scroll / rowH));
             for (int i = first; i < items.size(); i++) {
                 float rowY = y + i * rowH - scroll;
@@ -380,6 +482,19 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
                     renderer.drawQuad(x, rowY, w, rowH, hc, 0f);
                 }
                 owner.drawLabel(renderer, owner.labelProvider.apply(items.get(i)), x + 8f, rowY, rowH, owner.textColor.get());
+            }
+            renderer.popClip();
+
+            if (strip > 0f) {
+                float thickness = scrollBarStyle.getThickness(), barRadius = scrollBarStyle.getCornerRadius();
+                Color track = scrollBarStyle.getTrackColor();
+                if (track != null) {
+                    renderer.drawQuad((float) trackX(), (float) trackY(), thickness, (float) trackHeight(), track, barRadius);
+                }
+                Color thumb = draggingThumb ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
+                if (thumb != null) {
+                    renderer.drawQuad((float) trackX(), (float) thumbY(), thickness, (float) thumbLength(), thumb, barRadius);
+                }
             }
             renderer.popClip();
 
