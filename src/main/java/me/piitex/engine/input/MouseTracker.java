@@ -10,7 +10,8 @@ import me.piitex.engine.ui.background.ConstellationBackground;
  * time and most Elements have no reason to know where the mouse is. Hover, click, and
  * drag hit-testing already cover the normal cases (see {@link InputProcessor}). This
  * exists for the rarer case of an Element that needs live mouse position outside those,
- * such as {@link ConstellationBackground}'s mouse-repulsion effect.
+ * such as {@link ConstellationBackground}'s mouse-repulsion effect or
+ * {@link me.piitex.engine.ui.background.ElectricNodeBackground}'s arcs to the cursor.
  * <p>
  * Unlike {@link CursorManager}, no cross-thread pump is needed here.
  * {@link InputProcessor#processEvents}, which calls {@link #update}, and every

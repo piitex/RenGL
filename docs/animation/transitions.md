@@ -225,7 +225,8 @@ container.onUpdate(event -> {
 Two other kinds of motion do not use transitions:
 
 - [`ScrollingGradient`](../styling/colors-and-paints.md#scrolling-animated-gradients) and other [`AnimatedPaint`](../styling/colors-and-paints.md#animatedpaint)s advance once per frame automatically. See
-  [Colors and paints](../styling/colors-and-paints.md).
+  [Colors and paints](../styling/colors-and-paints.md). [`RainbowColor`](../styling/colors-and-paints.md#rainbowcolor-rgb-cycling)
+  cycles its hue from a clock instead, so it needs no advancing and can be shared.
 - [`Background`](../styling/backgrounds.md) effects have their own `update` and their own `fadeIn`/`fadeOut`. See
   [Backgrounds](../styling/backgrounds.md).
 

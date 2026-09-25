@@ -55,6 +55,9 @@ title.setTextColor(new LinearGradient(Color.BLUE, Color.GREEN));
 
 // A gradient that scrolls over time. Give each element its own instance.
 title.setTextColor(new ScrollingGradient(Color.BLUE, Color.GREEN, 50f)); // speed in px/second
+
+// Cycles through the colour wheel (RGB). One instance can be shared by any number of elements.
+title.setTextColor(new RainbowColor());
 ```
 
 See [Colors and paints](../styling/colors-and-paints.md).

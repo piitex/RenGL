@@ -166,30 +166,10 @@ public class AnimatedDotBackground extends AbstractBackground {
                 float radius = minRadius + (maxRadius - minRadius) * t;
                 float hue = (time * 0.05f + dist / (waveLength * 4f) + wave * 0.25f) * hueSpan;
 
-                renderer.drawCircle(x + dx, y + dy, radius, hsv(hue, saturation, brightness, alpha));
+                renderer.drawCircle(x + dx, y + dy, radius, Color.fromHSV(hue, saturation, brightness, alpha));
             }
         }
 
         renderer.popClip();
-    }
-
-    /**
-     * HSV to {@link Color}; {@code hue} is in turns and wraps, so any float is valid.
-     */
-    private static Color hsv(float hue, float s, float v, float a) {
-        float h = (hue - (float) Math.floor(hue)) * 6f;
-        int sector = (int) h;
-        float f = h - sector;
-        float p = v * (1f - s);
-        float q = v * (1f - s * f);
-        float t = v * (1f - s * (1f - f));
-        return switch (sector) {
-            case 0 -> new Color(v, t, p, a);
-            case 1 -> new Color(q, v, p, a);
-            case 2 -> new Color(p, v, t, a);
-            case 3 -> new Color(p, q, v, a);
-            case 4 -> new Color(t, p, v, a);
-            default -> new Color(v, p, q, a);
-        };
     }
 }

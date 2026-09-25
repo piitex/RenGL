@@ -1,5 +1,16 @@
 package me.piitex.engine.ui.color;
 
+/**
+ * A solid RGBA color with float components in [0, 1]. A plain Color is immutable. The
+ * {@link RainbowColor} subclass is the exception: its components change over time, and
+ * it works anywhere a Color is accepted. {@link #fromHSV} builds one from hue,
+ * saturation, and brightness, and the constants below are the standard CSS/X11 named
+ * colors.
+ * <p>
+ * Code reading a Color should call {@link #getR()}, {@link #getG()}, {@link #getB()},
+ * {@link #getA()}, or {@link #toARGB()} at draw time rather than copying the values once,
+ * so a {@link RainbowColor} keeps animating.
+ */
 public class Color implements Paint {
     private final float r, g, b, a;
 
@@ -40,6 +51,37 @@ public class Color implements Paint {
     @Override
     public String toString() {
         return "(" + r + "," + g + "," + b + "," + a + ")";
+    }
+
+    /**
+     * A Color from hue, saturation, and brightness. {@code hue} is in turns and wraps, so
+     * 0, 1, and 2 are all red and any float is valid. Saturation and brightness are [0, 1].
+     * See {@link RainbowColor} for a Color whose hue cycles by itself.
+     */
+    public static Color fromHSV(float hue, float saturation, float brightness, float alpha) {
+        float[] rgb = new float[3];
+        hsvToRgb(hue, saturation, brightness, rgb);
+        return new Color(rgb[0], rgb[1], rgb[2], alpha);
+    }
+
+    /**
+     * HSV to RGB into {@code out}, without allocating. {@code hue} is in turns and wraps.
+     */
+    static void hsvToRgb(float hue, float s, float v, float[] out) {
+        float h = (hue - (float) Math.floor(hue)) * 6f;
+        int sector = (int) h;
+        float f = h - sector;
+        float p = v * (1f - s);
+        float q = v * (1f - s * f);
+        float t = v * (1f - s * (1f - f));
+        switch (sector) {
+            case 0 -> { out[0] = v; out[1] = t; out[2] = p; }
+            case 1 -> { out[0] = q; out[1] = v; out[2] = p; }
+            case 2 -> { out[0] = p; out[1] = v; out[2] = t; }
+            case 3 -> { out[0] = p; out[1] = q; out[2] = v; }
+            case 4 -> { out[0] = t; out[1] = p; out[2] = v; }
+            default -> { out[0] = v; out[1] = p; out[2] = q; }
+        }
     }
 
     // Named colors below follow the standard CSS/X11 color keyword palette (the same

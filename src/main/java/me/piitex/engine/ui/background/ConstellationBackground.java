@@ -122,6 +122,11 @@ public class ConstellationBackground extends AbstractBackground {
         this.lineThickness = Math.max(0f, lineThickness);
     }
 
+    /**
+     * The particle dot color. A {@link me.piitex.engine.ui.color.RainbowColor} cycles the
+     * whole field through the colour wheel. Pair it with a matching RainbowColor for
+     * {@link #setLineColor}, same cycle duration and a lower alpha, and the two stay in sync.
+     */
     public Color getParticleColor() {
         return particleColor;
     }
@@ -132,6 +137,7 @@ public class ConstellationBackground extends AbstractBackground {
 
     /**
      * The line color's own alpha is the line's opacity at zero distance. See {@link #getLinkDistance()} for how it fades from there.
+     * A {@link me.piitex.engine.ui.color.RainbowColor} works here too; see {@link #getParticleColor()}.
      */
     public Color getLineColor() {
         return lineColor;

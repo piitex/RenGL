@@ -9,7 +9,8 @@ package me.piitex.engine.ui.color;
  * <p>
  * Each TextOverlay or Element should own its own ScrollingGradient instance rather than
  * sharing one. The offset is mutable per-instance state, so two elements sharing one
- * instance would scroll in lockstep and write to the same offset value.
+ * instance would scroll in lockstep and write to the same offset value. For a solid
+ * color that animates and can be shared, see {@link RainbowColor}.
  */
 public class ScrollingGradient extends LinearGradient implements AnimatedPaint {
     private final float speed;         // px/sec along the gradient's own axis

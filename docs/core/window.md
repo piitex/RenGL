@@ -168,9 +168,10 @@ The window background is what the canvas is cleared to before any container draw
 window.setBackgroundColor(Color.BLACK); // solid color (cheap)
 window.setBackgroundColor(new LinearGradient(Color.BLUE, Color.BLACK)); // static gradient
 window.setBackgroundColor(new ScrollingGradient(Color.BLUE, Color.BLACK, 500f)); // animated
+window.setBackgroundColor(new RainbowColor(20f, 0.6f, 0.15f, 1f)); // slow, dark RGB cycle
 ```
 
-- A plain [`Color`](../styling/colors-and-paints.md#color) is cleared directly. A gradient is drawn as a full-window quad every frame.
+- A plain [`Color`](../styling/colors-and-paints.md#color), including a [`RainbowColor`](../styling/colors-and-paints.md#rainbowcolor-rgb-cycling), is cleared directly. A gradient is drawn as a full-window quad every frame.
 - `null` resets to white.
 - `Window` is [`Themeable`](../styling/theming.md) and registers itself, so by default the background follows
   `Theme.getWindowBackground()` on every `ThemeManager.setCurrent(...)`. Calling `setBackgroundColor`

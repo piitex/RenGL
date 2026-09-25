@@ -47,10 +47,10 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Playback](audio/playback.md) | Volume, pitch, pan, pause, fades and callbacks on a playing sound |
 | [3D audio](audio/spatial-audio.md) | Listener, positioned sounds, distance falloff, Doppler |
 | **[Styling](styling/README.md)** | Colors, box styling, themes, backgrounds, fonts, images |
-| [Colors and paints](styling/colors-and-paints.md) | `Color`, gradients, animated paints |
+| [Colors and paints](styling/colors-and-paints.md) | `Color`, `RainbowColor` (RGB cycling), gradients, animated paints |
 | [Styling](styling/styling.md) | Background, border, hover, and corner radius on every element |
 | [Theming](styling/theming.md) | `Theme`, `ThemeManager`, and the "pinned" rule |
-| [Backgrounds](styling/backgrounds.md) | Constellation and dot-grid effects behind an element |
+| [Backgrounds](styling/backgrounds.md) | Constellation, electric-node, and dot-grid effects behind an element |
 | [Fonts](styling/fonts.md) | `Font` and custom fonts |
 | [Images and icons](styling/images-and-icons.md) | `ImageLoader`, `IconCache`, the bundled Feather set |
 | **[Animation](animation/transitions.md)** | `Transition`, fades, easing, custom transitions |
