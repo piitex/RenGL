@@ -7,7 +7,8 @@ package me.piitex.engine.ui;
  * {@link me.piitex.engine.input.InputProcessor} calls {@link #onDragStart} once, with
  * the same hit-testing used for an ordinary click, when a fresh left-button press lands
  * on this Element, or on an Element below it that hands the press up (one that is not
- * Draggable, or a Container whose {@link #canDrag} says no); {@link #onDragUpdate} on
+ * Draggable, or a Container whose {@link #canDrag} says no, unless it has a click
+ * listener: an Element that listens for clicks keeps its press and nothing above it drags); {@link #onDragUpdate} on
  * every subsequent mouse-move while that button stays held, regardless of whether the
  * cursor is still over this Element; and {@link #onDragEnd} once the left button is
  * released. Other mouse buttons neither start nor end a drag. Unlike

@@ -90,11 +90,13 @@ Only the **left** button drags. A right-click never starts a drag or a text sele
 button mid-drag does not end it.
 
 A press goes to the nearest `Draggable` at or above the element under the cursor. An element that is not
-`Draggable` at all (a label, an image, a button) **passes it up** to its container. `Draggable` also has
+`Draggable` at all (a label, an image) **passes it up** to its container. `Draggable` also has
 `default boolean canDrag(double x, double y)`, which is only consulted for a [`Container`](../containers/container.md):
 a container returning `false` (a plain layout that fills its parent) passes the press up too. A `Container` returns
-`true` only after `setDraggable(true)`. So a press on a button sitting on a draggable panel clicks the button and
-also drags the panel.
+`true` only after `setDraggable(true)`.
+
+Passing up stops at an element with a click listener. A button, checkbox or clickable row keeps its press, so
+pressing a button on a draggable panel clicks the button without moving the panel.
 
 A container can also claim the mouse ahead of its children with
 `public boolean interceptsPointer(double x, double y)` (default `false`). `ResizableContainer` uses it for its
