@@ -44,7 +44,8 @@ import java.util.function.Consumer;
  * through the UI.
  * <p>
  * The panel is shown through {@link Window#showPopup}, so it paints over everything, is not
- * clipped by a parent scroll container, and closes on an outside click or Escape. In {@code
+ * clipped by a parent scroll container, closes on an outside click or Escape, and follows the
+ * picker if the picker moves. In {@code
  * DATE} mode picking a day closes it; otherwise it stays open so you can adjust both parts.
  * {@link #onChange} fires on every user change. Days outside {@link #setMinDate}/{@link
  * #setMaxDate} are dimmed and cannot be picked.
@@ -335,7 +336,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         float[] at = PopupPlacement.below(this, window, (float) p.getWidth(), (float) p.getHeight());
         p.setPosition(at[0], at[1]);
         popup = p;
-        window.showPopup(p, () -> {
+        window.showPopup(p, this, () -> {
             p.dispose();
             if (popup == p) popup = null;
         });

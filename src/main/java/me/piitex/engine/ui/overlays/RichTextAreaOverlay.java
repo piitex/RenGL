@@ -181,7 +181,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         float px = (float) Math.min(x, window.getWindowOptions().getWidth() - w);
         float py = (float) Math.min(y, window.getWindowOptions().getHeight() - h);
         popup.setBounds(Math.max(0, px), Math.max(0, py), w, h);
-        window.showPopup(popup, popup::closeFont);
+        window.showPopup(popup, this, popup::closeFont);
     }
 
     /**

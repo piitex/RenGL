@@ -223,6 +223,8 @@ public class Engine {
                 }
             }
 
+            window.followPopupAnchor(); // after the update pass, so layouts have placed the anchor
+
             TooltipManager.update(window, delta);
 
             // A plain Color is cleared directly, which is cheap and needs no extra draw

@@ -15,7 +15,8 @@ The constructor is `ColorPickerOverlay(double width, double height)` (starts blu
 closed box shows the current color, drawn over a checkerboard while it is translucent, and by default its hex code.
 
 The panel is shown through `Window.showPopup`, so it paints over sibling elements, is **not clipped** by a parent
-[`ScrollContainer`](../containers/scroll-container.md), and closes on an outside click or Escape.
+[`ScrollContainer`](../containers/scroll-container.md), and closes on an outside click or Escape. It follows the picker if the
+picker moves while open, and closes if the picker is removed, disabled or scrolled out of view.
 
 ## The value
 

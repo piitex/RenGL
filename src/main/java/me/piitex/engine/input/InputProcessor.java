@@ -206,7 +206,7 @@ public class InputProcessor {
         if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             for (Element e = hitElement; e != null; e = e.owner) {
                 if (e.getContextMenu() != null) {
-                    e.getContextMenu().show(window, absoluteMouseX, absoluteMouseY);
+                    e.getContextMenu().show(e, absoluteMouseX, absoluteMouseY);
                     break;
                 }
             }

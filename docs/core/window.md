@@ -257,6 +257,27 @@ window.showPopup(menu, () -> System.out.println("menu closed"));
 - `closePopup()` closes it programmatically. `getPopup()` returns the current one or `null`.
 - Popups are not clipped by parent containers such as a [`ScrollContainer`](../containers/scroll-container.md).
 
+### Following an element
+
+A popup stays where you placed it. To keep it with the element that opened it, pass that element as the anchor:
+
+```java
+menu.setPosition(button.getAbsoluteX(), button.getAbsoluteY() + button.getHeight()); // place it first
+window.showPopup(menu, button, () -> System.out.println("menu closed"));
+```
+
+- The popup keeps the offset from the anchor it had when shown, so it moves along when the anchor is dragged, scrolled
+  or re-laid out.
+- It stays inside the window, including when the window shrinks. A popup shown below its anchor flips above it when
+  there is no room below (and there is above), and one shown above flips below the same way. Otherwise it is pushed
+  back inside the edge. It returns to its normal place once there is room again.
+- It closes on its own once the anchor is removed, disabled, or clipped entirely out of view (scrolled out of its
+  scroll container, say). `onDismiss` runs as usual.
+- `getPopupAnchor()` returns the anchor, or `null`.
+
+The built-in popups (dropdown lists, pickers, context menus, menu bar menus, spelling suggestions) all follow the
+element that opened them.
+
 ## Modals
 
 ```java

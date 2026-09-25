@@ -154,7 +154,7 @@ public class MenuBarOverlay extends Overlay implements Themeable {
 
         PopupMenu menu = menus.get(index);
         // Anchor to the title, but skip the toggle logic, since swapping menus goes through here too.
-        menu.show(window, getAbsoluteX() + titleX[index], getAbsoluteY() + getHeight());
+        menu.show(this, getAbsoluteX() + titleX[index], getAbsoluteY() + getHeight());
         // Set after show(): swapping menus closes the old one (clearing openIndex) while the new one opens.
         if (menu.isOpen()) openIndex = index;
     }

@@ -54,8 +54,9 @@ PopupMenu menu = new PopupMenu(itemA, itemB);
 menu.add(item).addSeparator().add("Label", runnable); // chainable
 
 menu.show(window, x, y); // top-left corner at a window point
+menu.show(element, x, y); // the same, but the menu then follows element
 menu.showAtMouse(window); // at the pointer
-menu.showBelow(moreButton); // under an element, left edges aligned
+menu.showBelow(moreButton); // under an element, left edges aligned; follows it
 menu.close();
 boolean open = menu.isOpen();
 ```
@@ -76,6 +77,10 @@ The menu is shown through `Window.showPopup`, so it paints above everything, is 
 [`ScrollContainer`](../containers/scroll-container.md), and only one popup is open at a time. A press outside it
 closes it, and that press is consumed rather than reaching whatever is underneath.
 
+`show(element, x, y)` and `showBelow` [anchor](../core/window.md#following-an-element) the menu to the element: it moves
+with it and closes if the element is removed, disabled or scrolled out of view. `show(window, x, y)` and `showAtMouse`
+stay where they opened.
+
 ## Context menus
 
 ```java
@@ -83,7 +88,7 @@ element.setContextMenu(menu); // null removes it
 ```
 
 Works on every element, containers included. A right-click on a child with no menu of its own falls through to the
-nearest ancestor that has one, and the deepest one wins. Right-clicking a `TextFieldOverlay` still focuses it as usual.
+nearest ancestor that has one, and the deepest one wins. The menu opens at the pointer and follows the element that owns it. Right-clicking a `TextFieldOverlay` still focuses it as usual.
 The click listener (`onMouseClick`) also still fires, with `getButton()` set to the right button.
 
 ## MenuBarOverlay

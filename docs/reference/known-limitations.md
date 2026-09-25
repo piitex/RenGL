@@ -36,8 +36,6 @@ source. If you hit something not listed here, please add it.
 - **`getX()`/`getY()` are relative to the container,** and mouse positions (drag callbacks, click events,
   `MouseTracker`) are window coordinates. Convert with `toLocalX`/`toLocalY` or `getAbsoluteX`/`getAbsoluteY`. Reading
   `getAbsoluteX()` walks up the containers each call, so it is not free in a hot loop.
-- **Popups are top-level.** A dropdown list or spelling menu is positioned in window coordinates, so it does not
-  move with the element that opened it if that element moves while the popup is open.
 - **`removeElement` leaves gaps** in the index space, and does not guard `SplitContainer`'s divider. Removing the
   divider breaks the split.
 - **The topmost container under the mouse takes the click, even where it is empty.** A transparent full-window
