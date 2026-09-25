@@ -96,9 +96,13 @@ not start moving when a user drags across its background.
 panel.setDraggable(true);
 ```
 
-- The press must land on the container's own area or on a child **container** (such as a layout filling it), which passes
-  the press up to the nearest draggable ancestor. That is like grabbing a window by its title bar. A button or other
-  non-container element sitting on the panel captures its own presses.
+- A left-button press anywhere on the container drags it: on its own area, on a child container (such as a layout
+  filling it), or on a plain child such as a label or image. Each passes the press up to the nearest draggable
+  ancestor. Only a child that is itself `Draggable` and wants the drag (a text field, a slider, a scroll
+  container's thumb, another draggable container) keeps it.
+- A child with a click listener, such as a button, still gets its click, but the press *also* starts dragging the
+  panel. If that matters, keep buttons out of the draggable area, or use a
+  [`ReorderableGrid`](reorderable-grid.md), which leaves presses on its items' controls alone.
 - The container comes to the front when the drag starts.
 - By default a draggable container cannot be dragged past the window's edges. Each edge is enforced
   independently, so it slides along an edge instead of sticking.
@@ -133,7 +137,8 @@ List<Container> obstacles = panel.getCollideables(); // live list
 ## Theming
 
 Containers are [`Themeable`](../styling/theming.md) but **do not register automatically**, because most containers only group
-children and should stay transparent.
+children and should stay transparent. A fresh container has a transparent background, and its hover color follows
+the background, so it shows no hover feedback until you set a hover color.
 
 ```java
 panel.useTheme(); // opt in: background, border, radius follow the current Theme

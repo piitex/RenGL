@@ -16,9 +16,6 @@ GridLayout form = new GridLayout(2, 40, 40, 420, 160); // columns, x, y, width, 
 form.setColumnSpacing(12);
 form.setRowSpacing(10);
 form.setAlignment(Layout.Alignment.CENTER_LEFT); // children centered vertically in their cell
-form.getStyling().setBackgroundColor(Color.TRANSPARENT);
-form.getStyling().setHoverColor(Color.TRANSPARENT);
-form.getStyling().setBorderThickness(0f);
 
 for (String label : new String[]{"Email", "Phone", "Company name"}) {
     form.addElement(new TextOverlay(label, 14f, Color.BLACK)); // column 0

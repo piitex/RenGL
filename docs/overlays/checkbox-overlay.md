@@ -56,9 +56,6 @@ box.getStyling().setBorderColor(Color.BLUE);
 HorizontalLayout row = new HorizontalLayout(220, 24);
 row.setSpacing(8);
 row.setAlignment(Layout.Alignment.CENTER_LEFT);
-row.getStyling().setBackgroundColor(Color.TRANSPARENT);
-row.getStyling().setHoverColor(Color.TRANSPARENT);
-row.getStyling().setBorderThickness(0f);
 
 CheckBoxOverlay box = new CheckBoxOverlay(18, true);
 TextOverlay label = new TextOverlay("Remember me", 14f, Color.BLACK);

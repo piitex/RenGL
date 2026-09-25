@@ -95,6 +95,30 @@ panel.fadeOut(0.25f, () -> {
 });
 ```
 
+## ScaleTransition
+
+`ScaleTransition` animates an element's [scale](../core/element.md#scale) from one value to another, shaped by an
+`Easing`. The element and all of its children are drawn scaled around the element's scale origin, which is its
+center unless you set one with `setScaleOrigin`.
+
+```java
+// Pop in: grow from 80% to full size while fading in.
+card.playTransition(new ScaleTransition(0.8f, 1f, 0.2f, Easing.EASE_OUT, null));
+card.fadeIn(0.2f);
+
+// Shrink into the top-left corner, then hide.
+card.setScaleOrigin(card.getX(), card.getY());
+card.playTransition(new ScaleTransition(1f, 0f, 0.3f, Easing.EASE_IN, () -> card.setEnabled(false)));
+```
+
+- Constructor: `ScaleTransition(from, to, durationSeconds, easing, onComplete)`. A `null` easing is `LINEAR`, and
+  `onComplete` is optional (`null` for none). It runs once, on the frame the transition finishes.
+- Scaling only changes how the element is drawn. Hit-testing, layout and the element's size stay the same.
+- It runs next to a fade, since scale and opacity are separate properties. Unlike fades, starting a second
+  `ScaleTransition` does not replace the first, so `stop()` the old one if you retarget mid-animation.
+- `stop()` leaves the element at the scale it had reached and skips `onComplete`.
+- [`ModalContainer`](../containers/modal-container.md#close-animations)'s `shrink` close animation is built on it.
+
 ## Easing
 
 `Easing` reshapes a linear 0-1 time into an eased 0-1 progress curve.
@@ -117,6 +141,7 @@ transitions can use it the same way.
 | Class | Used by | What it does |
 |---|---|---|
 | `FadeTransition` | `Element.fadeIn/fadeOut` | Fades opacity, optionally through a solid color |
+| `ScaleTransition` | `ModalContainer.CloseAnimation.shrink`, and your own code | Tweens `Element.setScale` with an `Easing`; see [above](#scaletransition) |
 | `ProgressTransition` | `ProgressBarOverlay.animateTo` | Tweens a bar's progress with an `Easing`; `stop()` (or `cancel()`) stops it without firing its callback |
 | `SweepTransition` | `ProgressBarOverlay.setIndeterminate` | Looping bouncing segment; `stop()` ends it |
 | `StripeTransition` | `ProgressBarOverlay.setStripes` | Advances the stripe offset; the bar draws the stripes. `stop()` ends it |
@@ -238,5 +263,7 @@ Two other kinds of motion do not use transitions:
 | `Element.isTransitioning()` | Whether any transition is running |
 | `Element.fadeIn/fadeOut(...)` | Convenience fades (8 overloads) |
 | `Element.getOpacity/setOpacity` | Whole-element opacity (0..1) |
+| `Element.getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin` | Whole-element drawing scale (default 1) and the point it scales around |
+| `ScaleTransition(from, to, seconds, easing, onComplete)` | Animates the scale |
 | `Transition` | `update`, `renderBackground` (default no-op), `render`, `isFinished`, `stop` (default returns `false`) |
 | `Easing` | `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_OUT`, `apply(float)` |

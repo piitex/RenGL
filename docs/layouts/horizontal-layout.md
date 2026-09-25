@@ -33,15 +33,12 @@ root.addElement(toolbar);
 ## Example: a checkbox with a label
 
 `CENTER_LEFT` alignment keeps the label vertically centered against the (usually taller) box no matter
-what the font metrics are. Make the row itself invisible so it does not paint a white box over its parent.
+what the font metrics are. The row itself is transparent, so it draws nothing over its parent.
 
 ```java
 HorizontalLayout row = new HorizontalLayout(200, 24);
 row.setSpacing(8);
 row.setAlignment(Layout.Alignment.CENTER_LEFT);
-row.getStyling().setBackgroundColor(Color.TRANSPARENT);
-row.getStyling().setHoverColor(Color.TRANSPARENT);
-row.getStyling().setBorderThickness(0f);
 
 CheckBoxOverlay box = new CheckBoxOverlay(18);
 box.onToggle(checked -> System.out.println("subscribed: " + checked));

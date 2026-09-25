@@ -21,8 +21,8 @@ root.addElement(tabs);
 - Only the selected tab's content is **enabled**. The others are disabled, which keeps their state (scroll position, typed
   text) but stops them drawing, updating and receiving input. Do not enable or disable a tab's content yourself. Select
   the tab instead.
-- Content is drawn on top of the container's own panel, so a layout used as a page should be transparent (see
-  [styling a layout](../layouts/README.md#styling-a-layout)) unless you want a box inside the panel.
+- Content is drawn on top of the container's own panel. A layout used as a page is transparent by default (see
+  [styling a layout](../layouts/README.md#styling-a-layout)), so it only draws a box inside the panel if you style it.
 - Content that is a `Container` is set to clip its children.
 - Use `addTab`/`removeTab`. `addElement` throws `UnsupportedOperationException`. `removeElement` on a tab's content removes
   the tab. The strip itself cannot be removed.

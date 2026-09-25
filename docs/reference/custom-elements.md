@@ -16,10 +16,7 @@ public class Dot extends Overlay {
         setWidth(size);
         setHeight(size);
         this.color = color;
-        // A fresh Element is an opaque white box with a border. This one draws only its own shape.
-        getStyling().setBackgroundColor(Color.TRANSPARENT);
-        getStyling().setHoverColor(Color.TRANSPARENT);
-        getStyling().setBorderThickness(0f);
+        // A fresh Element is transparent, so only the shape drawn below shows.
     }
 
     @Override
@@ -63,13 +60,17 @@ All coordinates are logical points, top-left origin.
 | `drawGradient(x, y, w, h, LinearGradient, cornerRadius)` | Gradient-filled rectangle. Pass the *original* gradient object so a [`ScrollingGradient`](../styling/colors-and-paints.md#scrolling-animated-gradients) keeps scrolling |
 | `drawImage(Image, x, y, w, h, cornerRadius, opacity[, Color tint])` | Scaled image |
 | `pushClip(x, y, w, h)` / `popClip()` | Clip subsequent drawing to a rectangle |
+| `pushClip(x, y, w, h, cornerRadius)` / `popClip()` | Clip subsequent drawing to a rounded rectangle |
+| `pushTranslate(dx, dy)` / `popTranslate()` | Shift subsequent drawing by (dx, dy) |
+| `pushScale(scale, pivotX, pivotY)` / `popScale()` | Scale subsequent drawing around (pivotX, pivotY), which stays in place. This is what [`Element.setScale`](../core/element.md#scale) uses |
 | `pushOpacityLayer(x, y, w, h, opacity)` / `popOpacityLayer()` | Composite everything drawn in between as one unit at that opacity |
 
 Rules:
 
 - A `null` color is a **no-op**, not an error, so you do not need to null-check before drawing.
-- Every `pushClip` needs exactly one `popClip`, and every `pushOpacityLayer` exactly one `popOpacityLayer`. An
-  unmatched push corrupts the rest of the frame.
+- Every `pushClip` needs exactly one `popClip`, every `pushOpacityLayer` exactly one `popOpacityLayer`, and the same
+  for `pushTranslate`/`popTranslate` and `pushScale`/`popScale`. Pushes nest. An unmatched push corrupts the rest
+  of the frame.
 - `drawQuad`/`drawBorder`/`drawLine`/`drawCircle` take a solid [`Color`](../styling/colors-and-paints.md#color). Only `drawText` and `drawGradient` take
   gradients.
 
@@ -93,9 +94,6 @@ public class Label extends Overlay {
         font = new org.jetbrains.skia.Font(Font.getDefault(), 16f);
         setWidth(font.measureTextWidth(text));
         setHeight(font.getMetrics().getHeight());
-        getStyling().setBackgroundColor(Color.TRANSPARENT);
-        getStyling().setHoverColor(Color.TRANSPARENT);
-        getStyling().setBorderThickness(0f);
     }
 
     @Override
@@ -229,7 +227,7 @@ layout.addElement(wifi);
 
 Things this example does right, and worth copying:
 
-1. It makes its own box transparent, since it draws its own shape.
+1. It keeps its own box transparent, even under a theme, since it draws its own shape.
 2. It seeds the styling with `applyThemeXxx`, and stores themed colors in [`Overridable`](../styling/theming.md#the-pinning-rule), so a public setter
    pins and a theme switch respects the pin.
 3. It registers with [`ThemeManager`](../styling/theming.md) **last** in the constructor, after its fields exist.
@@ -264,7 +262,7 @@ public class DiagonalLayout extends Layout {
 ## Checklist
 
 - [ ] Call `super.render(renderer)` / `super.update(delta)`.
-- [ ] Make the default look transparent if you draw the whole shape yourself.
+- [ ] Keep the element's own box transparent (the default) if you draw the whole shape yourself.
 - [ ] Do not allocate in `render` (fonts, lists, paints). Cache them.
 - [ ] Do not change state in `render`.
 - [ ] Register with [`ThemeManager`](../styling/theming.md) at the end of the constructor if the widget is themed, and use [`Overridable`](../styling/theming.md#the-pinning-rule).

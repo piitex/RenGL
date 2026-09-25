@@ -30,16 +30,18 @@ new Engine().start(window);
 ```
 
 ## What the render thread does every frame
-In order: apply a pending resize, process input, advance an animated window background, call `update(delta)`
+In order: apply a pending resize, process input, advance an animated window background, run
+[`Scheduler`](scheduler.md) tasks and queued menu and file-dialog callbacks, call `update(delta)`
 on every enabled top-level container, update tooltips, clear and draw the window background, draw every
 enabled top-level container, draw the tooltip, and present. See [Architecture](../architecture.md#one-frame)
 for the full list.
 
 ## Resizing
 When the user resizes the OS window, the engine recreates its drawing surface and keeps drawing. The
-window's contents are **not** re-laid-out automatically. If you want a container to follow the window size,
-handle that yourself in an `onUpdate` hook. [`WindowOptions`](window.md#windowoptions) keeps the size the window was *created* with.
-See [Known limitations](../reference/known-limitations.md).
+window's contents are **not** re-laid-out automatically. A [`ResizableContainer`](../containers/resizable-container.md)
+follows the window on its own; for anything else, resize it yourself from
+[`window.onResize`](window.md#resize-event). [`WindowOptions`](window.md#windowoptions)' `getWidth()`/`getHeight()`
+always hold the current size. See [Known limitations](../reference/known-limitations.md).
 
 ## One engine, one window
 An `Engine` drives exactly one [`Window`](window.md). Static helpers such as [`MouseTracker`](../input/input-and-focus.md#reading-the-mouse-directly), [`TooltipManager`](../input/tooltips.md), [`Clipboard`](../input/input-and-focus.md#clipboard)

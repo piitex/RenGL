@@ -78,10 +78,13 @@ Practical consequences:
 1. **Constructor colors are baselines.** `new TextOverlay("x", 16f, Color.RED)` is themed to the theme's text
    color immediately. Call `setTextColor(Color.RED)` to pin red.
 2. **Call `useTheme()` before customizing.** A property you customize afterwards is pinned. That is the intent.
-3. **There is no unpin.** To follow the theme again, use a new element.
+3. **Built-in elements have no unpin.** To make an element follow the theme again, use a new element. In your own
+   widgets, `Overridable.clearExplicit()` releases a pin: the property follows the theme again from the next
+   `applyTheme`, and keeps its current value until then.
 4. **The window background follows the same rule.** `Window` registers itself, so its background tracks
    `Theme.getWindowBackground()` by default, and `Window.setBackgroundColor` pins it just like any other themed
-   property. A pinned window background survives later theme switches.
+   property. A pinned window background survives later theme switches. `Window.followThemeBackground()` unpins it
+   and applies the current theme at once.
 
 ## The tokens
 
@@ -195,5 +198,5 @@ normally.
 |---|---|
 | `ThemeManager` | `getCurrent()`, `setCurrent(Theme)`, `register(Themeable)` |
 | `Themeable` | `applyTheme(Theme)` |
-| `Overridable<T>` | `get()`, `set(T)` (pins), `applyTheme(T)` (respects pin), `isExplicit()` |
+| `Overridable<T>` | `get()`, `set(T)` (pins), `applyTheme(T)` (respects pin), `clearExplicit()` (unpins), `isExplicit()` |
 | [`Container`](../containers/container.md) | `useTheme()` |

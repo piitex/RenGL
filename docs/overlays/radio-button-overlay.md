@@ -79,9 +79,6 @@ static HorizontalLayout option(RadioGroup group, Map<RadioButtonOverlay, String>
     HorizontalLayout row = new HorizontalLayout(150, 20);
     row.setSpacing(8);
     row.setAlignment(Layout.Alignment.CENTER_LEFT);
-    row.getStyling().setBackgroundColor(Color.TRANSPARENT);
-    row.getStyling().setHoverColor(Color.TRANSPARENT);
-    row.getStyling().setBorderThickness(0f);
 
     RadioButtonOverlay button = new RadioButtonOverlay(16);
     group.add(button);
@@ -100,9 +97,6 @@ RadioGroup group = new RadioGroup();
 
 VerticalLayout options = new VerticalLayout(20, 20, 160, 90);
 options.setSpacing(6);
-options.getStyling().setBackgroundColor(Color.TRANSPARENT);
-options.getStyling().setHoverColor(Color.TRANSPARENT);
-options.getStyling().setBorderThickness(0f);
 options.addElement(option(group, names, "Free"));
 options.addElement(option(group, names, "Pro"));
 options.addElement(option(group, names, "Enterprise"));

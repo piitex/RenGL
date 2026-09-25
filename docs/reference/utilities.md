@@ -144,6 +144,40 @@ never touch the disk. The `name` overloads throw `IOException` if the folder can
 
 `Platform.getCurrent()` returns `WINDOWS`, `MACOS`, `LINUX` or `OTHER` if you need to branch on the OS yourself.
 
+## ProcessUtil
+
+`me.piitex.engine.utils.ProcessUtil` ends other processes the same way on Windows, macOS and Linux, through Java's
+`ProcessHandle` rather than shelling out to `taskkill` or `kill`. It is meant for things like closing a helper
+program your app launched.
+
+```java
+ProcessUtil.Result result = ProcessUtil.kill(pid, "helper"); // graceful only
+ProcessUtil.Result forced = ProcessUtil.kill(pid, "helper", true); // escalate to a forced kill if needed
+
+int killed = ProcessUtil.killByName("helper", true); // every matching process
+List<ProcessHandle> running = ProcessUtil.findByName("helper");
+boolean alive = ProcessUtil.isRunning(pid, "helper");
+```
+
+- **The PID call always checks the name first.** PIDs get reused by the OS, so a stale PID could point at an
+  unrelated process. If the executable's name does not match, or cannot be read (a process owned by another user),
+  nothing is killed.
+- Names are the executable's **file name**, not the full command line. On Windows the match ignores case and the
+  `.exe` is optional. Interpreted programs report their interpreter (`java`, `python3`).
+- It asks the process to exit first and waits up to 3 seconds. With `force`, a process that is still running is
+  then killed forcibly (`SIGKILL` / `TerminateProcess`).
+- It never kills the running JVM or the PIDs the OS reserves (0 and 1).
+
+| `Result` | Meaning |
+|---|---|
+| `TERMINATED` | Found, matched, and no longer running |
+| `NOT_FOUND` | No process with that PID |
+| `NAME_MISMATCH` | The PID exists but its name differs, or could not be read |
+| `REFUSED` | The target is this JVM or a reserved PID |
+| `FAILED` | It matched but survived (no permission, or `force` was not requested) |
+
+`killByName` returns how many processes it terminated.
+
 ## AI-disclosure annotations
 
 The project documents AI-assisted code in the source with four source-retention annotations in

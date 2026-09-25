@@ -57,8 +57,10 @@ element.getStyling().setCornerRadius(8f);
 ```
 
 Every element owns a [`Styling`](../styling/styling.md) with a background, hover color, border color, border thickness and corner
-radius. **A fresh `Element` is opaque white with a 1pt white border.** Text, image and separator overlays
-change that default to transparent. Full details: [Styling](../styling/styling.md).
+radius. **A fresh `Element` is fully transparent**: no fill, no hover color, and a 1pt border in a transparent
+color, so nothing shows until you set a color (or opt into a theme). A [`Container`](../containers/container.md)'s
+hover color follows its background, so hovering it never flashes a different color. Full details:
+[Styling](../styling/styling.md).
 
 ## Hover, cursor and focus flags
 
@@ -73,8 +75,9 @@ element.setTabIndex(2); // explicit Tab order; -1 = natural order
   `Styling.getBackgroundColor()` to `Styling.getHoverColor()`.
 - Every container on the path to the hovered element is hovered too.
 - [`CursorMode`](../input/input-and-focus.md#hover-and-cursor-shape) values: `DEFAULT`, `TEXT`, `POINTER`, `CROSSHAIR`, `RESIZE_HORIZONTAL`,
-  `RESIZE_VERTICAL`, `RESIZE_NWSE`, `RESIZE_NESW`, `RESIZE_ALL`, `NOT_ALLOWED`. `null` means "no opinion", and
-  the cursor falls back to `DEFAULT`.
+  `RESIZE_VERTICAL`, `RESIZE_NWSE`, `RESIZE_NESW`, `RESIZE_ALL`, `NOT_ALLOWED`. `null` means "no opinion": the
+  element uses the cursor of the nearest container above it that has one, and `DEFAULT` if none does. A label
+  inside a `POINTER` row therefore shows the pointer too.
 - `setFocusTraversable` and `setTabIndex` are covered in
   [Input and focus](../input/input-and-focus.md#tab-order).
 
@@ -95,10 +98,14 @@ element.onMouseClick(event -> {
 
 - Fires on **press**, not on release, for **any** mouse button. Check `getButton()` if you only want the
   left button.
-- Only the **topmost** element under the cursor receives it. There is no bubbling to parent containers.
-  A container's own click listener fires only when the press lands on the container's empty area.
+- The press goes to the **topmost** element under the cursor if it has a click listener. If it has none, the
+  press goes up to the nearest container above it that does, so pressing the label or icon inside a clickable
+  row counts as pressing the row. Only that one listener runs: once an element with a listener is found, the
+  containers above it are not called.
 - Several widgets install their own click handler ([`ButtonOverlay`](../overlays/button-overlay.md), [`CheckBoxOverlay`](../overlays/checkbox-overlay.md), [`DropdownOverlay`](../overlays/dropdown-overlay.md),
-  [`RadioButtonOverlay`](../overlays/radio-button-overlay.md), [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md), [`ModalContainer`](../containers/modal-container.md)). Replacing it breaks that widget's
+  [`RadioButtonOverlay`](../overlays/radio-button-overlay.md), [`ToggleSwitchOverlay`](../overlays/toggle-switch-overlay.md), [`ColorPickerOverlay`](../overlays/color-picker-overlay.md),
+  [`DateTimePickerOverlay`](../overlays/date-time-picker-overlay.md), [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md), [`MenuBarOverlay`](../input/menus.md),
+  [`ModalContainer`](../containers/modal-container.md)). Replacing it breaks that widget's
   behavior. Use the widget's own callback (`onAction`, `onToggle`, ...) instead.
 
 ```java
@@ -145,9 +152,33 @@ The event classes are in `me.piitex.engine.ui.events`: `MouseClickEvent` (extend
 ```java
 element.setTooltip("Sends the form\nto the server"); // \n for multiple lines
 element.setTooltipDelay(0.25f); // seconds the mouse must rest; default 0.5
+element.setTooltipTheme(new DarkTheme()); // draw this tooltip with a theme other than the current one
 ```
 
 Works on any element, containers included. See [Tooltips](../input/tooltips.md).
+
+## Context menu
+
+```java
+element.setContextMenu(new PopupMenu(
+        new MenuItem("Rename", () -> rename()),
+        new MenuItem("Delete", () -> delete())));
+```
+
+Opens at the pointer on right-click. Works on any element, containers included. A right-click on a child with
+no menu of its own opens the nearest ancestor's. See [Menus](../input/menus.md).
+
+## Text alignment
+
+```java
+button.setTextAlignment(Layout.Alignment.CENTER_LEFT); // text at the left edge, vertically centered
+button.setTextAlignment(null); // back to the widget's own placement
+```
+
+Where the text sits inside an overlay's own box. `null` (the default) keeps each widget's natural placement:
+top-left for a [`TextOverlay`](../overlays/text-overlay.md), centered for a [`ButtonOverlay`](../overlays/button-overlay.md),
+left for a text field. It only matters when the box is larger than the text, and it is unrelated to a layout's
+alignment, which positions the element itself.
 
 ## Background effects
 
@@ -179,6 +210,20 @@ boolean busy = element.isTransitioning();
 
 See [Animation](../animation/transitions.md).
 
+## Scale
+
+```java
+card.setScale(1.1f); // draw at 110%, around its center
+card.setScaleOrigin(0, 0); // scale around a point instead, in the same space as getX()/getY()
+card.clearScaleOrigin(); // back to the center
+card.playTransition(new ScaleTransition(1f, 0.8f, 0.2f, Easing.EASE_OUT, null)); // animate it
+```
+
+- The element and all of its children are drawn scaled. Default `1`.
+- Only the drawing changes. Hit-testing, layout and `getWidth()`/`getHeight()` stay the same, so scale suits an
+  animation (a pop-in, a press effect) better than a permanently smaller element.
+- Scale and opacity combine, so a [`ScaleTransition`](../animation/transitions.md#scaletransition) can run next to a fade.
+
 ## Identity
 
 ```java
@@ -207,11 +252,13 @@ system. In practice you control order with `Container.addElement(element, index)
 | Group | Methods |
 |---|---|
 | Geometry | `getX/Y/Width/Height`, `setX/Y/Width/Height`, `setPosition`, `setBounds`, `contains` |
-| State | `isEnabled/setEnabled`, `isHovered`, `getOpacity/setOpacity` |
-| Look | `getStyling/setStyling`, `getBackground/setBackground`, `getCursorMode/setCursorMode` |
+| State | `isEnabled/setEnabled`, `isHovered`, `getOpacity/setOpacity`, `getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin` |
+| Look | `getStyling/setStyling`, `getBackground/setBackground`, `getCursorMode/setCursorMode`, `getTextAlignment/setTextAlignment` |
 | Focus | `isFocusTraversable/setFocusTraversable`, `getTabIndex/setTabIndex` |
-| Tooltip | `getTooltip/setTooltip`, `getTooltipDelay/setTooltipDelay` |
+| Tooltip | `getTooltip/setTooltip`, `getTooltipDelay/setTooltipDelay`, `getTooltipTheme/setTooltipTheme` |
+| Context menu | `getContextMenu/setContextMenu` |
+| Snapshots | `takeSnapshot()`, `takeSnapshot(scale)`, `takeSnapshotAsync` (see [Snapshots](snapshots.md)) |
 | Events | `onMouseClick`, `onUpdate`, `onRender` (and their `getXxxConsumer` getters) |
 | Transitions | `playTransition`, `isTransitioning`, `fadeIn` (4 overloads), `fadeOut` (4 overloads) |
 | Frame hooks (override in subclasses) | `update(float)`, `render(Renderer)`, `renderWithTransitions(Renderer)` |
-| Misc | `getId`, `getWindow` |
+| Misc | `getId`, `getWindow`, `toLocalX/toLocalY`, `getAbsoluteX/getAbsoluteY` |

@@ -10,12 +10,13 @@ submit.setTooltip("Sends the form\nto the server"); // \n starts a new line
 submit.setTooltipDelay(0.25f); // seconds before it appears; default 0.5
 ```
 
-That is the whole API. Set `null` (the default) to remove a tooltip.
+Set `null` (the default) to remove a tooltip.
 
 | Method | Description |
 |---|---|
 | `Element.setTooltip(String)` / `getTooltip()` | The text, or `null` for none. Use `\n` for multiple lines |
 | `Element.setTooltipDelay(float)` / `getTooltipDelay()` | Rest time in seconds before it shows (minimum 0, default `0.5`) |
+| `Element.setTooltipTheme(Theme)` / `getTooltipTheme()` | The theme this element's tooltip is drawn with, or `null` (the default) for the current theme |
 
 ## Which tooltip shows
 
@@ -55,6 +56,14 @@ BaseTheme theme = new BaseTheme();
 theme.setTooltipBackground(new Color(0.1f, 0.1f, 0.4f, 0.95f));
 theme.setTooltipText(Color.WHITE);
 ThemeManager.setCurrent(theme);
+```
+
+To style one element's tooltip differently, give it its own theme. It only affects that element's tooltip, and the
+theme does not need to be applied. A theme picker can use it so each option's tooltip previews that theme:
+
+```java
+darkOption.setTooltip("Dark theme");
+darkOption.setTooltipTheme(new DarkTheme());
 ```
 
 The tooltip font is the default font from [`Font`](../styling/fonts.md).
