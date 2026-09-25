@@ -8,6 +8,7 @@ import me.piitex.engine.ui.color.LinearGradient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.skia.*;
+import org.jetbrains.skia.impl.Managed;
 
 /**
  * Skiko renderer backed by Metal via a CAMetalLayer attached to a GLFW window.
@@ -186,8 +187,8 @@ public class MetalSkikoRenderer implements Renderer {
             // Closed through its Managed superclass rather than try-with-resources or path.close():
             // any member lookup on Path makes javac load its Kotlin marker interface, and
             // kotlin-stdlib is only on the runtime classpath.
-            org.jetbrains.skia.Path path = builder.detach();
-            org.jetbrains.skia.impl.Managed pathHandle = path;
+            Path path = builder.detach();
+            Managed pathHandle = path;
             try {
                 canvas.drawPath(path, paint);
             } finally {
@@ -299,6 +300,13 @@ public class MetalSkikoRenderer implements Renderer {
         if (!frameValid) return;
         canvas.save();
         canvas.clipRect(Rect.makeXYWH(x, y, width, height), ClipMode.INTERSECT, true);
+    }
+
+    @Override
+    public void pushClip(float x, float y, float width, float height, float cornerRadius) {
+        if (!frameValid) return;
+        canvas.save();
+        canvas.clipRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), ClipMode.INTERSECT, true);
     }
 
     @Override
