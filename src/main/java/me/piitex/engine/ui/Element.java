@@ -245,8 +245,8 @@ public class Element {
 
     /**
      * The OS mouse cursor shape to show while this Element is hovered, or null (the
-     * default) to leave the cursor as whatever is shown while hovering nothing more
-     * specific. It is applied automatically by the engine's input processing whenever
+     * default) to use the cursor of the nearest ancestor Container that has one, or
+     * {@link CursorMode#DEFAULT} if none does. It is applied automatically by the engine's input processing whenever
      * hover state changes; see {@link CursorMode} and
      * {@link me.piitex.engine.input.CursorManager}. Nothing else needs wiring up: set it
      * once per Element, such as {@code TEXT} for a text field.
@@ -783,7 +783,7 @@ public class Element {
     }
 
     /**
-     * Registers a callback invoked when this Element is clicked. Only one listener is held at a time; calling this again replaces the previous listener rather than adding a second one.
+     * Registers a callback invoked when this Element is pressed, with any mouse button. A press on a child that has no click listener of its own goes up to the nearest ancestor that has one, so this also fires for presses on the labels or icons inside this Element; only one listener runs per press. Only one listener is held at a time; calling this again replaces the previous listener rather than adding a second one.
      */
     public void onMouseClick(Consumer<MouseClickEvent> mouseClickListenerConsumer) {
         this.mouseClickListenerConsumer = mouseClickListenerConsumer;

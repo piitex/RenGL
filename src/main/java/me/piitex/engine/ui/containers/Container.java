@@ -63,7 +63,7 @@ public class Container extends Element implements Themeable, Draggable {
         setY(y);
         setWidth(width);
         setHeight(height);
-        // No hover feedback by default: without this, hovering shows Styling's default white over any background.
+        // No hover feedback by default: hovering keeps showing whatever background the Container is given.
         getStyling().setHoverFollowsBackground(true);
     }
 
@@ -209,11 +209,13 @@ public class Container extends Element implements Themeable, Draggable {
      * Whether this Container can be dragged by the mouse. Off by default, so an
      * ordinary layout-grouping Container, which is most of them, does not start moving
      * because the user clicked and dragged across its empty background.
-     * {@link me.piitex.engine.input.InputProcessor} finds this Container as the drag
-     * target only when the press lands on its own area and not on any child (see
-     * {@code findTopmostHit}). Dragging therefore works from empty space inside the
-     * Container, the same way a real window is dragged by its title bar rather than by a
-     * button sitting on it.
+     * {@link me.piitex.engine.input.InputProcessor} gives a left-button press to the nearest
+     * {@link Draggable} at or above the Element under the cursor that wants it. A press on
+     * this Container's own area, on a plain child that is not Draggable (a label, an image,
+     * a button), or on a child Container that does not want the drag is therefore handed up
+     * to this Container. Only a child that takes the drag itself, such as a text field or
+     * slider, keeps it. A child with a click listener still gets its click, so pressing a
+     * button on a draggable Container both clicks the button and starts the drag.
      * <p>
      * By default, a draggable Container also cannot be dragged past the Window's own
      * edges. Each edge is clamped independently, so dragging purely left stops when the
@@ -234,7 +236,7 @@ public class Container extends Element implements Themeable, Draggable {
     }
 
     /**
-     * A plain Container only takes a drag if it opted in via {@link #setDraggable}; otherwise the press falls through to its parent.
+     * A plain Container only takes a drag if it opted in via {@link #setDraggable}; otherwise the press is handed up to its owner.
      */
     @Override
     public boolean canDrag(double x, double y) {

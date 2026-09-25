@@ -14,8 +14,8 @@ import java.io.File;
  * through the same constructor, limited only by which codecs the underlying Skia build
  * was compiled with.
  * <p>
- * Background/border are transparent and zero-thickness by default (Element defaults
- * them to opaque white), since an image overlay is usually meant to show only its own
+ * Background/border are transparent and zero-thickness by default, and stay that way
+ * under a theme, since an image overlay is usually meant to show only its own
  * pixels rather than a filled box behind them. Use {@link #getStyling()} as usual to
  * add one, for instance to letterbox behind a transparent PNG. Rounded corners reuse
  * {@link me.piitex.engine.ui.color.Styling#getCornerRadius()} rather than a separate

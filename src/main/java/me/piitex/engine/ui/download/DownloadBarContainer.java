@@ -71,7 +71,7 @@ public class DownloadBarContainer extends VerticalLayout {
 
         super.setPadding(6f);
         super.setSpacing(3f);
-        useTheme(); // a themed panel; a bare Container is opaque white, which vanishes white text in a dark theme
+        useTheme(); // a themed panel; a bare Container is transparent, so the card would have no panel behind its text
 
         nameText = new TextOverlay(download.getDisplayName(), 14f, Color.BLACK);
         statsText = new TextOverlay("", 12f, Color.GRAY);

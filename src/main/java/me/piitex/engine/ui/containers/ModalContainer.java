@@ -58,7 +58,7 @@ public class ModalContainer extends Container {
     public ModalContainer(Container content) {
         super(0, 0);
         this.content = content;
-        // Transparent: the backdrop is drawn in render(); Element's default is opaque white.
+        // Transparent, and pinned against themes: the backdrop is drawn in render() instead.
         getStyling().setBackgroundColor(Color.TRANSPARENT);
         getStyling().setHoverColor(Color.TRANSPARENT);
         getStyling().setBorderThickness(0f);
