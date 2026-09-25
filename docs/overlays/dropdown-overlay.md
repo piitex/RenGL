@@ -87,7 +87,9 @@ The dropdown is [`Focusable`](../input/input-and-focus.md#keyboard-focus) and a 
 | Enter / Space | Opens or closes the list |
 | Up / Down | Moves the selection by one (fires `onSelect`) |
 
-The mouse wheel scrolls the open list when it has more rows than `maxVisibleRows`.
+When the list has more items than `maxVisibleRows`, a scrollbar appears along its right edge. The mouse wheel
+scrolls the list, the thumb can be dragged, and a press on the track jumps there. Rows stop short of the bar, so a
+press on it never picks a row.
 
 ## Look
 
@@ -97,6 +99,14 @@ selection color marking the selected row. Only plain [`Color`](../styling/colors
 ```java
 dropdown.getStyling().setBackgroundColor(new Color(0.12f, 0.12f, 0.14f, 1f));
 dropdown.getStyling().setCornerRadius(6f);
+```
+
+The list's scrollbar follows the theme's scroll colors. Restyle it through `getScrollBarStyle()`, the same
+[`ScrollBarStyle`](../containers/scroll-container.md#scrollbar-style) a `ScrollContainer` uses:
+
+```java
+dropdown.getScrollBarStyle().setThickness(6f);
+dropdown.getScrollBarStyle().setTrackColor(null); // thumb only
 ```
 
 > **Do not call `onMouseClick` on a dropdown.** The constructor registers an internal handler that toggles the
@@ -110,3 +120,4 @@ dropdown.getStyling().setCornerRadius(6f);
 | Selection | `getSelected`, `getSelectedIndex`, `setSelected`, `setSelectedIndex`, `onSelect` |
 | Display | `setLabelProvider`, `setPlaceholder`, `setMaxVisibleRows`, `setFontSize`, `getTextColor/setTextColor` |
 | List | `isOpen`, `open`, `close`, `toggleOpen` |
+| Scrollbar | `getScrollBarStyle`, `setScrollBarStyle` |
