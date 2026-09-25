@@ -16,7 +16,8 @@ layout.addElement(country);
 ```
 
 The list is shown through `Window.showPopup`, so it paints over sibling elements and containers, is **not clipped**
-by a parent [`ScrollContainer`](../containers/scroll-container.md), and closes on an outside click or Escape.
+by a parent [`ScrollContainer`](../containers/scroll-container.md), and closes on an outside click or Escape. It follows the
+dropdown if the dropdown moves while open, and closes if the dropdown is removed, disabled or scrolled out of view.
 
 The constructor is `DropdownOverlay(double width, double height)`. The height is also the height of each row in the open list.
 

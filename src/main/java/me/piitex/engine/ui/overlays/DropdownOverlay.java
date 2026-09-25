@@ -29,7 +29,8 @@ import java.util.function.Function;
  * {@code T} items above everything else, the same role JavaFX's {@code ComboBox}/
  * {@code ChoiceBox} plays. The list is shown through {@link Window#showPopup}, so it
  * paints over sibling Elements and Containers, dismisses on an outside click or Escape,
- * and isn't clipped by a parent {@link me.piitex.engine.ui.scroll.ScrollContainer}.
+ * and isn't clipped by a parent {@link me.piitex.engine.ui.scroll.ScrollContainer}. It
+ * follows the box if the box moves while it is open.
  * <p>
  * The box is themed like {@link TextFieldOverlay}'s field (field background/hover/border
  * tokens, text color from {@link Theme#getText()}); the open list reuses this
@@ -199,7 +200,7 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         p.setBounds(getAbsoluteX(), y, getWidth(), h);
         p.scrollToRevealSelected();
         popup = p;
-        window.showPopup(p, () -> popup = null);
+        window.showPopup(p, this, () -> popup = null);
     }
 
     public void close() {

@@ -191,12 +191,26 @@ public class PopupMenu {
      * any popup already open. Does nothing with no items or no window.
      */
     public void show(Window window, double x, double y) {
+        show(window, x, y, null);
+    }
+
+    /**
+     * As {@link #show(Window, double, double)}, on {@code anchor}'s window, but the menu then
+     * follows {@code anchor} (see {@link Window#showPopup(me.piitex.engine.ui.containers.Container,
+     * Element, Runnable)}): it moves along when the anchor moves, and closes when the anchor is
+     * removed, disabled or scrolled out of view. The right-click context menu opens this way.
+     */
+    public void show(Element anchor, double x, double y) {
+        show(anchor.getWindow(), x, y, anchor);
+    }
+
+    private void show(Window window, double x, double y, Element anchor) {
         if (window == null) return;
         if (onOpen != null) onOpen.accept(this); // may populate an empty menu, so run before the emptiness check
         if (items.isEmpty()) return;
 
         MenuPopup p = new MenuPopup(this, window, x, y);
-        window.showPopup(p, () -> {
+        window.showPopup(p, anchor, () -> {
             p.dispose();
             if (popup == p) popup = null;
             if (closeListener != null) closeListener.run();
@@ -214,9 +228,10 @@ public class PopupMenu {
 
     /**
      * Opens the menu just under {@code anchor} with their left edges aligned, as for a "more" button.
+     * It follows {@code anchor} while open, as {@link #show(Element, double, double)} does.
      */
     public void showBelow(Element anchor) {
-        show(anchor.getWindow(), anchor.getAbsoluteX(), anchor.getAbsoluteY() + anchor.getHeight());
+        show(anchor, anchor.getAbsoluteX(), anchor.getAbsoluteY() + anchor.getHeight());
     }
 
     /**

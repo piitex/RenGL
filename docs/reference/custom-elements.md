@@ -130,7 +130,8 @@ For most text needs, use or extend [`TextOverlay`](../overlays/text-overlay.md),
   `toLocalX(x)`/`toLocalY(y)`, or use `getAbsoluteX()`/`getAbsoluteY()` in your maths. `contains(px, py)` also takes a
   window point.
 - A floating popup you show with `Window.showPopup` is a top-level container, so position it in window
-  coordinates: use `getAbsoluteX()`/`getAbsoluteY()` of the element it belongs to.
+  coordinates: use `getAbsoluteX()`/`getAbsoluteY()` of the element it belongs to. Pass that element as the
+  [anchor](../core/window.md#following-an-element) (`showPopup(popup, this, onDismiss)`) so the popup moves with it.
 
 ## A complete example: a toggle switch
 

@@ -200,6 +200,14 @@ public class ScrollContainer extends Container implements Scrollable {
     }
 
     /**
+     * Always true: a scroll container clips to its viewport whatever {@link #setClipping} was given.
+     */
+    @Override
+    public boolean isClipping() {
+        return true;
+    }
+
+    /**
      * The total span the vertical thumb represents: everything scrollable plus one full viewport. This is used only for sizing the thumb proportionally; {@link #getMaxScrollY()} is the source of truth for how far this can scroll.
      */
     private double effectiveContentHeight() {

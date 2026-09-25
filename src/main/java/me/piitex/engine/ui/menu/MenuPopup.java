@@ -85,6 +85,7 @@ final class MenuPopup extends Container implements PopupKeyListener {
         setCursorMode(CursorMode.POINTER);
 
         panels.add(layout(menu.getItems(), x, y));
+        syncBounds();
         lastMouseX = MouseTracker.getX();
         lastMouseY = MouseTracker.getY();
 
@@ -98,6 +99,25 @@ final class MenuPopup extends Container implements PopupKeyListener {
                 }
             }
         });
+    }
+
+    /**
+     * The panels hold window coordinates rather than being children, so moving the popup
+     * (as {@link Window} does to keep it with its anchor) moves them by the same amount.
+     * This Container's box is kept as the union of the panels; see {@link #syncBounds()}.
+     */
+    @Override
+    public void setX(double x) {
+        float dx = (float) (x - getX());
+        if (panels != null) for (Panel panel : panels) panel.x += dx; // null while the super constructor runs
+        super.setX(x);
+    }
+
+    @Override
+    public void setY(double y) {
+        float dy = (float) (y - getY());
+        if (panels != null) for (Panel panel : panels) panel.y += dy;
+        super.setY(y);
     }
 
     /* Layout */
@@ -155,10 +175,31 @@ final class MenuPopup extends Container implements PopupKeyListener {
         }
         if (selectFirst) child.active = step(child, -1, 1);
         panels.add(child);
+        syncBounds();
     }
 
     private void truncate(int size) {
         while (panels.size() > size) panels.remove(panels.size() - 1);
+        syncBounds();
+    }
+
+    /**
+     * Makes this Container's own box the union of the open panels, so {@link Window} can keep the whole menu inside
+     * the window when it moves it. Goes through super so the panels themselves are not shifted.
+     */
+    private void syncBounds() {
+        float left = Float.MAX_VALUE, top = Float.MAX_VALUE, right = -Float.MAX_VALUE, bottom = -Float.MAX_VALUE;
+        for (Panel panel : panels) {
+            left = Math.min(left, panel.x);
+            top = Math.min(top, panel.y);
+            right = Math.max(right, panel.x + panel.w);
+            bottom = Math.max(bottom, panel.y + panel.h);
+        }
+        if (panels.isEmpty()) return;
+        super.setX(left);
+        super.setY(top);
+        setWidth(right - left);
+        setHeight(bottom - top);
     }
 
     /* Selection */

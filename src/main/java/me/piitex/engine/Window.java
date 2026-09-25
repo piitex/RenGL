@@ -50,6 +50,11 @@ public class Window implements Themeable {
     private Background background;
     private Container popup;
     private Runnable popupDismissListener;
+    private Element popupAnchor;
+    private double anchorStartX, anchorStartY; // the anchor's window position when the popup was shown
+    private double popupShiftX, popupShiftY;   // how far the popup has been moved since then
+    private int popupSide;                     // 1: shown below the anchor, -1: above it, 0: neither
+    private double popupGap;                   // space between the anchor and the popup on that side
     private ModalContainer modal;
     private volatile boolean hidden;
     private volatile boolean minimized, maximized;
@@ -566,12 +571,125 @@ public class Window implements Themeable {
      * {@link me.piitex.engine.input.InputProcessor}), and that press is consumed rather
      * than also reaching whatever is underneath. {@code onDismiss} runs whenever the
      * popup closes, by any route, so its owner can reset its own state.
+     * <p>
+     * The popup stays where it was placed. Use {@link #showPopup(Container, Element, Runnable)}
+     * to have it follow the Element that opened it.
      */
     public void showPopup(Container popup, Runnable onDismiss) {
+        showPopup(popup, null, onDismiss);
+    }
+
+    /**
+     * As {@link #showPopup(Container, Runnable)}, but the popup follows {@code anchor}: it keeps
+     * the offset from {@code anchor} it had when shown, so it moves along when the anchor is
+     * dragged, scrolled or re-laid out. Place the popup before calling this.
+     * <p>
+     * It is kept inside the window while it follows, including when the window shrinks. A popup
+     * shown below its anchor (a dropdown list) flips above it when there is no room below and
+     * there is above, and one shown above flips below the same way; otherwise it is pushed back
+     * inside the edge. It closes on its own once the anchor is removed from the window, disabled,
+     * or clipped entirely out of view (a dropdown scrolled out of its scroll container, say). A
+     * null {@code anchor} leaves the popup where it is.
+     */
+    public void showPopup(Container popup, Element anchor, Runnable onDismiss) {
         closePopup();
         this.popup = popup;
         this.popupDismissListener = onDismiss;
+        this.popupAnchor = anchor;
+        if (anchor != null) {
+            anchorStartX = anchor.getAbsoluteX();
+            anchorStartY = anchor.getAbsoluteY();
+            popupShiftX = 0;
+            popupShiftY = 0;
+            double anchorBottom = anchorStartY + anchor.getHeight();
+            double popupBottom = popup.getY() + popup.getHeight();
+            if (popup.getY() >= anchorBottom - 0.5) {
+                popupSide = 1;
+                popupGap = popup.getY() - anchorBottom;
+            } else if (popupBottom <= anchorStartY + 0.5) {
+                popupSide = -1;
+                popupGap = anchorStartY - popupBottom;
+            } else {
+                popupSide = 0;
+                popupGap = 0;
+            }
+        }
         addContainer(popup);
+    }
+
+    /**
+     * The Element the open popup follows, or null if there is no popup or it is not anchored.
+     */
+    public Element getPopupAnchor() {
+        return popupAnchor;
+    }
+
+    /**
+     * Moves the open popup to stay at its offset from its anchor, inside the window, or closes it
+     * if the anchor is no longer showing. The engine calls this each frame after the update pass,
+     * once layouts have placed their children.
+     */
+    void followPopupAnchor() {
+        Container open = popup;
+        Element anchor = popupAnchor;
+        if (open == null || anchor == null) return;
+        if (!isShowing(anchor)) {
+            closePopup();
+            return;
+        }
+        // Where the popup would be had the anchor never moved. Read live, so a popup that resizes
+        // itself (a menu opening a submenu) is still measured correctly.
+        double baseX = open.getX() - popupShiftX;
+        double baseY = open.getY() - popupShiftY;
+        double width = open.getWidth();
+        double height = open.getHeight();
+        double winW = windowOptions.getWidth();
+        double winH = windowOptions.getHeight();
+        double anchorTop = anchor.getAbsoluteY();
+        double anchorBottom = anchorTop + anchor.getHeight();
+
+        double x = baseX + anchor.getAbsoluteX() - anchorStartX;
+        double y = baseY + anchorTop - anchorStartY;
+        if (popupSide > 0 && y + height > winH && anchorTop - popupGap - height >= 0) {
+            y = anchorTop - popupGap - height; // no room below any more, so flip above
+        } else if (popupSide < 0 && y < 0 && anchorBottom + popupGap + height <= winH) {
+            y = anchorBottom + popupGap; // no room above any more, so flip below
+        }
+        // Push back inside the window; the left/top edge wins for a popup larger than the window.
+        x = Math.max(0, Math.min(x, winW - width));
+        y = Math.max(0, Math.min(y, winH - height));
+
+        popupShiftX = x - baseX;
+        popupShiftY = y - baseY;
+        if (x != open.getX()) open.setX(x);
+        if (y != open.getY()) open.setY(y);
+    }
+
+    /**
+     * Whether {@code element} is on this window, enabled along with all its ancestors, and not
+     * clipped entirely away by a clipping ancestor or the window's edges.
+     */
+    private boolean isShowing(Element element) {
+        double left = element.getAbsoluteX();
+        double top = element.getAbsoluteY();
+        double right = left + element.getWidth();
+        double bottom = top + element.getHeight();
+        Element node = element;
+        while (node.owner != null) {
+            Container owner = node.owner;
+            if (!node.isEnabled() || !owner.getElements().containsValue(node)) return false;
+            if (owner.isClipping()) {
+                left = Math.max(left, owner.getAbsoluteX());
+                top = Math.max(top, owner.getAbsoluteY());
+                right = Math.min(right, owner.getAbsoluteX() + owner.getWidth());
+                bottom = Math.min(bottom, owner.getAbsoluteY() + owner.getHeight());
+            }
+            node = owner;
+        }
+        if (!node.isEnabled() || !(node instanceof Container root) || !containers.containsValue(root)) return false;
+        right = Math.min(right, windowOptions.getWidth());
+        bottom = Math.min(bottom, windowOptions.getHeight());
+        return Math.max(left, 0) <= right && Math.max(top, 0) <= bottom;
     }
 
     /**
@@ -583,6 +701,7 @@ public class Window implements Themeable {
         Runnable listener = popupDismissListener;
         popup = null;
         popupDismissListener = null;
+        popupAnchor = null;
         removeContainer(closing);
         if (listener != null) listener.run();
     }

@@ -26,7 +26,7 @@ import java.util.function.Consumer;
  * <p>
  * The panel is shown through {@link Window#showPopup}, so like {@link DropdownOverlay}'s
  * list it paints over everything, is not clipped by a parent scroll container, and closes
- * on an outside click or Escape. Dragging in the square/bars changes the color live and
+ * on an outside click or Escape. It follows the picker if the picker moves. Dragging in the square/bars changes the color live and
  * fires {@link #onChange} continuously; typing a valid hex code ({@code #RGB}, {@code
  * #RRGGBB}, or {@code #RRGGBBAA} when opacity is enabled) does too.
  * <p>
@@ -179,7 +179,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         float[] at = PopupPlacement.below(this, window, (float) p.getWidth(), (float) p.getHeight());
         p.setPosition(at[0], at[1]);
         popup = p;
-        window.showPopup(p, () -> {
+        window.showPopup(p, this, () -> {
             if (window.getFocusedElement() == p.hexField) window.requestFocus(null); // it is about to be disposed
             p.dispose();
             if (popup == p) popup = null;

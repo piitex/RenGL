@@ -21,7 +21,8 @@ The constructor is `DateTimePickerOverlay(double width, double height)` (a date 
 | `DATE_TIME` | The calendar above the clock | `getDateTime()`, or `getDate()` and `getTime()` |
 
 The panel is shown through `Window.showPopup`, so it paints over sibling elements, is **not clipped** by a parent
-[`ScrollContainer`](../containers/scroll-container.md), and closes on an outside click or Escape.
+[`ScrollContainer`](../containers/scroll-container.md), and closes on an outside click or Escape. It follows the picker if the
+picker moves while open, and closes if the picker is removed, disabled or scrolled out of view.
 
 ## The value
 
