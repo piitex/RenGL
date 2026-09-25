@@ -291,6 +291,12 @@ public class SkikoRenderer implements Renderer {
     }
 
     @Override
+    public void pushClip(float x, float y, float width, float height, float cornerRadius) {
+        canvas.save();
+        canvas.clipRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), ClipMode.INTERSECT, true);
+    }
+
+    @Override
     public void popClip() {
         canvas.restore();
     }

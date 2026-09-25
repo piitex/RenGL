@@ -70,7 +70,7 @@ public final class TooltipManager {
         if (x + w > winW) x = Math.max(0f, (float) MouseTracker.getX() - CURSOR_OFFSET_X - w);
         if (y + h > winH) y = Math.max(0f, (float) MouseTracker.getY() - h - 6f);
 
-        Theme theme = ThemeManager.getCurrent();
+        Theme theme = target.getTooltipTheme() != null ? target.getTooltipTheme() : ThemeManager.getCurrent();
         renderer.drawQuad(x, y, w, h, theme.getTooltipBackground(), 4f);
         renderer.drawBorder(x, y, w, h, theme.getTooltipBorder(), 1f, 4f);
         for (int i = 0; i < lines.length; i++) {

@@ -12,7 +12,9 @@ import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.events.ElementRenderEvent;
 import me.piitex.engine.ui.events.ElementUpdateEvent;
 import me.piitex.engine.ui.events.MouseClickEvent;
+import me.piitex.engine.ui.layout.Layout;
 import me.piitex.engine.ui.text.TooltipManager;
+import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.utils.FormID;
 import me.piitex.engine.ui.menu.PopupMenu;
 import me.piitex.engine.utils.FormIDRegistry;
@@ -41,7 +43,7 @@ public class Element {
     private boolean enabled = true;
     private double x, y, z, width, height;
     private boolean hovered;
-    private me.piitex.engine.ui.layout.Layout.Alignment textAlignment;
+    private Layout.Alignment textAlignment;
     private CursorMode cursorMode;
     private boolean focusTraversable = false;
     private int tabIndex = -1;
@@ -56,6 +58,7 @@ public class Element {
      */
     public Container owner;
     private float tooltipDelay = 0.5f;
+    private Theme tooltipTheme;
 
     // Event handling
     private Consumer<MouseClickEvent> mouseClickListenerConsumer;
@@ -328,6 +331,19 @@ public class Element {
     }
 
     /**
+     * The theme this Element's tooltip is drawn with, or null (the default) for the current
+     * {@link me.piitex.engine.ui.theme.ThemeManager} theme. For a preview that shows a theme
+     * that isn't applied yet.
+     */
+    public me.piitex.engine.ui.theme.Theme getTooltipTheme() {
+        return tooltipTheme;
+    }
+
+    public void setTooltipTheme(me.piitex.engine.ui.theme.Theme tooltipTheme) {
+        this.tooltipTheme = tooltipTheme;
+    }
+
+    /**
      * The menu opened at the pointer when this Element is right-clicked, or null (the
      * default) for none. This works on every Element, Containers included. A right-click
      * on a child that has no context menu of its own falls through to the nearest
@@ -344,7 +360,8 @@ public class Element {
 
     /**
      * An effect painted behind this Element's own flat {@link Styling} background and
-     * border, and before {@link #onRender}. {@link ConstellationBackground} and
+     * border, and before {@link #onRender}. {@link ConstellationBackground},
+     * {@link me.piitex.engine.ui.background.ElectricNodeBackground}, and
      * {@link DotGridBackground} are examples. Null, the default, draws nothing extra.
      * See {@link Background}'s own docs for why this is attached here rather than added
      * as a child Element: a {@link me.piitex.engine.ui.layout.Layout} never sees it, so
