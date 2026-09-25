@@ -67,8 +67,8 @@ public class SplitContainer extends Layout {
         super(x, y, width, height);
         this.orientation = orientation == null ? Orientation.HORIZONTAL : orientation;
 
-        // A bare Container paints an opaque box by default; the panes and divider
-        // paint themselves. Non-pinning baseline, same as the other composites.
+        // Transparent as a baseline: the panes and divider paint themselves.
+        // Non-pinning, same as the other composites.
         getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
         getStyling().applyThemeHoverColor(Color.TRANSPARENT);
         getStyling().applyThemeBorderThickness(0f);

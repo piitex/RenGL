@@ -221,10 +221,11 @@ public class InputProcessor {
 
         // The press goes to the nearest Draggable at or above the hit Element. A container that doesn't want the
         // drag (typically a layout filling a draggable/resizable parent) and a plain child that is not Draggable at
-        // all (a label or image sitting on a draggable card) both hand it up to their owner.
+        // all (a label or image sitting on a draggable card) both hand it up to their owner. An Element that listens
+        // for clicks is a control (a button, a clickable row) and keeps its press: nothing above it is dragged.
         Element dragCandidate = hitElement;
         while (dragCandidate != null && !acceptsDrag(dragCandidate)) {
-            dragCandidate = dragCandidate.owner;
+            dragCandidate = dragCandidate.getMouseClickListenerConsumer() != null ? null : dragCandidate.owner;
         }
 
         if (dragCandidate instanceof Draggable draggable) {

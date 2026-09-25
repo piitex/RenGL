@@ -98,11 +98,10 @@ panel.setDraggable(true);
 
 - A left-button press anywhere on the container drags it: on its own area, on a child container (such as a layout
   filling it), or on a plain child such as a label or image. Each passes the press up to the nearest draggable
-  ancestor. Only a child that is itself `Draggable` and wants the drag (a text field, a slider, a scroll
-  container's thumb, another draggable container) keeps it.
-- A child with a click listener, such as a button, still gets its click, but the press *also* starts dragging the
-  panel. If that matters, keep buttons out of the draggable area, or use a
-  [`ReorderableGrid`](reorderable-grid.md), which leaves presses on its items' controls alone.
+  ancestor. A child that is itself `Draggable` and wants the drag (a text field, a slider, a scroll container's
+  thumb, another draggable container) keeps it.
+- **Controls keep their presses.** A child with a click listener, such as a button, a checkbox or a clickable
+  row, gets its click and the panel does not move. Labels and icons inside that control count as part of it.
 - The container comes to the front when the drag starts.
 - By default a draggable container cannot be dragged past the window's edges. Each edge is enforced
   independently, so it slides along an edge instead of sticking.

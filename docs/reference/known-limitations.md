@@ -116,11 +116,9 @@ source. If you hit something not listed here, please add it.
 - **`Element.getZ()` is reserved** and unused by rendering or hit-testing.
 - **A drag keeps the cursor shape of the dragged element** for its whole duration, including when it is a text field
   selecting text outside its own box.
-- **A press on any non-draggable child drags its draggable ancestor.** A plain child (a label, image or button)
-  and a container that does not want the drag both hand it up. So pressing a button on a draggable card clicks
-  the button *and* starts dragging the card; a small movement during the click moves the card. Only the left
-  button starts a drag. [`ReorderableGrid`](../containers/reorderable-grid.md) avoids this for its items: a press
-  on a child with a click listener never starts a drag there.
+- **An element with a click listener can never be used to drag its container.** Passing a press up to a draggable
+  ancestor stops at the first element that listens for clicks, so a clickable title bar on a draggable panel
+  does not drag it. Put the click handling on a smaller child (an icon or button) so the rest of the bar still drags.
 - **Re-entering the window relies on `WindowOptions` being current.** After macOS drops the "cursor entered" event
   following a live resize, a mouse move that lands inside the window is what re-enables hover and clicks.
 - **The resize cursors come from GLFW's standard cursor set.** They showed correctly on macOS. A platform or GLFW

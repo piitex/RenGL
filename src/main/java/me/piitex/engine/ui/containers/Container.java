@@ -211,11 +211,11 @@ public class Container extends Element implements Themeable, Draggable {
      * because the user clicked and dragged across its empty background.
      * {@link me.piitex.engine.input.InputProcessor} gives a left-button press to the nearest
      * {@link Draggable} at or above the Element under the cursor that wants it. A press on
-     * this Container's own area, on a plain child that is not Draggable (a label, an image,
-     * a button), or on a child Container that does not want the drag is therefore handed up
-     * to this Container. Only a child that takes the drag itself, such as a text field or
-     * slider, keeps it. A child with a click listener still gets its click, so pressing a
-     * button on a draggable Container both clicks the button and starts the drag.
+     * this Container's own area, on a plain child that is not Draggable (a label, an image),
+     * or on a child Container that does not want the drag is therefore handed up to this
+     * Container. A child that takes the drag itself, such as a text field or slider, keeps
+     * it, and so does anything with a click listener (a button, a clickable row): pressing
+     * it clicks it without moving this Container.
      * <p>
      * By default, a draggable Container also cannot be dragged past the Window's own
      * edges. Each edge is clamped independently, so dragging purely left stops when the
