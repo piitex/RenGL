@@ -27,6 +27,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Overlay](core/overlay.md) | The base class of every widget, and how to write your own |
 | [Snapshots](core/snapshots.md) | Capture a container or the window as an image (PNG, or an `ImageOverlay`) |
 | [Scheduler](core/scheduler.md) | Timers, `runLater`, and background work with results delivered on the render thread |
+| [Loading](core/loading.md) | `Loader`: background loading in named steps, with progress for a loading screen |
 | **[Containers](containers/README.md)** | Container, ScrollContainer, ResizableContainer, ModalContainer, ReorderableGrid |
 | [Container](containers/container.md) | Holding children, dragging, collision, clipping |
 | [ScrollContainer](containers/scroll-container.md) | Scrollable, clipped content |
@@ -45,6 +46,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | **[Game](game/README.md)** | Scenes and the game loop |
 | [Scenes](game/scenes.md) | `Scene` and `SceneManager`: menus, gameplay, pause menus, and moving between them |
 | [Game time](game/game-time.md) | Fixed-step updates, time scale, pausing, smooth drawing between steps |
+| [Scene transitions](game/transitions.md) | Fades, slides, wipes and custom effects when the scenes change |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
 | [Sound](audio/sound.md) | Short effects held in memory |
 | [Music](audio/music.md) | Streamed tracks, looping, crossfades |

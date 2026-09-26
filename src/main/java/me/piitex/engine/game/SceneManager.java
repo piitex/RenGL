@@ -2,6 +2,7 @@ package me.piitex.engine.game;
 
 import me.piitex.engine.Window;
 import me.piitex.engine.WindowOptions;
+import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.utils.flags.GeneratedClass;
 import org.apache.logging.log4j.LogManager;
@@ -11,6 +12,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The window's stack of {@link Scene}s, reached through {@link Window#getSceneManager()}. The top scene is the one
@@ -29,6 +31,17 @@ import java.util.function.Consumer;
  * <p>
  * An exception thrown by {@link Scene#onEnter}, {@link Scene#onExit}, {@link Scene#onPause}, {@link Scene#onResume},
  * {@link Scene#onKey} or {@link Scene#onResize} is logged and does not stop the change that triggered it.
+ *
+ * <h2>Transitions</h2>
+ * {@link #push(Scene, SceneTransition)}, {@link #pop(SceneTransition)}, {@link #replace(Scene, SceneTransition)},
+ * {@link #set(Scene, SceneTransition)} and {@link #clear(SceneTransition)} show the change with a
+ * {@link SceneTransition}, such as a fade. The stack still changes at once: the new scenes enter and run, and the
+ * ones below are paused or resumed, as without a transition. Only the picture takes time to catch up. Scenes on their
+ * way out leave the stack, the window and the input at once too, but are still drawn until the transition ends, and
+ * only then get {@link Scene#onExit}.
+ * <p>
+ * Any other change to the stack while a transition plays, with or without a transition of its own, first finishes
+ * the one that is playing, as {@link #finishTransition()} does.
  */
 @GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class SceneManager {
@@ -41,8 +54,18 @@ public class SceneManager {
      */
     static final int BASE_INDEX = Integer.MIN_VALUE / 2;
 
+    /**
+     * Window container index of the layer that draws a running transition, just below the scenes.
+     */
+    static final int TRANSITION_INDEX = BASE_INDEX - 1;
+
     private final Window window;
     private final List<Scene> stack = new ArrayList<>();
+    private final Container transitionLayer = new TransitionLayer(this);
+
+    private ActiveTransition active;
+    private List<Scene> pendingExits; // while a change with a transition is applied: removed scenes, onExit not yet called
+    private boolean drawingTransition;
 
     public SceneManager(Window window) {
         this.window = window;
@@ -59,6 +82,7 @@ public class SceneManager {
      */
     public void push(Scene scene) {
         if (scene == null) throw new IllegalArgumentException("scene must not be null");
+        settle(scene);
         if (scene.manager != null) throw new IllegalStateException("scene is already on a stack: " + scene);
         stack.add(scene);
         enter(scene);
@@ -69,6 +93,7 @@ public class SceneManager {
      * was empty.
      */
     public Scene pop() {
+        finishTransition();
         if (stack.isEmpty()) return null;
         Scene top = stack.removeLast();
         exit(top);
@@ -81,6 +106,7 @@ public class SceneManager {
      * stack.
      */
     public boolean remove(Scene scene) {
+        finishTransition();
         if (scene == null || scene.manager != this) return false;
         stack.remove(scene);
         exit(scene);
@@ -94,6 +120,7 @@ public class SceneManager {
      */
     public void replace(Scene scene) {
         if (scene == null) throw new IllegalArgumentException("scene must not be null");
+        settle(scene);
         if (scene.manager != null) throw new IllegalStateException("scene is already on a stack: " + scene);
         if (!stack.isEmpty()) {
             Scene old = stack.removeLast();
@@ -110,6 +137,7 @@ public class SceneManager {
      */
     public void set(Scene scene) {
         if (scene == null) throw new IllegalArgumentException("scene must not be null");
+        settle(scene);
         if (scene.manager != null && scene.manager != this) throw new IllegalStateException("scene is on another stack: " + scene);
         clearStack(scene);
         if (scene.manager == this) {
@@ -124,8 +152,76 @@ public class SceneManager {
      * Removes every scene, top first.
      */
     public void clear() {
+        finishTransition();
         clearStack(null);
         refresh();
+    }
+
+    /**
+     * As {@link #push(Scene)}, shown with {@code transition}; null for none.
+     */
+    public void push(Scene scene, SceneTransition transition) {
+        change(transition, () -> {
+            push(scene);
+            return null;
+        });
+    }
+
+    /**
+     * As {@link #pop()}, shown with {@code transition}; null for none.
+     */
+    public Scene pop(SceneTransition transition) {
+        return change(transition, this::pop);
+    }
+
+    /**
+     * As {@link #replace(Scene)}, shown with {@code transition}; null for none.
+     */
+    public void replace(Scene scene, SceneTransition transition) {
+        change(transition, () -> {
+            replace(scene);
+            return null;
+        });
+    }
+
+    /**
+     * As {@link #set(Scene)}, shown with {@code transition}; null for none.
+     */
+    public void set(Scene scene, SceneTransition transition) {
+        change(transition, () -> {
+            set(scene);
+            return null;
+        });
+    }
+
+    /**
+     * As {@link #clear()}, shown with {@code transition}; null for none. The scenes are drawn going out over the
+     * window's own background and whatever containers are below them.
+     */
+    public void clear(SceneTransition transition) {
+        change(transition, () -> {
+            clear();
+            return null;
+        });
+    }
+
+    /**
+     * True while a {@link SceneTransition} is playing.
+     */
+    public boolean isTransitioning() {
+        return active != null;
+    }
+
+    /**
+     * Ends the transition that is playing, if any, as if its time were up: the scenes are drawn as usual from the
+     * next frame on, and those that went out get {@link Scene#onExit} now.
+     */
+    public void finishTransition() {
+        ActiveTransition finished = active;
+        if (finished == null) return;
+        active = null;
+        window.removeContainer(transitionLayer);
+        runExits(finished.exits);
     }
 
     /**
@@ -180,7 +276,113 @@ public class SceneManager {
         scene.running = false;
         scene.getTimers().cancelAll();
         window.removeContainer(scene.getContainer());
-        call(scene, Scene::onExit, "onExit");
+        if (pendingExits != null) {
+            scene.leaving = this; // onExit once the transition has finished drawing it
+            pendingExits.add(scene);
+        } else {
+            call(scene, Scene::onExit, "onExit");
+        }
+    }
+
+    private static void runExits(List<Scene> scenes) {
+        for (Scene scene : scenes) {
+            scene.leaving = null;
+            call(scene, Scene::onExit, "onExit");
+        }
+    }
+
+    /**
+     * Finishes the transition {@code scene} is still going out in, on whichever manager that is, so it gets its
+     * {@link Scene#onExit} before it enters again. Also finishes the transition on this manager: any change does.
+     */
+    private void settle(Scene scene) {
+        SceneManager leaving = scene.leaving;
+        if (leaving != null) leaving.finishTransition();
+        finishTransition();
+    }
+
+    /**
+     * Applies {@code change} to the stack and, if it changed what is on screen, starts showing it with
+     * {@code transition}.
+     */
+    private <T> T change(SceneTransition transition, Supplier<T> change) {
+        finishTransition();
+        // Inside another change (a hook of a scene entering with a transition), the outer transition shows this one too.
+        if (transition == null || !(transition.getDuration() > 0f) || pendingExits != null) return change.get();
+
+        List<Scene> before = visibleScenes();
+        List<Scene> exits = new ArrayList<>();
+        pendingExits = exits;
+        T result = null;
+        boolean applied = false;
+        try {
+            result = change.get();
+            applied = true;
+        } finally {
+            pendingExits = null;
+            if (!applied) runExits(exits);
+        }
+        begin(transition, before, visibleScenes(), exits);
+        return result;
+    }
+
+    private void begin(SceneTransition transition, List<Scene> before, List<Scene> after, List<Scene> exits) {
+        // The base is what stays put at the bottom; everything above it on either side goes out or comes in.
+        int shared = 0;
+        while (shared < before.size() && shared < after.size() && before.get(shared) == after.get(shared)) shared++;
+        List<Scene> outgoing = before.subList(shared, before.size());
+        List<Scene> incoming = after.subList(shared, after.size());
+        if (outgoing.isEmpty() && incoming.isEmpty()) {
+            runExits(exits); // nothing on screen changed
+            return;
+        }
+        active = new ActiveTransition(transition, List.copyOf(after.subList(0, shared)), List.copyOf(outgoing),
+                List.copyOf(incoming), exits);
+        window.removeContainer(transitionLayer);
+        window.addContainer(transitionLayer, TRANSITION_INDEX);
+    }
+
+    private List<Scene> visibleScenes() {
+        List<Scene> visible = new ArrayList<>();
+        for (Scene scene : stack) {
+            if (scene.visible) visible.add(scene);
+        }
+        return visible;
+    }
+
+    /**
+     * Whether scene containers should skip drawing themselves because the running transition draws them.
+     */
+    boolean hidesScenes() {
+        return active != null && !drawingTransition;
+    }
+
+    /**
+     * Render thread: draws the running transition, from the layer just below the scenes.
+     */
+    private void renderTransition(Renderer renderer) {
+        ActiveTransition current = active;
+        if (current == null) return;
+        WindowOptions options = window.getWindowOptions();
+        SceneTransition.Frame frame = new SceneTransition.Frame(renderer, options.getWidth(), options.getHeight(),
+                current.base, current.outgoing, current.incoming);
+        drawingTransition = true;
+        try {
+            if (current.failed) {
+                frame.drawBase();
+                frame.drawIncoming();
+            } else {
+                float duration = current.transition.getDuration();
+                float progress = current.transition.getEasing().apply(Math.clamp(current.elapsed / duration, 0f, 1f));
+                current.transition.render(renderer, frame, progress);
+            }
+        } catch (Throwable t) {
+            log.error("{}.render threw; the transition is skipped", current.transition.getClass().getName(), t);
+            current.failed = true;
+            current.elapsed = current.transition.getDuration(); // ends on the next update
+        } finally {
+            drawingTransition = false;
+        }
     }
 
     /**
@@ -231,6 +433,7 @@ public class SceneManager {
      * each running scene's timers and {@link Scene#update}, bottom first.
      */
     public void update(float delta) {
+        advanceTransition(GameTime.getRealDelta());
         followWindowSize();
         for (Scene scene : List.copyOf(stack)) {
             if (!scene.running || scene.manager != this) continue;
@@ -259,6 +462,16 @@ public class SceneManager {
         return consumed;
     }
 
+    /**
+     * Transitions run on real time, so they play out while game time is paused or slowed down.
+     */
+    private void advanceTransition(float realDelta) {
+        ActiveTransition current = active;
+        if (current == null) return;
+        current.elapsed += realDelta;
+        if (current.elapsed >= current.transition.getDuration()) finishTransition();
+    }
+
     private void followWindowSize() {
         WindowOptions options = window.getWindowOptions();
         int w = options.getWidth(), h = options.getHeight();
@@ -276,6 +489,45 @@ public class SceneManager {
             hook.accept(scene);
         } catch (Throwable t) {
             log.error("{}.{} threw", scene.getClass().getName(), name, t);
+        }
+    }
+
+    private static final class ActiveTransition {
+        final SceneTransition transition;
+        final List<Scene> base, outgoing, incoming;
+        final List<Scene> exits;
+        float elapsed;
+        boolean failed;
+
+        ActiveTransition(SceneTransition transition, List<Scene> base, List<Scene> outgoing, List<Scene> incoming,
+                         List<Scene> exits) {
+            this.transition = transition;
+            this.base = base;
+            this.outgoing = outgoing;
+            this.incoming = incoming;
+            this.exits = exits;
+        }
+    }
+
+    /**
+     * Sits in the window just below the scenes while a transition plays, and draws it. Takes no input.
+     */
+    private static final class TransitionLayer extends Container {
+        private final SceneManager manager;
+
+        TransitionLayer(SceneManager manager) {
+            super(0, 0);
+            this.manager = manager;
+        }
+
+        @Override
+        public void renderWithTransitions(Renderer renderer) {
+            manager.renderTransition(renderer);
+        }
+
+        @Override
+        public boolean contains(double px, double py) {
+            return false;
         }
     }
 }
