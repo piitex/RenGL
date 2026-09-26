@@ -126,6 +126,12 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
         checkColor.applyTheme(theme.getText());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        checkColor.clearExplicit();
+    }
+
     /**
      * Draws the box (background/hover/border, via {@code super.render(...)}) then, while {@link #isChecked()}, a checkmark inset within it.
      */

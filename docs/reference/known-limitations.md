@@ -69,8 +69,6 @@ source. If you hit something not listed here, please add it.
 
 - **Some parts accept only `Color`, not [`Paint`](../styling/colors-and-paints.md):** caret and selection colors, scrollbars, slider/progress/
   checkbox/radio parts, tooltip colors.
-- **No unpin on elements.** Once an element's themed property is set explicitly it is pinned for the life of that
-  element. The window background is the exception: `Window.followThemeBackground()` unpins it.
 - **Constructor colors on themed widgets are baselines.** The theme's text color replaces them. Use `setTextColor`.
 - **A custom [`AnimatedPaint`](../styling/colors-and-paints.md#animatedpaint) is not drawn by the built-in fill.** Only `Color` and [`LinearGradient`](../styling/colors-and-paints.md#gradients) are.
 

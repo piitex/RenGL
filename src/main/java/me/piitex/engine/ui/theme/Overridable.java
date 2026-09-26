@@ -28,13 +28,18 @@ package me.piitex.engine.ui.theme;
  * {@link #applyTheme} without that seed permanently blocking the real theme
  * application that follows moments later in the same constructor, via {@code
  * ThemeManager.register(this)}.
+ * <p>
+ * The last theme value is remembered even while pinned, so {@link #clearExplicit}
+ * can put it back straight away.
  */
 public final class Overridable<T> {
     private T value;
+    private T themeValue;
     private boolean explicit;
 
     public Overridable(T initialValue) {
         this.value = initialValue;
+        this.themeValue = initialValue;
     }
 
     public T get() {
@@ -53,17 +58,19 @@ public final class Overridable<T> {
      * A Theme-driven set. This is a no-op once {@link #set} has pinned this property.
      */
     public void applyTheme(T value) {
+        this.themeValue = value;
         if (!explicit) {
             this.value = value;
         }
     }
 
     /**
-     * Releases a pin made by {@link #set}, so this property follows the theme again from the next
-     * {@link #applyTheme}. The current value stays until then.
+     * Releases a pin made by {@link #set}, so this property follows the theme again. The value goes back to
+     * the last one {@link #applyTheme} gave, or the starting value if the theme never set one.
      */
     public void clearExplicit() {
         this.explicit = false;
+        this.value = themeValue;
     }
 
     /**

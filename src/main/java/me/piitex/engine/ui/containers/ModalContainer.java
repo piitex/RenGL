@@ -5,6 +5,7 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.animation.Easing;
 import me.piitex.engine.ui.animation.ScaleTransition;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.theme.Theme;
 
 /**
  * A dialog: a dimmed full-window backdrop (or just part of the window, see {@link #setArea}) with a {@link #getContent() content} panel
@@ -58,10 +59,10 @@ public class ModalContainer extends Container {
     public ModalContainer(Container content) {
         super(0, 0);
         this.content = content;
-        // Transparent, and pinned against themes: the backdrop is drawn in render() instead.
-        getStyling().setBackgroundColor(Color.TRANSPARENT);
-        getStyling().setHoverColor(Color.TRANSPARENT);
-        getStyling().setBorderThickness(0f);
+        // Transparent, and kept so by applyTheme below: the backdrop is drawn in render() instead.
+        getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
+        getStyling().applyThemeHoverColor(Color.TRANSPARENT);
+        getStyling().applyThemeBorderThickness(0f);
         addElement(content);
         // Presses on the panel or anything in it reach this listener too, since a click goes up to the nearest
         // listener above what was hit (see InputProcessor#handleMouseButton). Only the backdrop dismisses.
@@ -274,5 +275,12 @@ public class ModalContainer extends Container {
                 modal.fadeOut(seconds, onFinished);
             };
         }
+    }
+
+    /**
+     * Leaves the box alone so the modal stays transparent, even after {@link #useTheme()}.
+     */
+    @Override
+    public void applyTheme(Theme theme) {
     }
 }

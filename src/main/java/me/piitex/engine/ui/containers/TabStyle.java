@@ -247,4 +247,17 @@ public class TabStyle {
         indicatorColor.applyTheme(new Color(selection.getR(), selection.getG(), selection.getB(), 1f));
         dividerColor.applyTheme(theme.getContainerBorder());
     }
+
+    /**
+     * Undoes every explicit color set on this style, so they all follow the theme again, starting now.
+     */
+    public void followTheme() {
+        tabColor.clearExplicit();
+        hoverColor.clearExplicit();
+        selectedColor.clearExplicit();
+        textColor.clearExplicit();
+        selectedTextColor.clearExplicit();
+        indicatorColor.clearExplicit();
+        dividerColor.clearExplicit();
+    }
 }

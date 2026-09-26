@@ -78,9 +78,11 @@ Practical consequences:
 1. **Constructor colors are baselines.** `new TextOverlay("x", 16f, Color.RED)` is themed to the theme's text
    color immediately. Call `setTextColor(Color.RED)` to pin red.
 2. **Call `useTheme()` before customizing.** A property you customize afterwards is pinned. That is the intent.
-3. **Built-in elements have no unpin.** To make an element follow the theme again, use a new element. In your own
-   widgets, `Overridable.clearExplicit()` releases a pin: the property follows the theme again from the next
-   `applyTheme`, and keeps its current value until then.
+3. **Pins can be undone.** `element.followTheme()` releases every pin on an element, its `Styling` and its own
+   colors (text, fill, caret, ...), and applies the current theme at once. `getStyling().resetBackgroundColor()`
+   and the other `resetXxx` methods undo one property. In your own widgets, `Overridable.clearExplicit()` releases
+   a pin and puts back the last value the theme gave. Override `followTheme()` to clear your own properties, and
+   call `super.followTheme()`.
 4. **The window background follows the same rule.** `Window` registers itself, so its background tracks
    `Theme.getWindowBackground()` by default, and `Window.setBackgroundColor` pins it just like any other themed
    property. A pinned window background survives later theme switches. `Window.followThemeBackground()` unpins it

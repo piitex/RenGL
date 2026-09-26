@@ -62,9 +62,9 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         setCursorMode(CursorMode.POINTER);
         setFocusTraversable(true);
         // The track is drawn in render(), so the plain Element box must not paint underneath it.
-        getStyling().setBackgroundColor(Color.TRANSPARENT);
-        getStyling().setHoverColor(Color.TRANSPARENT);
-        getStyling().setBorderThickness(0f);
+        getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
+        getStyling().applyThemeHoverColor(Color.TRANSPARENT);
+        getStyling().applyThemeBorderThickness(0f);
         onMouseClick(event -> toggle());
         ThemeManager.register(this);
     }
@@ -131,6 +131,14 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         offColor.applyTheme(theme.getFieldBorder());
         Color selection = theme.getSelection();
         onColor.applyTheme(new Color(selection.getR(), selection.getG(), selection.getB(), 1f));
+    }
+
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        offColor.clearExplicit();
+        onColor.clearExplicit();
+        knobColor.clearExplicit();
     }
 
     @Override

@@ -117,4 +117,12 @@ public class ScrollBarStyle {
     public void setThumbActiveColor(Color thumbActiveColor) {
         this.thumbActiveColor = thumbActiveColor;
     }
+
+    /**
+     * Undoes every explicit color set on this style, so they all follow the theme again, starting now.
+     */
+    public void followTheme() {
+        trackColor.clearExplicit();
+        thumbColor.clearExplicit();
+    }
 }

@@ -178,6 +178,12 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         options.applyThemeSelectionColor(theme.getSelection());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        options.followTheme();
+    }
+
     /**
      * Use a custom font file instead of the system default. Cached by path, so it is cheap to call repeatedly with the same file.
      */

@@ -101,6 +101,12 @@ public class SeparatorOverlay extends Overlay implements Themeable {
     }
 
     @Override
+    public void followTheme() {
+        super.followTheme();
+        lineColor.clearExplicit();
+    }
+
+    @Override
     public void render(Renderer renderer) {
         if (!isEnabled()) return;
 

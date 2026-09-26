@@ -427,4 +427,10 @@ public class ScrollContainer extends Container implements Scrollable {
             renderer.drawQuad((float) bx, (float) by, (float) bw, (float) bh, thumb, scrollBarStyle.getCornerRadius());
         }
     }
+
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        scrollBarStyle.followTheme();
+    }
 }

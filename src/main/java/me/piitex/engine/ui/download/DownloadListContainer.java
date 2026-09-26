@@ -4,6 +4,7 @@ import me.piitex.engine.io.download.Download;
 import me.piitex.engine.io.download.DownloadManager;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.layout.VerticalLayout;
 import me.piitex.engine.ui.overlays.TextOverlay;
 
@@ -45,10 +46,10 @@ public class DownloadListContainer extends VerticalLayout {
         this.manager = manager;
         setPadding(4f);
         setSpacing(6f);
-        // Just a stack of cards: no panel of its own. Set explicitly so the list stays bare even if it is themed.
-        getStyling().setBackgroundColor(Color.TRANSPARENT);
-        getStyling().setHoverColor(Color.TRANSPARENT);
-        getStyling().setBorderThickness(0f);
+        // Just a stack of cards: no panel of its own. applyTheme below keeps it bare even if it is themed.
+        getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
+        getStyling().applyThemeHoverColor(Color.TRANSPARENT);
+        getStyling().applyThemeBorderThickness(0f);
         addElement(summary, -1); // negative key: always sorts ahead of the cards
     }
 
@@ -126,5 +127,12 @@ public class DownloadListContainer extends VerticalLayout {
     public void update(float delta) {
         sync();
         super.update(delta);
+    }
+
+    /**
+     * Leaves the box alone so the list stays bare, even after {@link #useTheme()}.
+     */
+    @Override
+    public void applyTheme(Theme theme) {
     }
 }

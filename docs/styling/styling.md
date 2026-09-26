@@ -72,7 +72,15 @@ Every `Styling` property is backed by an [`Overridable`](theming.md#the-pinning-
 button.getStyling().setBackgroundColor(Color.RED); // pinned red; a theme switch will not change it
 ```
 
-If you want an element to follow the theme again you have to construct a fresh one. There is no "unpin" method.
+To undo a set, call the matching reset. The property follows the theme again straight away. An element that is
+not themed goes back to its own default look.
+
+```java
+button.getStyling().resetBackgroundColor(); // one property
+button.getStyling().followTheme(); // every Styling property
+button.followTheme(); // Styling plus the widget's own colors (text, fill, ...)
+```
+
 See [Theming](theming.md).
 
 ## Text hover color
@@ -122,7 +130,9 @@ right up to the edge covers the border there; add padding to a layout to keep ch
 | `getHoverColor` / `setHoverColor` | Fill while hovered |
 | `setHoverFollowsBackground` | Make the hover fill track the background (containers start this way) |
 | `getTextHoverColor` / `setTextHoverColor` | Text color while hovered, or `null` |
-| `getBorderColor` / `setBorderColor` | Border (plain [`Color`](colors-and-paints.md#color) only renders) |
+| `getBorderColor` / `setBorderColor` | Border, a [`Color`](colors-and-paints.md#color) or a gradient |
 | `getBorderThickness` / `setBorderThickness` | Border width in points |
 | `getCornerRadius` / `setCornerRadius` | Corner rounding in points |
+| `resetBackgroundColor`, `resetHoverColor`, `resetBorderColor`, `resetBorderThickness`, `resetCornerRadius` | Undo a set: the property follows the theme again |
+| `followTheme` | All the resets at once (the text hover color is not themed and is kept) |
 | `applyThemeXxx` | Theme-facing versions that do not pin (used inside `Themeable.applyTheme`) |

@@ -210,6 +210,12 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         scrollBarStyle.applyThemeThumbColor(theme.getScrollThumb());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        scrollBarStyle.followTheme();
+    }
+
     /**
      * A fixed-height box's height is the caller's; re-wrap since the scrollbar may now be needed.
      */
