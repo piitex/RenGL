@@ -74,9 +74,15 @@ The path is resolved with the classloader, so it works for icons inside any jar 
 
 ## Changing size
 
-An icon is **rasterized once at the size you construct it with**. Calling `setWidth` afterwards stretches
-that raster (which can look soft), it does not re-render the SVG. Construct a new `IconOverlay` at the size you
-actually want.
+An icon is rasterized at the size you construct it with. When its size changes later, through `setWidth`/`setHeight`
+or a [`ResizableContainer`](../containers/resizable-container.md), it **re-renders the SVG at the new size** once
+the size has stayed the same for `IconOverlay.RERASTER_DELAY` (0.12 seconds). Until then the old raster is
+stretched, so a live window resize does not re-render the icon every frame.
+
+- Re-rendered images belong to the overlay, not to `IconCache`, and each is closed when the next replaces it.
+  Do not keep `getImage()` from an icon that may be resized.
+- `setImageFile` switches the overlay to that raster image, and it stops re-rendering.
+- `setScale` and scale transitions enlarge the existing raster, since they don't change the size.
 
 ## Icon as a clickable button
 

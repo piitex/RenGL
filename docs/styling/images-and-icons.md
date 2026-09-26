@@ -25,7 +25,7 @@ Image image = ImageLoader.load("src/main/resources/demo.png"); // File or String
 
 ## IconCache
 
-`me.piitex.engine.ui.image.IconCache` rasterizes an **SVG** into an `ImageLoader` using Skia's built-in SVG renderer.
+`me.piitex.engine.ui.image.IconCache` rasterizes an **SVG** into an `Image` using Skia's built-in SVG renderer.
 No third-party SVG library is needed.
 
 ```java
@@ -35,6 +35,10 @@ Image fromClasspath = IconCache.loadResource("icons/feather/alert-triangle.svg",
 
 An SVG has no pixel size of its own, so it is re-rendered at whatever size is requested. The cache key is
 **the source and the size**. The same icon at two sizes is rasterized (and cached) twice.
+
+`IconCache.rasterizeFile` and `IconCache.rasterizeResource` render without caching the result. You own the returned
+`Image` and should close it when nothing draws it any more. This is what a resized
+[`IconOverlay`](../overlays/icon-overlay.md#changing-size) uses, since caching every size it passes through would grow without bound.
 
 `loadResource` resolves the path through the classloader, so it works for icons inside your own jar or any jar on
 the classpath.
