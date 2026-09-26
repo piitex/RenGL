@@ -86,6 +86,28 @@ window.addContainer(mainUi);
 
 The engine drives one OS window, so "replacing a window" means changing this one in place as above. The window is not recreated and a `Window` object cannot be swapped out for another while running.
 
+## Frame rate
+
+The engine measures its own frame rate. These getters are safe from any thread:
+
+| Method | Description |
+|---|---|
+| `getFps()` | Frames per second, averaged over half a second and updated that often. `0` until the engine has run for half a second |
+| `getFrameTime()` | The last frame's length in milliseconds, including any wait for vsync or `maxFPS`. Unlike the update `delta`, it is not capped at 0.25 s, so a stall shows in full |
+| `getFrameCount()` | Frames started since the engine began |
+
+An FPS label that refreshes itself:
+
+```java
+TextOverlay fps = new TextOverlay("", 13f, Color.WHITE);
+fps.setPosition(8, 8);
+fps.onUpdate(event -> fps.setText(Math.round(window.getFps()) + " FPS"));
+root.addElement(fps);
+```
+
+With vsync on, the rate follows the display, so it measures whether frames keep up rather than how fast they
+could go.
+
 ## Minimize and maximize events
 
 ```java

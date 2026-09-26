@@ -171,6 +171,7 @@ public class Engine {
         while (running) {
             long now = System.nanoTime();
             float delta = (now - lastFrameTimeNanos) / 1_000_000_000f;
+            window.recordFrame(now - lastFrameTimeNanos);
             lastFrameTimeNanos = now;
 
             // Guard against a huge delta after a debugger pause, GC stall, or the

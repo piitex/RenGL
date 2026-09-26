@@ -61,6 +61,12 @@ public class Window implements Themeable {
     private volatile Runnable closeListener;
     private volatile Runnable minimizeListener, maximizeListener, restoreListener;
     private volatile java.util.function.BiConsumer<Integer, Integer> resizeListener;
+    private static final long FPS_SAMPLE_NANOS = 500_000_000L;
+    private volatile double fps;
+    private volatile double frameTime;
+    private volatile long frameCount;
+    private long fpsSampleNanos;               // render thread only: time and frames in the current FPS sample
+    private int fpsSampleFrames;
 
 
     public Window(WindowOptions windowOptions) {
@@ -230,6 +236,45 @@ public class Window implements Themeable {
      */
     public void setMaxFPS(int maxFPS) {
         windowOptions.setMaxFPS(maxFPS);
+    }
+
+    /**
+     * The measured frame rate, in frames per second. It is averaged over half a second and updated that often, so it
+     * is steady enough to show in a label. 0 until the engine has run for half a second. Safe from any thread.
+     */
+    public double getFps() {
+        return fps;
+    }
+
+    /**
+     * How long the last frame took, in milliseconds, from the start of the frame before it to the start of this one.
+     * That includes any wait for vsync or {@link #setMaxFPS}. Unlike the {@code delta} given to update callbacks, it
+     * is not capped, so a stall shows up in full. 0 before the first frame. Safe from any thread.
+     */
+    public double getFrameTime() {
+        return frameTime;
+    }
+
+    /**
+     * How many frames the engine has started since it began running. Safe from any thread.
+     */
+    public long getFrameCount() {
+        return frameCount;
+    }
+
+    /**
+     * Render thread, called by the engine at the start of every frame with the time since the previous frame started.
+     */
+    void recordFrame(long frameNanos) {
+        frameTime = frameNanos / 1_000_000.0;
+        frameCount++;
+        fpsSampleNanos += frameNanos;
+        fpsSampleFrames++;
+        if (fpsSampleNanos >= FPS_SAMPLE_NANOS) {
+            fps = fpsSampleFrames * 1_000_000_000.0 / fpsSampleNanos;
+            fpsSampleNanos = 0;
+            fpsSampleFrames = 0;
+        }
     }
 
     /**

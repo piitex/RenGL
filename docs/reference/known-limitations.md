@@ -19,7 +19,6 @@ source. If you hit something not listed here, please add it.
   loop does not spin.
 - **The frame limiter finishes each frame by spinning** for its last ~2 ms, because OS sleeps wake up late. That
   costs a little CPU with vsync off.
-- **No FPS counter.** The engine does not expose the measured frame rate or frame time.
 - **The OS can open the window smaller than requested** (for example a 720-tall window on a small screen).
   `WindowOptions` always holds the real size, and the engine logs a warning, but containers keep their size unless
   they are a [`ResizableContainer`](../containers/resizable-container.md).
