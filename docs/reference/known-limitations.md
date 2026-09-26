@@ -38,11 +38,13 @@ source. If you hit something not listed here, please add it.
 - **`removeElement` leaves gaps** in the index space.
 - **The topmost container under the mouse takes the click, even where it is empty.** A transparent full-window
   container drawn above another container swallows every press meant for the one below. Add full-window roots first.
-- **Layouts do not size themselves** to their children, and positions are rewritten every frame. A child of a
-  layout cannot be positioned or dragged by hand, because the layout puts it back.
+- **Layout positions are rewritten every frame.** A child of a layout cannot be positioned or dragged by hand,
+  because the layout puts it back.
+- **Sizing to content is per layout.** Only layouts measure their children. A plain `Container` has no
+  content size, so one inside a layout counts as whatever size it was given.
 - **[`SplitContainer`](../containers/split-container.md) holds exactly two panes** (nest for more).
-- **[`ScrollContainer`](../containers/scroll-container.md) measures only direct children** for its scroll range, so a layout inside it needs an
-  explicit content-height.
+- **[`ScrollContainer`](../containers/scroll-container.md) measures only direct children** for its scroll range, so a layout inside it
+  needs `setSizeToContent`, or an explicit height.
 - **Scrollbars overlay the content** on the right/bottom edge instead of reserving a gutter, in both
   `ScrollContainer` and [`TextAreaOverlay`](../overlays/text-area-overlay.md).
 
@@ -114,8 +116,8 @@ source. If you hit something not listed here, please add it.
 
 ## Not implemented yet
 
-- **Size measurement.** Elements have no preferred size, so a layout cannot size itself to its children, and a
-  `ScrollContainer` cannot measure a layout inside it.
+- **Stretching children.** A layout can size itself to its children but cannot size children to itself (fill the
+  width, share leftover space). Only `SplitContainer` and `TabContainer` size their panes.
 - **Reflow other than `ResizableContainer`.** There are no anchors or percent sizing for ordinary containers.
 
 ## File dialogs

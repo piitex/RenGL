@@ -33,6 +33,30 @@ public class StackLayout extends Layout {
         else childAlignments.put(child, alignment);
     }
 
+    /**
+     * The widest child's width, since children overlap.
+     */
+    @Override
+    public double getContentWidth() {
+        double width = 0;
+        for (Element child : getElements().values()) {
+            width = Math.max(width, child.getWidth());
+        }
+        return width;
+    }
+
+    /**
+     * The tallest child's height.
+     */
+    @Override
+    public double getContentHeight() {
+        double height = 0;
+        for (Element child : getElements().values()) {
+            height = Math.max(height, child.getHeight());
+        }
+        return height;
+    }
+
     @Override
     protected void layoutChildren() {
         double left = getPadding();
