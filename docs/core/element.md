@@ -225,6 +225,28 @@ card.playTransition(new ScaleTransition(1f, 0.8f, 0.2f, Easing.EASE_OUT, null));
   animation (a pop-in, a press effect) better than a permanently smaller element.
 - Scale and opacity combine, so a [`ScaleTransition`](../animation/transitions.md#scaletransition) can run next to a fade.
 
+## Shader effect
+
+```java
+ShaderEffect grayscale = ShaderEffect.compile("""
+        uniform shader content;
+        half4 main(float2 coord) {
+            half4 c = content.eval(coord);
+            return half4(half3(dot(c.rgb, half3(0.3, 0.59, 0.11))), c.a);
+        }
+        """);
+panel.setEffect(grayscale); // the panel and its children, in gray
+panel.setEffect(null);      // back to normal
+```
+
+- Everything the element draws, children included, goes through the shader: post-processing. The shader must declare
+  `uniform shader content;`, which holds the element's drawing, or `setEffect` throws.
+- `coord` is in the same space as `getX()`/`getY()`, and the result is cut to the element's bounds.
+- Only the drawing changes. Hit-testing and layout stay the same.
+- The effect is applied before opacity, so a fade fades the processed result. The element doesn't close the effect.
+
+See [Shaders and post effects](../graphics/shaders.md).
+
 ## Identity
 
 ```java
@@ -253,7 +275,7 @@ system. In practice you control order with `Container.addElement(element, index)
 | Group | Methods |
 |---|---|
 | Geometry | `getX/Y/Width/Height`, `setX/Y/Width/Height`, `setPosition`, `setBounds`, `contains` |
-| State | `isEnabled/setEnabled`, `isHovered`, `getOpacity/setOpacity`, `getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin` |
+| State | `isEnabled/setEnabled`, `isHovered`, `getOpacity/setOpacity`, `getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin`, `getEffect/setEffect` |
 | Look | `getStyling/setStyling`, `followTheme`, `getBackground/setBackground`, `getCursorMode/setCursorMode`, `getTextAlignment/setTextAlignment` |
 | Focus | `isFocusTraversable/setFocusTraversable`, `getTabIndex/setTabIndex` |
 | Tooltip | `getTooltip/setTooltip`, `getTooltipDelay/setTooltipDelay`, `getTooltipTheme/setTooltipTheme` |

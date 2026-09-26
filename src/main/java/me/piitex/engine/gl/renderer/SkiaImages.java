@@ -189,13 +189,18 @@ public final class SkiaImages {
     }
 
     private static Shader pixelatedShader(Image image) {
-        return shaders.computeIfAbsent(image, i -> {
-            try {
-                return (Shader) MAKE_SHADER.invoke(i, FilterTileMode.CLAMP, FilterTileMode.CLAMP, PIXELATED, (float[]) null);
-            } catch (Throwable t) {
-                throw new IllegalStateException("Could not make an image shader", t);
-            }
-        });
+        return shaders.computeIfAbsent(image, i -> imageShader(i, false, FilterTileMode.CLAMP));
+    }
+
+    /**
+     * A shader reading {@code image} in its own pixels, blending neighbouring pixels or not. The caller closes it.
+     */
+    public static Shader imageShader(Image image, boolean smooth, FilterTileMode tileMode) {
+        try {
+            return (Shader) MAKE_SHADER.invoke(image, tileMode, tileMode, smooth ? SMOOTH : PIXELATED, (float[]) null);
+        } catch (Throwable t) {
+            throw new IllegalStateException("Could not make an image shader", t);
+        }
     }
 
     /**

@@ -4,6 +4,7 @@ import me.piitex.engine.ui.animation.FadeTransition;
 import me.piitex.engine.ui.animation.Transition;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.Snapshot;
+import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.background.Background;
 import me.piitex.engine.ui.background.ConstellationBackground;
 import me.piitex.engine.ui.background.DotGridBackground;
@@ -19,6 +20,7 @@ import me.piitex.engine.utils.FormID;
 import me.piitex.engine.ui.menu.PopupMenu;
 import me.piitex.engine.utils.FormIDRegistry;
 import me.piitex.engine.utils.Namespace;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +38,7 @@ import java.util.function.Consumer;
  * {@link Renderer} interface uses. See that interface's class-level docs for the
  * coordinate and threading contract that applies to everything drawn here.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class Element {
     private final FormID id;
     private int suggestedDrawIndex;
@@ -54,6 +57,7 @@ public class Element {
     // Drawn scaled around scaleOriginX/Y, in the same space as x and y. NaN is the Element's center.
     private float scale = 1f;
     private double scaleOriginX = Double.NaN, scaleOriginY = Double.NaN;
+    private ShaderEffect effect;
     private String tooltip;
     private PopupMenu contextMenu;
     /**
@@ -599,10 +603,10 @@ public class Element {
             }
             if (opacity < 1f) {
                 renderer.pushOpacityLayer((float) x, (float) y, (float) width, (float) height, opacity);
-                render(renderer);
+                renderWithEffect(renderer);
                 renderer.popOpacityLayer();
             } else {
-                render(renderer);
+                renderWithEffect(renderer);
             }
             if (scaled) renderer.popScale();
         }
@@ -610,6 +614,38 @@ public class Element {
         for (Transition transition : transitions) {
             transition.render(renderer, this);
         }
+    }
+
+    private void renderWithEffect(Renderer renderer) {
+        ShaderEffect current = effect;
+        if (current == null || current.isClosed()) {
+            render(renderer);
+            return;
+        }
+        renderer.pushEffect(current, (float) x, (float) y, (float) width, (float) height);
+        render(renderer);
+        renderer.popEffect();
+    }
+
+    /**
+     * Passes everything this Element draws, children included, through a shader: post-processing, such as a
+     * vignette, a color grade or a CRT look over a scene's container. The shader must declare
+     * {@code uniform shader content;}, which holds the Element's drawing, and its {@code coord} is in the same space
+     * as {@link #getX()} and {@link #getY()}. The result is clipped to the Element's bounds. It is only how it's
+     * drawn: hit testing and layout are unchanged. Null removes it. See {@link ShaderEffect}.
+     * <p>
+     * The effect is drawn before {@link #setOpacity opacity} fades the result. The Element doesn't close it.
+     */
+    public void setEffect(ShaderEffect effect) {
+        if (effect != null && !effect.hasContent()) {
+            throw new IllegalArgumentException("An Element's effect must declare 'uniform shader "
+                    + ShaderEffect.CONTENT + ";' to receive what the Element draws");
+        }
+        this.effect = effect;
+    }
+
+    public ShaderEffect getEffect() {
+        return effect;
     }
 
     /**

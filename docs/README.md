@@ -52,6 +52,8 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Sprites](graphics/sprites.md) | `Texture`, `TextureRegion`, `Sprite`, and `SpriteBatch` for drawing many in order and in few calls |
 | [Texture atlases](graphics/atlases.md) | `TextureAtlas`: packed sprite sheets from TexturePacker, Aseprite and similar tools |
 | [Sprite animation](graphics/sprite-animation.md) | `Animation` and `AnimationPlayer`: frame animation, loop modes, frame events |
+| [Shaders and post effects](graphics/shaders.md) | `ShaderEffect`: SkSL shaders to fill shapes or post-process a scene or element |
+| [Debug drawing](graphics/debug-drawing.md) | `DebugDraw`: hit boxes, rays and labels drawn in world space |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
 | [Sound](audio/sound.md) | Short effects held in memory |
 | [Music](audio/music.md) | Streamed tracks, looping, crossfades |

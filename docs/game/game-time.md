@@ -77,6 +77,8 @@ once, and it keeps a running pause menu's `update` from getting any time either.
 | `getFixedDelta()` | Length of one fixed step: `1 / tickRate`. |
 | `getTicks()` | Fixed steps completed. Inside `fixedUpdate`, the number of the current step, from 0. |
 | `getAlpha()` | How far past the last fixed step, 0 to 1. |
+| `getFrameCount()` | Frames started since the engine started, paused or not. |
+| `isInFixedStep()` | True while a fixed step runs, that is inside `fixedUpdate`. |
 
 They can be read from any thread. `reset()` sets them all back to 0 (not the settings). The engine calls it when it
 starts. Call it yourself on the render thread if you want the clocks to restart with a new game.
