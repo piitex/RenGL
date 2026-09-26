@@ -23,9 +23,8 @@ All of them live in `me.piitex.engine.ui.layout`.
   You do not call anything. Positioning a layout child by hand is pointless, because the layout overwrites it.
 - **Children keep their own size.** A layout positions children but does not resize them. ([`SplitContainer`](../containers/split-container.md)
   and [`TabContainer`](../containers/tab-container.md) are the exceptions. They resize their panes to fill the available space.)
-- **A layout does not resize itself** to fit its children. Its width and height are what you gave the
-  constructor. Children that overflow just draw past the layout's box (and are clipped to it, since
-  containers clip by default).
+- **A layout keeps the size you gave it,** unless you turn on sizing to content (below). Children that
+  overflow just draw past the layout's box (and are clipped to it, since containers clip by default).
 - Layouts nest freely. A [`HorizontalLayout`](horizontal-layout.md) inside a [`VerticalLayout`](vertical-layout.md) is repositioned along with its
   parent, and repositions its own children.
 - `relayout()` recomputes positions immediately. Call it if you change a child's size and need the new
@@ -40,6 +39,7 @@ Every layout inherits these from `Layout`:
 | `setSpacing(float)` | Gap between children along the layout's axis | `0` |
 | `setPadding(float)` | Inset between the layout's edges and its children | `0` |
 | `setAlignment(Alignment)` | Where the children sit within the layout (see below) | `TOP_LEFT` |
+| `setSizeToContent(boolean)` / `setSizeToContent(width, height)` | Size the layout to its children (see below) | off |
 
 `Layout.Alignment` is one setting with nine positions: `TOP_LEFT`, `TOP_CENTER`, `TOP_RIGHT`, `CENTER_LEFT`,
 `CENTER`, `CENTER_RIGHT`, `BOTTOM_LEFT`, `BOTTOM_CENTER`, `BOTTOM_RIGHT`.
@@ -47,6 +47,27 @@ Every layout inherits these from `Layout`:
 - `VerticalLayout` / `HorizontalLayout`: places the whole block of children within the padded area.
 - `GridLayout`: places each child within its cell.
 - `StackLayout`: places each child within the layout.
+
+## Sizing to content
+
+`setSizeToContent(true)` makes a layout's width and height follow its children: `getContentWidth()` /
+`getContentHeight()` (what the children need, spacing included) plus the padding on both sides. It is
+kept up to date every frame, so adding, removing or resizing a child resizes the layout. Pass two flags
+to fit only one axis. The common case is a column with a fixed width and a fitted height:
+
+```java
+VerticalLayout list = new VerticalLayout(280, 0);
+list.setSpacing(6);
+list.setSizeToContent(false, true); // width stays 280, height follows the rows
+```
+
+- Nested layouts that also size to content are measured first, so a column of fitted rows is right in one
+  pass.
+- The constructor size still matters for any axis left off.
+- [`SplitContainer`](../containers/split-container.md) and [`TabContainer`](../containers/tab-container.md)
+  fill their own size, so sizing them to content changes nothing. Sizing a pane of one to content also changes
+  nothing, because the container sets the pane's size.
+- `getContentWidth()` / `getContentHeight()` can be read at any time, whether or not the layout sizes to them.
 
 ## Styling a layout
 
@@ -93,4 +114,4 @@ root.addElement(form);
 - A badge on an icon, or a spinner over a button: [`StackLayout`](stack-layout.md).
 - Resizable side-by-side or stacked panes: [`SplitContainer`](../containers/split-container.md).
 - Several pages of content, one visible at a time: [`TabContainer`](../containers/tab-container.md).
-- Content taller than its box: put a layout inside a [`ScrollContainer`](../containers/scroll-container.md).
+- Content taller than its box: put a layout that sizes to content inside a [`ScrollContainer`](../containers/scroll-container.md).

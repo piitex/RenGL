@@ -29,12 +29,34 @@ public class VerticalLayout extends Layout {
     protected void moveChildToFront(Element child) {
     }
 
+    /**
+     * The widest child's width.
+     */
+    @Override
+    public double getContentWidth() {
+        double width = 0;
+        for (Element child : getElements().values()) {
+            width = Math.max(width, child.getWidth());
+        }
+        return width;
+    }
+
+    /**
+     * Every child's height plus the spacing between them.
+     */
+    @Override
+    public double getContentHeight() {
+        if (getElements().isEmpty()) return 0;
+        double height = -getSpacing();
+        for (Element child : getElements().values()) {
+            height += child.getHeight() + getSpacing();
+        }
+        return height;
+    }
+
     @Override
     protected void layoutChildren() {
-        double contentHeight = -getSpacing();
-        for (Element child : getElements().values()) {
-            contentHeight += child.getHeight() + getSpacing();
-        }
+        double contentHeight = getContentHeight();
         double innerHeight = getHeight() - 2 * getPadding();
         double cursorY = getPadding() + Math.max(0, innerHeight - contentHeight) * getAlignment().vertical();
 

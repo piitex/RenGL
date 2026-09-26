@@ -52,5 +52,5 @@ root.addElement(form);
 - Children fill **row-major**: index 0 is row 0/column 0, index 1 is row 0/column 1, and so on.
 - The last row may be incomplete. Empty cells stay empty.
 - Column widths and row heights are recomputed every frame from the current child sizes.
-- The layout does not resize itself. A grid taller than its box is clipped.
+- The layout keeps the size you gave it unless you call `setSizeToContent`. Otherwise a grid taller than its box is clipped.
 - To leave a cell empty, add an invisible element such as a `TextOverlay("")`.
