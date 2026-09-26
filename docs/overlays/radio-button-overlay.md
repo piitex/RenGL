@@ -28,7 +28,7 @@ only `setSelected(false)` deselects it.
 | `RadioButtonOverlay()` | Unselected 18 × 18 circle |
 | `RadioButtonOverlay(double size)` | Unselected `size` × `size` circle |
 
-The corner radius is pinned to `size / 2` (that is what makes it a circle), so do not change it.
+The corner radius is `size / 2` (that is what makes it a circle), so do not change it. `followTheme()` keeps it.
 
 ## Selecting
 

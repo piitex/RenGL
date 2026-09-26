@@ -316,6 +316,14 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         selectionColor.applyTheme(theme.getSelection());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        textColor.clearExplicit();
+        placeholderColor.clearExplicit();
+        selectionColor.clearExplicit();
+    }
+
     /* Open / close */
 
     public boolean isOpen() {

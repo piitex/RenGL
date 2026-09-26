@@ -234,6 +234,12 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
     }
 
     @Override
+    public void followTheme() {
+        super.followTheme();
+        fillColor.clearExplicit();
+    }
+
+    @Override
     public void render(Renderer renderer) {
         if (!isEnabled()) return;
 
