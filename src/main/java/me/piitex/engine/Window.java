@@ -442,11 +442,13 @@ public class Window implements Themeable {
 
     /**
      * Main thread, from the GLFW window-size callback (not the framebuffer-size one).
-     * See {@link #onResize}.
+     * See {@link #onResize}. The listener is handed the size current when it runs, not the
+     * one from the callback, so it never disagrees with {@link WindowOptions} when several
+     * resizes arrive before the render thread gets to it.
      */
     void notifyResized(int width, int height) {
         java.util.function.BiConsumer<Integer, Integer> listener = resizeListener;
-        fire(listener == null ? null : () -> listener.accept(width, height));
+        fire(listener == null ? null : () -> listener.accept(windowOptions.getWidth(), windowOptions.getHeight()));
     }
 
     /**
