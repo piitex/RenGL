@@ -23,6 +23,10 @@ Image image = ImageLoader.load("src/main/resources/demo.png"); // File or String
 - Cached images are **never closed**. Decoding is expensive and drawing from a decoded image is cheap, which is a
   reasonable trade for a typical UI. If you load huge numbers of unique large images, this cache will grow.
 
+An image drawn at a size other than its own is sampled smoothly, blending neighbouring pixels. For pixel art that
+should keep hard edges when scaled, draw it as a [sprite](../graphics/sprites.md) from a texture with
+`setSmooth(false)`.
+
 ## IconCache
 
 `me.piitex.engine.ui.image.IconCache` rasterizes an **SVG** into an `Image` using Skia's built-in SVG renderer.

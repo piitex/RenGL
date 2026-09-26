@@ -14,6 +14,9 @@ The two work together: a [`Scene`](scenes.md) runs its game logic on the [game c
 buttons and text are ordinary elements on the real clock, so menus keep animating while the game is paused or in
 slow motion.
 
+To draw the game world, see [Graphics](../graphics/README.md): a camera, sprites, texture atlases, frame animation
+and batched drawing.
+
 For loading screens, see [Loading](../core/loading.md): the `Loader` runs the work in the background and reports
 progress, and the loading screen itself is an ordinary scene that draws it however the game likes.
 

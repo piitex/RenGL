@@ -47,6 +47,11 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Scenes](game/scenes.md) | `Scene` and `SceneManager`: menus, gameplay, pause menus, and moving between them |
 | [Game time](game/game-time.md) | Fixed-step updates, time scale, pausing, smooth drawing between steps |
 | [Scene transitions](game/transitions.md) | Fades, slides, wipes and custom effects when the scenes change |
+| **[Graphics](graphics/README.md)** | Drawing a 2D game world |
+| [Camera](graphics/camera.md) | `Camera`: position, zoom, rotation, viewports, and mouse to world coordinates |
+| [Sprites](graphics/sprites.md) | `Texture`, `TextureRegion`, `Sprite`, and `SpriteBatch` for drawing many in order and in few calls |
+| [Texture atlases](graphics/atlases.md) | `TextureAtlas`: packed sprite sheets from TexturePacker, Aseprite and similar tools |
+| [Sprite animation](graphics/sprite-animation.md) | `Animation` and `AnimationPlayer`: frame animation, loop modes, frame events |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
 | [Sound](audio/sound.md) | Short effects held in memory |
 | [Music](audio/music.md) | Streamed tracks, looping, crossfades |

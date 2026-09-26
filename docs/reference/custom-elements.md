@@ -58,18 +58,22 @@ All coordinates are logical points, top-left origin.
 | `drawCircle(x, y, radius, Color)` | Filled circle centered at (x, y) |
 | `drawText(text, x, y, Font, Paint)` | One line of text; (x, y) is its top-left |
 | `drawGradient(x, y, w, h, LinearGradient, cornerRadius)` | Gradient-filled rectangle. Pass the *original* gradient object so a [`ScrollingGradient`](../styling/colors-and-paints.md#scrolling-animated-gradients) keeps scrolling |
-| `drawImage(Image, x, y, w, h, cornerRadius, opacity[, Color tint])` | Scaled image |
+| `drawImage(Image, x, y, w, h, cornerRadius, opacity[, Color tint])` | Scaled image, sampled smoothly |
+| `drawImageRegion(Image, srcX, srcY, srcW, srcH, x, y, w, h, Color, smooth)` | Part of an image, scaled into a rectangle. `Color` multiplies it (null for none); `smooth` false keeps hard pixel edges. Nothing outside the source rectangle shows |
+| `drawImageQuads(Image, smooth, positions, texCoords, colors, count)` | Many parts of one image at once, each moved, turned, scaled or mirrored. What [`SpriteBatch`](../graphics/sprites.md#drawing-many-spritebatch) draws with |
 | `pushClip(x, y, w, h)` / `popClip()` | Clip subsequent drawing to a rectangle |
 | `pushClip(x, y, w, h, cornerRadius)` / `popClip()` | Clip subsequent drawing to a rounded rectangle |
 | `pushTranslate(dx, dy)` / `popTranslate()` | Shift subsequent drawing by (dx, dy) |
 | `pushScale(scale, pivotX, pivotY)` / `popScale()` | Scale subsequent drawing around (pivotX, pivotY), which stays in place. This is what [`Element.setScale`](../core/element.md#scale) uses |
+| `pushTransform(x, y, rotation, scaleX, scaleY, originX, originY)` / `popTransform()` | Move (originX, originY) to (x, y), turning by `rotation` degrees clockwise and scaling around it; a negative scale mirrors. This is what a [`Camera`](../graphics/camera.md) uses |
 | `pushOpacityLayer(x, y, w, h, opacity)` / `popOpacityLayer()` | Composite everything drawn in between as one unit at that opacity |
 
 Rules:
 
-- A `null` color is a **no-op**, not an error, so you do not need to null-check before drawing.
+- A `null` color is a **no-op**, not an error, so you do not need to null-check before drawing. The image calls are
+  the exception: there a null color or tint means the image's own colors.
 - Every `pushClip` needs exactly one `popClip`, every `pushOpacityLayer` exactly one `popOpacityLayer`, and the same
-  for `pushTranslate`/`popTranslate` and `pushScale`/`popScale`. Pushes nest. An unmatched push corrupts the rest
+  for `pushTranslate`/`popTranslate`, `pushScale`/`popScale` and `pushTransform`/`popTransform`. Pushes nest. An unmatched push corrupts the rest
   of the frame.
 - `drawQuad`/`drawBorder`/`drawLine`/`drawCircle` take a solid [`Color`](../styling/colors-and-paints.md#color). `drawText`, `drawGradient` and
   `drawGradientBorder` take gradients. `drawQuad` and `drawBorder` also have overloads that take any `Paint` and pick
