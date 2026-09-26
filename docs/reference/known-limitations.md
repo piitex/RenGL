@@ -63,8 +63,8 @@ source. If you hit something not listed here, please add it.
 - **Layout spacing and padding are not scaled,** only sizes and positions. Text scales by the smaller of the width and
   height factors, so it never overflows, but it can look small in one direction.
 - **Only some elements scale their text.** Those that implement `FontScalable`: text, button, text flow, text field,
-  text area, dropdown and slider. Tooltip text has a fixed size, and icons and images scale as pictures (an
-  `IconOverlay` is rasterized once, so a big enlargement looks soft).
+  text area, dropdown and slider. Tooltip text has a fixed size, and images scale as pictures (an
+  `IconOverlay` re-renders its SVG once the resize settles, so it is soft only during the resize).
 - **No visible grip by default.** Only the cursor changes. `setShowResizeHandles(true)` draws the zones.
 
 ## Styling
@@ -134,7 +134,8 @@ source. If you hit something not listed here, please add it.
 
 - **Decoded images and typefaces are cached forever.** There is no eviction, so loading very many unique large
   images will grow memory use.
-- **[`IconOverlay`](../overlays/icon-overlay.md) is rasterized once** at its construction size. Resizing it later stretches the raster.
+- **A resized [`IconOverlay`](../overlays/icon-overlay.md) is stretched until the size settles** (0.12 seconds), then
+  re-rendered. `setScale` and scale transitions only stretch it, because they don't change its size.
 - **Feather icons are black** until you tint them.
 
 ## Audio

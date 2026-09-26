@@ -100,6 +100,14 @@ public class ImageOverlay extends Overlay {
     }
 
     /**
+     * Swaps the displayed image for an already-decoded one, without changing this overlay's size. For a subclass
+     * that renders its own image, such as {@link IconOverlay} re-rasterizing after a resize.
+     */
+    protected void setImage(org.jetbrains.skia.Image image) {
+        this.image = image;
+    }
+
+    /**
      * The underlying decoded Skia image, for advanced use (e.g. building a shader from it).
      */
     public org.jetbrains.skia.Image getImage() {

@@ -36,11 +36,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * screen.
  * <p>
  * As with {@link ImageLoader}'s entries, cached Images are never closed. See that
- * class's docs for the trade-off this makes.
+ * class's docs for the trade-off this makes. {@link #rasterizeFile} and {@link
+ * #rasterizeResource} skip the cache, for an icon whose size keeps changing.
  */
 public final class IconCache {
     private static final float OVERSAMPLE = 2f;
     private static final Map<String, org.jetbrains.skia.Image> cache = new ConcurrentHashMap<>();
+    private static final Map<String, byte[]> sources = new ConcurrentHashMap<>();
 
     private IconCache() {
     }
@@ -50,7 +52,7 @@ public final class IconCache {
      */
     public static org.jetbrains.skia.Image load(File svgFile, int width, int height) {
         String key = "file:" + svgFile.getAbsolutePath() + "@" + width + "x" + height;
-        return cache.computeIfAbsent(key, k -> rasterize(readFile(svgFile), svgFile.getAbsolutePath(), width, height));
+        return cache.computeIfAbsent(key, k -> rasterizeFile(svgFile, width, height));
     }
 
     /**
@@ -63,7 +65,24 @@ public final class IconCache {
      */
     public static org.jetbrains.skia.Image loadResource(String resourcePath, int width, int height) {
         String key = "resource:" + resourcePath + "@" + width + "x" + height;
-        return cache.computeIfAbsent(key, k -> rasterize(readResource(resourcePath), resourcePath, width, height));
+        return cache.computeIfAbsent(key, k -> rasterizeResource(resourcePath, width, height));
+    }
+
+    /**
+     * Rasterizes {@code svgFile} at {@code width}x{@code height} logical points without caching the result, so the
+     * caller owns the Image and should close it once nothing draws it. This is for an icon whose size keeps
+     * changing, where caching every size would grow without bound. The file's bytes are still read only once.
+     */
+    public static org.jetbrains.skia.Image rasterizeFile(File svgFile, int width, int height) {
+        String source = svgFile.getAbsolutePath();
+        return rasterize(sources.computeIfAbsent("file:" + source, k -> readFile(svgFile)), source, width, height);
+    }
+
+    /**
+     * The classpath counterpart of {@link #rasterizeFile}.
+     */
+    public static org.jetbrains.skia.Image rasterizeResource(String resourcePath, int width, int height) {
+        return rasterize(sources.computeIfAbsent("resource:" + resourcePath, k -> readResource(resourcePath)), resourcePath, width, height);
     }
 
     private static byte[] readFile(File svgFile) {
