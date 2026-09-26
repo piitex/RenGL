@@ -67,8 +67,6 @@ source. If you hit something not listed here, please add it.
 
 ## Styling
 
-- **Gradient borders are not drawn.** A gradient border color is silently skipped. Only a plain [`Color`](../styling/colors-and-paints.md#color) border
-  renders.
 - **Some parts accept only `Color`, not [`Paint`](../styling/colors-and-paints.md):** caret and selection colors, scrollbars, slider/progress/
   checkbox/radio parts, tooltip colors.
 - **No unpin on elements.** Once an element's themed property is set explicitly it is pinned for the life of that

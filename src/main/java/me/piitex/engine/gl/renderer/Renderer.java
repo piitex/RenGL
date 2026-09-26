@@ -29,10 +29,11 @@ import org.jetbrains.skia.Image;
  * {@link Color}, meaning solid fills only. {@link #drawText} takes the broader
  * {@link Paint} type so it can also accept a
  * {@link me.piitex.engine.ui.color.LinearGradient} or an animated
- * {@link me.piitex.engine.ui.color.ScrollingGradient}. Gradient quads go through the
- * separate {@link #drawGradient} method rather than an overload of drawQuad, because a
- * gradient fill needs two colors and the caller is what resolves a quad background to
- * either a Color or a LinearGradient. See {@link me.piitex.engine.ui.Element#render}.
+ * {@link me.piitex.engine.ui.color.ScrollingGradient}. Gradient quads and outlines go
+ * through {@link #drawGradient} and {@link #drawGradientBorder}. The
+ * {@link #drawQuad(float, float, float, float, Paint, float)} and
+ * {@link #drawBorder(float, float, float, float, Paint, float, float)} overloads take
+ * any Paint and pick the right call. See {@link me.piitex.engine.ui.Element#render}.
  */
 public interface Renderer {
 
@@ -144,6 +145,46 @@ public interface Renderer {
      * pass the original object through.
      */
     void drawGradient(float x, float y, float width, float height, LinearGradient gradient, float cornerRadius);
+
+    /**
+     * Draws a stroked outline like {@link #drawBorder}, colored by {@code gradient}
+     * across the (x, y, width, height) box the same way {@link #drawGradient} fills it.
+     * As with drawGradient, pass the original gradient object so a {@link
+     * me.piitex.engine.ui.color.ScrollingGradient} scrolls. A null {@code gradient} or a
+     * {@code thickness <= 0} is a no-op.
+     * <p>
+     * The default implementation draws a solid border in the gradient's start color, so
+     * a custom Renderer keeps working without overriding this.
+     */
+    default void drawGradientBorder(float x, float y, float width, float height, LinearGradient gradient, float thickness, float cornerRadius) {
+        if (gradient == null) return;
+        drawBorder(x, y, width, height, gradient.getStartColor(), thickness, cornerRadius);
+    }
+
+    /**
+     * Fills a rectangle with any {@link Paint}: a {@link Color} goes to {@link #drawQuad},
+     * a {@link LinearGradient} to {@link #drawGradient}. A null paint is a no-op.
+     */
+    default void drawQuad(float x, float y, float width, float height, Paint paint, float cornerRadius) {
+        if (paint instanceof Color color) {
+            drawQuad(x, y, width, height, color, cornerRadius);
+        } else if (paint instanceof LinearGradient gradient) {
+            drawGradient(x, y, width, height, gradient, cornerRadius);
+        }
+    }
+
+    /**
+     * Outlines a rectangle with any {@link Paint}: a {@link Color} goes to
+     * {@link #drawBorder}, a {@link LinearGradient} to {@link #drawGradientBorder}. A
+     * null paint is a no-op.
+     */
+    default void drawBorder(float x, float y, float width, float height, Paint paint, float thickness, float cornerRadius) {
+        if (paint instanceof Color color) {
+            drawBorder(x, y, width, height, color, thickness, cornerRadius);
+        } else if (paint instanceof LinearGradient gradient) {
+            drawGradientBorder(x, y, width, height, gradient, thickness, cornerRadius);
+        }
+    }
 
     /**
      * Same as {@link #drawImage(Image, float, float, float, float, float, float, Color)} with no tint, so the image draws with its own colors unchanged.

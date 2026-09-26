@@ -465,7 +465,7 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
             Paint hoverPaint = owner.getStyling().getHoverColor();
             Paint border = owner.getStyling().getBorderColor();
 
-            if (bg instanceof Color c) renderer.drawQuad(x, y, w, h, c, radius);
+            renderer.drawQuad(x, y, w, h, bg, radius);
 
             renderer.pushClip(x, y, w, h, radius);
             float strip = barStrip();
@@ -478,8 +478,8 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
                 if (rowY >= y + h) break;
                 if (i == selectedIndex) {
                     renderer.drawQuad(x, rowY, w, rowH, owner.selectionColor.get(), 0f);
-                } else if (i == hoverRow && hoverPaint instanceof Color hc) {
-                    renderer.drawQuad(x, rowY, w, rowH, hc, 0f);
+                } else if (i == hoverRow) {
+                    renderer.drawQuad(x, rowY, w, rowH, hoverPaint, 0f);
                 }
                 owner.drawLabel(renderer, owner.labelProvider.apply(items.get(i)), x + 8f, rowY, rowH, owner.textColor.get());
             }
@@ -498,9 +498,7 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
             }
             renderer.popClip();
 
-            if (border instanceof Color bc && owner.getStyling().getBorderThickness() > 0) {
-                renderer.drawBorder(x, y, w, h, bc, owner.getStyling().getBorderThickness(), radius);
-            }
+            renderer.drawBorder(x, y, w, h, border, owner.getStyling().getBorderThickness(), radius);
         }
     }
 }
