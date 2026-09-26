@@ -64,7 +64,8 @@ as the container. Text scales too, by the **smaller** of the width and height fa
   growing back restores the original font size.
 - If you change an element's font size yourself, the new size becomes its baseline at the current scale.
 - A [layout](../layouts/README.md) child re-places its own children every frame, so for those only the sizes are scaled.
-- Icons and images scale as pictures. An `IconOverlay` is rasterized once, so a large enlargement looks soft.
+- Images scale as pictures, so a large enlargement looks soft. An `IconOverlay` re-renders its SVG at the new
+  size once the resize settles, so icons stay sharp.
 
 ## Resizing by dragging
 

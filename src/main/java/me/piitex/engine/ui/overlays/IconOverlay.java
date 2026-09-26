@@ -24,16 +24,34 @@ import java.io.File;
  * The {@link IconAsset} constructors can omit the width and height, defaulting to
  * {@link #DEFAULT_SIZE}, which is Feather's natural size. The File and path constructors
  * cannot, since an arbitrary external SVG has no size this class can assume. Changing
- * the size afterwards, through {@link #setWidth} for example, stretches the
- * already-rasterized Image rather than re-rendering the SVG at the new size. Construct a
- * new IconOverlay at the intended size instead, the same way a differently sized raster
- * image would be swapped in rather than stretched.
+ * the size afterwards, through {@link #setWidth} or a {@link
+ * me.piitex.engine.ui.containers.ResizableContainer} for example, re-renders the SVG at the
+ * new size once the size has stopped changing for {@link #RERASTER_DELAY} seconds. Until
+ * then the old image is stretched, so a live resize does not re-render every frame.
+ * <p>
+ * Re-rendered images belong to this overlay, not to {@link IconCache}, and each one is
+ * closed when the next replaces it, so do not hold on to {@link #getImage()} across a
+ * resize. {@link #setImageFile} switches this overlay to that raster image for good.
  */
 public class IconOverlay extends ImageOverlay {
     private static final double DEFAULT_SIZE = 24;
+    /**
+     * Seconds the size must stay the same before the SVG is re-rendered at it.
+     */
+    public static final float RERASTER_DELAY = 0.12f;
+
+    private File svgFile;          // the SVG source is this file,
+    private String resourcePath;   // or this classpath resource; both null after setImageFile
+    private int rasterWidth, rasterHeight;   // the size the current image was rendered at
+    private int pendingWidth, pendingHeight; // a new size waiting out RERASTER_DELAY
+    private float pendingSeconds;
+    private org.jetbrains.skia.Image ownedImage; // a re-rendered image this overlay must close; null while the cached one shows
 
     public IconOverlay(File svgFile, double width, double height) {
         super(IconCache.load(svgFile, (int) Math.round(width), (int) Math.round(height)), width, height);
+        this.svgFile = svgFile;
+        this.rasterWidth = (int) Math.round(width);
+        this.rasterHeight = (int) Math.round(height);
     }
 
     public IconOverlay(String svgFilePath, double width, double height) {
@@ -42,6 +60,9 @@ public class IconOverlay extends ImageOverlay {
 
     public IconOverlay(IconAsset asset, double width, double height) {
         super(IconCache.loadResource(asset.resourcePath(), (int) Math.round(width), (int) Math.round(height)), width, height);
+        this.resourcePath = asset.resourcePath();
+        this.rasterWidth = (int) Math.round(width);
+        this.rasterHeight = (int) Math.round(height);
     }
 
     /**
@@ -49,5 +70,57 @@ public class IconOverlay extends ImageOverlay {
      */
     public IconOverlay(IconAsset asset) {
         this(asset, DEFAULT_SIZE, DEFAULT_SIZE);
+    }
+
+    /**
+     * Shows a raster image file instead of the SVG, which stops this overlay re-rendering on resize.
+     */
+    @Override
+    public void setImageFile(File imageFile) {
+        svgFile = null;
+        resourcePath = null;
+        super.setImageFile(imageFile);
+        closeOwnedImage();
+    }
+
+    @Override
+    public void update(float delta) {
+        super.update(delta);
+        if (!isEnabled() || (svgFile == null && resourcePath == null)) return;
+
+        int width = (int) Math.round(getWidth()), height = (int) Math.round(getHeight());
+        if ((width == rasterWidth && height == rasterHeight) || width <= 0 || height <= 0) {
+            pendingSeconds = 0;
+            return;
+        }
+        if (width != pendingWidth || height != pendingHeight) {
+            pendingWidth = width;
+            pendingHeight = height;
+            pendingSeconds = 0;
+            return;
+        }
+        pendingSeconds += delta;
+        if (pendingSeconds >= RERASTER_DELAY) {
+            rerasterize(width, height);
+        }
+    }
+
+    private void rerasterize(int width, int height) {
+        org.jetbrains.skia.Image image = svgFile != null
+                ? IconCache.rasterizeFile(svgFile, width, height)
+                : IconCache.rasterizeResource(resourcePath, width, height);
+        setImage(image);
+        closeOwnedImage();
+        ownedImage = image;
+        rasterWidth = width;
+        rasterHeight = height;
+        pendingSeconds = 0;
+    }
+
+    private void closeOwnedImage() {
+        if (ownedImage != null) {
+            ownedImage.close();
+            ownedImage = null;
+        }
     }
 }
