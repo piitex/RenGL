@@ -37,6 +37,7 @@ public abstract class Scene {
     private boolean pausesBelow = true;
 
     SceneManager manager; // non-null while on a stack
+    SceneManager leaving; // non-null while drawn going out in a transition, until onExit
     boolean visible;
     boolean running;
 
@@ -49,7 +50,9 @@ public abstract class Scene {
 
     /**
      * Called when the scene is removed from the stack. Its container is already off the window, and its timers are
-     * cancelled. Not called when the application closes; use {@link Window#onClose} for that.
+     * cancelled. When the removal plays a {@link SceneTransition}, this comes at the end of the transition, once the
+     * scene has stopped being drawn, so it is the place to release anything {@link #render} uses. Not called when
+     * the application closes; use {@link Window#onClose} for that.
      */
     protected void onExit() {
     }
@@ -85,7 +88,8 @@ public abstract class Scene {
 
     /**
      * Draws the scene's world, in window coordinates, below the elements in {@link #getContainer()}. Called every
-     * frame the scene is visible, including while it is paused under an overlay. Only draw here; change state in
+     * frame the scene is visible, including while it is paused under an overlay, and while a
+     * {@link SceneTransition} draws it on its way out, after it has left the stack. Only draw here; change state in
      * {@link #update} or {@link #fixedUpdate}. {@code alpha} is {@link GameTime#getAlpha()}, for drawing things
      * moved in {@link #fixedUpdate} between their last two positions.
      */
@@ -137,7 +141,8 @@ public abstract class Scene {
     }
 
     /**
-     * True while the scene is on a stack, from just before {@link #onEnter()} until just before {@link #onExit()}.
+     * True while the scene is on a stack, from just before {@link #onEnter()} until it is removed. That is just
+     * before {@link #onExit()}, or when a {@link SceneTransition} plays, at the start of the transition.
      */
     public boolean isActive() {
         return manager != null;
@@ -226,6 +231,13 @@ public abstract class Scene {
         SceneContainer(Scene scene) {
             super(0, 0);
             this.scene = scene;
+        }
+
+        @Override
+        public void renderWithTransitions(Renderer renderer) {
+            SceneManager current = scene.manager;
+            if (current != null && current.hidesScenes()) return; // the running scene transition draws it instead
+            super.renderWithTransitions(renderer);
         }
 
         @Override

@@ -54,11 +54,11 @@ public class Level extends Scene {
 | Hook | When it runs |
 |---|---|
 | `onEnter()` | The scene was added to the stack. Build its UI here. |
-| `onExit()` | The scene was removed. Its container is already off the window and its timers are cancelled. |
+| `onExit()` | The scene was removed. Its container is already off the window and its timers are cancelled. With a [transition](transitions.md), this comes when the transition ends. |
 | `onPause()` / `onResume()` | A scene above started or stopped pausing this one. |
 | `fixedUpdate(step)` | At the fixed tick rate (60 per second by default), while the scene is running. For game logic and physics. See [Game time](game-time.md). |
 | `update(delta)` | Once per frame after the fixed steps, while the scene is running. `delta` is game time. |
-| `render(renderer, alpha)` | Every frame the scene is visible, paused or not. Draws below the scene's elements. Draw only; don't change state. |
+| `render(renderer, alpha)` | Every frame the scene is visible, paused or not, and while a transition draws it going out. Draws below the scene's elements. Draw only; don't change state. |
 | `onKey(key, action, mods)` | A key no text field, popup or modal took. Return true to consume it. |
 | `onResize(width, height)` | The window changed size. The container has already been resized. |
 
@@ -124,6 +124,17 @@ before `Engine.start`. From another thread, use [`Scheduler.runLater`](../core/s
 
 The order of calls is: on `push`, the scene below gets `onPause`, then the new one gets `onEnter`. On `pop`, the old
 scene gets `onExit`, then the one below gets `onResume`.
+
+`push`, `pop`, `replace`, `set` and `clear` also take a [`SceneTransition`](transitions.md), which shows the change
+with a fade, slide or wipe:
+
+```java nocompile
+scenes.set(new Level(), SceneTransition.fadeThrough(Color.BLACK, 0.6f));
+scenes.push(new PauseMenu(), SceneTransition.fade(0.2f));
+```
+
+The stack still changes at once. Scenes that leave get `onExit` only when the transition ends, and
+`isTransitioning()` tells you whether one is playing. See [Scene transitions](transitions.md).
 
 ## Keyboard input
 

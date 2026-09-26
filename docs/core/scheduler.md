@@ -47,6 +47,8 @@ Scheduler.async(() -> loadSaveFile(path)) // worker thread, must not touch the U
 
 Cancelling an `AsyncTask` interrupts the worker and drops its callbacks.
 
+For loading in several steps with a progress bar, such as a game's loading screen, use a [`Loader`](loading.md).
+
 ## Repeating timers
 
 ```java

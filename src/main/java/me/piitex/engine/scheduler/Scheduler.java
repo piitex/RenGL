@@ -100,7 +100,7 @@ public final class Scheduler {
         });
     }
 
-    private static ExecutorService executor() {
+    static ExecutorService executor() {
         ExecutorService pool = workers;
         if (pool == null) {
             synchronized (Scheduler.class) {
