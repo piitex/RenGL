@@ -94,7 +94,7 @@ press on it never picks a row.
 ## Look
 
 The box uses the text-field theme tokens, and the open list reuses the dropdown's own styling, with the theme
-selection color marking the selected row. Only plain [`Color`](../styling/colors-and-paints.md#color) backgrounds and borders are honored for the list.
+selection color marking the selected row. The background, hover and border colors may be a [`Color`](../styling/colors-and-paints.md#color) or a gradient.
 
 ```java
 dropdown.getStyling().setBackgroundColor(new Color(0.12f, 0.12f, 0.14f, 1f));

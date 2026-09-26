@@ -115,7 +115,7 @@ Where a gradient works:
 | Element background and hover color (`styling.setBackgroundColor(gradient)`) | Yes |
 | Text color (`TextOverlay.setTextColor`, and other text widgets) | Yes |
 | Window background (`window.setBackgroundColor`) | Yes |
-| **Border color** | **No.** A gradient border is silently not drawn. Only a plain `Color` border renders |
+| Border color (`styling.setBorderColor(gradient)`) | Yes |
 | Scrollbar colors | No. Plain `Color` only |
 
 ### Scrolling (animated) gradients

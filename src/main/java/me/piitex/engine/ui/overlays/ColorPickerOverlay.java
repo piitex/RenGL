@@ -355,9 +355,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
 
         if (color.getA() < 0.999f) drawChecker(renderer, sx, sy, sw, sh);
         renderer.drawQuad(sx, sy, sw, sh, color, radius);
-        if (getStyling().getBorderColor() instanceof Color border) {
-            renderer.drawBorder(sx, sy, sw, sh, border, 1f, radius);
-        }
+        renderer.drawBorder(sx, sy, sw, sh, getStyling().getBorderColor(), 1f, radius);
 
         if (showHex && w - sw - 3 * pad > 20f) {
             org.jetbrains.skia.Font f = getFont();

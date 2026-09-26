@@ -29,8 +29,8 @@ Each frame, `Element.render` draws, in this order:
 1. The **background fill**, at the element's bounds. While the element is hovered it uses the hover color,
    otherwise the background color. Both may be a [`Color`](colors-and-paints.md#color) or a [`LinearGradient`](colors-and-paints.md#gradients). Rounded by the corner radius.
 2. The attached [`Background`](backgrounds.md) effect, if any.
-3. The **border**, only if the thickness is above 0. A `Color` border is drawn. A gradient border is
-   **not supported** and is silently skipped.
+3. The **border**, only if the thickness is above 0. It may be a `Color` or a `LinearGradient`, and follows the
+   same corner radius.
 4. Your `onRender` hook.
 5. Anything the specific widget draws on top (text, image, ...).
 
