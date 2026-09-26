@@ -565,7 +565,10 @@ public class Container extends Element implements Themeable, Draggable {
         }
     }
 
-    private void moveChildToFront(Element child) {
+    /**
+     * Moves {@code child} to the highest draw index. Called by {@link #bringToFront()} on the child's parent.
+     */
+    protected void moveChildToFront(Element child) {
         if (elements.isEmpty() || elements.lastEntry().getValue() == child) return;
 
         Integer key = null;

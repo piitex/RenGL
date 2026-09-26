@@ -36,8 +36,7 @@ source. If you hit something not listed here, please add it.
 - **`getX()`/`getY()` are relative to the container,** and mouse positions (drag callbacks, click events,
   `MouseTracker`) are window coordinates. Convert with `toLocalX`/`toLocalY` or `getAbsoluteX`/`getAbsoluteY`. Reading
   `getAbsoluteX()` walks up the containers each call, so it is not free in a hot loop.
-- **`removeElement` leaves gaps** in the index space, and does not guard `SplitContainer`'s divider. Removing the
-  divider breaks the split.
+- **`removeElement` leaves gaps** in the index space.
 - **The topmost container under the mouse takes the click, even where it is empty.** A transparent full-window
   container drawn above another container swallows every press meant for the one below. Add full-window roots first.
 - **Layouts do not size themselves** to their children, and positions are rewritten every frame. A child of a
