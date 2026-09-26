@@ -124,7 +124,7 @@ Details on each: [Input and focus](input/input-and-focus.md), [Window](core/wind
 You never call these directly, but it helps to know what draws your UI:
 
 - **Skia (via Skiko)** is the 2D engine on every platform. All widgets draw through the [`Renderer`](reference/custom-elements.md#the-renderer)
-  interface (`drawQuad`, `drawBorder`, `drawLine`, `drawPolyline`, `drawCircle`, `drawText`, `drawGradient`, `drawImage`,
+  interface (`drawQuad`, `drawBorder`, `drawLine`, `drawPolyline`, `drawCircle`, `drawText`, `drawGradient`, `drawGradientBorder`, `drawImage`,
   clips, translations, scales and opacity layers).
 - **OpenGL 3.3 core** backs Skia on Windows and Linux (`SkikoRenderer`).
 - **Metal** backs Skia on macOS (`MetalSkikoRenderer`). macOS windows are created without an OpenGL

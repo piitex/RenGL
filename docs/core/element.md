@@ -142,7 +142,7 @@ element.onRender(event -> {
 ```
 
 `Renderer` calls are documented in [Architecture](../architecture.md#rendering-backends). The common ones
-are `drawQuad`, `drawBorder`, `drawLine`, `drawCircle`, `drawText`, `drawGradient` and `drawImage`.
+are `drawQuad`, `drawBorder`, `drawLine`, `drawCircle`, `drawText`, `drawGradient`, `drawGradientBorder` and `drawImage`.
 
 The event classes are in `me.piitex.engine.ui.events`: `MouseClickEvent` (extends `MouseEvent`),
 `ElementUpdateEvent` and `ElementRenderEvent` (both extend `ElementEvent`, which has `getElement()`).

@@ -71,8 +71,9 @@ Rules:
 - Every `pushClip` needs exactly one `popClip`, every `pushOpacityLayer` exactly one `popOpacityLayer`, and the same
   for `pushTranslate`/`popTranslate` and `pushScale`/`popScale`. Pushes nest. An unmatched push corrupts the rest
   of the frame.
-- `drawQuad`/`drawBorder`/`drawLine`/`drawCircle` take a solid [`Color`](../styling/colors-and-paints.md#color). Only `drawText` and `drawGradient` take
-  gradients.
+- `drawQuad`/`drawBorder`/`drawLine`/`drawCircle` take a solid [`Color`](../styling/colors-and-paints.md#color). `drawText`, `drawGradient` and
+  `drawGradientBorder` take gradients. `drawQuad` and `drawBorder` also have overloads that take any `Paint` and pick
+  the right call, which is handy for drawing a styling color that may be either.
 
 ## Drawing text
 
