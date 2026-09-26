@@ -1,6 +1,7 @@
 package me.piitex.engine.gl.renderer;
 
 import me.piitex.engine.gl.renderer.metal.MetalSkikoRenderer;
+import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.LinearGradient;
 import me.piitex.engine.ui.color.Paint;
@@ -279,6 +280,37 @@ public interface Renderer {
 
     private static Color unpackColor(int argb) {
         return new Color(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f, (argb & 0xFF) / 255f, (argb >>> 24) / 255f);
+    }
+
+    /**
+     * Fills a rectangle with {@code effect}'s shader, with its top-left corner at (x, y) and the same corner-radius
+     * rules as {@link #drawQuad}. The shader's {@code coord} runs from (0, 0) at that corner to ({@code width},
+     * {@code height}), in points, whatever transform is in effect. A null or closed effect, or an empty rectangle, is
+     * a no-op.
+     * <p>
+     * The default implementation draws nothing, so a custom Renderer keeps working without overriding this.
+     */
+    default void drawShader(ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
+    }
+
+    /**
+     * Passes everything drawn after this call, until the matching {@link #popEffect()}, through {@code effect}:
+     * post-processing. The drawing is collected in an offscreen layer covering (x, y, width, height) and handed to the
+     * shader as its {@code uniform shader content}. The shader's result is drawn in that rectangle, and nothing
+     * outside it. Its {@code coord} is in the current coordinate space, the same one (x, y) is in, so
+     * {@code content.eval(coord)} reads the drawing at the point being colored.
+     * <p>
+     * An effect that is null, closed or declares no {@code content} leaves the drawing unchanged. Nests, and must be
+     * paired with exactly one {@link #popEffect()}. The default implementation leaves the drawing unchanged, so a
+     * custom Renderer keeps working without overriding this.
+     */
+    default void pushEffect(ShaderEffect effect, float x, float y, float width, float height) {
+    }
+
+    /**
+     * Pops the effect most recently pushed by {@link #pushEffect}, drawing what was drawn since through it.
+     */
+    default void popEffect() {
     }
 
     /**

@@ -1,7 +1,9 @@
 package me.piitex.engine.gl.renderer.metal;
 
 import me.piitex.engine.gl.renderer.Renderer;
+import me.piitex.engine.gl.renderer.SkiaEffects;
 import me.piitex.engine.gl.renderer.SkiaImages;
+import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.utils.flags.GeneratedFragments;
@@ -312,6 +314,24 @@ public class MetalSkikoRenderer implements Renderer {
                 canvas.drawRect(Rect.makeXYWH(x, y, width, height), paint);
             }
         }
+    }
+
+    @Override
+    public void drawShader(ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
+        if (!frameValid) return;
+        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius);
+    }
+
+    @Override
+    public void pushEffect(ShaderEffect effect, float x, float y, float width, float height) {
+        if (!frameValid) return;
+        SkiaEffects.pushEffect(canvas, effect, x, y, width, height);
+    }
+
+    @Override
+    public void popEffect() {
+        if (!frameValid) return;
+        SkiaEffects.popEffect(canvas);
     }
 
     @Override

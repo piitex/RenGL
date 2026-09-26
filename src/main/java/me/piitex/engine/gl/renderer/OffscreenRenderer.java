@@ -1,5 +1,6 @@
 package me.piitex.engine.gl.renderer;
 
+import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.GradientUtil;
 import me.piitex.engine.ui.color.LinearGradient;
@@ -267,6 +268,21 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
                 canvas.drawRect(Rect.makeXYWH(x, y, width, height), paint);
             }
         }
+    }
+
+    @Override
+    public void drawShader(ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
+        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius);
+    }
+
+    @Override
+    public void pushEffect(ShaderEffect effect, float x, float y, float width, float height) {
+        SkiaEffects.pushEffect(canvas, effect, x, y, width, height);
+    }
+
+    @Override
+    public void popEffect() {
+        SkiaEffects.popEffect(canvas);
     }
 
     @Override

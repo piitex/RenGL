@@ -34,6 +34,8 @@ public final class GameTime {
     private static volatile float realDelta;
     private static volatile long ticks;
     private static volatile float alpha;
+    private static volatile long frames;
+    private static volatile boolean inFixedStep;
     private static double accumulator; // render thread only
 
     private GameTime() {
@@ -146,6 +148,22 @@ public final class GameTime {
     }
 
     /**
+     * How many frames have started since the engine started (or since {@link #reset}), paused or not. It goes up by
+     * one at the start of each frame, just before the frame's fixed steps.
+     */
+    public static long getFrameCount() {
+        return frames;
+    }
+
+    /**
+     * True while a fixed step runs, that is inside {@link Scene#fixedUpdate}. Lets code called from both kinds of
+     * update, such as {@link me.piitex.engine.graphics.DebugDraw}, tell which one it is in.
+     */
+    public static boolean isInFixedStep() {
+        return inFixedStep;
+    }
+
+    /**
      * How far game time is past the last fixed step, as a fraction of a step from 0 up to 1. To draw something that
      * moves in {@link Scene#fixedUpdate} without stutter, remember its position before and after each step and draw
      * it at {@code previous + (current - previous) * alpha}. {@link Scene#render} is given this value.
@@ -165,6 +183,7 @@ public final class GameTime {
         realDelta = 0f;
         ticks = 0;
         alpha = 0f;
+        frames = 0;
         accumulator = 0;
     }
 
@@ -176,6 +195,7 @@ public final class GameTime {
         double step = 1.0 / tickRate;
         float scaled = paused ? 0f : frameDelta * timeScale;
 
+        frames++;
         realDelta = frameDelta;
         delta = scaled;
         realTime += frameDelta;
@@ -190,7 +210,12 @@ public final class GameTime {
         }
         for (int i = 0; i < due; i++) {
             accumulator -= step;
-            fixedStep.run();
+            inFixedStep = true;
+            try {
+                fixedStep.run();
+            } finally {
+                inFixedStep = false;
+            }
             ticks++;
         }
         alpha = (float) Math.max(0.0, Math.min(1.0, accumulator / step));

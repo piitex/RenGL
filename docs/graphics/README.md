@@ -11,6 +11,8 @@ are, how they move and how the camera follows them is up to the game.
 | [Sprites](sprites.md) | `Texture`, `TextureRegion` and `Sprite`: pictures placed, turned, scaled, mirrored and tinted; `SpriteBatch` to draw many in layer order, skipping those out of view, in few draw calls |
 | [Texture atlases](atlases.md) | `TextureAtlas`: named pictures from one packed image, read from the JSON that texture packers and Aseprite export, or built from a grid |
 | [Sprite animation](sprite-animation.md) | `Animation` and `AnimationPlayer`: frame-by-frame animation, loop modes, frame events |
+| [Shaders and post effects](shaders.md) | `ShaderEffect`: SkSL shaders that fill shapes, or post-process what's drawn, on the whole screen or one element |
+| [Debug drawing](debug-drawing.md) | `DebugDraw`: lines, shapes and labels in world space for seeing hit boxes, rays and state, from fixed steps or frames |
 
 They fit together like this:
 
@@ -35,4 +37,4 @@ Each piece can be used without the others. A sprite can be drawn without a batch
 
 A runnable example is `me.piitex.examples.demo.SpriteDemo`: a tile world with a few hundred hopping slimes and
 spinning coins from a packed sprite sheet, a camera that follows the player and can zoom and turn, and a minimap
-drawn by a second camera.
+drawn by a second camera. It also has a shader-drawn sea, post effects on F2 and a debug view on F1.

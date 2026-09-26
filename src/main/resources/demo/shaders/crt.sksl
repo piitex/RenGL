@@ -1,0 +1,16 @@
+// An old monitor: a curved screen, color fringes, scanlines and dark corners.
+uniform shader content;
+uniform float2 size;  // the area the effect covers, in points
+
+half4 main(float2 coord) {
+    float2 uv = coord / size * 2.0 - 1.0;      // -1 to 1 across the area
+    uv *= 1.0 + 0.05 * dot(uv.yx, uv.yx);      // bulge
+    float2 p = (uv + 1.0) * 0.5 * size;
+    if (p.x < 0.0 || p.y < 0.0 || p.x > size.x || p.y > size.y) return half4(0, 0, 0, 1);
+    half r = content.eval(p + float2(1.2, 0)).r;
+    half g = content.eval(p).g;
+    half b = content.eval(p - float2(1.2, 0)).b;
+    float scanline = 0.8 + 0.2 * sin(p.y * 2.1);
+    float corners = 1.0 - 0.18 * dot(uv, uv);
+    return half4(half3(r, g, b) * scanline * corners, 1);
+}

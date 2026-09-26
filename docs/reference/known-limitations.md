@@ -122,6 +122,11 @@ source. If you hit something not listed here, please add it.
 - **Smooth sprites turned at an angle can leave a few see-through pixels between them in snapshots.** Only the CPU
   renderer that [snapshots](../core/snapshots.md) use does this, and only for sprites of a smooth texture drawn
   turned. On screen, and for pixel-art textures, sprites side by side never leave gaps.
+- **Shaders are SkSL only.** GLSL, HLSL and Metal shaders can't be loaded directly; SkSL is close to GLSL, so most
+  fragment shaders port by renaming the entry point and replacing texture reads with `eval`.
+- **Post effects on a turned camera are resampled.** Inside a turned `Camera`, `pushEffect`'s layer is drawn upright
+  and turned afterwards, so its content is slightly softer than without the effect. Push effects outside the camera,
+  in window coordinates, to avoid it.
 
 ## Not implemented yet
 

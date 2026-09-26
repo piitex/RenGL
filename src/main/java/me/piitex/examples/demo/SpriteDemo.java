@@ -10,6 +10,8 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.graphics.Animation;
 import me.piitex.engine.graphics.AnimationPlayer;
 import me.piitex.engine.graphics.Camera;
+import me.piitex.engine.graphics.DebugDraw;
+import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.graphics.Sprite;
 import me.piitex.engine.graphics.SpriteBatch;
 import me.piitex.engine.graphics.Texture;
@@ -23,7 +25,7 @@ import me.piitex.engine.ui.overlays.TextOverlay;
 import me.piitex.engine.ui.text.Font;
 import me.piitex.engine.ui.theme.DarkTheme;
 import me.piitex.engine.ui.theme.ThemeManager;
-import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -50,9 +52,15 @@ import static org.lwjgl.glfw.GLFW.*;
  *   <li>A second camera draws the minimap in the corner. The map there is drawn once into an image at startup.</li>
  *   <li>Clicking drops a new slime where you click, found with {@link Camera#screenToWorld}. The tile under the
  *       mouse is outlined.</li>
+ *   <li>The sea around the map is a shader, drawn with {@link Renderer#drawShader} inside the camera so it moves and
+ *       turns with the world. F2 passes the world through a post effect with {@link Renderer#pushEffect}: night,
+ *       underwater or an old monitor. The shaders are the {@code .sksl} files in {@code demo/shaders}.</li>
+ *   <li>F1 shows a {@link DebugDraw} view: each slime's bounds and feet, the player's pick-up box and heading, which
+ *       come from the fixed steps, a ring where a coin was picked up, held for a moment, and the tile under the
+ *       mouse.</li>
  * </ul>
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class SpriteDemo {
 
     static void main() {
@@ -75,6 +83,11 @@ public class SpriteDemo {
         private static final Color HOVER = new Color(1f, 1f, 1f, 0.8f);
         private static final Color MINIMAP_VIEW = new Color(1f, 1f, 1f, 0.9f);
         private static final Color PLAYER_COLOR = new Color(0.45f, 0.75f, 1f, 1f);
+        private static final Color DEBUG_BOUNDS = new Color(1f, 1f, 1f, 0.35f);
+        private static final Color DEBUG_FEET = new Color(1f, 0.3f, 0.3f, 1f);
+        private static final Color DEBUG_PLAYER = new Color(0.3f, 1f, 0.4f, 1f);
+        private static final Color DEBUG_COIN = new Color(1f, 0.85f, 0.2f, 1f);
+        private static final String[] EFFECT_NAMES = {"none", "night", "underwater", "old monitor"};
 
         private final TextureAtlas atlas;
         private final int[][] map = new int[MAP][MAP];
@@ -87,6 +100,11 @@ public class SpriteDemo {
         private Texture mapImage;
         private final float[] outline = new float[10];
 
+        private final DebugDraw debug = new DebugDraw();
+        private ShaderEffect sea;
+        private final ShaderEffect[] effects = new ShaderEffect[EFFECT_NAMES.length]; // [0] stays null: no effect
+        private int effect;
+
         private final List<Slime> slimes = new ArrayList<>();
         private final List<Coin> coins = new ArrayList<>();
         private Slime player;
@@ -97,7 +115,8 @@ public class SpriteDemo {
 
         private final TextOverlay stats = new TextOverlay("", 14f, Color.WHITE);
         private final TextOverlay help = new TextOverlay(
-                "WASD / arrows move   Z / X zoom   Q / E turn the camera   R reset   Click drops a slime", 14f, Color.GRAY);
+                "WASD / arrows move   Z / X zoom   Q / E turn the camera   R reset   Click drops a slime   F1 debug view   F2 effect",
+                14f, Color.GRAY);
 
         WorldScene(TextureAtlas atlas) {
             this.atlas = atlas;
@@ -113,6 +132,12 @@ public class SpriteDemo {
 
             generateMap();
             mapImage = drawMapImage();
+
+            sea = ShaderEffect.load("src/main/resources/demo/shaders/sea.sksl");
+            effects[1] = ShaderEffect.load("src/main/resources/demo/shaders/night.sksl");
+            effects[2] = ShaderEffect.load("src/main/resources/demo/shaders/underwater.sksl");
+            effects[3] = ShaderEffect.load("src/main/resources/demo/shaders/crt.sksl");
+            debug.setEnabled(false);
 
             player = new Slime(MAP * TILE / 2f, MAP * TILE / 2f, PLAYER_COLOR);
             player.speed = 150f;
@@ -135,6 +160,12 @@ public class SpriteDemo {
                 Vec2 world = camera.screenToWorld((float) event.getMouseX(), (float) event.getMouseY());
                 spawnSlime(world.x(), world.y());
             });
+        }
+
+        @Override
+        protected void onExit() {
+            sea.close();
+            for (ShaderEffect e : effects) if (e != null) e.close();
         }
 
         @Override
@@ -177,7 +208,15 @@ public class SpriteDemo {
                 if (Math.abs(coin.x - player.x) < 10 && Math.abs(coin.y - player.y) < 8) {
                     it.remove();
                     collected++;
+                    debug.hold(0.6f).circle(coin.x, coin.y - 6, 9, DEBUG_COIN); // a pick-up lasts one step: hold it
+                    debug.hold(0.6f).text(coin.x + 8, coin.y - 20, "+1", DEBUG_COIN);
                 }
+            }
+            // Queued in a fixed step, these stay until the next one, so they show on every frame in between.
+            debug.rect(player.x - 10, player.y - 8, 20, 16, DEBUG_PLAYER);
+            if (player.dirX != 0 || player.dirY != 0) {
+                float length = (float) Math.hypot(player.dirX, player.dirY);
+                debug.arrow(player.x, player.y, player.x + player.dirX / length * 24, player.y + player.dirY / length * 24, DEBUG_PLAYER);
             }
         }
 
@@ -198,24 +237,52 @@ public class SpriteDemo {
             camera.setPosition(lerp(camera.getX(), targetX, follow), lerp(camera.getY(), targetY, follow));
 
             stats.setText(String.format(Locale.ROOT,
-                    "Sprites drawn %d   Out of view %d   Draw calls %d   Slimes %d   Coins %d   Zoom %dx   FPS %.0f",
+                    "Sprites drawn %d   Out of view %d   Draw calls %d   Slimes %d   Coins %d   Zoom %dx   Effect %s   FPS %.0f",
                     batch.getDrawnCount(), batch.getCulledCount(), batch.getDrawCallCount(), slimes.size(), collected,
-                    zoom, getWindow().getFps()));
+                    zoom, EFFECT_NAMES[effect], getWindow().getFps()));
         }
 
         @Override
         protected void render(Renderer renderer, float alpha) {
-            renderer.drawQuad(0, 0, (float) getContainer().getWidth(), (float) getContainer().getHeight(), BACKGROUND, 0f);
+            float width = camera.getViewportWidth(), height = camera.getViewportHeight();
+            ShaderEffect post = effects[effect];
+            if (post != null) {
+                setEffectUniforms(post, width, height, alpha);
+                renderer.pushEffect(post, 0, 0, width, height);
+            }
 
             camera.begin(renderer);
             Rect view = camera.getVisibleBounds();
+            sea.set("time", (float) GameTime.getTime());
+            renderer.drawShader(sea, view.x(), view.y(), view.width(), view.height(), 0f); // in world units
             addTiles(view);
             addCharacters(alpha);
             batch.draw(renderer, view);
             drawHover(renderer);
             camera.end(renderer);
 
+            if (post != null) renderer.popEffect();
+
+            if (debug.isEnabled()) {
+                for (Slime slime : slimes) {
+                    Rect bounds = slime.sprite.getBounds();
+                    if (!bounds.intersects(view)) continue;
+                    debug.rect(bounds, DEBUG_BOUNDS);
+                    debug.point(slime.sprite.getX(), slime.sprite.getY(), DEBUG_FEET);
+                }
+                debug.draw(renderer, camera); // above the effect, so it reads clearly
+            }
+
             drawMinimap(renderer, alpha);
+        }
+
+        private void setEffectUniforms(ShaderEffect post, float width, float height, float alpha) {
+            if (post.has("size")) post.set("size", width, height);
+            if (post.has("time")) post.set("time", (float) GameTime.getTime());
+            if (post.has("light")) {
+                Vec2 light = camera.worldToScreen(lerp(player.prevX, player.x, alpha), lerp(player.prevY, player.y, alpha) - 8);
+                post.set("light", light.x(), light.y()).set("radius", 90f * zoom);
+            }
         }
 
         /**
@@ -259,6 +326,7 @@ public class SpriteDemo {
             int tx = (int) Math.floor(world.x() / TILE), ty = (int) Math.floor(world.y() / TILE);
             if (tx < 0 || ty < 0 || tx >= MAP || ty >= MAP) return;
             renderer.drawBorder(tx * TILE, ty * TILE, TILE, TILE, HOVER, 1f / zoom, 0f);
+            debug.text(tx * TILE, (ty + 1) * TILE + 2 / camera.getZoom(), "tile " + tx + ", " + ty, Color.WHITE);
         }
 
         private void drawMinimap(Renderer renderer, float alpha) {
@@ -303,6 +371,8 @@ public class SpriteDemo {
                             zoom = 3;
                             camera.setRotation(0f);
                         }
+                        case GLFW_KEY_F1 -> debug.setEnabled(!debug.isEnabled());
+                        case GLFW_KEY_F2 -> effect = (effect + 1) % effects.length;
                         default -> {
                             return false;
                         }
