@@ -28,12 +28,34 @@ public class HorizontalLayout extends Layout {
     protected void moveChildToFront(Element child) {
     }
 
+    /**
+     * Every child's width plus the spacing between them.
+     */
+    @Override
+    public double getContentWidth() {
+        if (getElements().isEmpty()) return 0;
+        double width = -getSpacing();
+        for (Element child : getElements().values()) {
+            width += child.getWidth() + getSpacing();
+        }
+        return width;
+    }
+
+    /**
+     * The tallest child's height.
+     */
+    @Override
+    public double getContentHeight() {
+        double height = 0;
+        for (Element child : getElements().values()) {
+            height = Math.max(height, child.getHeight());
+        }
+        return height;
+    }
+
     @Override
     protected void layoutChildren() {
-        double contentWidth = -getSpacing();
-        for (Element child : getElements().values()) {
-            contentWidth += child.getWidth() + getSpacing();
-        }
+        double contentWidth = getContentWidth();
         double innerWidth = getWidth() - 2 * getPadding();
         double cursorX = getPadding() + Math.max(0, innerWidth - contentWidth) * getAlignment().horizontal();
 

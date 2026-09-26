@@ -56,5 +56,6 @@ avatar.setChildAlignment(badge, Layout.Alignment.TOP_RIGHT); // top-right
 ## Behavior notes
 
 - Children keep their own size. A child larger than the layout is aligned by its top-left corner and overflows.
+- `setSizeToContent(true)` makes the layout as big as its largest child on each axis, plus padding.
 - Click routing goes to the topmost child under the cursor. The front layer wins where children overlap.
 - Positions are recomputed every frame.

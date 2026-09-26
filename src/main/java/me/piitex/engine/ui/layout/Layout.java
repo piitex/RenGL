@@ -15,6 +15,10 @@ import me.piitex.engine.ui.Element;
  * or added some other way. There is normally nothing to call directly. Use
  * {@link #relayout()} after mutating a child's size directly, when the new position has
  * to take effect before the next frame.
+ * <p>
+ * By default a Layout keeps the size it was given. {@link #setSizeToContent} makes it
+ * grow or shrink to fit its children instead, which is what a Layout inside a {@link
+ * me.piitex.engine.ui.scroll.ScrollContainer} needs for the scroll range to match its content.
  */
 public abstract class Layout extends Container {
 
@@ -56,6 +60,8 @@ public abstract class Layout extends Container {
     private float spacing = 0f;
     private float padding = 0f;
     private Alignment alignment = Alignment.TOP_LEFT;
+    private boolean sizeToContentWidth;
+    private boolean sizeToContentHeight;
 
     protected Layout(double x, double y, double width, double height) {
         super(x, y, width, height);
@@ -95,6 +101,53 @@ public abstract class Layout extends Container {
     }
 
     /**
+     * Makes this Layout size itself to its children on both axes, or go back to the size it was given. See {@link #setSizeToContent(boolean, boolean)}.
+     */
+    public void setSizeToContent(boolean sizeToContent) {
+        setSizeToContent(sizeToContent, sizeToContent);
+    }
+
+    /**
+     * Makes this Layout's width and/or height follow its children: {@link #getContentWidth()} or {@link
+     * #getContentHeight()} plus the padding on both sides, kept up to date every frame as children are added,
+     * removed or resized. An axis left false keeps whatever size was last set. The usual case is a {@link
+     * VerticalLayout} of a fixed width inside a scroll container, with {@code setSizeToContent(false, true)}.
+     * <p>
+     * Nested Layouts that also size to content are measured first, so a column of rows sizes correctly in one
+     * pass. A parent that sizes its own children, such as a {@link me.piitex.engine.ui.containers.SplitContainer}
+     * pane, overrides this. Off on both axes by default.
+     */
+    public void setSizeToContent(boolean width, boolean height) {
+        this.sizeToContentWidth = width;
+        this.sizeToContentHeight = height;
+        relayout();
+    }
+
+    public boolean isSizeToContentWidth() {
+        return sizeToContentWidth;
+    }
+
+    public boolean isSizeToContentHeight() {
+        return sizeToContentHeight;
+    }
+
+    /**
+     * The width the children need, spacing included but not padding, from their current sizes. A Layout that
+     * sizes its children to itself, such as a {@link me.piitex.engine.ui.containers.SplitContainer}, has no
+     * such width and returns its own inner width.
+     */
+    public double getContentWidth() {
+        return Math.max(0, getWidth() - 2 * getPadding());
+    }
+
+    /**
+     * The height counterpart of {@link #getContentWidth()}.
+     */
+    public double getContentHeight() {
+        return Math.max(0, getHeight() - 2 * getPadding());
+    }
+
+    /**
      * Repositions every child per this Layout's rules, in child order (see {@link #getElements()}).
      */
     protected abstract void layoutChildren();
@@ -104,17 +157,35 @@ public abstract class Layout extends Container {
      * automatic pass in {@link #update}. Useful right after resizing a child directly.
      * <p>
      * This also relays out any child that is itself a Layout, such as a
-     * {@link HorizontalLayout} nested in a {@link VerticalLayout}. That child's own
-     * children were positioned relative to where it sat before this call moved it.
-     * Without the nested pass they would stay stale until that Layout next updated on
-     * its own, which happens every frame once the engine is running, but would be wrong
-     * if read immediately after building the tree.
+     * {@link HorizontalLayout} nested in a {@link VerticalLayout}. Without the nested
+     * pass it would stay stale until that Layout next updated on its own, which happens
+     * every frame once the engine is running, but would be wrong if read immediately
+     * after building the tree.
+     * <p>
+     * It runs in two passes: sizes to content bottom-up, since a Layout's size depends on
+     * its children's, then positions top-down, since a Layout like {@link
+     * me.piitex.engine.ui.containers.SplitContainer} sizes its children to itself.
      */
     public void relayout() {
+        fitToContent();
+        arrange();
+    }
+
+    private void fitToContent() {
+        for (Element child : getElements().values()) {
+            if (child instanceof Layout nestedLayout) {
+                nestedLayout.fitToContent();
+            }
+        }
+        if (sizeToContentWidth) setWidth(getContentWidth() + 2 * getPadding());
+        if (sizeToContentHeight) setHeight(getContentHeight() + 2 * getPadding());
+    }
+
+    private void arrange() {
         layoutChildren();
         for (Element child : getElements().values()) {
             if (child instanceof Layout nestedLayout) {
-                nestedLayout.relayout();
+                nestedLayout.arrange();
             }
         }
     }
