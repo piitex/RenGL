@@ -21,6 +21,14 @@ public class VerticalLayout extends Layout {
         super(x, y, width, height);
     }
 
+    /**
+     * Does nothing: child order is the order children are placed top to bottom, so moving one to the front would move
+     * it to the end. Children do not overlap, so front and back make no difference.
+     */
+    @Override
+    protected void moveChildToFront(Element child) {
+    }
+
     @Override
     protected void layoutChildren() {
         double contentHeight = -getSpacing();

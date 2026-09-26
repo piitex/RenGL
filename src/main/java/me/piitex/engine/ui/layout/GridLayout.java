@@ -75,6 +75,14 @@ public class GridLayout extends Layout {
         this.rowSpacing = rowSpacing;
     }
 
+    /**
+     * Does nothing: child order is the order children are placed cell by cell, so moving one to the front would move
+     * it to the end. Children do not overlap, so front and back make no difference.
+     */
+    @Override
+    protected void moveChildToFront(Element child) {
+    }
+
     @Override
     protected void layoutChildren() {
         List<Element> children = new ArrayList<>(getElements().values());

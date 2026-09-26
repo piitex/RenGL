@@ -557,7 +557,8 @@ public class Container extends Element implements Themeable, Draggable {
      * or if it is already frontmost. Called automatically from {@link #onDragStart} so
      * picking up an overlapping draggable panel raises it above the others, the way a
      * window manager would. Call it directly to get the same behavior on a plain click
-     * instead of a drag.
+     * instead of a drag. Layouts whose child order sets positions, such as {@link
+     * me.piitex.engine.ui.layout.VerticalLayout}, ignore it.
      */
     public void bringToFront() {
         if (parent != null) {
