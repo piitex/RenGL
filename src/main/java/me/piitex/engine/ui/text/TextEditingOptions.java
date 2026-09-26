@@ -241,4 +241,14 @@ public class TextEditingOptions {
     public void applyThemeSelectionColor(Color selectionColor) {
         this.selectionColor.applyTheme(selectionColor);
     }
+
+    /**
+     * Undoes every explicit color set on this style, so they all follow the theme again, starting now.
+     */
+    public void followTheme() {
+        textColor.clearExplicit();
+        placeholderColor.clearExplicit();
+        caretColor.clearExplicit();
+        selectionColor.clearExplicit();
+    }
 }

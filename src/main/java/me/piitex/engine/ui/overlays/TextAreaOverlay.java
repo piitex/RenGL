@@ -201,6 +201,13 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         scrollBarStyle.applyThemeThumbColor(theme.getScrollThumb());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        options.followTheme();
+        scrollBarStyle.followTheme();
+    }
+
     /**
      * Use a custom font file instead of the system default. Cached by path, so it is cheap to call repeatedly with the same file.
      */

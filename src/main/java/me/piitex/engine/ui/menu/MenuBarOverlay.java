@@ -252,6 +252,14 @@ public class MenuBarOverlay extends Overlay implements Themeable {
         dividerColor.applyTheme(theme.getContainerBorder());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        textColor.clearExplicit();
+        highlightColor.clearExplicit();
+        dividerColor.clearExplicit();
+    }
+
     /* Update / render */
 
     @Override

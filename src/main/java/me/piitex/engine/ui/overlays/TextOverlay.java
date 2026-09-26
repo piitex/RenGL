@@ -337,4 +337,10 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
     public void applyTheme(Theme theme) {
         textColor.applyTheme(theme.getText());
     }
+
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        textColor.clearExplicit();
+    }
 }

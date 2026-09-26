@@ -8,13 +8,15 @@ import me.piitex.engine.ui.theme.Overridable;
  * drive it as a baseline (via the {@code applyThemeXxx} methods below, called from a
  * {@link me.piitex.engine.ui.theme.Themeable#applyTheme}) while any explicit {@code
  * setXxx} call from application code pins it against every future theme switch. See
- * {@link Overridable}'s own docs for the exact rule.
+ * {@link Overridable}'s own docs for the exact rule. The {@code resetXxx} methods undo a
+ * {@code setXxx}, and {@link #followTheme()} undoes them all.
  */
 public class Styling {
     private final Overridable<Paint> borderColor = new Overridable<>(Color.TRANSPARENT);
     private final Overridable<Paint> backgroundColor = new Overridable<>(Color.TRANSPARENT);
     private final Overridable<Paint> hoverColor = new Overridable<>(Color.TRANSPARENT);
     private boolean hoverFollowsBackground;
+    private boolean themeHoverFollowsBackground; // what a reset of the hover color goes back to
     private Paint textHoverColor;
     private final Overridable<Float> borderThickness = new Overridable<>(1f);
     private final Overridable<Float> cornerRadius = new Overridable<>(0.0f);
@@ -34,6 +36,13 @@ public class Styling {
         this.borderColor.applyTheme(borderColor);
     }
 
+    /**
+     * Undoes {@link #setBorderColor}: the border color follows the theme again, starting now.
+     */
+    public void resetBorderColor() {
+        borderColor.clearExplicit();
+    }
+
     public Paint getBackgroundColor() {
         return backgroundColor.get();
     }
@@ -47,6 +56,13 @@ public class Styling {
      */
     public void applyThemeBackgroundColor(Paint backgroundColor) {
         this.backgroundColor.applyTheme(backgroundColor);
+    }
+
+    /**
+     * Undoes {@link #setBackgroundColor}: the background follows the theme again, starting now.
+     */
+    public void resetBackgroundColor() {
+        backgroundColor.clearExplicit();
     }
 
     /**
@@ -68,6 +84,7 @@ public class Styling {
      */
     public void setHoverFollowsBackground(boolean follows) {
         this.hoverFollowsBackground = follows;
+        this.themeHoverFollowsBackground = follows;
     }
 
     /**
@@ -75,7 +92,17 @@ public class Styling {
      */
     public void applyThemeHoverColor(Paint hoverColor) {
         this.hoverFollowsBackground = false;
+        this.themeHoverFollowsBackground = false;
         this.hoverColor.applyTheme(hoverColor);
+    }
+
+    /**
+     * Undoes {@link #setHoverColor}: the hover color follows the theme again, starting now. On an element whose
+     * hover was {@link #setHoverFollowsBackground following the background}, it follows the background again.
+     */
+    public void resetHoverColor() {
+        hoverColor.clearExplicit();
+        hoverFollowsBackground = themeHoverFollowsBackground;
     }
 
     /**
@@ -107,6 +134,13 @@ public class Styling {
         this.borderThickness.applyTheme(borderThickness);
     }
 
+    /**
+     * Undoes {@link #setBorderThickness}: the border thickness follows the theme again, starting now.
+     */
+    public void resetBorderThickness() {
+        borderThickness.clearExplicit();
+    }
+
     public float getCornerRadius() {
         return cornerRadius.get();
     }
@@ -120,5 +154,24 @@ public class Styling {
      */
     public void applyThemeCornerRadius(float cornerRadius) {
         this.cornerRadius.applyTheme(cornerRadius);
+    }
+
+    /**
+     * Undoes {@link #setCornerRadius}: the corner radius follows the theme again, starting now.
+     */
+    public void resetCornerRadius() {
+        cornerRadius.clearExplicit();
+    }
+
+    /**
+     * Undoes every {@code setXxx} above at once, so all of these follow the theme again. The text hover color is
+     * not themed and is left as it is.
+     */
+    public void followTheme() {
+        resetBackgroundColor();
+        resetHoverColor();
+        resetBorderColor();
+        resetBorderThickness();
+        resetCornerRadius();
     }
 }

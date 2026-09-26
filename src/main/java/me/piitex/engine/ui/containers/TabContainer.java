@@ -366,6 +366,12 @@ public class TabContainer extends Layout {
     }
 
     @Override
+    public void followTheme() {
+        super.followTheme();
+        style.followTheme();
+    }
+
+    @Override
     protected void layoutChildren() {
         double border = getStyling().getBorderThickness();
         double innerWidth = Math.max(0, getWidth() - 2 * border);

@@ -557,6 +557,17 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         tickLabelColor.applyTheme(theme.getPlaceholderText());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        trackColor.clearExplicit();
+        fillColor.clearExplicit();
+        thumbColor.clearExplicit();
+        tickColor.clearExplicit();
+        labelColor.clearExplicit();
+        tickLabelColor.clearExplicit();
+    }
+
     // --- Rendering -------------------------------------------------------------------------------
 
     @Override
