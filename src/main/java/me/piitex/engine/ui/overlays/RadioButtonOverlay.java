@@ -19,8 +19,8 @@ import me.piitex.engine.ui.theme.Themeable;
  * <p>
  * Selection is exclusive only within a {@link RadioGroup}, so add every mutually
  * exclusive RadioButtonOverlay to the same group through {@link RadioGroup#add}. A
- * button not in any group selects itself in isolation when clicked, and nothing
- * deselects it afterward.
+ * button not in any group selects itself in isolation when clicked, and only
+ * {@link #setSelected setSelected(false)} deselects it afterward.
  * <p>
  * This class registers its own {@link #onMouseClick} handler to select itself. Calling
  * {@code onMouseClick(...)} afterward replaces that handler and stops the radio button
@@ -59,7 +59,7 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
     }
 
     /**
-     * Whether this button is currently the selected member of its {@link RadioGroup}, or, when ungrouped, whether it has ever been clicked. See the class docs.
+     * Whether this button is currently the selected member of its {@link RadioGroup}, or, when ungrouped, whether it has been clicked or set selected. See the class docs.
      */
     public boolean isSelected() {
         return selected;
@@ -73,14 +73,30 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
     public void select() {
         if (selected) return;
         if (group != null) {
-            group.select(this);
+            group.select(this, true);
         } else {
             selected = true;
         }
     }
 
     /**
-     * Package-private: only {@link RadioGroup} sets this directly, so it can select the chosen button and deselect its siblings in one pass. Everything else goes through {@link #select()}.
+     * Sets the selected state programmatically. Unlike {@link #select()}, this does not fire
+     * {@link RadioGroup#onChange}. Selecting still deselects the other members of its group,
+     * and deselecting the group's selected member leaves the group with no selection. This
+     * is also the only way to deselect a button that is not in a group.
+     */
+    public void setSelected(boolean selected) {
+        if (group == null) {
+            this.selected = selected;
+        } else if (selected) {
+            group.select(this, false);
+        } else if (group.getSelected() == this) {
+            group.select(null, false);
+        }
+    }
+
+    /**
+     * Package-private: only {@link RadioGroup} sets this directly, so it can select the chosen button and deselect its siblings in one pass. Everything else goes through {@link #select()} or {@link #setSelected}.
      */
     void setSelectedInternal(boolean selected) {
         this.selected = selected;

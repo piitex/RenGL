@@ -168,7 +168,7 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
     /**
      * Sets the value programmatically, clamped to {@code [min, max]} and snapped to
      * {@link #getStep()}. This does not fire {@link #onValueChange}, the same convention
-     * {@link CheckBoxOverlay#setChecked} and {@link RadioButtonOverlay} use for their
+     * {@link CheckBoxOverlay#setChecked} and {@link RadioButtonOverlay#setSelected} use for their
      * own programmatic setters. Dragging the thumb, or clicking the track, goes through
      * {@link #onDragStart} instead, which does fire it.
      */

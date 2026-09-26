@@ -106,7 +106,6 @@ source. If you hit something not listed here, please add it.
   both a child and its container.
 - **One listener per hook.** `onMouseClick`, `onUpdate`, `onRender` and most `onXxx` callbacks replace the previous
   listener rather than adding to it.
-- **[`RadioButtonOverlay`](../overlays/radio-button-overlay.md) has no silent select.** `select()` always fires the group's `onChange`.
 - **`Element.getZ()` is reserved** and unused by rendering or hit-testing.
 - **A drag keeps the cursor shape of the dragged element** for its whole duration, including when it is a text field
   selecting text outside its own box.

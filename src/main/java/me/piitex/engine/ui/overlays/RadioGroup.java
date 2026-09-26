@@ -17,12 +17,22 @@ public class RadioGroup {
     private Consumer<RadioButtonOverlay> onChange;
 
     /**
-     * Adds {@code button} to this group and points it back at this group. See {@link RadioButtonOverlay#getGroup()}. A no-op if {@code button} is null or already a member.
+     * Adds {@code button} to this group and points it back at this group. See {@link RadioButtonOverlay#getGroup()}.
+     * A button in another group leaves that group first. A selected button becomes this group's selection if the
+     * group has none, and is deselected if it already has one. {@link #onChange} does not fire. A no-op if
+     * {@code button} is null or already a member.
      */
     public void add(RadioButtonOverlay button) {
         if (button == null || buttons.contains(button)) return;
+        if (button.getGroup() != null) {
+            button.getGroup().remove(button);
+        }
         buttons.add(button);
         button.setGroupInternal(this);
+        if (button.isSelected()) {
+            if (selected == null) selected = button;
+            else button.setSelectedInternal(false);
+        }
     }
 
     /**
@@ -41,17 +51,29 @@ public class RadioGroup {
     }
 
     /**
-     * Selects {@code button} and deselects every other member. Called by {@link RadioButtonOverlay#select()}, so it is rarely called directly.
+     * Selects {@code button} and deselects every other member, or deselects them all if {@code button} is null. Called
+     * by {@link RadioButtonOverlay#select()} with {@code fire} set, and by {@link #setSelected} and
+     * {@link RadioButtonOverlay#setSelected} without it.
      */
-    void select(RadioButtonOverlay button) {
+    void select(RadioButtonOverlay button, boolean fire) {
         if (selected == button) return;
         selected = button;
         for (RadioButtonOverlay b : buttons) {
             b.setSelectedInternal(b == button);
         }
-        if (onChange != null) {
+        if (fire && onChange != null) {
             onChange.accept(button);
         }
+    }
+
+    /**
+     * Selects {@code button} programmatically, deselecting every other member, or clears the selection if it is
+     * null. Unlike a click or {@link RadioButtonOverlay#select()}, this does not fire {@link #onChange}. Ignored if
+     * {@code button} is not a member.
+     */
+    public void setSelected(RadioButtonOverlay button) {
+        if (button != null && !buttons.contains(button)) return;
+        select(button, false);
     }
 
     /**
@@ -69,7 +91,7 @@ public class RadioGroup {
     }
 
     /**
-     * Registers the callback fired with the newly selected button every time this group's selection changes. Only one is held at a time; calling this again replaces the previous one.
+     * Registers the callback fired with the newly selected button every time the user, or {@link RadioButtonOverlay#select()}, changes this group's selection. {@link #setSelected} and {@link RadioButtonOverlay#setSelected} do not fire it. Only one is held at a time; calling this again replaces the previous one.
      */
     public void onChange(Consumer<RadioButtonOverlay> onChange) {
         this.onChange = onChange;
