@@ -4,130 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4c9a2e17-6a4f-4c56-8432-20d3d4776a42" name="Changes" comment="Added clear function to remove all functions.">
+    <list default="true" id="4c9a2e17-6a4f-4c56-8432-20d3d4776a42" name="Changes" comment="Removed demo.png file.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/Engine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/Engine.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/FrameLimiter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/FrameLimiter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/Window.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/Window.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/AudioDecoder.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/AudioDecoder.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/AudioListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/AudioListener.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/DistanceModel.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/DistanceModel.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/FlacStream.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/FlacStream.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Mp3Stream.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Mp3Stream.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Music.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Music.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/OpusStream.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/OpusStream.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Pcm.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Pcm.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/PcmStream.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/PcmStream.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Playback.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Playback.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Sound.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/Sound.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/VorbisStream.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/audio/VorbisStream.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/config/Config.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/config/Config.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/config/ConfigException.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/config/ConfigException.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/config/ConfigParser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/config/ConfigParser.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/GLFWindow.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/GLFWindow.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/MacIcon.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/MacIcon.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/NativeMenuBar.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/NativeMenuBar.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/game/GameTime.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/game/GameTime.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/OffscreenRenderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/OffscreenRenderer.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Renderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Renderer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Snapshot.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Snapshot.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/SkiaImages.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/SkiaImages.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/SkikoRenderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/SkikoRenderer.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/metal/MetalSkikoRenderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/metal/MetalSkikoRenderer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/Clipboard.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/Clipboard.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/CursorManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/CursorManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/FileDialog.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/FileDialog.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/InputEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/InputEvent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/InputManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/InputManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/InputProcessor.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/InputProcessor.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/MouseTracker.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/input/MouseTracker.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/AppEnvironment.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/AppEnvironment.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/AssetManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/AssetManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/download/Download.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/download/Download.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/download/DownloadListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/download/DownloadListener.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/download/DownloadManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/download/DownloadManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/download/DownloadState.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/io/download/DownloadState.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/scheduler/AsyncTask.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/scheduler/AsyncTask.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/scheduler/Scheduler.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/scheduler/Scheduler.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/scheduler/Task.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/scheduler/Task.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/Draggable.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/Draggable.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/Element.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/Element.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/Focusable.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/Focusable.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/PopupKeyListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/PopupKeyListener.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/FadeTransition.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/FadeTransition.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/ProgressTransition.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/ProgressTransition.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/SpinTransition.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/SpinTransition.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/SweepTransition.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/SweepTransition.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/Transition.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/animation/Transition.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/AbstractBackground.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/AbstractBackground.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/AnimatedDotBackground.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/AnimatedDotBackground.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/Background.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/Background.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/ConstellationBackground.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/ConstellationBackground.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/DotGridBackground.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/background/DotGridBackground.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/color/ScrollingGradient.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/color/ScrollingGradient.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/color/StripeStyle.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/color/StripeStyle.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/color/Styling.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/color/Styling.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/Container.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/Container.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/ModalContainer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/ModalContainer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/ResizableContainer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/ResizableContainer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/SplitContainer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/SplitContainer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/TabContainer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/TabContainer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/TabStyle.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/containers/TabStyle.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/download/DownloadBarContainer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/download/DownloadBarContainer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/download/DownloadFormat.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/download/DownloadFormat.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/download/DownloadListContainer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/download/DownloadListContainer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/download/DownloadTextOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/download/DownloadTextOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/image/IconCache.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/image/IconCache.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/layout/GridLayout.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/layout/GridLayout.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/layout/Layout.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/layout/Layout.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/layout/StackLayout.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/layout/StackLayout.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/menu/MenuBarOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/menu/MenuBarOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/menu/MenuItem.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/menu/MenuItem.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/menu/MenuPopup.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/menu/MenuPopup.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/menu/PopupMenu.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/menu/PopupMenu.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/CheckBoxOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/CheckBoxOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/ColorPickerOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/ColorPickerOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/DateTimePickerOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/DateTimePickerOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/DropdownOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/DropdownOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/IconOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/IconOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/ImageOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/ImageOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/LoadingSpinnerOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/LoadingSpinnerOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/PopupPlacement.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/PopupPlacement.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/ProgressBarOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/ProgressBarOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/RadioButtonOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/RadioButtonOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/RichTextAreaOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/RichTextAreaOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/SeparatorOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/SeparatorOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/SliderOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/SliderOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/SpinnerOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/SpinnerOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/TextAreaOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/TextAreaOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/TextFieldOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/TextFieldOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/TextFlowOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/TextFlowOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/TextOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/TextOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/ToggleSwitchOverlay.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/overlays/ToggleSwitchOverlay.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/scroll/ScrollBarStyle.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/scroll/ScrollBarStyle.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/scroll/ScrollContainer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/scroll/ScrollContainer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/Font.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/Font.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/FontScalable.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/FontScalable.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/HunspellChecker.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/HunspellChecker.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/TextChecker.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/TextChecker.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/TextEditingOptions.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/TextEditingOptions.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/TextUndoHistory.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/TextUndoHistory.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/TooltipManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/text/TooltipManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/theme/Overridable.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/theme/Overridable.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/theme/Theme.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/theme/Theme.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/theme/ThemeManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/theme/ThemeManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/FileUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/FileUtil.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/FormID.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/FormID.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/Namespace.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/Namespace.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/Platform.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/Platform.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/ProcessUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/ProcessUtil.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/flags/GeneratedClass.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/flags/GeneratedClass.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/flags/GeneratedFragments.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/flags/GeneratedFragments.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/flags/GeneratedFunction.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/flags/GeneratedFunction.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/flags/Verified.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/utils/flags/Verified.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/AudioDemo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/AudioDemo.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/Demo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/Demo.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/DownloadDemo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/DownloadDemo.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/ResizableContainerDemo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/ResizableContainerDemo.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/SnapshotDemo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/SnapshotDemo.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/SplashDemo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/SplashDemo.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/SpriteDemo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/SpriteDemo.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -138,8 +25,8 @@
     <option name="RECENT_TEMPLATES">
       <list>
         <option value="Interface" />
-        <option value="AnnotationType" />
         <option value="Class" />
+        <option value="AnnotationType" />
       </list>
     </option>
   </component>
@@ -152,12 +39,12 @@
     &quot;assignee&quot;: &quot;HackusatePvP&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/piitex/RenGL.git",
-    "accountId": "cd81848c-ba0d-4265-8199-352e6b7ba8aa"
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/piitex/RenGL.git&quot;,
+    &quot;accountId&quot;: &quot;cd81848c-ba0d-4265-8199-352e6b7ba8aa&quot;
   }
-}]]></component>
+}</component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/src/main/java/me/piitex/engine/Window.java" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Renderer.java" root0="FORCE_HIGHLIGHTING" />
@@ -182,13 +69,17 @@
     "Application.AudioDemo.executor": "Run",
     "Application.Demo.executor": "Run",
     "Application.DownloadDemo.executor": "Run",
+    "Application.ElectricDemo.executor": "Run",
     "Application.FileDialogDemo.executor": "Run",
+    "Application.GameLoopDemo.executor": "Run",
     "Application.Main.executor": "Run",
     "Application.MenuDemo.executor": "Run",
     "Application.PickerDemo.executor": "Run",
+    "Application.PopupFollowDemo.executor": "Run",
     "Application.ResizableContainerDemo.executor": "Run",
     "Application.SnapshotDemo.executor": "Run",
     "Application.SplashDemo.executor": "Run",
+    "Application.SpriteDemo.executor": "Run",
     "Maven.RenGL [clean,compile].executor": "Run",
     "Maven.RenGL [clean,install].executor": "Run",
     "Maven.RenGL [clean,package].executor": "Run",
@@ -204,7 +95,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "feature/game-loop",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "/Users/annon/IdeaProjects/RenGL copy/src/main/resources",
     "node.js.detected.package.jshint": "true",
@@ -230,7 +121,7 @@
       <recent name="me.piitex.engine.io" />
     </key>
   </component>
-  <component name="RunManager" selected="Application.Demo">
+  <component name="RunManager" selected="Application.SpriteDemo">
     <configuration name="AudioDemo" type="Application" factoryName="Application" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.AudioDemo" />
       <module name="RenGL" />
@@ -273,8 +164,36 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
+    <configuration name="ElectricDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.ElectricDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="FileDialogDemo" type="Application" factoryName="Application" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.FileDialogDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="GameLoopDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.GameLoopDemo" />
       <module name="RenGL" />
       <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
       <extension name="coverage">
@@ -303,6 +222,20 @@
     </configuration>
     <configuration name="PickerDemo" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.PickerDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="PopupFollowDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.PopupFollowDemo" />
       <module name="RenGL" />
       <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
       <extension name="coverage">
@@ -357,8 +290,26 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
+    <configuration name="SpriteDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.SpriteDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
     <list>
+      <item itemvalue="Application.GameLoopDemo" />
+      <item itemvalue="Application.PopupFollowDemo" />
+      <item itemvalue="Application.SpriteDemo" />
       <item itemvalue="Application.AudioDemo" />
+      <item itemvalue="Application.ElectricDemo" />
       <item itemvalue="Application.DownloadDemo" />
       <item itemvalue="Application.FileDialogDemo" />
       <item itemvalue="Application.SnapshotDemo" />
@@ -370,10 +321,10 @@
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Application.Demo" />
-        <item itemvalue="Application.PickerDemo" />
-        <item itemvalue="Application.MenuDemo" />
         <item itemvalue="Application.ResizableContainerDemo" />
+        <item itemvalue="Application.Demo" />
+        <item itemvalue="Application.MenuDemo" />
+        <item itemvalue="Application.PickerDemo" />
       </list>
     </recent_temporary>
   </component>
@@ -398,20 +349,47 @@
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="VcsManagerConfiguration">
     <ignored-roots>
       <path value="$PROJECT_DIR$" />
     </ignored-roots>
-    <MESSAGE value="Added ScrollingGradient and fixed issues with LinearGradient." />
-    <MESSAGE value="Added JavaDoc" />
-    <MESSAGE value="Added ScrollingGradient to Demo." />
-    <MESSAGE value="Expanding FormID range to support ~16 million addresses." />
-    <MESSAGE value="Removed some comments." />
-    <MESSAGE value="Implemented audio through OpenAL." />
-    <MESSAGE value="Updated information." />
-    <MESSAGE value="Adjusted line spacing issues." />
-    <MESSAGE value="Added clear function to remove all functions." />
-    <option name="LAST_COMMIT_MESSAGE" value="Added clear function to remove all functions." />
+    <MESSAGE value="Added Nullable flag." />
+    <MESSAGE value="Removed demo.png file." />
+    <MESSAGE value="Add silent selection to radio buttons." />
+    <MESSAGE value="Add silent selection to radio buttons.&#10;&#10;RadioButtonOverlay.setSelected and RadioGroup.setSelected change the&#10;selection without firing onChange, like setChecked and setOn. setSelected&#10;(false) also deselects a button that has no group. RadioGroup.add now takes&#10;a button out of its old group, and no longer leaves two buttons selected&#10;when the added one was already selected." />
+    <MESSAGE value="Ordered layouts ignore bringToFront." />
+    <MESSAGE value="Ordered layouts ignore bringToFront.&#10;&#10;In VerticalLayout, HorizontalLayout and GridLayout the child order sets&#10;each child's position, so dragging a draggable child moved it to the end of&#10;the layout. These layouts now leave the order alone. StackLayout still&#10;raises the child, since its order is the drawing order." />
+    <MESSAGE value="Guard SplitContainer's divider and pane slots." />
+    <MESSAGE value="Guard SplitContainer's divider and pane slots.&#10;&#10;Removing the divider now throws, like TabContainer's tab strip. Replacing a&#10;pane or setting it to null detaches the old pane, setting a pane that is on&#10;the other side moves it instead of showing it twice, and bringToFront no&#10;longer moves a dragged pane out of its slot." />
+    <MESSAGE value="Show a scrollbar on long dropdown lists." />
+    <MESSAGE value="Show a scrollbar on long dropdown lists.&#10;&#10;A dropdown list with more items than maxVisibleRows now draws a themed&#10;scrollbar along its right edge. The thumb can be dragged and a press on&#10;the track jumps there; rows stop short of the bar so pressing it never&#10;picks a row. Styled through getScrollBarStyle. Docs updated." />
+    <MESSAGE value="Popups follow the element that opened them." />
+    <MESSAGE value="Popups follow the element that opened them.&#10;&#10;Window.showPopup takes an optional anchor element. Each frame after the&#10;update pass the popup moves with its anchor, stays inside the window&#10;(flipping above or below when one side runs out of room), and closes&#10;when the anchor is removed, disabled, or scrolled or clipped out of&#10;view. Dropdowns, color and date pickers, menus, context menus and the&#10;spelling suggestion popup all pass their anchor. Added PopupFollowDemo&#10;and updated the docs." />
+    <MESSAGE value="Clip container children to rounded corners." />
+    <MESSAGE value="Clip container children to rounded corners.&#10;&#10;A container with a corner radius now clips its children to the rounded&#10;shape instead of its bounding rectangle. ScrollContainer scrollbars are&#10;shortened just enough to stay inside the rounded corners. Docs updated." />
+    <MESSAGE value="Controls with a click listener no longer drag their container." />
+    <MESSAGE value="Controls with a click listener no longer drag their container.&#10;&#10;A press handed up to a draggable ancestor now stops at the first element&#10;that listens for clicks, so pressing a button on a draggable panel clicks&#10;it without moving the panel. Updated the javadocs and docs to match, and&#10;fixed a stale SplitContainer comment." />
+    <MESSAGE value="Added fps and frame-time data." />
+    <MESSAGE value="Added fps and frame-time data." />
+    <MESSAGE value="Add silent selection to radio buttons." />
+    <MESSAGE value="Ordered layouts ignore bringToFront." />
+    <MESSAGE value="Guard SplitContainer's divider and pane slots." />
+    <MESSAGE value="Show a scrollbar on long dropdown lists." />
+    <MESSAGE value="Popups follow the element that opened them." />
+    <MESSAGE value="Clip container children to rounded corners." />
+    <MESSAGE value="Controls with a click listener no longer drag their container." />
+    <option name="LAST_COMMIT_MESSAGE" value="Controls with a click listener no longer drag their container." />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
