@@ -4,6 +4,7 @@ import me.piitex.engine.gl.renderer.metal.MetalSkikoRenderer;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.LinearGradient;
 import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.Font;
 import org.jetbrains.skia.Image;
 
@@ -35,6 +36,7 @@ import org.jetbrains.skia.Image;
  * {@link #drawBorder(float, float, float, float, Paint, float, float)} overloads take
  * any Paint and pick the right call. See {@link me.piitex.engine.ui.Element#render}.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public interface Renderer {
 
     /**
@@ -194,8 +196,9 @@ public interface Renderer {
     }
 
     /**
-     * Draws {@code image} scaled to fill a (x, y, width, height) rectangle, using the
-     * same corner-radius rules as {@link #drawQuad} for rounded corners. {@code
+     * Draws {@code image} scaled to fill a (x, y, width, height) rectangle, blending
+     * neighbouring pixels when scaled, using the same corner-radius rules as
+     * {@link #drawQuad} for rounded corners. {@code
      * opacity} in [0, 1] fades the whole image uniformly (1 = fully opaque, 0 =
      * invisible); values outside that range are clamped. A null {@code image} is a
      * no-op, matching {@link #drawQuad}/{@link #drawBorder}'s null-{@link Color}
@@ -208,6 +211,75 @@ public interface Renderer {
      * colors as they are.
      */
     void drawImage(Image image, float x, float y, float width, float height, float cornerRadius, float opacity, Color tint);
+
+    /**
+     * Draws the part of {@code image} inside the source rectangle ({@code srcX}, {@code srcY}, {@code srcWidth},
+     * {@code srcHeight}), in image pixels, scaled to fill the destination rectangle ({@code x}, {@code y},
+     * {@code width}, {@code height}). Nothing outside the source rectangle is sampled, so neighbouring pictures on a
+     * sprite sheet never bleed in. The edges are not antialiased, so regions drawn side by side, such as tiles, leave
+     * no seams. To mirror or rotate the picture, draw it inside {@link #pushTransform}.
+     * <p>
+     * {@code color} is multiplied with the image: white or null draws it unchanged, and its alpha fades it. This
+     * differs from the recoloring {@code tint} of {@link #drawImage}. {@code smooth} picks the sampling when the image
+     * is scaled: true blends neighbouring pixels, false keeps hard pixel edges, as pixel art wants. A null
+     * {@code image} or an empty rectangle is a no-op.
+     * <p>
+     * The default implementation clips {@link #drawImage} to the destination, using only the alpha of {@code color}
+     * and ignoring {@code smooth}, so pixels beside the source rectangle can show faintly along its edges when scaled.
+     * It keeps a custom Renderer working without overriding this.
+     */
+    default void drawImageRegion(Image image, float srcX, float srcY, float srcWidth, float srcHeight,
+                                 float x, float y, float width, float height, Color color, boolean smooth) {
+        if (image == null || !(srcWidth > 0) || !(srcHeight > 0) || !(width > 0) || !(height > 0)) return;
+        float scaleX = width / srcWidth, scaleY = height / srcHeight;
+        float opacity = color == null ? 1f : color.getA();
+        pushClip(x, y, width, height);
+        drawImage(image, x - srcX * scaleX, y - srcY * scaleY, image.getWidth() * scaleX, image.getHeight() * scaleY, 0f, opacity);
+        popClip();
+    }
+
+    /**
+     * Draws {@code count} textured quads from one image in a single call, for drawing many sprites at once.
+     * <ul>
+     *   <li>{@code positions}: 8 floats per quad, the x and y of its four corners in the order top-left, top-right,
+     *       bottom-right, bottom-left of the picture. A quad may be moved, rotated, scaled or mirrored, but not
+     *       skewed.</li>
+     *   <li>{@code texCoords}: 8 floats per quad, the same four corners in image pixels. They must form an
+     *       upright rectangle: top-left, top-right, bottom-right, bottom-left.</li>
+     *   <li>{@code colors}: one ARGB int per quad, multiplied with the image as in {@link #drawImageRegion}; null for
+     *       white.</li>
+     * </ul>
+     * The arrays may be longer than {@code count} quads need; the rest is ignored. As with {@link #drawImageRegion},
+     * edges are not antialiased, so quads side by side leave no seams, {@code smooth} picks the sampling, and nothing
+     * outside a quad's rectangle of the image shows at its edges.
+     * <p>
+     * The default implementation draws each quad with {@link #drawImageRegion} inside {@link #pushTransform}, so a
+     * custom Renderer keeps working without overriding this.
+     */
+    default void drawImageQuads(Image image, boolean smooth, float[] positions, float[] texCoords, int[] colors, int count) {
+        if (image == null) return;
+        for (int q = 0; q < count; q++) {
+            int p = q * 8;
+            float sx = texCoords[p], sy = texCoords[p + 1];
+            float sw = texCoords[p + 2] - sx, sh = texCoords[p + 7] - sy;
+            if (!(sw > 0) || !(sh > 0)) continue;
+            float x0 = positions[p], y0 = positions[p + 1];
+            float axisX = positions[p + 2] - x0, axisY = positions[p + 3] - y0; // along the picture's top edge
+            float downX = positions[p + 6] - x0, downY = positions[p + 7] - y0; // along its left edge
+            double angle = Math.atan2(axisY, axisX);
+            float cos = (float) Math.cos(angle), sin = (float) Math.sin(angle);
+            float scaleX = (float) Math.hypot(axisX, axisY) / sw;
+            float scaleY = (downY * cos - downX * sin) / sh; // negative when mirrored top to bottom
+            Color color = colors == null ? null : unpackColor(colors[q]);
+            pushTransform(x0, y0, (float) Math.toDegrees(angle), scaleX, scaleY, 0f, 0f);
+            drawImageRegion(image, sx, sy, sw, sh, 0f, 0f, sw, sh, color, smooth);
+            popTransform();
+        }
+    }
+
+    private static Color unpackColor(int argb) {
+        return new Color(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f, (argb & 0xFF) / 255f, (argb >>> 24) / 255f);
+    }
 
     /**
      * Pushes an offscreen layer onto the canvas's save stack. Everything drawn after
@@ -273,4 +345,31 @@ public interface Renderer {
      * Pops the scale most recently pushed by {@link #pushScale}.
      */
     void popScale();
+
+    /**
+     * Moves, rotates and scales everything drawn after this call, until the matching {@link #popTransform()}. A
+     * point ({@code px}, {@code py}) drawn in between lands where the point ({@code originX}, {@code originY}) is
+     * first moved to (0, 0), then scaled by {@code scaleX} and {@code scaleY}, rotated clockwise by
+     * {@code rotation} degrees, and finally moved to ({@code x}, {@code y}). So the origin ends up at (x, y) and
+     * everything turns and scales around it. A negative scale mirrors along that axis. This is how a
+     * {@link me.piitex.engine.graphics.Camera} maps the world onto the screen, and how a rotated picture is drawn.
+     * Nests, and must be paired with exactly one {@link #popTransform()}.
+     * <p>
+     * The default implementation ignores {@code rotation} and scales both axes by {@code scaleX}, through
+     * {@link #pushTranslate} and {@link #pushScale}, so a custom Renderer keeps working without overriding this.
+     */
+    default void pushTransform(float x, float y, float rotation, float scaleX, float scaleY, float originX, float originY) {
+        pushTranslate(x, y);
+        pushScale(scaleX, 0f, 0f);
+        pushTranslate(-originX, -originY);
+    }
+
+    /**
+     * Pops the transform most recently pushed by {@link #pushTransform}.
+     */
+    default void popTransform() {
+        popTranslate();
+        popScale();
+        popTranslate();
+    }
 }

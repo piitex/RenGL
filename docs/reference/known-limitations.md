@@ -115,6 +115,14 @@ source. If you hit something not listed here, please add it.
 - **The resize cursors come from GLFW's standard cursor set.** They showed correctly on macOS. A platform or GLFW
   build without one falls back to the arrow, and the handles still work.
 
+## Graphics
+
+- **Rotated frames in packed sprite sheets aren't supported.** Turn rotation off in the packer; loading a sheet with
+  rotated frames fails with a message saying so.
+- **Smooth sprites turned at an angle can leave a few see-through pixels between them in snapshots.** Only the CPU
+  renderer that [snapshots](../core/snapshots.md) use does this, and only for sprites of a smooth texture drawn
+  turned. On screen, and for pixel-art textures, sprites side by side never leave gaps.
+
 ## Not implemented yet
 
 - **Stretching children.** A layout can size itself to its children but cannot size children to itself (fill the
