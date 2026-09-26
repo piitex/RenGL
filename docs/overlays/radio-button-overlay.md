@@ -19,7 +19,7 @@ plan.add(pro);
 ```
 
 Exclusivity only exists inside a group. A button that belongs to no group just selects itself when clicked, and
-nothing will ever deselect it.
+only `setSelected(false)` deselects it.
 
 ## Constructors
 
@@ -33,24 +33,27 @@ The corner radius is pinned to `size / 2` (that is what makes it a circle), so d
 ## Selecting
 
 ```java
-button.select(); // selects it; in a group, deselects the others and fires the group's onChange
+button.setSelected(true); // silent: deselects the others but does NOT fire onChange
+plan.setSelected(pro); // the same from the group; null clears the selection
+button.select(); // what a click runs: selects it and fires the group's onChange
 boolean chosen = button.isSelected();
 RadioGroup g = button.getGroup(); // null if not in a group
 ```
 
-`select()` fires the group's `onChange` callback. There is no silent selection method, so calling
-`select()` at startup to set a default also fires `onChange`. Register your `onChange` listener *after*
-setting the default if you do not want that.
+Use `setSelected` to set a default or to sync the buttons to your model, and only user choices reach `onChange`.
+`button.setSelected(false)` on the group's selected member leaves the group with no selection.
+`group.setSelected(b)` ignores a button that is not a member.
 
 ## RadioGroup
 
 | Method | Description |
 |---|---|
-| `add(RadioButtonOverlay)` | Adds a member and links it back to the group (no-op if already a member) |
+| `add(RadioButtonOverlay)` | Adds a member and links it back to the group (no-op if already a member). A button in another group leaves it first. A selected button becomes the selection if the group has none, and is deselected otherwise |
 | `remove(RadioButtonOverlay)` | Removes it. It becomes ungrouped. If it was selected, the group has no selection |
 | `getSelected()` | The selected member, or `null` |
+| `setSelected(RadioButtonOverlay)` | Silent select; `null` clears. Ignores non-members |
 | `getButtons()` | Members in the order they were added |
-| `onChange(Consumer<RadioButtonOverlay>)` | Fired with the newly selected button whenever selection changes |
+| `onChange(Consumer<RadioButtonOverlay>)` | Fired with the newly selected button when a click or `select()` changes the selection |
 
 `onChange` gives you the *button*, which carries no label, so keep your own mapping from button to meaning:
 
@@ -110,6 +113,7 @@ root.addElement(options);
 | Method | Description |
 |---|---|
 | `select()` | Select this button (fires group `onChange`) |
+| `setSelected(boolean)` | Silent select or deselect |
 | `isSelected()` | Whether it is the selected one |
 | `getGroup()` | Its `RadioGroup`, or `null` |
 | `getDotColor()` / `setDotColor(Color)` | Inner dot color; setting pins it |
