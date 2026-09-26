@@ -48,12 +48,11 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         setHeight(size);
         setCursorMode(CursorMode.POINTER);
         // A square box rounded at half its own size renders as a full circle rather
-        // than a rounded rect. That is a shape invariant, not a themed property, so
-        // cornerRadius is pinned through the plain setter rather than
-        // applyThemeCornerRadius (see Overridable). Theme#getCornerRadius() stays
-        // reserved for the square controls that use it: ButtonOverlay,
-        // TextFieldOverlay, and a themed Container.
-        getStyling().setCornerRadius((float) (size / 2));
+        // than a rounded rect. applyTheme never sets the corner radius, so this
+        // baseline stays through theme switches and followTheme(). Theme#getCornerRadius()
+        // is for the square controls that use it: ButtonOverlay, TextFieldOverlay, and
+        // a themed Container.
+        getStyling().applyThemeCornerRadius((float) (size / 2));
         onMouseClick(event -> select());
         ThemeManager.register(this);
     }
@@ -142,6 +141,12 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         getStyling().applyThemeBorderColor(theme.getFieldBorder());
         getStyling().applyThemeBorderThickness(theme.getBorderThickness());
         dotColor.applyTheme(theme.getText());
+    }
+
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        dotColor.clearExplicit();
     }
 
     /**

@@ -102,9 +102,9 @@ public class DownloadBarContainer extends VerticalLayout {
     private HorizontalLayout row(double height) {
         HorizontalLayout row = new HorizontalLayout(100, height);
         row.setAlignment(Layout.Alignment.CENTER_LEFT);
-        row.getStyling().setBackgroundColor(Color.TRANSPARENT);
-        row.getStyling().setHoverColor(Color.TRANSPARENT);
-        row.getStyling().setBorderThickness(0f);
+        row.getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
+        row.getStyling().applyThemeHoverColor(Color.TRANSPARENT);
+        row.getStyling().applyThemeBorderThickness(0f);
         return row;
     }
 

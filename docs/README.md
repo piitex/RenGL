@@ -81,7 +81,8 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
   listener. Calling one again *replaces* the previous listener. Widgets such as [`ButtonOverlay`](overlays/button-overlay.md) register
   their own click handler, so read the "Gotchas" section of a widget's page before replacing one.
 - **Setters that "pin".** Colors and geometry that a theme can drive are *pinned* the moment you call an
-  explicit setter, and a later theme switch will not overwrite them. See [Theming](styling/theming.md).
+  explicit setter, and a later theme switch will not overwrite them. `followTheme()` undoes that. See
+  [Theming](styling/theming.md).
 - **Code samples** assume the imports below unless a sample shows its own. Snippets that use a bare
   `window` or `root` refer to the [`Window`](core/window.md) and full-window [`Container`](containers/container.md) from the
   [first program](getting-started.md#your-first-window).

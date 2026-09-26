@@ -387,6 +387,16 @@ public class Element {
     }
 
     /**
+     * Undoes every explicit color and geometry set on this element, so it follows the theme again, starting now:
+     * its {@link #getStyling() styling} and, in widgets that have them, their own colors such as a text or fill
+     * color. To undo just one property, use the matching {@code resetXxx} on {@link Styling}. An element that never
+     * followed a theme goes back to its own default look.
+     */
+    public void followTheme() {
+        styling.followTheme();
+    }
+
+    /**
      * Replaces this Element's Styling wholesale. {@link me.piitex.engine.ui.overlays.TextOverlay} and similar subclasses configure specific Styling defaults, such as a transparent background, in their constructors, and calling this afterward overwrites those defaults as well.
      */
     public void setStyling(Styling styling) {

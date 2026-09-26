@@ -250,6 +250,15 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         scrollBarStyle.applyThemeThumbColor(theme.getScrollThumb());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        textColor.clearExplicit();
+        placeholderColor.clearExplicit();
+        selectionColor.clearExplicit();
+        scrollBarStyle.followTheme();
+    }
+
     /* Rendering */
 
     private org.jetbrains.skia.Font getFont() {

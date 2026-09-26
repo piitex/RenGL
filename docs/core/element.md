@@ -253,7 +253,7 @@ system. In practice you control order with `Container.addElement(element, index)
 |---|---|
 | Geometry | `getX/Y/Width/Height`, `setX/Y/Width/Height`, `setPosition`, `setBounds`, `contains` |
 | State | `isEnabled/setEnabled`, `isHovered`, `getOpacity/setOpacity`, `getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin` |
-| Look | `getStyling/setStyling`, `getBackground/setBackground`, `getCursorMode/setCursorMode`, `getTextAlignment/setTextAlignment` |
+| Look | `getStyling/setStyling`, `followTheme`, `getBackground/setBackground`, `getCursorMode/setCursorMode`, `getTextAlignment/setTextAlignment` |
 | Focus | `isFocusTraversable/setFocusTraversable`, `getTabIndex/setTabIndex` |
 | Tooltip | `getTooltip/setTooltip`, `getTooltipDelay/setTooltipDelay`, `getTooltipTheme/setTooltipTheme` |
 | Context menu | `getContextMenu/setContextMenu` |

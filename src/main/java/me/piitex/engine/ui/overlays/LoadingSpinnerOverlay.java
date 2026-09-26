@@ -83,4 +83,10 @@ public class LoadingSpinnerOverlay extends Overlay implements Themeable {
     public void applyTheme(Theme theme) {
         color.applyTheme(theme.getScrollThumb());
     }
+
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        color.clearExplicit();
+    }
 }

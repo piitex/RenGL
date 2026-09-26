@@ -323,6 +323,12 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         textColor.applyTheme(theme.getText());
     }
 
+    @Override
+    public void followTheme() {
+        super.followTheme();
+        textColor.clearExplicit();
+    }
+
     private org.jetbrains.skia.Font getFont() {
         Typeface typeface = Font.getDefault();
         if (font == null || typeface != fontTypeface) {
