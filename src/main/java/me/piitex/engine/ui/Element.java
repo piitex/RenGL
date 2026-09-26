@@ -402,11 +402,7 @@ public class Element {
      * {@link Renderer}: a plain {@link Color} goes through {@link Renderer#drawQuad}/
      * {@link Renderer#drawBorder}, while a {@link LinearGradient} (including an
      * animated {@link ScrollingGradient}) goes through {@link Renderer#drawGradient}
-     * instead, since that's a different draw call entirely rather than an overload.
-     * <p>
-     * Known gap: a {@link LinearGradient} border ({@code styling.getBorderColor()})
-     * is not drawn, because {@link Renderer} has no gradient-border primitive. Only a
-     * plain {@link Color} border renders.
+     * or {@link Renderer#drawGradientBorder}.
      * <p>
      * Subclasses that override this (e.g. {@link me.piitex.engine.ui.overlays.TextOverlay})
      * should generally call {@code super.render(renderer)} first so the background/
@@ -448,9 +444,12 @@ public class Element {
                         (float) x, (float) y, (float) width, (float) height,
                         (Color) borderPaint, styling.getBorderThickness(), styling.getCornerRadius()
                 );
-            } else if (borderPaint instanceof LinearGradient) {
-                // Gradient borders are not drawn: Renderer has no gradient-border
-                // primitive. Adding one would require a drawGradientBorder method there.
+            } else if (borderPaint instanceof LinearGradient grad) {
+                // Passed as-is so a ScrollingGradient border scrolls, same as the fill above.
+                renderer.drawGradientBorder(
+                        (float) x, (float) y, (float) width, (float) height,
+                        grad, styling.getBorderThickness(), styling.getCornerRadius()
+                );
             }
         }
 

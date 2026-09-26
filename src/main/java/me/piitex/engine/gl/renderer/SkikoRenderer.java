@@ -272,6 +272,24 @@ public class SkikoRenderer implements Renderer {
     }
 
     @Override
+    public void drawGradientBorder(float x, float y, float width, float height, LinearGradient gradient, float thickness, float cornerRadius) {
+        if (gradient == null || thickness <= 0) return;
+
+        try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint();
+             Shader shader = GradientUtil.buildShader(gradient, x, y, x + width, y + height)) {
+            paint.setShader(shader);
+            paint.setMode(PaintMode.STROKE);
+            paint.setStrokeWidth(thickness);
+            paint.setAntiAlias(true);
+            if (cornerRadius > 0) {
+                canvas.drawRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), paint);
+            } else {
+                canvas.drawRect(Rect.makeXYWH(x, y, width, height), paint);
+            }
+        }
+    }
+
+    @Override
     public void pushOpacityLayer(float x, float y, float width, float height, float opacity) {
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
             paint.setAlphaf(Math.max(0f, Math.min(1f, opacity)));
