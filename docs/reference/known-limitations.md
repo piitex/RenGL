@@ -38,6 +38,7 @@ source. If you hit something not listed here, please add it.
 - **`removeElement` leaves gaps** in the index space.
 - **The topmost container under the mouse takes the click, even where it is empty.** A transparent full-window
   container drawn above another container swallows every press meant for the one below. Add full-window roots first.
+  This includes [scenes](../game/scenes.md): the elements of a scene under an overlay scene can't be clicked.
 - **Layout positions are rewritten every frame.** A child of a layout cannot be positioned or dragged by hand,
   because the layout puts it back.
 - **Sizing to content is per layout.** Only layouts measure their children. A plain `Container` has no

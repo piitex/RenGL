@@ -31,7 +31,8 @@ new Engine().start(window);
 
 ## What the render thread does every frame
 In order: apply a pending resize, process input, advance an animated window background, run
-[`Scheduler`](scheduler.md) tasks and queued menu and file-dialog callbacks, call `update(delta)`
+[`Scheduler`](scheduler.md) tasks and queued menu and file-dialog callbacks, run the [scenes'](../game/scenes.md)
+fixed steps and updates on the [game clock](../game/game-time.md), call `update(delta)`
 on every enabled top-level container, update tooltips, clear and draw the window background, draw every
 enabled top-level container, draw the tooltip, and present. See [Architecture](../architecture.md#one-frame)
 for the full list.

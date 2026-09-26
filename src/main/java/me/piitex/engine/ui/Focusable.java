@@ -30,9 +30,9 @@ public interface Focusable {
     void onCharTyped(int codepoint);
 
     /**
-     * A raw GLFW key code pressed or repeated while this Element is focused (never
-     * called for {@code GLFW_RELEASE}; see
-     * {@link me.piitex.engine.input.InputProcessor}). This is intended for control keys
+     * A raw GLFW key code pressed, repeated or released while this Element is focused;
+     * {@code action} says which, and most controls ignore {@code GLFW_RELEASE}. See
+     * {@link me.piitex.engine.input.InputProcessor}. This is intended for control keys
      * such as backspace, delete, the arrows, and enter, which do not arrive through
      * {@link #onCharTyped}, and for modifier-driven shortcuts such as Ctrl/Cmd+A through
      * {@code mods}, a GLFW modifier bitmask of GLFW_MOD_SHIFT, CONTROL, ALT, and SUPER.
