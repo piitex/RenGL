@@ -1,6 +1,8 @@
 package me.piitex.engine;
 
 import me.piitex.engine.audio.Audio;
+import me.piitex.engine.game.GameTime;
+import me.piitex.engine.game.SceneManager;
 import me.piitex.engine.gl.GLFWindow;
 import me.piitex.engine.gl.NativeMenuBar;
 import me.piitex.engine.gl.renderer.metal.MetalContext;
@@ -28,7 +30,9 @@ import java.nio.IntBuffer;
 import java.util.Map;
 
 import static org.lwjgl.glfw.GLFW.*;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class Engine {
     private static final Logger log = LogManager.getLogger("Engine");
     private Window window;
@@ -167,6 +171,8 @@ public class Engine {
         applyVsync(options.isVsync());
 
         lastFrameTimeNanos = System.nanoTime();
+        GameTime.reset();
+        SceneManager scenes = window.getSceneManager();
 
         while (running) {
             long now = System.nanoTime();
@@ -215,6 +221,10 @@ public class Engine {
             NativeMenuBar.drainActions(); // callbacks of items chosen in the macOS system menu bar
             FileDialog.drainCallbacks();  // results of native open/save dialogs
             Scheduler.update(delta);      // runLater callbacks, timers, and async results
+
+            // Game time: the scenes' fixed steps (as many as this frame covers), then their per-frame update
+            GameTime.advance(delta, scenes::fixedUpdate);
+            scenes.update(GameTime.getDelta());
 
             // Update pass: fires onUpdate for every enabled container and element
             for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {

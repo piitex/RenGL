@@ -12,7 +12,9 @@ import me.piitex.engine.ui.events.MouseClickEvent;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Map;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class InputProcessor {
     private double absoluteMouseX = 0.0;
     private double absoluteMouseY = 0.0;
@@ -301,6 +303,12 @@ public class InputProcessor {
      * so nothing is taken away from them.
      */
     private void handleKey(Window window, InputEvent event) {
+        // A release always reaches the game as well, so a key held down in the game and let go while a text field
+        // or menu has the keyboard isn't left stuck down there.
+        if (event.action == GLFW.GLFW_RELEASE) {
+            window.getSceneManager().dispatchKey(event.buttonOrKey, event.action, event.mods);
+        }
+
         // An open popup that wants the keyboard (a menu) gets every key first and keeps it.
         if (window.getPopup() instanceof PopupKeyListener listener) {
             if (event.action != GLFW.GLFW_RELEASE) listener.onPopupKey(event.buttonOrKey, event.mods);
@@ -329,6 +337,12 @@ public class InputProcessor {
 
         if (window.getFocusedElement() instanceof Focusable focusable) {
             focusable.onKeyPressed(event.buttonOrKey, event.action, event.mods);
+            return;
+        }
+
+        // Nothing in the UI wants the key, so it is game input. A popup or modal keeps it from the game underneath.
+        if (event.action != GLFW.GLFW_RELEASE && window.getPopup() == null && window.getModal() == null) {
+            window.getSceneManager().dispatchKey(event.buttonOrKey, event.action, event.mods);
         }
     }
 

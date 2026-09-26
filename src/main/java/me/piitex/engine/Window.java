@@ -1,5 +1,6 @@
 package me.piitex.engine;
 
+import me.piitex.engine.game.SceneManager;
 import me.piitex.engine.gl.GLFWindow;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.Snapshot;
@@ -28,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 /**
  * Implements {@link Themeable} and registers itself automatically in its constructor,
@@ -40,10 +42,12 @@ import java.util.concurrent.ConcurrentSkipListMap;
  * themed property in this engine: the theme is only a baseline, and an explicit call
  * pins the background so later theme switches leave it alone. See {@link Overridable}.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class Window implements Themeable {
     private final WindowOptions windowOptions;
     private final ConcurrentSkipListMap<Integer, Container> containers = new ConcurrentSkipListMap<>();
     private final InputManager inputManager = new InputManager();
+    private final SceneManager sceneManager = new SceneManager(this);
     private GLFWindow glfWindow;
     private Element focusedElement;
     private final Overridable<Paint> backgroundColor = new Overridable<>(Color.WHITE);
@@ -463,6 +467,14 @@ public class Window implements Themeable {
     }
 
     /**
+     * The window's stack of game {@link me.piitex.engine.game.Scene scenes}. Scenes are drawn below every container
+     * added with {@link #addContainer(Container)}. See {@link SceneManager}.
+     */
+    public SceneManager getSceneManager() {
+        return sceneManager;
+    }
+
+    /**
      * Renders the whole window (backdrop plus every enabled container) into a {@link Snapshot}. See {@link Snapshot#of(Window, float)}.
      */
     public Snapshot takeSnapshot(float scale) {
@@ -551,7 +563,8 @@ public class Window implements Themeable {
     }
 
     public void addContainer(Container container) {
-        int nextIndex = containers.isEmpty() ? 0 : containers.lastKey() + 1;
+        // Never below 0, where the scene containers live (see SceneManager).
+        int nextIndex = containers.isEmpty() ? 0 : Math.max(0, containers.lastKey() + 1);
         containers.put(nextIndex, container);
         container.setWindow(this);
     }

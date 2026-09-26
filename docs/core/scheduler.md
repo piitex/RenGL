@@ -62,6 +62,9 @@ A repeating timer fires at most once per frame. If the app falls behind it does 
 - Timers count **frame delta**, the same clock the [transitions](../animation/transitions.md) use, so they stay in
   step with animations. Delta is capped at 0.25 seconds per frame, so a debugger pause or GC stall delays timers
   instead of firing them all at once.
+- Timers run on real time: they ignore the [game time](../game/game-time.md) scale and keep going while the game is
+  paused. For a timer that belongs to the game, use a [scene's](../game/scenes.md#timers) `after`/`every`, which
+  follow game time and stop while the scene is paused.
 - Timer precision is one frame. Use a [`Transition`](../animation/transitions.md) for smooth per-frame animation.
 - An exception thrown by a callback is logged and does not stop the engine or other tasks.
 - `Scheduler.shutdown()` is called by the engine on exit. It drops pending tasks and stops the worker threads.

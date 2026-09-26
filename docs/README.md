@@ -42,6 +42,9 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | Controls | [ButtonOverlay](overlays/button-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
 | Feedback | [ProgressBarOverlay](overlays/progress-bar-overlay.md) · [LoadingSpinnerOverlay](overlays/loading-spinner-overlay.md) · [SeparatorOverlay](overlays/separator-overlay.md) |
 | Images | [ImageOverlay](overlays/image-overlay.md) · [IconOverlay](overlays/icon-overlay.md) |
+| **[Game](game/README.md)** | Scenes and the game loop |
+| [Scenes](game/scenes.md) | `Scene` and `SceneManager`: menus, gameplay, pause menus, and moving between them |
+| [Game time](game/game-time.md) | Fixed-step updates, time scale, pausing, smooth drawing between steps |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
 | [Sound](audio/sound.md) | Short effects held in memory |
 | [Music](audio/music.md) | Streamed tracks, looping, crossfades |

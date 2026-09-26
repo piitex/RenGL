@@ -49,14 +49,19 @@ thread at the start of the next frame.
  3. Advance the window background       (an animated paint, and the window's Background effect if set)
  4. Deliver queued callbacks            (native menu choices, file dialog results)
  5. Scheduler.update                    (runLater tasks, timers, async results)
- 6. container.update(delta)             (every enabled top-level container, recursively)
- 7. TooltipManager.update
- 8. Clear the canvas; draw the window background and its Background effect
- 9. container.renderWithTransitions     (every enabled top-level container, in index order)
-10. TooltipManager.render               (above every container)
-11. Present
-12. Pace the frame                      (vsync waits for the display; with vsync off, sleep to WindowOptions.maxFPS)
+ 6. Scene fixed steps                   (Scene.fixedUpdate, as many ticks as this frame's game time covers)
+ 7. Scene updates                       (scene timers and Scene.update, with the frame's game time)
+ 8. container.update(delta)             (every enabled top-level container, recursively)
+ 9. TooltipManager.update
+10. Clear the canvas; draw the window background and its Background effect
+11. container.renderWithTransitions     (every enabled top-level container, in index order; scenes come first)
+12. TooltipManager.render               (above every container)
+13. Present
+14. Pace the frame                      (vsync waits for the display; with vsync off, sleep to WindowOptions.maxFPS)
 ```
+
+Steps 6 and 7 run on the game clock, which can be scaled and paused. Everything else runs on real time. See
+[Game time](game/game-time.md) and [Scenes](game/scenes.md).
 
 `delta` is the seconds since the previous frame, capped at 0.25 s so a debugger pause or GC stall does not
 make animations jump. Use it for anything time-based:
