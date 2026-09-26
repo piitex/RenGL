@@ -59,6 +59,10 @@ split.addElement(leftPane); // fills the first empty pane, then the second
 
 - `addElement(Element)` fills first, then second. A **third** call throws `IllegalStateException`.
 - `addElement(Element, int)` throws `UnsupportedOperationException`. Use `setFirst`/`setSecond`.
+- `removeElement(pane)` or `setFirst(null)`/`setSecond(null)` empties that side, and `addElement` fills it again. The
+  replaced or removed pane is detached, so it can be added elsewhere. Setting a pane that is already on the other
+  side moves it.
+- The divider cannot be removed. `removeElement` on it throws `UnsupportedOperationException`.
 - **Each pane is resized to fill its side every frame.** Anything that lays itself out inside (a [`Layout`](../layouts/README.md), a
   [`ScrollContainer`](scroll-container.md)) gets more or less room as the divider moves.
 - A pane that is a [`Container`](container.md) is set to clip its children so they cannot spill across the divider.

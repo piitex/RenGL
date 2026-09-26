@@ -20,8 +20,9 @@ import java.util.function.Consumer;
  * vertical divider, and {@link Orientation#VERTICAL} stacks them with a horizontal one.
  * <p>
  * The panes are set with {@link #setFirst} and {@link #setSecond} (or two {@link
- * #addElement} calls, filling first then second). Each is resized to fill its side
- * every frame, so anything that lays itself out inside, such as a {@link Layout} or a
+ * #addElement} calls, filling first then second). Removing a pane empties its side; the
+ * divider cannot be removed. Each pane is resized to fill its side every frame, so
+ * anything that lays itself out inside, such as a {@link Layout} or a
  * {@link me.piitex.engine.ui.scroll.ScrollContainer}, simply gets more or less room. A
  * pane that is a {@link Container} is set to clip its children so they cannot spill
  * across the divider while squeezed.
@@ -111,9 +112,12 @@ public class SplitContainer extends Layout {
     }
 
     private void setPane(int slot, Element pane) {
-        if (pane == null) {
-            getElements().remove(slot);
-            return;
+        if (getElements().get(slot) == pane) return;
+        super.removeElement(slot); // detaches the pane it replaces
+        if (pane == null) return;
+        int other = slot == FIRST ? SECOND : FIRST;
+        if (getElements().get(other) == pane) {
+            super.removeElement(other); // moving a pane to the other side
         }
         if (pane instanceof Container container) {
             container.setClipping(true);
@@ -138,6 +142,25 @@ public class SplitContainer extends Layout {
     @Override
     public void addElement(Element element, int index) {
         throw new UnsupportedOperationException("Use setFirst/setSecond");
+    }
+
+    /**
+     * Removing a pane empties its side. The divider cannot be removed.
+     */
+    @Override
+    public Element removeElement(int index) {
+        if (getElements().get(index) == divider) {
+            throw new UnsupportedOperationException("The divider cannot be removed");
+        }
+        return super.removeElement(index);
+    }
+
+    /**
+     * Panes keep their sides, so a pane that is dragged or brought to front stays where it is. They never overlap,
+     * so front and back make no difference.
+     */
+    @Override
+    protected void moveChildToFront(Element child) {
     }
 
     /**
