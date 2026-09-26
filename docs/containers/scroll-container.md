@@ -31,19 +31,22 @@ resize children.
 Two consequences:
 
 1. **Only direct children count.** The range comes from each direct child's own bounds. A
-   [`VerticalLayout`](../layouts/vertical-layout.md) placed in a scroll container counts as one child whose height is whatever you gave the
-   layout, so give it the *full content height*:
+   [`VerticalLayout`](../layouts/vertical-layout.md) placed in a scroll container counts as one child, so
+   let it [size to its content](../layouts/README.md#sizing-to-content) and the range follows the rows as
+   they are added or removed:
 
    ```java
    ScrollContainer scroll = new ScrollContainer(20, 20, 300, 200);
 
-   VerticalLayout rows = new VerticalLayout(20, 20, 280, 12 * 30); // tall enough for 12 rows
-   rows.setSpacing(0);
+   VerticalLayout rows = new VerticalLayout(280, 0);
+   rows.setSizeToContent(false, true); // keep the width, fit the height to the rows
    for (int i = 0; i < 12; i++) {
        rows.addElement(new TextOverlay("Row " + i, 16f, Color.BLACK));
    }
    scroll.addElement(rows);
    ```
+
+   A layout left at a fixed size counts as that size, and rows past its bottom edge are clipped by the layout itself.
 
 2. Content that starts away from the container's top-left (padding, a header) is handled correctly. The range
    is measured from the actual last edge.

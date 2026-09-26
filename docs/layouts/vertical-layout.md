@@ -44,9 +44,9 @@ Alignment is measured inside the padded area (`layoutSize - 2 * padding`). If th
 
 ## Behavior notes
 
-- The layout **does not grow** to fit its children. If the children total more height than the layout,
-  they continue down past its box and are clipped. Size it generously, or wrap it in a
-  [`ScrollContainer`](../containers/scroll-container.md).
+- The layout keeps the size you gave it unless you call `setSizeToContent`. Otherwise children that total
+  more height than the layout continue down past its box and are clipped. For a long list, use
+  `setSizeToContent(false, true)` and wrap it in a [`ScrollContainer`](../containers/scroll-container.md).
 - A child's own width and height are never changed. Give widgets the width you want them to have.
 - The order is the child index order. `addElement(child, index)` lets you insert at a specific slot.
 - Child positions are recalculated every frame, so a child's `setPosition` is overwritten.

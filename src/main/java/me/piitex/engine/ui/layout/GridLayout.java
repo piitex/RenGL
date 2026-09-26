@@ -83,22 +83,65 @@ public class GridLayout extends Layout {
     protected void moveChildToFront(Element child) {
     }
 
+    /**
+     * The column widths plus the column spacing between them, counting only columns that hold a child.
+     */
+    @Override
+    public double getContentWidth() {
+        if (getElements().isEmpty()) return 0;
+        double width = -columnSpacing;
+        for (double columnWidth : columnWidths(new ArrayList<>(getElements().values()))) {
+            width += columnWidth + columnSpacing;
+        }
+        return width;
+    }
+
+    /**
+     * The row heights plus the row spacing between them.
+     */
+    @Override
+    public double getContentHeight() {
+        if (getElements().isEmpty()) return 0;
+        double height = -rowSpacing;
+        for (double rowHeight : rowHeights(new ArrayList<>(getElements().values()))) {
+            height += rowHeight + rowSpacing;
+        }
+        return height;
+    }
+
+    /**
+     * Each used column's width: its widest child. Fewer than {@link #getColumns()} entries when there are fewer children than columns.
+     */
+    private double[] columnWidths(List<Element> children) {
+        double[] widths = new double[Math.min(columns, children.size())];
+        for (int i = 0; i < children.size(); i++) {
+            widths[i % columns] = Math.max(widths[i % columns], children.get(i).getWidth());
+        }
+        return widths;
+    }
+
+    /**
+     * Each row's height: its tallest child.
+     */
+    private double[] rowHeights(List<Element> children) {
+        double[] heights = new double[(children.size() + columns - 1) / columns];
+        for (int i = 0; i < children.size(); i++) {
+            heights[i / columns] = Math.max(heights[i / columns], children.get(i).getHeight());
+        }
+        return heights;
+    }
+
     @Override
     protected void layoutChildren() {
         List<Element> children = new ArrayList<>(getElements().values());
         int rows = (children.size() + columns - 1) / columns;
-        double[] columnWidths = new double[columns];
-        double[] rowHeights = new double[rows];
-        for (int i = 0; i < children.size(); i++) {
-            Element child = children.get(i);
-            columnWidths[i % columns] = Math.max(columnWidths[i % columns], child.getWidth());
-            rowHeights[i / columns] = Math.max(rowHeights[i / columns], child.getHeight());
-        }
+        double[] columnWidths = columnWidths(children);
+        double[] rowHeights = rowHeights(children);
 
         double top = getPadding();
         for (int row = 0; row < rows; row++) {
             double left = getPadding();
-            for (int col = 0; col < columns; col++) {
+            for (int col = 0; col < columnWidths.length; col++) {
                 int index = row * columns + col;
                 if (index < children.size()) {
                     Element child = children.get(index);
