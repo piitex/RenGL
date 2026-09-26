@@ -62,7 +62,9 @@ panel.addElement(top, 1); // draws over `bottom` and wins hit-testing where they
 ```
 
 `bringToFront()` moves a container to the last slot among its siblings. Dragging a draggable container calls it
-automatically, so the panel you pick up comes to the front.
+automatically, so the panel you pick up comes to the front. It does nothing inside a `VerticalLayout`,
+`HorizontalLayout`, `GridLayout` or `SplitContainer`, where the order places the children and they do not overlap.
+In a `StackLayout` it raises the child to the top of the stack.
 
 ## Clipping
 
