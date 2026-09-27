@@ -167,7 +167,9 @@ public interface Focusable {
 ```
 
 - **Clicking** a `Focusable` gives it focus. Clicking anything else, including empty space, clears focus.
-- While focused, it receives every char and key event. `onKeyPressed` is never called for key *release*.
+- While focused, it receives every char and key event except Tab, which moves focus, and an Escape that closes an
+  open popup or modal. `onKeyPressed` gets presses, repeats and releases; `action` says which, and most controls
+  ignore `GLFW_RELEASE`.
 - `mods` is a GLFW modifier bitmask (`GLFW.GLFW_MOD_SHIFT`, `_CONTROL`, `_ALT`, `_SUPER`).
 - For text, use `onCharTyped`. Use `onKeyPressed` for backspace, arrows, Enter and shortcuts.
 
