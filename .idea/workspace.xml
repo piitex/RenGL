@@ -6,15 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="4c9a2e17-6a4f-4c56-8432-20d3d4776a42" name="Changes" comment="Removed demo.png file.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/game/GameTime.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/game/GameTime.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/OffscreenRenderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/OffscreenRenderer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Renderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/Renderer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/SkiaImages.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/SkiaImages.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/SkikoRenderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/SkikoRenderer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/metal/MetalSkikoRenderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/gl/renderer/metal/MetalSkikoRenderer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/Element.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/engine/ui/Element.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/SpriteDemo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/me/piitex/examples/demo/SpriteDemo.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -72,6 +63,7 @@
     "Application.ElectricDemo.executor": "Run",
     "Application.FileDialogDemo.executor": "Run",
     "Application.GameLoopDemo.executor": "Run",
+    "Application.InputDemo.executor": "Run",
     "Application.Main.executor": "Run",
     "Application.MenuDemo.executor": "Run",
     "Application.PickerDemo.executor": "Run",
@@ -121,7 +113,7 @@
       <recent name="me.piitex.engine.io" />
     </key>
   </component>
-  <component name="RunManager" selected="Application.SpriteDemo">
+  <component name="RunManager" selected="Application.InputDemo">
     <configuration name="AudioDemo" type="Application" factoryName="Application" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.AudioDemo" />
       <module name="RenGL" />
@@ -194,6 +186,20 @@
     </configuration>
     <configuration name="GameLoopDemo" type="Application" factoryName="Application" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.GameLoopDemo" />
+      <module name="RenGL" />
+      <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="me.piitex.examples.demo.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="InputDemo" type="Application" factoryName="Application" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="me.piitex.examples.demo.InputDemo" />
       <module name="RenGL" />
       <option name="VM_PARAMETERS" value="-XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny" />
       <extension name="coverage">
@@ -306,6 +312,7 @@
     </configuration>
     <list>
       <item itemvalue="Application.GameLoopDemo" />
+      <item itemvalue="Application.InputDemo" />
       <item itemvalue="Application.PopupFollowDemo" />
       <item itemvalue="Application.SpriteDemo" />
       <item itemvalue="Application.AudioDemo" />
@@ -364,32 +371,32 @@
     <ignored-roots>
       <path value="$PROJECT_DIR$" />
     </ignored-roots>
-    <MESSAGE value="Added Nullable flag." />
-    <MESSAGE value="Removed demo.png file." />
-    <MESSAGE value="Add silent selection to radio buttons." />
-    <MESSAGE value="Add silent selection to radio buttons.&#10;&#10;RadioButtonOverlay.setSelected and RadioGroup.setSelected change the&#10;selection without firing onChange, like setChecked and setOn. setSelected&#10;(false) also deselects a button that has no group. RadioGroup.add now takes&#10;a button out of its old group, and no longer leaves two buttons selected&#10;when the added one was already selected." />
-    <MESSAGE value="Ordered layouts ignore bringToFront." />
-    <MESSAGE value="Ordered layouts ignore bringToFront.&#10;&#10;In VerticalLayout, HorizontalLayout and GridLayout the child order sets&#10;each child's position, so dragging a draggable child moved it to the end of&#10;the layout. These layouts now leave the order alone. StackLayout still&#10;raises the child, since its order is the drawing order." />
-    <MESSAGE value="Guard SplitContainer's divider and pane slots." />
-    <MESSAGE value="Guard SplitContainer's divider and pane slots.&#10;&#10;Removing the divider now throws, like TabContainer's tab strip. Replacing a&#10;pane or setting it to null detaches the old pane, setting a pane that is on&#10;the other side moves it instead of showing it twice, and bringToFront no&#10;longer moves a dragged pane out of its slot." />
-    <MESSAGE value="Show a scrollbar on long dropdown lists." />
-    <MESSAGE value="Show a scrollbar on long dropdown lists.&#10;&#10;A dropdown list with more items than maxVisibleRows now draws a themed&#10;scrollbar along its right edge. The thumb can be dragged and a press on&#10;the track jumps there; rows stop short of the bar so pressing it never&#10;picks a row. Styled through getScrollBarStyle. Docs updated." />
-    <MESSAGE value="Popups follow the element that opened them." />
-    <MESSAGE value="Popups follow the element that opened them.&#10;&#10;Window.showPopup takes an optional anchor element. Each frame after the&#10;update pass the popup moves with its anchor, stays inside the window&#10;(flipping above or below when one side runs out of room), and closes&#10;when the anchor is removed, disabled, or scrolled or clipped out of&#10;view. Dropdowns, color and date pickers, menus, context menus and the&#10;spelling suggestion popup all pass their anchor. Added PopupFollowDemo&#10;and updated the docs." />
-    <MESSAGE value="Clip container children to rounded corners." />
-    <MESSAGE value="Clip container children to rounded corners.&#10;&#10;A container with a corner radius now clips its children to the rounded&#10;shape instead of its bounding rectangle. ScrollContainer scrollbars are&#10;shortened just enough to stay inside the rounded corners. Docs updated." />
-    <MESSAGE value="Controls with a click listener no longer drag their container." />
-    <MESSAGE value="Controls with a click listener no longer drag their container.&#10;&#10;A press handed up to a draggable ancestor now stops at the first element&#10;that listens for clicks, so pressing a button on a draggable panel clicks&#10;it without moving the panel. Updated the javadocs and docs to match, and&#10;fixed a stale SplitContainer comment." />
-    <MESSAGE value="Added fps and frame-time data." />
-    <MESSAGE value="Added fps and frame-time data." />
-    <MESSAGE value="Add silent selection to radio buttons." />
-    <MESSAGE value="Ordered layouts ignore bringToFront." />
     <MESSAGE value="Guard SplitContainer's divider and pane slots." />
     <MESSAGE value="Show a scrollbar on long dropdown lists." />
     <MESSAGE value="Popups follow the element that opened them." />
     <MESSAGE value="Clip container children to rounded corners." />
     <MESSAGE value="Controls with a click listener no longer drag their container." />
-    <option name="LAST_COMMIT_MESSAGE" value="Controls with a click listener no longer drag their container." />
+    <MESSAGE value="Add object pooling." />
+    <MESSAGE value="Add object pooling." />
+    <MESSAGE value="Add geometry and raycasts, tweens and sequences, and an event bus." />
+    <MESSAGE value="Add geometry and raycasts, tweens and sequences, and an event bus." />
+    <MESSAGE value="Fix Focusable key event description in input docs." />
+    <MESSAGE value="Fix Focusable key event description in input docs." />
+    <MESSAGE value="Add game input: polled state, actions, contexts and rebinding." />
+    <MESSAGE value="Add game input: polled state, actions, contexts and rebinding." />
+    <MESSAGE value="Update README, .gitignore and IDE files; add save slot images." />
+    <MESSAGE value="Update README, .gitignore and IDE files; add save slot images." />
+    <MESSAGE value="Add shader effects and debug drawing." />
+    <MESSAGE value="Add shader effects and debug drawing." />
+    <MESSAGE value="Add a camera, sprites, atlases, frame animation and sprite batching." />
+    <MESSAGE value="Add a camera, sprites, atlases, frame animation and sprite batching." />
+    <MESSAGE value="Add scene transitions and a background loader." />
+    <MESSAGE value="Add scene transitions and a background loader." />
+    <MESSAGE value="Add scenes, game time and a fixed-step game loop." />
+    <MESSAGE value="Add scenes, game time and a fixed-step game loop." />
+    <MESSAGE value="Re-render icons at their new size after a resize." />
+    <MESSAGE value="Re-render icons at their new size after a resize." />
+    <option name="LAST_COMMIT_MESSAGE" value="Re-render icons at their new size after a resize." />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
