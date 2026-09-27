@@ -322,3 +322,6 @@ Showing a modal closes any popup and any previous modal, and clears focus. See
 `window.getInputManager()` returns the [`InputManager`](../input/input-and-focus.md#reference-the-input-types) that GLFW callbacks feed. You rarely need it.
 The [`InputProcessor`](../input/input-and-focus.md#reference-the-input-types) drains its event queue every frame. See
 [Input and focus](../input/input-and-focus.md).
+
+`window.getInput()` returns the window's [`Input`](../input/game-input.md): the keyboard and mouse state a game polls
+each frame, and the input contexts that are always active.

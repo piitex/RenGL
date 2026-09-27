@@ -111,8 +111,10 @@ public class Engine {
             window.notifyResized(newW, newH);
         });
 
+        window.getInputManager().refreshKeyNames();
         glfwSetWindowFocusCallback(windowHandle, (w, focused) -> {
             if (!focused) focusLost = true;
+            else window.getInputManager().refreshKeyNames(); // the keyboard layout may have changed while away
         });
 
         // callback: just record the size, do not mutate the layer

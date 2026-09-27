@@ -141,6 +141,8 @@ pattern is to keep hand-written defaults in code with `setDefault` and let `save
 
 `Config` is not thread-safe. Load and save it from one thread, or synchronize access yourself.
 
+Key bindings are stored in a config by [`InputContext.save` and `load`](../input/game-input.md#saving-bindings).
+
 ## Gotchas
 
 - **Stringly-typed round trips are safe:** `set("v", "true")` is written as `"true"` in quotes, so it reads back as

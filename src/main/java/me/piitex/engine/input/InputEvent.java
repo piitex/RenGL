@@ -1,5 +1,8 @@
 package me.piitex.engine.input;
 
+import me.piitex.engine.utils.flags.GeneratedFragments;
+
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class InputEvent {
 
     // TODO: Make dedicated class
@@ -22,7 +25,7 @@ public class InputEvent {
     public final int buttonOrKey;
     public final int action;
     /**
-     * GLFW modifier bitmask (GLFW_MOD_SHIFT/CONTROL/ALT/SUPER). Only meaningful for KEY events; 0 for every other type.
+     * GLFW modifier bitmask (GLFW_MOD_SHIFT/CONTROL/ALT/SUPER). Only meaningful for KEY and MOUSE_BUTTON events; 0 for every other type.
      */
     public final int mods;
 

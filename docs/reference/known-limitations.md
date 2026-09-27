@@ -112,6 +112,11 @@ source. If you hit something not listed here, please add it.
   does not drag it. Put the click handling on a smaller child (an icon or button) so the rest of the bar still drags.
 - **Re-entering the window relies on `WindowOptions` being current.** After macOS drops the "cursor entered" event
   following a live resize, a mouse move that lands inside the window is what re-enables hover and clicks.
+- **No gamepad support yet.** Game input covers the keyboard and mouse. See [Game input](../input/game-input.md).
+- **Key names follow the keyboard layout only for keys that print a character.** Other keys use fixed English names
+  ("Left Shift", "Page Up"). The layout is read when the window opens and each time it gains focus.
+- **Several wheel notches in one frame count as one press** of a wheel binding. `Input.getScrollY()` has the full
+  amount.
 - **The resize cursors come from GLFW's standard cursor set.** They showed correctly on macOS. A platform or GLFW
   build without one falls back to the arrow, and the handles still work.
 

@@ -5,6 +5,7 @@ import me.piitex.engine.gl.GLFWindow;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.Snapshot;
 import me.piitex.engine.scheduler.Scheduler;
+import me.piitex.engine.input.Input;
 import me.piitex.engine.input.InputManager;
 import me.piitex.engine.ui.background.Background;
 import me.piitex.engine.ui.containers.Container;
@@ -48,6 +49,7 @@ public class Window implements Themeable {
     private final ConcurrentSkipListMap<Integer, Container> containers = new ConcurrentSkipListMap<>();
     private final InputManager inputManager = new InputManager();
     private final SceneManager sceneManager = new SceneManager(this);
+    private final Input input = new Input(this);
     private GLFWindow glfWindow;
     private Element focusedElement;
     private final Overridable<Paint> backgroundColor = new Overridable<>(Color.WHITE);
@@ -464,6 +466,14 @@ public class Window implements Themeable {
 
     public InputManager getInputManager() {
         return inputManager;
+    }
+
+    /**
+     * The keyboard and mouse state for game code to poll, and the window's {@link me.piitex.engine.input.InputContext
+     * input contexts}. See {@link Input}.
+     */
+    public Input getInput() {
+        return input;
     }
 
     /**
