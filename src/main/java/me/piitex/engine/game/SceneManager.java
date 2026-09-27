@@ -275,6 +275,7 @@ public class SceneManager {
         scene.visible = false;
         scene.running = false;
         scene.getTimers().cancelAll();
+        scene.cancelSubscriptions();
         window.removeContainer(scene.getContainer());
         if (pendingExits != null) {
             scene.leaving = this; // onExit once the transition has finished drawing it

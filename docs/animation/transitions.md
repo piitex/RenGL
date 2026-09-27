@@ -2,8 +2,10 @@
 
 [Documentation](../README.md) › Animation
 
-RenGL animates through **transitions**: small self-contained objects you attach to any element with
-`playTransition`. The engine drives each one every frame until it says it is finished, then drops it.
+RenGL animates elements through **transitions**: small self-contained objects you attach to any element with
+`playTransition`. The engine drives each one every frame until it says it is finished, then drops it. To animate
+anything else, such as a camera, a sprite or a number your game draws, use a
+[tween or a sequence](tweens-and-sequences.md).
 
 ```java
 element.fadeIn(0.3f); // built-in convenience
@@ -133,8 +135,19 @@ Easing custom = t -> t * t * t; // any lambda; should map 0 to 0 and 1 to 1
 float y = Easing.EASE_OUT.apply(0.5f);
 ```
 
-It is a functional interface (`float apply(float t)`). `ProgressBarOverlay.animateTo` takes one. Your own
-transitions can use it the same way.
+More curves:
+
+| Constant | Shape |
+|---|---|
+| `EASE_IN_CUBIC`, `EASE_OUT_CUBIC`, `EASE_IN_OUT_CUBIC` | As the plain ones, more strongly |
+| `EASE_OUT_BACK` | Shoots about 10% past the end, then settles back: a pop |
+| `EASE_OUT_ELASTIC` | Wobbles past the end and back before it settles, like a spring |
+| `EASE_OUT_BOUNCE` | Lands and bounces a few times, each lower |
+
+`EASE_OUT_BACK` and `EASE_OUT_ELASTIC` go outside 0-1 on the way, so a value eased with them overshoots its target.
+
+It is a functional interface (`float apply(float t)`). `ProgressBarOverlay.animateTo`, [`Tween`](tweens-and-sequences.md)
+and [scene transitions](../game/transitions.md) take one. Your own transitions can use it the same way.
 
 ## Built-in transitions used by widgets
 
@@ -266,4 +279,4 @@ Two other kinds of motion do not use transitions:
 | `Element.getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin` | Whole-element drawing scale (default 1) and the point it scales around |
 | `ScaleTransition(from, to, seconds, easing, onComplete)` | Animates the scale |
 | `Transition` | `update`, `renderBackground` (default no-op), `render`, `isFinished`, `stop` (default returns `false`) |
-| `Easing` | `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_OUT`, `apply(float)` |
+| `Easing` | `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_OUT`, the `_CUBIC` variants, `EASE_OUT_BACK`, `EASE_OUT_ELASTIC`, `EASE_OUT_BOUNCE`, `apply(float)` |

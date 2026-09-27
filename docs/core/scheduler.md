@@ -14,8 +14,9 @@ before the window opens.
 | `Scheduler.every(seconds, Runnable)` | Repeats until cancelled. | `Timeline` with `INDEFINITE` |
 | `Scheduler.every(initialDelay, interval, Runnable)` | Same, with a different first delay. | |
 | `Scheduler.async(Supplier<T>)` | Runs blocking work on a worker thread. | `Task<T>` |
+| `Scheduler.play(Playable)` | Plays a [tween or sequence](../animation/tweens-and-sequences.md) on real time. | `Timeline`, `SequentialTransition` |
 
-All of them return a `Task` you can `cancel()`. `async` returns an `AsyncTask<T>`, which adds `onSuccess` and
+All of them return a `Task` you can `cancel()`. For `play`, that is the tween or sequence itself. `async` returns an `AsyncTask<T>`, which adds `onSuccess` and
 `onError`. Those callbacks are delivered on the render thread.
 
 ## Splash screen
@@ -65,7 +66,7 @@ A repeating timer fires at most once per frame. If the app falls behind it does 
   step with animations. Delta is capped at 0.25 seconds per frame, so a debugger pause or GC stall delays timers
   instead of firing them all at once.
 - Timers run on real time: they ignore the [game time](../game/game-time.md) scale and keep going while the game is
-  paused. For a timer that belongs to the game, use a [scene's](../game/scenes.md#timers) `after`/`every`, which
+  paused. For a timer that belongs to the game, use a [scene's](../game/scenes.md#timers-tweens-and-sequences) `after`/`every`, which
   follow game time and stop while the scene is paused.
 - Timer precision is one frame. Use a [`Transition`](../animation/transitions.md) for smooth per-frame animation.
 - An exception thrown by a callback is logged and does not stop the engine or other tasks.

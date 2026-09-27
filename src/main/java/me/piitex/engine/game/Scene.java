@@ -1,8 +1,11 @@
 package me.piitex.engine.game;
 
 import me.piitex.engine.Window;
+import me.piitex.engine.event.EventBus;
+import me.piitex.engine.event.Subscription;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.InputContext;
+import me.piitex.engine.scheduler.Playable;
 import me.piitex.engine.scheduler.Task;
 import me.piitex.engine.scheduler.Timers;
 import me.piitex.engine.ui.containers.Container;
@@ -11,6 +14,7 @@ import me.piitex.engine.utils.flags.GeneratedClass;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * One screen or state of a game: a main menu, the gameplay, a pause menu, a loading screen. Scenes live on the
@@ -45,6 +49,7 @@ public abstract class Scene {
     private boolean overlay;
     private boolean pausesBelow = true;
     private final List<InputContext> inputContexts = new ArrayList<>();
+    private final List<Subscription> subscriptions = new ArrayList<>();
 
     SceneManager manager; // non-null while on a stack
     SceneManager leaving; // non-null while drawn going out in a transition, until onExit
@@ -59,8 +64,8 @@ public abstract class Scene {
     }
 
     /**
-     * Called when the scene is removed from the stack. Its container is already off the window, and its timers are
-     * cancelled. When the removal plays a {@link SceneTransition}, this comes at the end of the transition, once the
+     * Called when the scene is removed from the stack. Its container is already off the window, and its timers,
+     * tweens, sequences and {@link #subscribe event subscriptions} are cancelled. When the removal plays a {@link SceneTransition}, this comes at the end of the transition, once the
      * scene has stopped being drawn, so it is the place to release anything {@link #render} uses. Not called when
      * the application closes; use {@link Window#onClose} for that.
      */
@@ -243,6 +248,36 @@ public abstract class Scene {
      */
     public Task every(float initialDelay, float interval, Runnable action) {
         return timers.every(initialDelay, interval, action);
+    }
+
+    /**
+     * Plays a {@link me.piitex.engine.scheduler.Tween Tween}, a {@link me.piitex.engine.scheduler.Sequence Sequence}
+     * or any other {@link Playable} on this scene's game time: like the scene's timers, it follows the time scale,
+     * stops while the scene is paused, and is cancelled if the scene is removed first. Played from the render thread,
+     * which includes every scene hook, it starts at once, so a tween's starting value is set before the next frame is
+     * drawn. Returns the handle to cancel it with: the tween or sequence itself, or a new {@link Task}. Use
+     * {@link me.piitex.engine.scheduler.Scheduler#play} to play one on real time instead.
+     */
+    public Task play(Playable playable) {
+        return timers.play(playable);
+    }
+
+    /**
+     * Subscribes {@code listener} to events of {@code type} on {@code bus} until this scene is removed from the stack,
+     * so a scene that subscribes in {@link #onEnter()} needs no clean-up. The listener also hears events while the
+     * scene is paused; check {@link #isRunning()} to ignore those. Returns the subscription, to cancel it sooner.
+     * Render thread only.
+     */
+    public <E> Subscription subscribe(EventBus bus, Class<E> type, Consumer<? super E> listener) {
+        Subscription subscription = bus.subscribe(type, listener);
+        subscriptions.removeIf(s -> !s.isActive());
+        subscriptions.add(subscription);
+        return subscription;
+    }
+
+    void cancelSubscriptions() {
+        for (Subscription subscription : subscriptions) subscription.cancel();
+        subscriptions.clear();
     }
 
     Timers getTimers() {

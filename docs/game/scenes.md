@@ -54,7 +54,7 @@ public class Level extends Scene {
 | Hook | When it runs |
 |---|---|
 | `onEnter()` | The scene was added to the stack. Build its UI here. |
-| `onExit()` | The scene was removed. Its container is already off the window and its timers are cancelled. With a [transition](transitions.md), this comes when the transition ends. |
+| `onExit()` | The scene was removed. Its container is already off the window, and its timers, tweens, sequences and event subscriptions are cancelled. With a [transition](transitions.md), this comes when the transition ends. |
 | `onPause()` / `onResume()` | A scene above started or stopped pausing this one. |
 | `fixedUpdate(step)` | At the fixed tick rate (60 per second by default), while the scene is running. For game logic and physics. See [Game time](game-time.md). |
 | `update(delta)` | Once per frame after the fixed steps, while the scene is running. `delta` is game time. |
@@ -161,11 +161,24 @@ or was just pressed. Presses a scene's `onKey` consumes don't reach any context.
 | `removeInputContext(context)` | Removes it |
 | `getInputContexts()` | The scene's contexts, in the order they were added |
 
-## Timers
+## Timers, tweens and sequences
 
 `after`, `every` and `every(initialDelay, interval, ...)` on a scene work like the [`Scheduler`](../core/scheduler.md)
-ones but run on the scene's game time. They slow down with the [time scale](game-time.md), stop while the scene is
-paused, and are cancelled when it is removed. Use `Scheduler` for timers that should keep real time.
+ones but run on the scene's game time. So does `play`, which runs a [tween or a sequence](../animation/tweens-and-sequences.md).
+They slow down with the [time scale](game-time.md), stop while the scene is paused, and are cancelled when it is
+removed. They run each frame just before the scene's `update`. Use `Scheduler` for ones that should keep real time.
+
+```java nocompile
+play(new Sequence()
+        .run(() -> banner.setText("Wave 2"))
+        .delay(2f)
+        .run(this::spawnWave));
+```
+
+## Events
+
+`subscribe(bus, type, listener)` listens on an [`EventBus`](events.md) until the scene is removed, so a scene that
+subscribes in `onEnter` needs no clean-up.
 
 ## Things to know
 

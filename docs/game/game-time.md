@@ -6,8 +6,8 @@
 
 | Clock | Drives | Pauses? | Time scale? |
 |---|---|---|---|
-| **Real time** | Elements, transitions, `onUpdate`, [`Scheduler`](../core/scheduler.md) timers | Never | No |
-| **Game time** | [Scenes](scenes.md): `fixedUpdate`, `update`, scene timers | With `GameTime.setPaused` | Yes |
+| **Real time** | Elements, transitions, `onUpdate`, [`Scheduler`](../core/scheduler.md) timers, tweens and sequences | Never | No |
+| **Game time** | [Scenes](scenes.md): `fixedUpdate`, `update`, scene timers, tweens and sequences | With `GameTime.setPaused` | Yes |
 
 Because the UI stays on real time, menus and buttons keep animating while the game is paused or in slow motion.
 

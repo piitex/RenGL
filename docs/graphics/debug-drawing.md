@@ -38,6 +38,7 @@ Every shape takes a `Color`. A null color draws nothing, as elsewhere in the eng
 | `fillRect(x, y, w, h, color)`, `fillRect(Rect, color)` | A filled rectangle. Give the color some transparency to see what's under it |
 | `circle(x, y, radius, color)`, `fillCircle(...)` | A circle's outline, or a filled one, around (x, y) |
 | `polygon(points, pointCount, color)` | The closed outline through packed `x0, y0, x1, y1, ...` points: a turned box, a collision shape, a path. The points are copied |
+| `shape(shape, color)` | The outline of a [`Rect`, `Circle` or `Polygon`](../game/geometry.md#shapes) |
 | `point(x, y, color)` | A dot |
 | `text(x, y, text, color)` | A label with its top-left at (x, y), in the [default font](../styling/fonts.md), with a dark shadow so it reads over anything |
 

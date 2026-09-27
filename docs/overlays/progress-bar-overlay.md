@@ -35,7 +35,7 @@ bar.animateTo(1.0, 3f, Easing.EASE_OUT, () -> System.out.println("done"));
 
 - `animateTo` replaces any tween already running. It starts from wherever the bar currently is, so it is safe to
   call repeatedly (for example on every incoming update).
-- [`Easing`](../animation/transitions.md#easing) constants: `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_OUT`, or any lambda `t -> ...`.
+- Any [`Easing`](../animation/transitions.md#easing): a constant such as `EASE_OUT`, or any lambda `t -> ...`.
 - The completion callback fires when the tween reaches its target, not when it is cancelled.
 
 ## Indeterminate mode
