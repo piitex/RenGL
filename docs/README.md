@@ -67,8 +67,9 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Fonts](styling/fonts.md) | `Font` and custom fonts |
 | [Images and icons](styling/images-and-icons.md) | `ImageLoader`, `IconCache`, the bundled Feather set |
 | **[Animation](animation/transitions.md)** | `Transition`, fades, scaling, easing, custom transitions |
-| **[Input](input/README.md)** | Clicks, drags, scrolling, focus, cursors, tooltips, menus |
+| **[Input](input/README.md)** | Clicks, drags, scrolling, focus, cursors, tooltips, menus, game controls |
 | [Input and focus](input/input-and-focus.md) | Clicks, drags, scrolling, keyboard focus, cursors, clipboard |
+| [Game input](input/game-input.md) | Polled keys and mouse, named actions and contexts, rebinding, saved key bindings |
 | [Tooltips](input/tooltips.md) | Hover bubbles |
 | [File dialogs](input/file-dialogs.md) | Native open, save and choose-folder dialogs |
 | [Menus](input/menus.md) | Menu bar, popup menus and right-click context menus |

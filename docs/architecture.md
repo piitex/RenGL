@@ -45,7 +45,7 @@ thread at the start of the next frame.
 
 ```text
  1. Handle window resize                (recreate the drawing surface if needed)
- 2. InputProcessor.processEvents        (mouse move, click and scroll, keys, typed chars)
+ 2. InputProcessor.processEvents        (mouse move, click and scroll, keys, typed chars; the game's Input state)
  3. Advance the window background       (an animated paint, and the window's Background effect if set)
  4. Deliver queued callbacks            (native menu choices, file dialog results)
  5. Scheduler.update                    (runLater tasks, timers, async results)
@@ -115,6 +115,13 @@ go up the same way (see the table).
 | Mouse release | The left button ends the drag; other buttons do not |
 | Scroll | Goes to the innermost [`Scrollable`](input/input-and-focus.md#scrolling) under the cursor, whatever child is directly beneath |
 | Key / char | Goes to the focused `Focusable`, except Tab (focus traversal) and Escape (closes a popup/modal first) |
+
+Whatever the interface leaves is game input. A key press no focused element, popup or modal took goes to the
+scenes' `onKey`, top first, and then to the polled [`Input`](input/game-input.md) state and its input contexts. A
+mouse press no element used (no click listener, focus, context menu or drag) and a wheel turn nothing scrolled go to
+`Input` too. Releases always reach the game. A controls menu waiting for a binding
+([`listenForBinding`](input/game-input.md#rebinding)) gets the next press before all of this. See
+[What reaches the game](input/game-input.md#what-reaches-the-game).
 
 Two special layers sit above normal containers:
 

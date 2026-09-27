@@ -17,7 +17,9 @@ import me.piitex.engine.graphics.SpriteBatch;
 import me.piitex.engine.graphics.Texture;
 import me.piitex.engine.graphics.TextureAtlas;
 import me.piitex.engine.graphics.TextureRegion;
-import me.piitex.engine.input.MouseTracker;
+import me.piitex.engine.input.Binding;
+import me.piitex.engine.input.Input;
+import me.piitex.engine.input.InputContext;
 import me.piitex.engine.math.Rect;
 import me.piitex.engine.math.Vec2;
 import me.piitex.engine.ui.color.Color;
@@ -43,7 +45,8 @@ import static org.lwjgl.glfw.GLFW.*;
  *       Aseprite export. Its tags become the hop, coin spin and water animations, and its coin frames are
  *       trimmed.</li>
  *   <li>The camera follows the player with a little lag. That is game code: the camera only holds the view.
- *       Z and X zoom, Q and E turn it, R resets.</li>
+ *       Z and X or the wheel zoom, Q and E turn it, R resets.</li>
+ *   <li>The controls are the actions of an {@link InputContext}, polled in the scene's updates.</li>
  *   <li>Slimes only move while they are in the air. Their hop animation reports "jump" and "land" events on the
  *       right frames, and the movement follows them.</li>
  *   <li>Everything in view goes through one {@link SpriteBatch}: tiles on the bottom layer, shadows above them,
@@ -109,17 +112,30 @@ public class SpriteDemo {
         private final List<Coin> coins = new ArrayList<>();
         private Slime player;
         private Animation hop, idle, spin, water;
-        private boolean left, right, up, down;
+        private final InputContext controls = new InputContext("world")
+                .bind("move_left", Binding.key(GLFW_KEY_A), Binding.key(GLFW_KEY_LEFT))
+                .bind("move_right", Binding.key(GLFW_KEY_D), Binding.key(GLFW_KEY_RIGHT))
+                .bind("move_up", Binding.key(GLFW_KEY_W), Binding.key(GLFW_KEY_UP))
+                .bind("move_down", Binding.key(GLFW_KEY_S), Binding.key(GLFW_KEY_DOWN))
+                .bind("zoom_in", Binding.key(GLFW_KEY_Z), Binding.wheel(Binding.WHEEL_UP))
+                .bind("zoom_out", Binding.key(GLFW_KEY_X), Binding.wheel(Binding.WHEEL_DOWN))
+                .bind("turn_left", Binding.key(GLFW_KEY_Q))
+                .bind("turn_right", Binding.key(GLFW_KEY_E))
+                .bind("reset_view", Binding.key(GLFW_KEY_R))
+                .bind("drop_slime", Binding.mouse(GLFW_MOUSE_BUTTON_LEFT))
+                .bind("debug_view", Binding.key(GLFW_KEY_F1))
+                .bind("next_effect", Binding.key(GLFW_KEY_F2));
         private int zoom = 3;
         private int collected;
 
         private final TextOverlay stats = new TextOverlay("", 14f, Color.WHITE);
         private final TextOverlay help = new TextOverlay(
-                "WASD / arrows move   Z / X zoom   Q / E turn the camera   R reset   Click drops a slime   F1 debug view   F2 effect",
+                "WASD / arrows move   Z / X or wheel zoom   Q / E turn the camera   R reset   Click drops a slime   F1 debug view   F2 effect",
                 14f, Color.GRAY);
 
         WorldScene(TextureAtlas atlas) {
             this.atlas = atlas;
+            addInputContext(controls);
         }
 
         @Override
@@ -156,10 +172,6 @@ public class SpriteDemo {
             help.setPosition(16, 34);
             getContainer().addElement(stats);
             getContainer().addElement(help);
-            getContainer().onMouseClick(event -> {
-                Vec2 world = camera.screenToWorld((float) event.getMouseX(), (float) event.getMouseY());
-                spawnSlime(world.x(), world.y());
-            });
         }
 
         @Override
@@ -192,8 +204,9 @@ public class SpriteDemo {
                 slime.prevX = slime.x;
                 slime.prevY = slime.y;
                 if (slime == player) {
-                    slime.dirX = (right ? 1 : 0) - (left ? 1 : 0);
-                    slime.dirY = (down ? 1 : 0) - (up ? 1 : 0);
+                    Vec2 move = controls.getVector("move_left", "move_right", "move_up", "move_down");
+                    slime.dirX = move.x();
+                    slime.dirY = move.y();
                 } else if ((slime.wanderTimer -= step) <= 0f) {
                     slime.wanderIn(1f + random.nextFloat() * 3f);
                 }
@@ -222,6 +235,24 @@ public class SpriteDemo {
 
         @Override
         protected void update(float delta) {
+            // One-off actions, read once per frame.
+            if (controls.isJustPressed("zoom_in")) zoom = Math.min(6, zoom + 1);
+            if (controls.isJustPressed("zoom_out")) zoom = Math.max(1, zoom - 1);
+            if (controls.isJustPressed("turn_left")) camera.setRotation(camera.getRotation() - 15f);
+            if (controls.isJustPressed("turn_right")) camera.setRotation(camera.getRotation() + 15f);
+            if (controls.isJustPressed("reset_view")) {
+                zoom = 3;
+                camera.setRotation(0f);
+            }
+            camera.setZoom(zoom);
+            if (controls.isJustPressed("debug_view")) debug.setEnabled(!debug.isEnabled());
+            if (controls.isJustPressed("next_effect")) effect = (effect + 1) % effects.length;
+            if (controls.isJustPressed("drop_slime")) { // only clicks no element took, so not on the text
+                Input input = getWindow().getInput();
+                Vec2 world = camera.screenToWorld(input.getMouseX(), input.getMouseY());
+                spawnSlime(world.x(), world.y());
+            }
+
             for (Slime slime : slimes) {
                 boolean moving = slime.dirX != 0 || slime.dirY != 0;
                 slime.anim.play(moving ? hop : idle);
@@ -321,8 +352,9 @@ public class SpriteDemo {
         }
 
         private void drawHover(Renderer renderer) {
-            if (!MouseTracker.isInWindow()) return;
-            Vec2 world = camera.screenToWorld((float) MouseTracker.getX(), (float) MouseTracker.getY());
+            Input input = getWindow().getInput();
+            if (!input.isMouseInWindow()) return;
+            Vec2 world = camera.screenToWorld(input.getMouseX(), input.getMouseY());
             int tx = (int) Math.floor(world.x() / TILE), ty = (int) Math.floor(world.y() / TILE);
             if (tx < 0 || ty < 0 || tx >= MAP || ty >= MAP) return;
             renderer.drawBorder(tx * TILE, ty * TILE, TILE, TILE, HOVER, 1f / zoom, 0f);
@@ -350,37 +382,6 @@ public class SpriteDemo {
             }
             renderer.drawPolyline(outline, 5, MINIMAP_VIEW, 1.5f / minimap.getZoom());
             minimap.end(renderer);
-        }
-
-        @Override
-        protected boolean onKey(int key, int action, int mods) {
-            boolean held = action != GLFW_RELEASE;
-            switch (key) {
-                case GLFW_KEY_LEFT, GLFW_KEY_A -> left = held;
-                case GLFW_KEY_RIGHT, GLFW_KEY_D -> right = held;
-                case GLFW_KEY_UP, GLFW_KEY_W -> up = held;
-                case GLFW_KEY_DOWN, GLFW_KEY_S -> down = held;
-                default -> {
-                    if (action == GLFW_RELEASE) return false;
-                    switch (key) {
-                        case GLFW_KEY_Z -> zoom = Math.min(6, zoom + 1);
-                        case GLFW_KEY_X -> zoom = Math.max(1, zoom - 1);
-                        case GLFW_KEY_Q -> camera.setRotation(camera.getRotation() - 15f);
-                        case GLFW_KEY_E -> camera.setRotation(camera.getRotation() + 15f);
-                        case GLFW_KEY_R -> {
-                            zoom = 3;
-                            camera.setRotation(0f);
-                        }
-                        case GLFW_KEY_F1 -> debug.setEnabled(!debug.isEnabled());
-                        case GLFW_KEY_F2 -> effect = (effect + 1) % effects.length;
-                        default -> {
-                            return false;
-                        }
-                    }
-                    camera.setZoom(zoom);
-                }
-            }
-            return true;
         }
 
         // ---- the map

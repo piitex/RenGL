@@ -59,7 +59,7 @@ public class Level extends Scene {
 | `fixedUpdate(step)` | At the fixed tick rate (60 per second by default), while the scene is running. For game logic and physics. See [Game time](game-time.md). |
 | `update(delta)` | Once per frame after the fixed steps, while the scene is running. `delta` is game time. |
 | `render(renderer, alpha)` | Every frame the scene is visible, paused or not, and while a transition draws it going out. Draws below the scene's elements. Draw only; don't change state. |
-| `onKey(key, action, mods)` | A key no text field, popup or modal took. Return true to consume it. |
+| `onKey(key, action, mods)` | A key no text field, popup or modal took. Return true to consume it. For controls, polling an [input context](../input/game-input.md) is usually simpler. |
 | `onResize(width, height)` | The window changed size. The container has already been resized. |
 
 `onExit` is not called when the application closes. Save the game from [`window.onClose`](../core/window.md) instead.
@@ -145,7 +145,21 @@ Key releases are always delivered to every scene on the stack, paused or not, ev
 scene that tracks which keys are held therefore never misses one being let go, for example when the player opens
 the pause menu while holding an arrow key.
 
-Tab presses stay with the UI for moving focus and never reach a scene.
+Tab moves focus between elements while an element has focus or a popup or modal is open. Otherwise it comes to
+the scenes first, and moves focus only if no scene consumes it and no [input context](../input/game-input.md) binds it.
+
+### Polling instead
+
+Most game controls are easier to poll than to track from events. Give the scene an
+[`InputContext`](../input/game-input.md) with `addInputContext(context)`: it receives input while the scene is running,
+before the contexts of the scenes below, and game code asks it in `fixedUpdate` or `update` whether an action is held
+or was just pressed. Presses a scene's `onKey` consumes don't reach any context.
+
+| Method | What it does |
+|---|---|
+| `addInputContext(context)` | The context receives input while this scene runs. The last added gets presses first |
+| `removeInputContext(context)` | Removes it |
+| `getInputContexts()` | The scene's contexts, in the order they were added |
 
 ## Timers
 

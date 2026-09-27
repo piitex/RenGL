@@ -2,10 +2,15 @@ package me.piitex.engine.game;
 
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
+import me.piitex.engine.input.InputContext;
 import me.piitex.engine.scheduler.Task;
 import me.piitex.engine.scheduler.Timers;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.utils.flags.GeneratedClass;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * One screen or state of a game: a main menu, the gameplay, a pause menu, a loading screen. Scenes live on the
@@ -22,6 +27,10 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  *   <li>{@link #render(Renderer, float)} to draw the game world with the {@link Renderer} directly.</li>
  *   <li>{@link #onKey(int, int, int)} for keyboard input no text field or other focused element has taken.</li>
  * </ul>
+ * For controls, polling is usually simpler than {@code onKey}: add an {@link InputContext} with the scene's actions
+ * with {@link #addInputContext}, and ask it in {@link #fixedUpdate} or {@link #update} whether an action is held or was
+ * just pressed. The window's {@link me.piitex.engine.input.Input} has the raw keys and mouse.
+ * <p>
  * Every scene has a {@link #getContainer() container} that fills the window. Add buttons, text and other elements
  * to it as with any container. They are drawn above what {@link #render} draws, work with the mouse as usual, and
  * keep running on real time even while the scene is paused. Scenes are drawn below every container added to the
@@ -35,6 +44,7 @@ public abstract class Scene {
     private final Timers timers = new Timers();
     private boolean overlay;
     private boolean pausesBelow = true;
+    private final List<InputContext> inputContexts = new ArrayList<>();
 
     SceneManager manager; // non-null while on a stack
     SceneManager leaving; // non-null while drawn going out in a transition, until onExit
@@ -104,10 +114,32 @@ public abstract class Scene {
      * has the keyboard, and consuming one doesn't stop it. So a scene tracking held keys never misses one being let
      * go. {@code key}, {@code action} and {@code mods} are GLFW values: {@code GLFW_KEY_*}, {@code GLFW_PRESS}/
      * {@code GLFW_REPEAT}/{@code GLFW_RELEASE}, {@code GLFW_MOD_*}. Tab presses are kept for moving focus between
-     * elements and never arrive here.
+     * elements while an element has focus or a popup or modal is open; otherwise they come here first, and move focus
+     * only if no scene consumes them and no {@link InputContext} binds Tab.
      */
     protected boolean onKey(int key, int action, int mods) {
         return false;
+    }
+
+    /**
+     * Adds an {@link InputContext} that receives input while this scene is running. A scene's contexts get presses
+     * before those of the scenes below it, and after the window's own; among the scene's contexts, the last added comes
+     * first. A context can belong to several scenes, such as shared menu controls.
+     */
+    public void addInputContext(InputContext context) {
+        if (context == null) throw new IllegalArgumentException("context must not be null");
+        if (!inputContexts.contains(context)) inputContexts.add(context);
+    }
+
+    public void removeInputContext(InputContext context) {
+        inputContexts.remove(context);
+    }
+
+    /**
+     * The contexts added with {@link #addInputContext}, in the order they were added.
+     */
+    public List<InputContext> getInputContexts() {
+        return Collections.unmodifiableList(inputContexts);
     }
 
     /**

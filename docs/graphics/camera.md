@@ -75,13 +75,23 @@ times per second while the player moves every frame, and the player appears to s
 | `worldToScreen(x, y)` | Where a world point is drawn in the window, for putting a label over a character. |
 | `getVisibleBounds()` | The part of the world in view, as a `Rect`. A little larger than the view when the camera is turned, since it is the upright rectangle around it. |
 
-Window points here are the coordinates mouse events, `MouseTracker` and `Scene.render` use:
+Window points here are the coordinates mouse events, `MouseTracker`, `Input.getMouseX/Y` and `Scene.render` use:
 
 ```java nocompile
 getContainer().onMouseClick(event -> {
     Vec2 world = camera.screenToWorld((float) event.getMouseX(), (float) event.getMouseY());
     placeTower(world.x(), world.y());
 });
+```
+
+To poll instead, as a game usually does, read the mouse from [`Input`](../input/game-input.md):
+
+```java nocompile
+Input input = window.getInput();
+if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+    Vec2 world = camera.screenToWorld(input.getMouseX(), input.getMouseY());
+    placeTower(world.x(), world.y());
+}
 ```
 
 `Vec2` and `Rect` are small value types in `me.piitex.engine.math`.

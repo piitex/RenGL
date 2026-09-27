@@ -14,6 +14,8 @@ The two work together: a [`Scene`](scenes.md) runs its game logic on the [game c
 buttons and text are ordinary elements on the real clock, so menus keep animating while the game is paused or in
 slow motion.
 
+For controls, see [Game input](../input/game-input.md): polled keys and mouse, and named actions players can rebind.
+
 To draw the game world, see [Graphics](../graphics/README.md): a camera, sprites, texture atlases, frame animation
 and batched drawing.
 
