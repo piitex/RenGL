@@ -47,6 +47,8 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Scenes](game/scenes.md) | `Scene` and `SceneManager`: menus, gameplay, pause menus, and moving between them |
 | [Game time](game/game-time.md) | Fixed-step updates, time scale, pausing, smooth drawing between steps |
 | [Scene transitions](game/transitions.md) | Fades, slides, wipes and custom effects when the scenes change |
+| [Geometry and raycasts](game/geometry.md) | `Vec2`, `Rect`, `Circle`, `Polygon`: overlap tests, raycasts, and number helpers |
+| [Events](game/events.md) | `EventBus`: tell other parts of the game what happened without knowing about them |
 | **[Graphics](graphics/README.md)** | Drawing a 2D game world |
 | [Camera](graphics/camera.md) | `Camera`: position, zoom, rotation, viewports, and mouse to world coordinates |
 | [Sprites](graphics/sprites.md) | `Texture`, `TextureRegion`, `Sprite`, and `SpriteBatch` for drawing many in order and in few calls |
@@ -67,6 +69,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Fonts](styling/fonts.md) | `Font` and custom fonts |
 | [Images and icons](styling/images-and-icons.md) | `ImageLoader`, `IconCache`, the bundled Feather set |
 | **[Animation](animation/transitions.md)** | `Transition`, fades, scaling, easing, custom transitions |
+| [Tweens and sequences](animation/tweens-and-sequences.md) | `Tween` any value, and `Sequence` steps: "wait 2 seconds, then..." |
 | **[Input](input/README.md)** | Clicks, drags, scrolling, focus, cursors, tooltips, menus, game controls |
 | [Input and focus](input/input-and-focus.md) | Clicks, drags, scrolling, keyboard focus, cursors, clipboard |
 | [Game input](input/game-input.md) | Polled keys and mouse, named actions and contexts, rebinding, saved key bindings |

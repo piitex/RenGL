@@ -172,6 +172,19 @@ public final class DebugDraw {
     }
 
     /**
+     * The outline of a {@link me.piitex.engine.math.Shape}: a rectangle, circle or polygon hit box. A null shape draws
+     * nothing.
+     */
+    public void shape(me.piitex.engine.math.Shape shape, Color color) {
+        if (shape == null) return;
+        switch (shape) {
+            case Rect rect -> rect(rect, color);
+            case me.piitex.engine.math.Circle circle -> circle(circle.x(), circle.y(), circle.radius(), color);
+            case me.piitex.engine.math.Polygon polygon -> polygon(polygon.getPoints(), polygon.getPointCount(), color);
+        }
+    }
+
+    /**
      * A dot at (x, y), {@link #setPointSize point size} across on screen at any zoom.
      */
     public void point(float x, float y, Color color) {

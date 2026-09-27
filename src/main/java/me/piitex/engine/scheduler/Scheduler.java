@@ -17,6 +17,7 @@ import me.piitex.engine.utils.flags.GeneratedFragments;
  *   <li>{@link #runLater}: run something on the render thread on the next frame. Callable from any thread.</li>
  *   <li>{@link #after}, {@link #every}: timers. They are driven by the frame delta, the same clock the
  *       transitions use, so they stay in step with animations.</li>
+ *   <li>{@link #play}: tweens and sequences, on the same clock.</li>
  *   <li>{@link #async}: run blocking work (I/O, decoding, network) on a worker thread and get the result back
  *       on the render thread.</li>
  * </ul>
@@ -36,6 +37,7 @@ public final class Scheduler {
     private static final Timers timers = new Timers();
 
     private static volatile ExecutorService workers;
+    private static volatile Thread renderThread;
 
     private Scheduler() {
     }
@@ -72,6 +74,17 @@ public final class Scheduler {
      */
     public static Task every(float initialDelay, float interval, Runnable action) {
         return timers.every(initialDelay, interval, action);
+    }
+
+    /**
+     * Plays a {@link Tween}, a {@link Sequence} or any other {@link Playable} on real time, on the render thread. It
+     * keeps going while the game is paused; to play one on game time, use
+     * {@link me.piitex.engine.game.Scene#play} instead. Played from the render thread it starts at once; from any other
+     * thread, on the next frame. Returns the handle to cancel it with: the tween or sequence itself, or a new
+     * {@link Task}.
+     */
+    public static Task play(Playable playable) {
+        return timers.play(playable);
     }
 
     /**
@@ -122,6 +135,7 @@ public final class Scheduler {
      * Render thread, once per frame. Runs queued callbacks, then advances the timers by {@code delta} seconds.
      */
     public static void update(float delta) {
+        renderThread = Thread.currentThread();
         // Only what was queued when the frame began, so a callback that re-queues itself can't stall the frame.
         for (int n = queue.size(); n > 0; n--) {
             Runnable action = queue.poll();
@@ -144,6 +158,13 @@ public final class Scheduler {
                 workers = null;
             }
         }
+    }
+
+    /**
+     * Whether this is the thread that runs {@link #update}, once it has run.
+     */
+    static boolean isRenderThread() {
+        return Thread.currentThread() == renderThread;
     }
 
     static void run(Runnable action) {
