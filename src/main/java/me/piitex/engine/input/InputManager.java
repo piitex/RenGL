@@ -1,8 +1,11 @@
 package me.piitex.engine.input;
 
+import me.piitex.engine.utils.flags.GeneratedFragments;
+
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class InputManager {
     private final Queue<InputEvent> eventQueue = new ConcurrentLinkedQueue<>();
     private double lastMouseX;
@@ -15,7 +18,7 @@ public class InputManager {
 
     public void onMouseButton(long window, int button, int action, int mods) {
         long time = System.nanoTime();
-        eventQueue.offer(new InputEvent(InputEvent.Type.MOUSE_BUTTON, time, 0, 0, button, action));
+        eventQueue.offer(new InputEvent(InputEvent.Type.MOUSE_BUTTON, time, 0, 0, button, action, mods));
     }
 
     public void onKey(long window, int key, int scancode, int action, int mods) {
@@ -46,6 +49,15 @@ public class InputManager {
     public void onScroll(long window, double xoffset, double yoffset) {
         long time = System.nanoTime();
         eventQueue.offer(new InputEvent(InputEvent.Type.SCROLL, time, xoffset, yoffset, -1, -1));
+    }
+
+    /**
+     * Main thread only. Reads the names the printable keys have on the current keyboard layout, for
+     * {@link Binding#getDisplayName()}. The engine calls this when the window opens and whenever it gains focus, since
+     * the layout may have been switched in between.
+     */
+    public void refreshKeyNames() {
+        KeyNames.refreshLayout();
     }
 
     public Queue<InputEvent> getEventQueue() {

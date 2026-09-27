@@ -3,14 +3,12 @@ package me.piitex.engine.scheduler;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 /**
  * Timers and background work for the UI, the equivalent of JavaFX's {@code PauseTransition}, {@code Timeline},
@@ -19,6 +17,7 @@ import java.util.function.Supplier;
  *   <li>{@link #runLater}: run something on the render thread on the next frame. Callable from any thread.</li>
  *   <li>{@link #after}, {@link #every}: timers. They are driven by the frame delta, the same clock the
  *       transitions use, so they stay in step with animations.</li>
+ *   <li>{@link #play}: tweens and sequences, on the same clock.</li>
  *   <li>{@link #async}: run blocking work (I/O, decoding, network) on a worker thread and get the result back
  *       on the render thread.</li>
  * </ul>
@@ -30,14 +29,15 @@ import java.util.function.Supplier;
  * Because the engine caps a single frame's delta at 0.25 seconds, timers pause across long stalls (a debugger
  * break, a GC pause) instead of all firing at once afterwards.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Scheduler {
     private static final Logger log = LogManager.getLogger("Scheduler");
 
     private static final Queue<Runnable> queue = new ConcurrentLinkedQueue<>();
-    private static final Queue<Timer> incoming = new ConcurrentLinkedQueue<>();
-    private static final List<Timer> timers = new ArrayList<>(); // render thread only
+    private static final Timers timers = new Timers();
 
     private static volatile ExecutorService workers;
+    private static volatile Thread renderThread;
 
     private Scheduler() {
     }
@@ -59,7 +59,7 @@ public final class Scheduler {
      * Runs {@code action} once on the render thread after {@code seconds}, for example to leave a splash screen.
      */
     public static Task after(float seconds, Runnable action) {
-        return schedule(seconds, 0f, action);
+        return timers.after(seconds, action);
     }
 
     /**
@@ -73,8 +73,18 @@ public final class Scheduler {
      * As {@link #every(float, Runnable)}, but the first run comes after {@code initialDelay}.
      */
     public static Task every(float initialDelay, float interval, Runnable action) {
-        if (interval <= 0f) throw new IllegalArgumentException("interval must be positive: " + interval);
-        return schedule(initialDelay, interval, action);
+        return timers.every(initialDelay, interval, action);
+    }
+
+    /**
+     * Plays a {@link Tween}, a {@link Sequence} or any other {@link Playable} on real time, on the render thread. It
+     * keeps going while the game is paused; to play one on game time, use
+     * {@link me.piitex.engine.game.Scene#play} instead. Played from the render thread it starts at once; from any other
+     * thread, on the next frame. Returns the handle to cancel it with: the tween or sequence itself, or a new
+     * {@link Task}.
+     */
+    public static Task play(Playable playable) {
+        return timers.play(playable);
     }
 
     /**
@@ -103,14 +113,7 @@ public final class Scheduler {
         });
     }
 
-    private static Task schedule(float delay, float interval, Runnable action) {
-        if (delay < 0f) throw new IllegalArgumentException("delay must not be negative: " + delay);
-        Timer timer = new Timer(delay, interval, action);
-        incoming.add(timer);
-        return timer;
-    }
-
-    private static ExecutorService executor() {
+    static ExecutorService executor() {
         ExecutorService pool = workers;
         if (pool == null) {
             synchronized (Scheduler.class) {
@@ -132,6 +135,7 @@ public final class Scheduler {
      * Render thread, once per frame. Runs queued callbacks, then advances the timers by {@code delta} seconds.
      */
     public static void update(float delta) {
+        renderThread = Thread.currentThread();
         // Only what was queued when the frame began, so a callback that re-queues itself can't stall the frame.
         for (int n = queue.size(); n > 0; n--) {
             Runnable action = queue.poll();
@@ -139,30 +143,7 @@ public final class Scheduler {
             run(action);
         }
 
-        Timer added;
-        while ((added = incoming.poll()) != null) {
-            timers.add(added);
-        }
-
-        Iterator<Timer> it = timers.iterator();
-        while (it.hasNext()) {
-            Timer timer = it.next();
-            if (timer.isCancelled()) {
-                it.remove();
-                continue;
-            }
-            timer.remaining -= delta;
-            if (timer.remaining > 0f) continue;
-
-            if (timer.interval > 0f) {
-                // Keep the overshoot so the rate holds steady, but never queue up a backlog of missed runs.
-                timer.remaining = Math.max(timer.remaining + timer.interval, 0f);
-            } else {
-                timer.markDone();
-                it.remove();
-            }
-            run(timer.action);
-        }
+        timers.update(delta);
     }
 
     /**
@@ -170,8 +151,7 @@ public final class Scheduler {
      */
     public static void shutdown() {
         queue.clear();
-        incoming.clear();
-        timers.clear();
+        timers.cancelAll();
         synchronized (Scheduler.class) {
             if (workers != null) {
                 workers.shutdownNow();
@@ -180,23 +160,18 @@ public final class Scheduler {
         }
     }
 
-    private static void run(Runnable action) {
+    /**
+     * Whether this is the thread that runs {@link #update}, once it has run.
+     */
+    static boolean isRenderThread() {
+        return Thread.currentThread() == renderThread;
+    }
+
+    static void run(Runnable action) {
         try {
             action.run();
         } catch (Throwable t) {
             log.error("Scheduled task threw", t);
-        }
-    }
-
-    private static final class Timer extends Task {
-        final float interval; // 0 = one-shot
-        final Runnable action;
-        float remaining;
-
-        Timer(float delay, float interval, Runnable action) {
-            this.remaining = delay;
-            this.interval = interval;
-            this.action = action;
         }
     }
 }

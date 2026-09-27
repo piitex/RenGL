@@ -167,7 +167,9 @@ public interface Focusable {
 ```
 
 - **Clicking** a `Focusable` gives it focus. Clicking anything else, including empty space, clears focus.
-- While focused, it receives every char and key event. `onKeyPressed` is never called for key *release*.
+- While focused, it receives every char and key event except Tab, which moves focus, and an Escape that closes an
+  open popup or modal. `onKeyPressed` gets presses, repeats and releases; `action` says which, and most controls
+  ignore `GLFW_RELEASE`.
 - `mods` is a GLFW modifier bitmask (`GLFW.GLFW_MOD_SHIFT`, `_CONTROL`, `_ALT`, `_SUPER`).
 - For text, use `onCharTyped`. Use `onKeyPressed` for backspace, arrows, Enter and shortcuts.
 
@@ -223,7 +225,9 @@ element.setTabIndex(0); // explicit order; -1 (default) = natural order
 
 ### Reserved keys
 
-- **Tab / Shift+Tab** are consumed for focus traversal before any focused widget sees them.
+- **Tab / Shift+Tab** are consumed for focus traversal before any focused widget sees them. While nothing has focus
+  and no popup or modal is open, the game gets Tab first, and it moves focus only if no scene's `onKey` consumes it and
+  no [input context](game-input.md) binds it.
 - **Escape** first closes an open popup, then an open modal (if it allows dismissing on Escape). Only if neither
   is open does it reach the focused widget.
 - **A popup that implements `PopupKeyListener`** (the [menus](menus.md) do, for arrow-key navigation) gets every key
@@ -264,6 +268,7 @@ String text = Clipboard.paste(); // blocks briefly while the main thread reads; 
 | `InputManager` | `input` | GLFW callback sink; queues `InputEvent`s (`window.getInputManager()`) |
 | `InputProcessor` | `input` | Drains the queue each frame; hit-testing, hover, click, drag, scroll, keys |
 | `InputEvent` | `input` | One queued event. `Type` is `MOUSE_MOVE`, `MOUSE_BUTTON`, `KEY`, `MOUSE_ENTER`, `CHAR` or `SCROLL` |
+| `Input`, `InputContext`, `Binding` | `input` | Polled game input, named actions and rebinding. See [Game input](game-input.md) |
 | `MouseTracker` | `input` | Last known mouse position |
 | `CursorManager` | `input` | Main-thread bridge that applies the requested OS cursor |
 | `Clipboard` | `input` | Main-thread bridge for copy/paste |

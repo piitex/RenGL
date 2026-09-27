@@ -183,7 +183,7 @@ window.addContainer(new Container(1280, 720), 100); // pick an explicit index
 
 | Method | Description |
 |---|---|
-| `addContainer(Container)` | Appends at `lastIndex + 1` (or `0` if empty) |
+| `addContainer(Container)` | Appends at `lastIndex + 1`, never below `0` (`0` if empty) |
 | `addContainers(Container...)` / `addContainers(Collection)` | Appends several in order, each at `lastIndex + 1`. Null entries are skipped |
 | `addContainer(Container, int index)` | Puts it at `index`, replacing whatever was there |
 | `removeContainer(int index)` | Removes by index; returns whether something was removed |
@@ -197,6 +197,10 @@ window (`element.getWindow()`), which widgets such as the dropdown need to open 
 
 The map is concurrent, so adding or removing a container from another thread will not throw. The frame
 loop can still observe the change mid-frame.
+
+[Scenes](../game/scenes.md) from `window.getSceneManager()` put their containers in this map too, at large negative
+indexes, so they draw below every container you add and appear in `getContainers()`. `clear()` takes them off the
+window as well; use the scene manager's `clear()` to remove scenes.
 
 ## Background
 
@@ -318,3 +322,6 @@ Showing a modal closes any popup and any previous modal, and clears focus. See
 `window.getInputManager()` returns the [`InputManager`](../input/input-and-focus.md#reference-the-input-types) that GLFW callbacks feed. You rarely need it.
 The [`InputProcessor`](../input/input-and-focus.md#reference-the-input-types) drains its event queue every frame. See
 [Input and focus](../input/input-and-focus.md).
+
+`window.getInput()` returns the window's [`Input`](../input/game-input.md): the keyboard and mouse state a game polls
+each frame, and the input contexts that are always active.

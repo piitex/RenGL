@@ -1,8 +1,12 @@
 package me.piitex.engine.gl.renderer.metal;
 
 import me.piitex.engine.gl.renderer.Renderer;
+import me.piitex.engine.gl.renderer.SkiaEffects;
+import me.piitex.engine.gl.renderer.SkiaImages;
+import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import me.piitex.engine.ui.color.GradientUtil;
 import me.piitex.engine.ui.color.LinearGradient;
 import org.apache.logging.log4j.LogManager;
@@ -20,6 +24,7 @@ import org.jetbrains.skia.impl.Managed;
  * Threading: construct MetalContext on the main thread, then call begin()/end() on the
  * render thread only.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class MetalSkikoRenderer implements Renderer {
     private static final Logger log = LogManager.getLogger("Engine");
 
@@ -253,12 +258,25 @@ public class MetalSkikoRenderer implements Renderer {
             if (cornerRadius > 0) {
                 canvas.save();
                 canvas.clipRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), true);
-                canvas.drawImageRect(image, dst, paint);
+                canvas.drawImageRect(image, Rect.makeWH(image.getWidth(), image.getHeight()), dst, SkiaImages.SMOOTH, paint, true);
                 canvas.restore();
             } else {
-                canvas.drawImageRect(image, dst, paint);
+                canvas.drawImageRect(image, Rect.makeWH(image.getWidth(), image.getHeight()), dst, SkiaImages.SMOOTH, paint, true);
             }
         }
+    }
+
+    @Override
+    public void drawImageRegion(Image image, float srcX, float srcY, float srcWidth, float srcHeight,
+                                float x, float y, float width, float height, Color color, boolean smooth) {
+        if (!frameValid) return;
+        SkiaImages.drawImageRegion(canvas, image, srcX, srcY, srcWidth, srcHeight, x, y, width, height, color, smooth);
+    }
+
+    @Override
+    public void drawImageQuads(Image image, boolean smooth, float[] positions, float[] texCoords, int[] colors, int count) {
+        if (!frameValid) return;
+        SkiaImages.drawImageQuads(canvas, image, smooth, positions, texCoords, colors, count);
     }
 
     @Override
@@ -296,6 +314,24 @@ public class MetalSkikoRenderer implements Renderer {
                 canvas.drawRect(Rect.makeXYWH(x, y, width, height), paint);
             }
         }
+    }
+
+    @Override
+    public void drawShader(ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
+        if (!frameValid) return;
+        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius);
+    }
+
+    @Override
+    public void pushEffect(ShaderEffect effect, float x, float y, float width, float height) {
+        if (!frameValid) return;
+        SkiaEffects.pushEffect(canvas, effect, x, y, width, height);
+    }
+
+    @Override
+    public void popEffect() {
+        if (!frameValid) return;
+        SkiaEffects.popEffect(canvas);
     }
 
     @Override
@@ -357,6 +393,18 @@ public class MetalSkikoRenderer implements Renderer {
 
     @Override
     public void popScale() {
+        if (!frameValid) return;
+        canvas.restore();
+    }
+
+    @Override
+    public void pushTransform(float x, float y, float rotation, float scaleX, float scaleY, float originX, float originY) {
+        if (!frameValid) return;
+        SkiaImages.pushTransform(canvas, x, y, rotation, scaleX, scaleY, originX, originY);
+    }
+
+    @Override
+    public void popTransform() {
         if (!frameValid) return;
         canvas.restore();
     }

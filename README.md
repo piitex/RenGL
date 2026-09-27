@@ -28,11 +28,10 @@ cannot be modified without using css. This created built up frustration which le
 RenGL does not have a built in css engine. RenGL uses OpenGL, Metal, and Skiko to provide
 a raw Java window toolkit.
 
-Moving away from JavaFX has significant drawbacks. JavaFX has a well developed component system that RenGL cannot compete with.
-However, RenGL was made with simplicity in mind. RenGL offers an easier API and you get started quickly.
-With time RenGL will add more components to become a competing window toolkit for all purposes, clients, games, forms, ect.
+Moving away from JavaFX has some minor drawbacks. JavaFX has advanced object views (Tree and list tables) which RenGL does not have.
+RenGL offers better styling, theming, and overall design. RenGL also offers features that JavaFX doesn't. Draggable, resizeable, and sorted containers.
 
-**The Goal**: To create a versatile Java window toolkit to support multiple platforms and a variety of projects.
+**Mission**: RenGL brings creativity and design to everyday applications. The boring simplistic designs don't have to be the normal.
 
 ## Current API Use
 Make sure to check out the [docs](https://github.com/piitex/RenGL/tree/main/docs).

@@ -45,18 +45,24 @@ thread at the start of the next frame.
 
 ```text
  1. Handle window resize                (recreate the drawing surface if needed)
- 2. InputProcessor.processEvents        (mouse move, click and scroll, keys, typed chars)
+ 2. InputProcessor.processEvents        (mouse move, click and scroll, keys, typed chars; the game's Input state)
  3. Advance the window background       (an animated paint, and the window's Background effect if set)
  4. Deliver queued callbacks            (native menu choices, file dialog results)
  5. Scheduler.update                    (runLater tasks, timers, async results)
- 6. container.update(delta)             (every enabled top-level container, recursively)
- 7. TooltipManager.update
- 8. Clear the canvas; draw the window background and its Background effect
- 9. container.renderWithTransitions     (every enabled top-level container, in index order)
-10. TooltipManager.render               (above every container)
-11. Present
-12. Pace the frame                      (vsync waits for the display; with vsync off, sleep to WindowOptions.maxFPS)
+ 6. Scene fixed steps                   (Scene.fixedUpdate, as many ticks as this frame's game time covers)
+ 7. Scene updates                       (scene transition clock, then scene timers and Scene.update with the frame's game time)
+ 8. container.update(delta)             (every enabled top-level container, recursively)
+ 9. TooltipManager.update
+10. Clear the canvas; draw the window background and its Background effect
+11. container.renderWithTransitions     (every enabled top-level container, in index order; scenes, or a scene transition, come first)
+12. TooltipManager.render               (above every container)
+13. Present
+14. Pace the frame                      (vsync waits for the display; with vsync off, sleep to WindowOptions.maxFPS)
 ```
+
+Steps 6 and 7 run on the game clock, which can be scaled and paused, except for scene transitions. Everything
+else runs on real time. See
+[Game time](game/game-time.md) and [Scenes](game/scenes.md).
 
 `delta` is the seconds since the previous frame, capped at 0.25 s so a debugger pause or GC stall does not
 make animations jump. Use it for anything time-based:
@@ -110,6 +116,13 @@ go up the same way (see the table).
 | Scroll | Goes to the innermost [`Scrollable`](input/input-and-focus.md#scrolling) under the cursor, whatever child is directly beneath |
 | Key / char | Goes to the focused `Focusable`, except Tab (focus traversal) and Escape (closes a popup/modal first) |
 
+Whatever the interface leaves is game input. A key press no focused element, popup or modal took goes to the
+scenes' `onKey`, top first, and then to the polled [`Input`](input/game-input.md) state and its input contexts. A
+mouse press no element used (no click listener, focus, context menu or drag) and a wheel turn nothing scrolled go to
+`Input` too. Releases always reach the game. A controls menu waiting for a binding
+([`listenForBinding`](input/game-input.md#rebinding)) gets the next press before all of this. See
+[What reaches the game](input/game-input.md#what-reaches-the-game).
+
 Two special layers sit above normal containers:
 
 - A **popup** (dropdown list, spell-check suggestions) is one temporary container. A press *outside* it
@@ -125,7 +138,8 @@ You never call these directly, but it helps to know what draws your UI:
 
 - **Skia (via Skiko)** is the 2D engine on every platform. All widgets draw through the [`Renderer`](reference/custom-elements.md#the-renderer)
   interface (`drawQuad`, `drawBorder`, `drawLine`, `drawPolyline`, `drawCircle`, `drawText`, `drawGradient`, `drawGradientBorder`, `drawImage`,
-  clips, translations, scales and opacity layers).
+  `drawImageRegion`, `drawImageQuads`, `drawShader`, clips, translations, scales, transforms, opacity layers and
+  shader effects).
 - **OpenGL 3.3 core** backs Skia on Windows and Linux (`SkikoRenderer`).
 - **Metal** backs Skia on macOS (`MetalSkikoRenderer`). macOS windows are created without an OpenGL
   context.

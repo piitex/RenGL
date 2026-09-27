@@ -1,0 +1,12 @@
+// Wobbles the picture, tints it and adds moving light ripples.
+uniform shader content;
+uniform float time;
+uniform float2 size;  // the area the effect covers, in points
+
+half4 main(float2 coord) {
+    float2 wobble = float2(sin(coord.y * 0.035 + time * 2.0), cos(coord.x * 0.03 + time * 1.6)) * 4.0;
+    half4 color = content.eval(clamp(coord + wobble, float2(0.5), size - 0.5)); // don't read past the edges
+    float ripple = sin((coord.x + coord.y) * 0.05 + time * 3.0) * sin((coord.x - coord.y) * 0.043 - time * 2.2);
+    half3 tinted = mix(color.rgb, half3(0.1, 0.45, 0.6), 0.35) + max(ripple, 0.0) * 0.08;
+    return half4(tinted, color.a);
+}

@@ -38,6 +38,7 @@ source. If you hit something not listed here, please add it.
 - **`removeElement` leaves gaps** in the index space.
 - **The topmost container under the mouse takes the click, even where it is empty.** A transparent full-window
   container drawn above another container swallows every press meant for the one below. Add full-window roots first.
+  This includes [scenes](../game/scenes.md): the elements of a scene under an overlay scene can't be clicked.
 - **Layout positions are rewritten every frame.** A child of a layout cannot be positioned or dragged by hand,
   because the layout puts it back.
 - **Sizing to content is per layout.** Only layouts measure their children. A plain `Container` has no
@@ -111,8 +112,26 @@ source. If you hit something not listed here, please add it.
   does not drag it. Put the click handling on a smaller child (an icon or button) so the rest of the bar still drags.
 - **Re-entering the window relies on `WindowOptions` being current.** After macOS drops the "cursor entered" event
   following a live resize, a mouse move that lands inside the window is what re-enables hover and clicks.
+- **No gamepad support yet.** Game input covers the keyboard and mouse. See [Game input](../input/game-input.md).
+- **Key names follow the keyboard layout only for keys that print a character.** Other keys use fixed English names
+  ("Left Shift", "Page Up"). The layout is read when the window opens and each time it gains focus.
+- **Several wheel notches in one frame count as one press** of a wheel binding. `Input.getScrollY()` has the full
+  amount.
 - **The resize cursors come from GLFW's standard cursor set.** They showed correctly on macOS. A platform or GLFW
   build without one falls back to the arrow, and the handles still work.
+
+## Graphics
+
+- **Rotated frames in packed sprite sheets aren't supported.** Turn rotation off in the packer; loading a sheet with
+  rotated frames fails with a message saying so.
+- **Smooth sprites turned at an angle can leave a few see-through pixels between them in snapshots.** Only the CPU
+  renderer that [snapshots](../core/snapshots.md) use does this, and only for sprites of a smooth texture drawn
+  turned. On screen, and for pixel-art textures, sprites side by side never leave gaps.
+- **Shaders are SkSL only.** GLSL, HLSL and Metal shaders can't be loaded directly; SkSL is close to GLSL, so most
+  fragment shaders port by renaming the entry point and replacing texture reads with `eval`.
+- **Post effects on a turned camera are resampled.** Inside a turned `Camera`, `pushEffect`'s layer is drawn upright
+  and turned afterwards, so its content is slightly softer than without the effect. Push effects outside the camera,
+  in window coordinates, to avoid it.
 
 ## Not implemented yet
 
