@@ -11,6 +11,7 @@ The pieces a game builds on, on top of the UI toolkit.
 | [Scene transitions](transitions.md) | `SceneTransition`: fades, slides, wipes and your own effects when the scenes change |
 | [Geometry and raycasts](geometry.md) | `Vec2`, `Rect`, `Circle` and `Polygon`: overlap tests, raycasts, and number helpers such as `damp` |
 | [Events](events.md) | `EventBus`: posting what happened, such as an enemy killed, to whoever listens |
+| [Object pools](pooling.md) | `Pool` and `Poolable`: reusing bullets, particles and other objects made and thrown away often |
 
 Scenes and game time work together: a [`Scene`](scenes.md) runs its game logic on the [game clock](game-time.md), while its
 buttons and text are ordinary elements on the real clock, so menus keep animating while the game is paused or in

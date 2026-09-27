@@ -49,6 +49,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Scene transitions](game/transitions.md) | Fades, slides, wipes and custom effects when the scenes change |
 | [Geometry and raycasts](game/geometry.md) | `Vec2`, `Rect`, `Circle`, `Polygon`: overlap tests, raycasts, and number helpers |
 | [Events](game/events.md) | `EventBus`: tell other parts of the game what happened without knowing about them |
+| [Object pools](game/pooling.md) | `Pool`: reuse bullets, particles and other short-lived objects instead of creating new ones |
 | **[Graphics](graphics/README.md)** | Drawing a 2D game world |
 | [Camera](graphics/camera.md) | `Camera`: position, zoom, rotation, viewports, and mouse to world coordinates |
 | [Sprites](graphics/sprites.md) | `Texture`, `TextureRegion`, `Sprite`, and `SpriteBatch` for drawing many in order and in few calls |
