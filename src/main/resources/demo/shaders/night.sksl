@@ -1,0 +1,12 @@
+// Moonlight everywhere, and a warm light around the player.
+uniform shader content;
+uniform float2 light;  // the player on screen, in points
+uniform float radius;  // how far the light reaches, in points
+
+half4 main(float2 coord) {
+    half4 color = content.eval(coord);
+    float lit = clamp(1.25 - distance(coord, light) / radius, 0.0, 1.0);
+    half3 moon = color.rgb * half3(0.22, 0.28, 0.52);
+    half3 lamp = color.rgb * half3(1.1, 0.95, 0.75);
+    return half4(mix(moon, lamp, lit * lit), color.a);
+}

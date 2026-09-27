@@ -12,7 +12,9 @@ import me.piitex.engine.ui.events.MouseClickEvent;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Map;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class InputProcessor {
     private double absoluteMouseX = 0.0;
     private double absoluteMouseY = 0.0;
@@ -24,11 +26,13 @@ public class InputProcessor {
 
     public void processEvents(Window window) {
         InputManager manager = window.getInputManager();
+        window.getInput().beginFrame();
         InputEvent event;
 
         while ((event = manager.getEventQueue().poll()) != null) {
             switch (event.type) {
                 case MOUSE_MOVE:
+                    window.getInput().mouseMoved(event.x, event.y, isInsideWindow(window, event.x, event.y));
                     // GLFW's enter callback is edge-triggered, and on macOS a live window resize sends a
                     // "left" without a matching "entered" once the drag ends (the tracking area is rebuilt
                     // under the cursor). A move that lands inside the window is proof the cursor is back.
@@ -41,6 +45,7 @@ public class InputProcessor {
                 case MOUSE_ENTER:
                     mouseInWindow = event.action == 1;
                     MouseTracker.setInWindow(mouseInWindow);
+                    window.getInput().mouseEntered(mouseInWindow);
                     if (!mouseInWindow) clearAllHover(window);
                     break;
                 case MOUSE_BUTTON:
@@ -163,7 +168,9 @@ public class InputProcessor {
     }
 
     private void handleMouseButton(Window window, InputEvent event) {
+        Input input = window.getInput();
         if (event.action == GLFW.GLFW_RELEASE) {
+            input.mouseReleased(event.buttonOrKey);
             // Only the button that began a drag (always the left one) ends it; releasing a right-click mid-drag must not.
             if (event.buttonOrKey != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
             if (dragTarget instanceof Draggable draggable) {
@@ -177,6 +184,8 @@ public class InputProcessor {
             return; // ignore anything that isn't a fresh press/release (mouse buttons don't repeat)
         }
 
+        if (input.captureMouse(event.buttonOrKey, event.mods)) return; // a controls menu waiting for a binding
+
         // An open popup (dropdown list, ...) is modal-ish: a press outside it just dismisses it.
         if (window.getPopup() != null && !window.getPopup().contains(absoluteMouseX, absoluteMouseY)) {
             window.closePopup();
@@ -185,6 +194,8 @@ public class InputProcessor {
 
         MouseClickEvent clickEvent = new MouseClickEvent(absoluteMouseX, absoluteMouseY, event.buttonOrKey, event.action);
         Element hitElement = null;
+        // Whether the interface used the press. If nothing did, it is game input.
+        boolean taken = window.getPopup() != null || window.getModal() != null;
 
         for (Map.Entry<Integer, Container> entry : window.getContainers().descendingMap().entrySet()) {
             Container container = entry.getValue();
@@ -196,6 +207,7 @@ public class InputProcessor {
             for (Element e = hitElement; e != null; e = e.owner) {
                 if (e.getMouseClickListenerConsumer() != null) {
                     e.getMouseClickListenerConsumer().accept(clickEvent);
+                    taken = true;
                     break;
                 }
             }
@@ -207,6 +219,7 @@ public class InputProcessor {
             for (Element e = hitElement; e != null; e = e.owner) {
                 if (e.getContextMenu() != null) {
                     e.getContextMenu().show(e, absoluteMouseX, absoluteMouseY);
+                    taken = true;
                     break;
                 }
             }
@@ -215,9 +228,13 @@ public class InputProcessor {
         // Clicking a Focusable element (e.g. a text field) grants it keyboard focus;
         // clicking anything else, including empty space, clears focus.
         window.requestFocus(hitElement instanceof Focusable ? hitElement : null);
+        if (hitElement instanceof Focusable) taken = true;
 
         // Only the left button drags; a right-click opens a context menu and must not start a drag or a text selection.
-        if (event.buttonOrKey != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
+        if (event.buttonOrKey != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            if (!taken) input.mousePressed(event.buttonOrKey, event.mods);
+            return;
+        }
 
         // The press goes to the nearest Draggable at or above the hit Element. A container that doesn't want the
         // drag (typically a layout filling a draggable/resizable parent) and a plain child that is not Draggable at
@@ -231,7 +248,9 @@ public class InputProcessor {
         if (dragCandidate instanceof Draggable draggable) {
             dragTarget = dragCandidate;
             draggable.onDragStart(absoluteMouseX, absoluteMouseY);
+            taken = true;
         }
+        if (!taken) input.mousePressed(event.buttonOrKey, event.mods);
     }
 
     private boolean acceptsDrag(Element element) {
@@ -250,6 +269,9 @@ public class InputProcessor {
      * over its empty background.
      */
     private void handleScroll(Window window, InputEvent event) {
+        Input input = window.getInput();
+        if (input.captureScroll(event.x, event.y)) return;
+        boolean taken = window.getPopup() != null || window.getModal() != null;
         for (Map.Entry<Integer, Container> entry : window.getContainers().descendingMap().entrySet()) {
             Container container = entry.getValue();
             if (!container.isEnabled() || !container.contains(absoluteMouseX, absoluteMouseY)) continue;
@@ -257,9 +279,11 @@ public class InputProcessor {
             Element target = findScrollTarget(container, absoluteMouseX, absoluteMouseY, event.x, event.y);
             if (target instanceof Scrollable scrollable) {
                 scrollable.onScroll(event.x, event.y);
+                taken = true;
             }
             break;
         }
+        if (!taken) input.scrolled(event.x, event.y); // nothing scrolled: the wheel is game input
     }
 
     /**
@@ -293,14 +317,24 @@ public class InputProcessor {
     }
 
     /**
-     * Tab/Shift+Tab is claimed here for focus traversal (see {@link
-     * Window#focusNext()}/{@link Window#focusPrevious()}) before it ever reaches the
-     * focused Element's own {@link Focusable#onKeyPressed}. None of this engine's
-     * built-in Focusables, such as the single-line
-     * {@link me.piitex.engine.ui.overlays.TextFieldOverlay}, act on a raw Tab keystroke,
-     * so nothing is taken away from them.
+     * Tab/Shift+Tab moves focus (see {@link Window#focusNext()}/{@link Window#focusPrevious()})
+     * before it ever reaches the focused Element's own {@link Focusable#onKeyPressed}. None of
+     * this engine's built-in Focusables, such as the single-line
+     * {@link me.piitex.engine.ui.overlays.TextFieldOverlay}, act on a raw Tab keystroke, so
+     * nothing is taken away from them. While nothing has focus and no popup or modal is open,
+     * the game gets Tab first, and it moves focus only if no scene or input context uses it.
      */
     private void handleKey(Window window, InputEvent event) {
+        Input input = window.getInput();
+        if (input.captureKey(event.buttonOrKey, event.action, event.mods)) return; // a controls menu waiting for a binding
+
+        // A release always reaches the game as well, so a key held down in the game and let go while a text field
+        // or menu has the keyboard isn't left stuck down there.
+        if (event.action == GLFW.GLFW_RELEASE) {
+            window.getSceneManager().dispatchKey(event.buttonOrKey, event.action, event.mods);
+            input.keyReleased(event.buttonOrKey);
+        }
+
         // An open popup that wants the keyboard (a menu) gets every key first and keeps it.
         if (window.getPopup() instanceof PopupKeyListener listener) {
             if (event.action != GLFW.GLFW_RELEASE) listener.onPopupKey(event.buttonOrKey, event.mods);
@@ -308,10 +342,13 @@ public class InputProcessor {
         }
 
         if (event.buttonOrKey == GLFW.GLFW_KEY_TAB && event.action != GLFW.GLFW_RELEASE) {
-            if ((event.mods & GLFW.GLFW_MOD_SHIFT) != 0) {
-                window.focusPrevious();
-            } else {
-                window.focusNext();
+            boolean uiHasKeyboard = window.getFocusedElement() != null || window.getPopup() != null || window.getModal() != null;
+            if (uiHasKeyboard || !sendKeyToGame(window, event)) {
+                if ((event.mods & GLFW.GLFW_MOD_SHIFT) != 0) {
+                    window.focusPrevious();
+                } else {
+                    window.focusNext();
+                }
             }
             return;
         }
@@ -329,10 +366,30 @@ public class InputProcessor {
 
         if (window.getFocusedElement() instanceof Focusable focusable) {
             focusable.onKeyPressed(event.buttonOrKey, event.action, event.mods);
+            return;
+        }
+
+        // Nothing in the UI wants the key, so it is game input. A popup or modal keeps it from the game underneath.
+        if (event.action != GLFW.GLFW_RELEASE && window.getPopup() == null && window.getModal() == null) {
+            sendKeyToGame(window, event);
         }
     }
 
+    /**
+     * A key press or repeat for the game: the scenes' {@link me.piitex.engine.game.Scene#onKey} first, then the
+     * polled {@link Input} state and its contexts. Returns whether a scene consumed it or a context uses it.
+     */
+    private boolean sendKeyToGame(Window window, InputEvent event) {
+        boolean consumed = window.getSceneManager().dispatchKey(event.buttonOrKey, event.action, event.mods);
+        Input input = window.getInput();
+        if (event.action == GLFW.GLFW_REPEAT) {
+            return input.keyRepeated(event.buttonOrKey, consumed) || consumed;
+        }
+        return input.keyPressed(event.buttonOrKey, event.mods, consumed) || consumed;
+    }
+
     private void handleChar(Window window, InputEvent event) {
+        if (window.getInput().swallowsChars()) return; // the key that typed it was just bound in a controls menu
         if (window.getFocusedElement() instanceof Focusable focusable) {
             focusable.onCharTyped(event.buttonOrKey);
         }

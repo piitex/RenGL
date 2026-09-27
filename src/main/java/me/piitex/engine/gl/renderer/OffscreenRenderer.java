@@ -1,9 +1,11 @@
 package me.piitex.engine.gl.renderer;
 
+import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.GradientUtil;
 import me.piitex.engine.ui.color.LinearGradient;
 import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.*;
 
 /**
@@ -13,6 +15,7 @@ import org.jetbrains.skia.*;
  * <p>
  * Not thread-safe. Use it on the render thread, like every other {@link Renderer}, and {@link #close()} it when done.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class OffscreenRenderer implements Renderer, AutoCloseable {
     private final Surface surface;
     private final Canvas canvas;
@@ -211,12 +214,23 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
             if (cornerRadius > 0) {
                 canvas.save();
                 canvas.clipRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), true);
-                canvas.drawImageRect(image, dst, paint);
+                canvas.drawImageRect(image, Rect.makeWH(image.getWidth(), image.getHeight()), dst, SkiaImages.SMOOTH, paint, true);
                 canvas.restore();
             } else {
-                canvas.drawImageRect(image, dst, paint);
+                canvas.drawImageRect(image, Rect.makeWH(image.getWidth(), image.getHeight()), dst, SkiaImages.SMOOTH, paint, true);
             }
         }
+    }
+
+    @Override
+    public void drawImageRegion(Image image, float srcX, float srcY, float srcWidth, float srcHeight,
+                                float x, float y, float width, float height, Color color, boolean smooth) {
+        SkiaImages.drawImageRegion(canvas, image, srcX, srcY, srcWidth, srcHeight, x, y, width, height, color, smooth);
+    }
+
+    @Override
+    public void drawImageQuads(Image image, boolean smooth, float[] positions, float[] texCoords, int[] colors, int count) {
+        SkiaImages.drawImageQuads(canvas, image, smooth, positions, texCoords, colors, count);
     }
 
     @Override
@@ -254,6 +268,21 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
                 canvas.drawRect(Rect.makeXYWH(x, y, width, height), paint);
             }
         }
+    }
+
+    @Override
+    public void drawShader(ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
+        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius);
+    }
+
+    @Override
+    public void pushEffect(ShaderEffect effect, float x, float y, float width, float height) {
+        SkiaEffects.pushEffect(canvas, effect, x, y, width, height);
+    }
+
+    @Override
+    public void popEffect() {
+        SkiaEffects.popEffect(canvas);
     }
 
     @Override
@@ -307,6 +336,16 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
 
     @Override
     public void popScale() {
+        canvas.restore();
+    }
+
+    @Override
+    public void pushTransform(float x, float y, float rotation, float scaleX, float scaleY, float originX, float originY) {
+        SkiaImages.pushTransform(canvas, x, y, rotation, scaleX, scaleY, originX, originY);
+    }
+
+    @Override
+    public void popTransform() {
         canvas.restore();
     }
 }

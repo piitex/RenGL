@@ -4,6 +4,8 @@
 
 Small supporting classes in `me.piitex.engine.utils`, `me.piitex.engine.io` and related packages.
 
+`Pool` and `Poolable`, also in `me.piitex.engine.utils`, have their own page: [Object pools](../game/pooling.md).
+
 ## FormID
 
 Every [`Element`](../core/element.md) gets a unique **`FormID`** at construction, keyed by its concrete class.

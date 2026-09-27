@@ -1,0 +1,16 @@
+// The sea around the map. Drawn with drawShader inside the camera, so coord is in world units and the waves move,
+// zoom and turn with the world.
+uniform float time;
+
+half4 main(float2 coord) {
+    float2 p = floor(coord); // whole world pixels, to match the pixel art
+    float swell = sin(p.x * 0.05 + p.y * 0.03 + time * 0.8) + sin(p.x * 0.02 - p.y * 0.06 - time * 0.6);
+    float band = floor(clamp(swell * 0.5 + 0.5, 0.0, 0.999) * 3.0) / 2.0; // three shades, not a smooth blend
+    half3 color = mix(half3(0.1, 0.2, 0.38), half3(0.16, 0.33, 0.58), band);
+
+    // Short crests on every eighth row, drifting sideways, where the swell is up.
+    float row = floor(p.y / 8.0);
+    float along = fract((p.x + row * 5.0 + time * 6.0 * (mod(row, 2.0) * 2.0 - 1.0)) / 20.0);
+    if (mod(p.y, 8.0) == 0.0 && along < 0.25 && swell > 0.3) color = half3(0.5, 0.7, 0.92);
+    return half4(color, 1);
+}

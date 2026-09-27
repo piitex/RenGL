@@ -27,6 +27,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Overlay](core/overlay.md) | The base class of every widget, and how to write your own |
 | [Snapshots](core/snapshots.md) | Capture a container or the window as an image (PNG, or an `ImageOverlay`) |
 | [Scheduler](core/scheduler.md) | Timers, `runLater`, and background work with results delivered on the render thread |
+| [Loading](core/loading.md) | `Loader`: background loading in named steps, with progress for a loading screen |
 | **[Containers](containers/README.md)** | Container, ScrollContainer, ResizableContainer, ModalContainer, ReorderableGrid |
 | [Container](containers/container.md) | Holding children, dragging, collision, clipping |
 | [ScrollContainer](containers/scroll-container.md) | Scrollable, clipped content |
@@ -42,6 +43,20 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | Controls | [ButtonOverlay](overlays/button-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
 | Feedback | [ProgressBarOverlay](overlays/progress-bar-overlay.md) · [LoadingSpinnerOverlay](overlays/loading-spinner-overlay.md) · [SeparatorOverlay](overlays/separator-overlay.md) |
 | Images | [ImageOverlay](overlays/image-overlay.md) · [IconOverlay](overlays/icon-overlay.md) |
+| **[Game](game/README.md)** | Scenes and the game loop |
+| [Scenes](game/scenes.md) | `Scene` and `SceneManager`: menus, gameplay, pause menus, and moving between them |
+| [Game time](game/game-time.md) | Fixed-step updates, time scale, pausing, smooth drawing between steps |
+| [Scene transitions](game/transitions.md) | Fades, slides, wipes and custom effects when the scenes change |
+| [Geometry and raycasts](game/geometry.md) | `Vec2`, `Rect`, `Circle`, `Polygon`: overlap tests, raycasts, and number helpers |
+| [Events](game/events.md) | `EventBus`: tell other parts of the game what happened without knowing about them |
+| [Object pools](game/pooling.md) | `Pool`: reuse bullets, particles and other short-lived objects instead of creating new ones |
+| **[Graphics](graphics/README.md)** | Drawing a 2D game world |
+| [Camera](graphics/camera.md) | `Camera`: position, zoom, rotation, viewports, and mouse to world coordinates |
+| [Sprites](graphics/sprites.md) | `Texture`, `TextureRegion`, `Sprite`, and `SpriteBatch` for drawing many in order and in few calls |
+| [Texture atlases](graphics/atlases.md) | `TextureAtlas`: packed sprite sheets from TexturePacker, Aseprite and similar tools |
+| [Sprite animation](graphics/sprite-animation.md) | `Animation` and `AnimationPlayer`: frame animation, loop modes, frame events |
+| [Shaders and post effects](graphics/shaders.md) | `ShaderEffect`: SkSL shaders to fill shapes or post-process a scene or element |
+| [Debug drawing](graphics/debug-drawing.md) | `DebugDraw`: hit boxes, rays and labels drawn in world space |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
 | [Sound](audio/sound.md) | Short effects held in memory |
 | [Music](audio/music.md) | Streamed tracks, looping, crossfades |
@@ -55,8 +70,10 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Fonts](styling/fonts.md) | `Font` and custom fonts |
 | [Images and icons](styling/images-and-icons.md) | `ImageLoader`, `IconCache`, the bundled Feather set |
 | **[Animation](animation/transitions.md)** | `Transition`, fades, scaling, easing, custom transitions |
-| **[Input](input/README.md)** | Clicks, drags, scrolling, focus, cursors, tooltips, menus |
+| [Tweens and sequences](animation/tweens-and-sequences.md) | `Tween` any value, and `Sequence` steps: "wait 2 seconds, then..." |
+| **[Input](input/README.md)** | Clicks, drags, scrolling, focus, cursors, tooltips, menus, game controls |
 | [Input and focus](input/input-and-focus.md) | Clicks, drags, scrolling, keyboard focus, cursors, clipboard |
+| [Game input](input/game-input.md) | Polled keys and mouse, named actions and contexts, rebinding, saved key bindings |
 | [Tooltips](input/tooltips.md) | Hover bubbles |
 | [File dialogs](input/file-dialogs.md) | Native open, save and choose-folder dialogs |
 | [Menus](input/menus.md) | Menu bar, popup menus and right-click context menus |
