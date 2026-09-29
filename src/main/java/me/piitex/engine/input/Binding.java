@@ -1,6 +1,7 @@
 package me.piitex.engine.input;
 
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
@@ -21,7 +22,7 @@ import java.util.Locale;
  * @param modifiers GLFW modifier bits ({@code GLFW_MOD_SHIFT}, {@code _CONTROL}, {@code _ALT}, {@code _SUPER}) that
  *                  must be held, or 0 for none
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public record Binding(Device device, int code, int modifiers) {
 
     public enum Device {

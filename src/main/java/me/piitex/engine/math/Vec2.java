@@ -1,6 +1,7 @@
 package me.piitex.engine.math;
 
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 /**
  * A point or a direction in 2D, such as a position converted by {@link me.piitex.engine.graphics.Camera}. It is
@@ -8,7 +9,7 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  * a positive angle turns clockwise on screen, the same way {@link me.piitex.engine.graphics.Camera#setRotation}
  * does. Angles are in degrees.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public record Vec2(float x, float y) {
     public static final Vec2 ZERO = new Vec2(0f, 0f);
 
@@ -86,6 +87,28 @@ public record Vec2(float x, float y) {
     public Vec2 normalize() {
         float length = length();
         return length > 0f ? new Vec2(x / length, y / length) : ZERO;
+    }
+
+    /**
+     * This point moved towards {@code target} by at most {@code maxDistance}, without overshooting: steady movement
+     * such as {@code position = position.moveTowards(goal, speed * step)}.
+     */
+    public Vec2 moveTowards(Vec2 target, float maxDistance) {
+        float dx = target.x - x, dy = target.y - y;
+        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+        if (distance <= maxDistance || distance == 0f) return target;
+        return new Vec2(x + dx / distance * maxDistance, y + dy / distance * maxDistance);
+    }
+
+    /**
+     * This vector made no longer than {@code maxLength}, keeping its direction: a top speed,
+     * {@code velocity = velocity.limit(maxSpeed)}.
+     */
+    public Vec2 limit(float maxLength) {
+        float lengthSquared = x * x + y * y;
+        if (lengthSquared <= maxLength * maxLength) return this;
+        float scale = maxLength / (float) Math.sqrt(lengthSquared);
+        return new Vec2(x * scale, y * scale);
     }
 
     /**

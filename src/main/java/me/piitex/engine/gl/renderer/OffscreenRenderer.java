@@ -19,6 +19,7 @@ import org.jetbrains.skia.*;
 public class OffscreenRenderer implements Renderer, AutoCloseable {
     private final Surface surface;
     private final Canvas canvas;
+    private final AlphaStack alphas = new AlphaStack();
     private final float scale;
 
     private float clearR = 0f, clearG = 0f, clearB = 0f, clearA = 0f;
@@ -36,6 +37,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
 
     @Override
     public void begin() {
+        alphas.reset();
         canvas.clear(argb(clearA, clearR, clearG, clearB));
         canvas.save();
         canvas.scale(scale, scale);
@@ -85,7 +87,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
         if (color == null) return;
 
         org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint();
-        paint.setColor(color.toARGB());
+        paint.setColor(alphas.argb(color));
         paint.setAntiAlias(true);
 
         if (cornerRadius > 0) {
@@ -102,7 +104,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
         if (color == null || thickness <= 0) return;
 
         org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint();
-        paint.setColor(color.toARGB());
+        paint.setColor(alphas.argb(color));
         paint.setMode(PaintMode.STROKE);
         paint.setStrokeWidth(thickness);
         paint.setAntiAlias(true);
@@ -121,7 +123,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
         if (color == null || thickness <= 0) return;
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setAntiAlias(true);
@@ -139,7 +141,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
             for (int i = 1; i < pointCount; i++) {
                 builder.lineTo(points[i * 2], points[i * 2 + 1]);
             }
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setStrokeCap(PaintStrokeCap.ROUND);
@@ -159,11 +161,23 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
     }
 
     @Override
+    public void drawPolygon(float[] points, int pointCount, Color color) {
+        if (color == null || pointCount < 3) return;
+        SkiaShapes.drawPolygon(canvas, points, pointCount, alphas.argb(color), 0f);
+    }
+
+    @Override
+    public void drawPolygonOutline(float[] points, int pointCount, Color color, float thickness) {
+        if (color == null || thickness <= 0 || pointCount < 2) return;
+        SkiaShapes.drawPolygon(canvas, points, pointCount, alphas.argb(color), thickness);
+    }
+
+    @Override
     public void drawCircle(float x, float y, float radius, Color color) {
         if (color == null || radius <= 0) return;
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setAntiAlias(true);
             canvas.drawCircle(x, y, radius, paint);
         }
@@ -182,7 +196,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
             paint.setAntiAlias(true);
 
             if (color instanceof Color c) {
-                paint.setColor(c.toARGB());
+                paint.setColor(alphas.argb(c));
             } else if (color instanceof LinearGradient grad) {
                 // Approximate text bounding box for the gradient shader coordinates
                 float textWidth = font.measureTextWidth(text);
@@ -190,6 +204,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
 
                 try (Shader shader = GradientUtil.buildShader(grad, x, y, x + textWidth, y + textHeight)) {
                     paint.setShader(shader);
+                    paint.setAlphaf(alphas.get());
                 }
             }
 
@@ -203,7 +218,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
             paint.setAntiAlias(true);
-            paint.setAlphaf(Math.max(0f, Math.min(1f, opacity)));
+            paint.setAlphaf(Math.max(0f, Math.min(1f, opacity)) * alphas.get());
             if (tint != null) {
                 try (ColorFilter filter = ColorFilter.Companion.makeBlend(tint.toARGB(), BlendMode.SRC_IN)) {
                     paint.setColorFilter(filter);
@@ -225,12 +240,12 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
     @Override
     public void drawImageRegion(Image image, float srcX, float srcY, float srcWidth, float srcHeight,
                                 float x, float y, float width, float height, Color color, boolean smooth) {
-        SkiaImages.drawImageRegion(canvas, image, srcX, srcY, srcWidth, srcHeight, x, y, width, height, color, smooth);
+        SkiaImages.drawImageRegion(canvas, image, srcX, srcY, srcWidth, srcHeight, x, y, width, height, color, smooth, alphas.get());
     }
 
     @Override
     public void drawImageQuads(Image image, boolean smooth, float[] positions, float[] texCoords, int[] colors, int count) {
-        SkiaImages.drawImageQuads(canvas, image, smooth, positions, texCoords, colors, count);
+        SkiaImages.drawImageQuads(canvas, image, smooth, positions, texCoords, colors, count, alphas.get());
     }
 
     @Override
@@ -242,6 +257,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
 
             try (Shader shader = GradientUtil.buildShader(gradient, x, y, x + width, y + height)) {
                 paint.setShader(shader);
+                paint.setAlphaf(alphas.get());
 
                 if (cornerRadius > 0) {
                     canvas.drawRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), paint);
@@ -259,6 +275,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint();
              Shader shader = GradientUtil.buildShader(gradient, x, y, x + width, y + height)) {
             paint.setShader(shader);
+            paint.setAlphaf(alphas.get());
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setAntiAlias(true);
@@ -272,7 +289,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
 
     @Override
     public void drawShader(ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
-        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius);
+        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius, alphas.get());
     }
 
     @Override
@@ -283,6 +300,21 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
     @Override
     public void popEffect() {
         SkiaEffects.popEffect(canvas);
+    }
+
+    @Override
+    public void pushAlpha(float alpha) {
+        alphas.push(alpha);
+    }
+
+    @Override
+    public void popAlpha() {
+        alphas.pop();
+    }
+
+    @Override
+    public float getAlpha() {
+        return alphas.get();
     }
 
     @Override

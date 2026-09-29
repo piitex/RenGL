@@ -21,6 +21,7 @@ Playing the same `Sound` again does not stop the earlier playback. They overlap.
 | `Sound.load(String path)` | From a file or classpath resource |
 | `Sound.load(AssetManager, String name)` | Through an [`AssetManager`](../reference/utilities.md#assetmanager), so it can come from a `.pak` |
 | `Sound.tone(float hz, float seconds)` | A generated sine tone. Useful as a placeholder while you wait for real assets |
+| `Sound.fromSamples(name, short[] samples, channels, sampleRate)` | Samples the game made itself, such as synthesized effects: 16-bit, 1 or 2 channels, interleaved |
 
 Loading decodes the whole file, so do it up front (a loading screen, or [`Audio.preload`](README.md)) and not in the
 middle of gameplay. It can be done on a worker thread with [`Scheduler.async`](../core/scheduler.md).
@@ -60,7 +61,33 @@ Playback fire = Sound.load("sfx/fire.ogg").loopAt(camp.x, camp.y, camp.z);
 ```
 
 Use mono files for positioned sounds where you can: a stereo file is placed as one point too, but it keeps its own
-left/right spread.
+left/right spread. For a 2D game, [`Audio.hearIn2D`](spatial-audio.md#2d-games) sets the hearing up in one call.
+
+## Variety and limits
+
+A sound played often, such as a gunshot or a hit, sounds mechanical when every copy is identical, and turns into a
+roar when fifty play in the same frame. Set these once, after loading:
+
+```java
+Sound hit = Sound.load("sfx/hit.ogg")
+        .pitchVariation(0.08f)   // each play up to 8% higher or lower, at random
+        .minGap(0.05f)           // a play less than 0.05 s after the last one is skipped
+        .maxPlaying(4);          // and so is one while 4 copies are still sounding
+```
+
+| Method | Default | Effect |
+|---|---|---|
+| `pitchVariation(amount)` | 0 | Each play gets a pitch from `1 - amount` to `1 + amount`. The speed changes with it, so higher copies are a little shorter |
+| `minGap(seconds)` | 0 | A play that comes sooner than this after the last one that played is skipped, in real time, so it holds in slow motion |
+| `maxPlaying(count)` | no limit | A play is skipped while this many copies are still sounding |
+| `getPlayingCount()` | | How many copies are sounding now |
+
+A skipped play returns a `Playback` that is already [finished](playback.md#finished-playbacks-are-safe), so chained
+calls on it are harmless. Loops are never skipped or varied, but they count towards `maxPlaying` while they play.
+
+The limits belong to the sound, so every play of it shares them. When some plays must never be skipped, such as the
+player's own gun among a crowd of enemies firing the same sound, make a second `Sound` from the same file or samples
+and limit only that one.
 
 ## Loop points
 

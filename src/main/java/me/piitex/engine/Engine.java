@@ -2,7 +2,6 @@ package me.piitex.engine;
 
 import me.piitex.engine.audio.Audio;
 import me.piitex.engine.game.GameTime;
-import me.piitex.engine.game.SceneManager;
 import me.piitex.engine.gl.GLFWindow;
 import me.piitex.engine.gl.NativeMenuBar;
 import me.piitex.engine.gl.renderer.metal.MetalContext;
@@ -13,6 +12,7 @@ import me.piitex.engine.input.Clipboard;
 import me.piitex.engine.input.CursorManager;
 import me.piitex.engine.input.FileDialog;
 import me.piitex.engine.input.InputProcessor;
+import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.scheduler.Scheduler;
 import me.piitex.engine.ui.background.Background;
 import me.piitex.engine.ui.containers.Container;
@@ -27,114 +27,157 @@ import org.apache.logging.log4j.Logger;
 import org.lwjgl.system.MemoryStack;
 
 import java.nio.IntBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.lwjgl.glfw.GLFW.*;
+import static org.lwjgl.system.MemoryUtil.NULL;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 
+/**
+ * Runs the application: opens its windows, and every frame handles their input, runs their scenes and containers,
+ * and draws them.
+ * <pre>{@code
+ * Window window = new Window(new WindowOptions("My Game"));
+ * // build the UI...
+ * new Engine().start(window); // returns when the window closes
+ * }</pre>
+ * <b>Several windows.</b> More windows open with {@link #open(Window)} or {@link Window#open()}, from any thread,
+ * before or after {@code start}. Each has its own containers, scenes, input and focus, and closing one closes only
+ * it. Closing the first window, the one given to {@code start}, closes the others and ends the engine.
+ * <p>
+ * All windows share one render thread, which draws them one after another each frame, and one {@link GameTime}
+ * clock, so pausing game time pauses the scenes of every window. The frame rate follows the pacing window's
+ * {@link WindowOptions#setVsync vsync} and {@link WindowOptions#setMaxFPS max FPS} settings: the first window, unless
+ * {@link #setPacingWindow} picks another.
+ * <p>
+ * One engine runs per process.
+ */
 @GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class Engine {
     private static final Logger log = LogManager.getLogger("Engine");
-    private Window window;
-    private GLFWindow glfWindow;
-    private Renderer renderer;
-    private volatile boolean running = true;
-    private final InputProcessor inputProcessor = new InputProcessor();
+    private static volatile Engine current;
 
-    // Thread synchronization flags
-    private volatile boolean firstFrameRendered = false;
-    private boolean windowVisible = false;
+    private final List<Host> hosts = new CopyOnWriteArrayList<>();
+    private final Queue<Window> toOpen = new ConcurrentLinkedQueue<>();
+    private volatile Host primary;
+    private volatile Window pacingWindow; // null: the first window paces
+    private volatile boolean running = true;
+    private volatile boolean started;
 
     private final boolean mac = System.getProperty("os.name").toLowerCase().contains("mac");
-    private MetalContext metalContext;
-    private int logicalW, logicalH, fbW, fbH;
-    private volatile boolean sizeDirty = false;
-    private volatile boolean focusLost = false;
+    private long currentContext = NULL; // render thread: the window whose OpenGL context is current
 
     private long lastFrameTimeNanos;
     private final FrameLimiter frameLimiter = new FrameLimiter();
-    private boolean appliedVsync;
 
     /**
      * With vsync on, a frame faster than this can't have waited on the display (e.g. the window is minimised/occluded and no drawable was available), so the cap is applied as a fallback.
      */
     private static final long IMPLAUSIBLY_FAST_FRAME_NANOS = 2_000_000L;
 
-    public void start(Window window) {
-        log.info("Starting engine...");
-        this.window = window;
-        window.initializeGLFW();
-        WindowOptions options = window.getWindowOptions();
-        glfWindow = window.getGlfWindow();
-        long windowHandle = glfWindow.createWindow(options.getWidth(), options.getHeight(), options.getTitle());
-        glfWindow.applyOptions(options);
-        Clipboard.attach(windowHandle);
-        CursorManager.attach(windowHandle);
+    /**
+     * One open OS window: the {@link Window} and everything native the engine keeps for it.
+     */
+    private static final class Host {
+        final Window window;
+        final GLFWindow glfWindow;
+        final long handle;
+        final InputProcessor inputProcessor = new InputProcessor();
+        MetalContext metalContext; // created on the main thread, closed there after the renderer is released
+        Renderer renderer;         // render thread
+        volatile int logicalW, logicalH, fbW, fbH;
+        volatile boolean sizeDirty;
+        volatile boolean focusLost;
+        volatile boolean firstFrameRendered;
+        boolean shown;                   // main thread
+        Boolean appliedVsync;            // render thread; null until first applied
+        volatile boolean closeRequested; // main thread -> render thread: stop drawing and release the renderer
+        volatile boolean released;       // render thread -> main thread: the renderer is gone, destroy the window
 
-        // Main thread only: AppKit, and GLFW's size queries.
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer w = stack.mallocInt(1), h = stack.mallocInt(1);
-            IntBuffer bw = stack.mallocInt(1), bh = stack.mallocInt(1);
-            glfwGetWindowSize(windowHandle, w, h);
-            glfwGetFramebufferSize(windowHandle, bw, bh);
-            logicalW = w.get(0);
-            logicalH = h.get(0);
-            fbW = bw.get(0);
-            fbH = bh.get(0);
+        Host(Window window, GLFWindow glfWindow, long handle) {
+            this.window = window;
+            this.glfWindow = glfWindow;
+            this.handle = handle;
         }
-        // The window may not be the size that was asked for: fullscreen changes it, and the OS can shrink one
-        // that doesn't fit the screen. WindowOptions always holds the real size.
-        if (!options.isFullscreen() && (logicalW != options.getWidth() || logicalH != options.getHeight())) {
-            log.warn("Window opened at {}x{} instead of the requested {}x{} (adjusted by the OS).",
-                    logicalW, logicalH, options.getWidth(), options.getHeight());
+    }
+
+    /**
+     * The engine that is running, or null before {@link #start} and after it returns.
+     */
+    public static Engine getRunning() {
+        return current;
+    }
+
+    /**
+     * Opens {@code window} and runs the engine until it closes. This is the first window: closing it closes every
+     * other window and ends the engine. Must be called on the main thread (the first thread, with
+     * {@code -XstartOnFirstThread} on macOS), which it keeps until it returns.
+     *
+     * @throws IllegalStateException if an engine is already running
+     */
+    public void start(Window window) {
+        synchronized (Engine.class) {
+            if (current != null) throw new IllegalStateException("An engine is already running; open more windows with Engine.open");
+            current = this;
         }
-        options.setDimensions(logicalW, logicalH);
+        try {
+            run(window);
+        } finally {
+            current = null;
+        }
+    }
+
+    private void run(Window window) {
+        log.info("Starting engine...");
+        started = true;
+        Host main = createHost(window);
+        primary = main;
+        Clipboard.attach(main.handle); // GLFW's clipboard is system-wide; any window's handle will do
 
         String gpu;
         if (mac) {
-            metalContext = new MetalContext(glfWindow.getWindow());
-            gpu = SystemInfo.gpuFromMetalDevice(metalContext.getDevice());
+            gpu = SystemInfo.gpuFromMetalDevice(main.metalContext.getDevice());
         } else {
-            glfWindow.initOpenGLContext();
+            main.glfWindow.initOpenGLContext();
             gpu = SystemInfo.gpuFromGL();
+            glfwMakeContextCurrent(NULL); // the render thread takes the context over; it can't be current on two threads
         }
         SystemInfo.collect(gpu).log();
-        log.info("VSYNC: {}", options.isVsync());
-        log.info("Max-FPS: {}", options.getMaxFPS());
+        log.info("VSYNC: {}", window.getWindowOptions().isVsync());
+        log.info("Max-FPS: {}", window.getWindowOptions().getMaxFPS());
 
-        // Window size changed in screen coordinates (user drag-resized the border)
-        glfwSetWindowSizeCallback(windowHandle, (w, newW, newH) -> {
-            logicalW = newW;
-            logicalH = newH;
-            options.setDimensions(newW, newH); // keep WindowOptions in step with the real size (mouse clamping, modal centering, etc.)
-            sizeDirty = true;
-            window.notifyResized(newW, newH);
-        });
-
-        window.getInputManager().refreshKeyNames();
-        glfwSetWindowFocusCallback(windowHandle, (w, focused) -> {
-            if (!focused) focusLost = true;
-            else window.getInputManager().refreshKeyNames(); // the keyboard layout may have changed while away
-        });
-
-        // callback: just record the size, do not mutate the layer
-        glfwSetFramebufferSizeCallback(windowHandle, (w, newW, newH) -> {
-            fbW = newW;
-            fbH = newH;
-            sizeDirty = true;
-        });
-
-        Thread renderThread = new Thread(() -> renderLoop(options), "Render-Thread");
+        Thread renderThread = new Thread(this::renderLoop, "Render-Thread");
         renderThread.start();
 
-        while (running && !glfwWindowShouldClose(windowHandle)) {
-            if (firstFrameRendered && !windowVisible) {
-                if (!window.isHidden()) glfWindow.showWindow(); // hide() before the first frame keeps it hidden
-                windowVisible = true;
+        while (running && !glfwWindowShouldClose(main.handle)) {
+            Window next;
+            while ((next = toOpen.poll()) != null) {
+                try {
+                    createHost(next);
+                } catch (RuntimeException e) {
+                    log.error("Could not open window \"{}\"", next.getWindowOptions().getTitle(), e);
+                }
+            }
+            for (Host host : hosts) {
+                if (host.firstFrameRendered && !host.shown) {
+                    if (!host.window.isHidden()) host.glfWindow.showWindow(); // hide() before the first frame keeps it hidden
+                    host.shown = true;
+                }
             }
             glfwWaitEventsTimeout(0.001);
 
-            glfWindow.pollEventsHighFrequency();
+            glfwPollEvents();
+            for (Host host : hosts) {
+                host.glfWindow.runMainThreadTasks();
+                if (host == main) continue;
+                if (!host.closeRequested && glfwWindowShouldClose(host.handle)) host.closeRequested = true;
+                if (host.released) destroyHost(host);
+            }
             Clipboard.pump();
             CursorManager.pump();
             NativeMenuBar.pump();
@@ -144,42 +187,166 @@ public class Engine {
 
         running = false;
 
-        // The window is going away however the loop ended (close button, Window.close(), Engine stop). Let the
-        // render thread finish its last frame first, so the close listener can touch the UI model without racing it.
+        // The windows are going away however the loop ended (close button, Window.close(), Engine stop). Let the
+        // render thread finish its last frame first, so the close listeners can touch the UI model without racing it.
         try {
             renderThread.join(2000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        glfWindow.applyHide(); // cleanup may take a while; don't leave a frozen window on screen
-        window.notifyClosing();
+        // Cleanup may take a while; don't leave frozen windows on screen. Other windows close before the first.
+        for (Host host : hosts) host.glfWindow.applyHide();
+        for (Host host : hosts) {
+            if (host != main) host.window.notifyClosing();
+        }
+        main.window.notifyClosing();
 
         FileDialog.shutdown();
         Audio.shutdown();
         Scheduler.shutdown();
     }
 
-    private void renderLoop(WindowOptions options) {
-        if (mac) {
-            MetalSkikoRenderer metalRenderer = new MetalSkikoRenderer(metalContext);
-            metalRenderer.init();
-            metalRenderer.onResize(logicalW, logicalH, fbW, fbH);
-            renderer = metalRenderer;
-        } else {
-            glfWindow.initOpenGLContext();
-            renderer = new SkikoRenderer(glfWindow.getWindow());
+    /**
+     * Opens another window. Safe from any thread, and before {@link #start}: the window then opens right after the
+     * first. It opens on the next pass of the main thread's loop and shows once its first frame is drawn. Opening a
+     * window that is already open does nothing. A window that was closed can be opened again.
+     */
+    public void open(Window window) {
+        if (window == null) throw new IllegalArgumentException("window must not be null");
+        if (started && !running) throw new IllegalStateException("The engine has stopped");
+        for (Host host : hosts) {
+            if (host.window == window && !host.closeRequested) return;
         }
+        if (!toOpen.contains(window)) toOpen.add(window);
+    }
 
-        applyVsync(options.isVsync());
+    /**
+     * Makes {@code window} pace the frame loop: it alone waits for the display when its vsync is on, and its max FPS
+     * caps the loop, while the other windows are drawn at its rate. An editor sets this to the game window it opens
+     * on Play, so the game runs at its own settings. {@code null}, or the window closing, hands pacing back to the
+     * first window. Safe from any thread; it takes effect on the next frame.
+     */
+    public void setPacingWindow(Window window) {
+        pacingWindow = window;
+    }
 
+    /**
+     * The window pacing the frame loop now: the one given to {@link #setPacingWindow} while it is open, otherwise the
+     * first window.
+     */
+    public Window getPacingWindow() {
+        Host host = pacingHost();
+        return host == null ? null : host.window;
+    }
+
+    /**
+     * The host whose settings pace the loop: the chosen pacing window while it is open, else the first window.
+     */
+    private Host pacingHost() {
+        Window chosen = pacingWindow;
+        if (chosen != null) {
+            for (Host host : hosts) {
+                if (host.window == chosen && !host.closeRequested) return host;
+            }
+        }
+        return primary;
+    }
+
+    /**
+     * The windows open now, the first one first. Windows asked for with {@link #open} appear once they have opened,
+     * and closed ones are gone.
+     */
+    public List<Window> getWindows() {
+        List<Window> windows = new ArrayList<>();
+        for (Host host : hosts) {
+            if (!host.closeRequested) windows.add(host.window);
+        }
+        return windows;
+    }
+
+    /**
+     * Main thread. Creates the native window for {@code window} and starts tracking it; the render thread sets up its
+     * renderer on its next frame.
+     */
+    private Host createHost(Window window) {
+        window.initializeGLFW();
+        WindowOptions options = window.getWindowOptions();
+        GLFWindow glfWindow = window.getGlfWindow();
+        long windowHandle = glfWindow.createWindow(options.getWidth(), options.getHeight(), options.getTitle());
+        glfWindow.applyOptions(options);
+        Host host = new Host(window, glfWindow, windowHandle);
+        CursorManager.attach(windowHandle);
+
+        // Main thread only: AppKit, and GLFW's size queries.
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            IntBuffer w = stack.mallocInt(1), h = stack.mallocInt(1);
+            IntBuffer bw = stack.mallocInt(1), bh = stack.mallocInt(1);
+            glfwGetWindowSize(windowHandle, w, h);
+            glfwGetFramebufferSize(windowHandle, bw, bh);
+            host.logicalW = w.get(0);
+            host.logicalH = h.get(0);
+            host.fbW = bw.get(0);
+            host.fbH = bh.get(0);
+        }
+        // The window may not be the size that was asked for: fullscreen changes it, and the OS can shrink one
+        // that doesn't fit the screen. WindowOptions always holds the real size.
+        if (!options.isFullscreen() && (host.logicalW != options.getWidth() || host.logicalH != options.getHeight())) {
+            log.warn("Window opened at {}x{} instead of the requested {}x{} (adjusted by the OS).",
+                    host.logicalW, host.logicalH, options.getWidth(), options.getHeight());
+        }
+        options.setDimensions(host.logicalW, host.logicalH);
+
+        if (mac) host.metalContext = new MetalContext(windowHandle);
+
+        // Window size changed in screen coordinates (user drag-resized the border)
+        glfwSetWindowSizeCallback(windowHandle, (w, newW, newH) -> {
+            host.logicalW = newW;
+            host.logicalH = newH;
+            options.setDimensions(newW, newH); // keep WindowOptions in step with the real size (mouse clamping, modal centering, etc.)
+            host.sizeDirty = true;
+            window.notifyResized(newW, newH);
+        });
+
+        window.getInputManager().refreshKeyNames();
+        glfwSetWindowFocusCallback(windowHandle, (w, focused) -> {
+            window.notifyFocused(focused);
+            if (!focused) host.focusLost = true;
+            else window.getInputManager().refreshKeyNames(); // the keyboard layout may have changed while away
+        });
+
+        // callback: just record the size, do not mutate the layer
+        glfwSetFramebufferSizeCallback(windowHandle, (w, newW, newH) -> {
+            host.fbW = newW;
+            host.fbH = newH;
+            host.sizeDirty = true;
+        });
+
+        hosts.add(host);
+        return host;
+    }
+
+    /**
+     * Main thread, once the render thread has released the window's renderer: tells the window it closed and destroys
+     * the native window.
+     */
+    private void destroyHost(Host host) {
+        hosts.remove(host);
+        host.glfWindow.applyHide();
+        host.window.notifyClosing();
+        CursorManager.detach(host.handle);
+        host.glfWindow.destroy();
+        if (host.metalContext != null) host.metalContext.close();
+    }
+
+    private void renderLoop() {
         lastFrameTimeNanos = System.nanoTime();
         GameTime.reset();
-        SceneManager scenes = window.getSceneManager();
+        List<Host> live = new ArrayList<>();
 
         while (running) {
             long now = System.nanoTime();
-            float delta = (now - lastFrameTimeNanos) / 1_000_000_000f;
-            window.recordFrame(now - lastFrameTimeNanos);
+            long frameNanos = now - lastFrameTimeNanos;
+            float delta = frameNanos / 1_000_000_000f;
             lastFrameTimeNanos = now;
 
             // Guard against a huge delta after a debugger pause, GC stall, or the
@@ -187,114 +354,217 @@ public class Engine {
             // animation math can see a multi-second jump and misbehave.
             delta = Math.min(delta, 0.25f);
 
-            boolean vsync = options.isVsync();
-            if (vsync != appliedVsync) {
-                applyVsync(vsync);
-            }
-
-            if (sizeDirty) {
-                if (mac) {
-                    metalContext.resize(fbW, fbH);
-                    ((MetalSkikoRenderer) renderer).onResize(logicalW, logicalH, fbW, fbH);
-                } else {
-                    ((SkikoRenderer) renderer).recreateSurface(glfWindow.getWindow());
+            live.clear();
+            for (Host host : hosts) {
+                if (host.closeRequested) {
+                    if (!host.released) release(host);
+                    continue;
                 }
-                sizeDirty = false;
+                if (host.renderer == null) initRenderer(host);
+                live.add(host);
             }
 
-            if (focusLost) {
-                focusLost = false;
-                if (options.isHandleFocus()) {
-                    window.requestFocus(null); // OS window lost focus: drop keyboard focus so carets/selections don't linger
+            // Per window: surface size, focus, input, and animated backdrops
+            for (Host host : live) {
+                Window window = host.window;
+                select(host);
+                window.recordFrame(frameNanos);
+                applyVsync(host);
+
+                if (host.sizeDirty) {
+                    if (mac) {
+                        host.metalContext.resize(host.fbW, host.fbH);
+                        ((MetalSkikoRenderer) host.renderer).onResize(host.logicalW, host.logicalH, host.fbW, host.fbH);
+                    } else {
+                        makeContextCurrent(host);
+                        ((SkikoRenderer) host.renderer).recreateSurface(host.handle);
+                    }
+                    host.sizeDirty = false;
                 }
-            }
 
-            inputProcessor.processEvents(window);
+                if (host.focusLost) {
+                    host.focusLost = false;
+                    if (window.getWindowOptions().isHandleFocus()) {
+                        window.requestFocus(null); // OS window lost focus: drop keyboard focus so carets/selections don't linger
+                    }
+                }
 
-            Paint background = window.getBackgroundColor();
-            if (background instanceof AnimatedPaint animated) {
-                animated.advance(delta);
-            }
-            Background windowBackground = window.getBackground();
-            if (windowBackground != null) {
-                windowBackground.update(delta, 0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight());
+                host.inputProcessor.processEvents(window);
+
+                if (window.getBackgroundColor() instanceof AnimatedPaint animated) {
+                    animated.advance(delta);
+                }
+                Background windowBackground = window.getBackground();
+                if (windowBackground != null) {
+                    windowBackground.update(delta, 0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight());
+                }
             }
 
             NativeMenuBar.drainActions(); // callbacks of items chosen in the macOS system menu bar
             FileDialog.drainCallbacks();  // results of native open/save dialogs
             Scheduler.update(delta);      // runLater callbacks, timers, and async results
 
-            // Game time: the scenes' fixed steps (as many as this frame covers), then their per-frame update
-            GameTime.advance(delta, scenes::fixedUpdate);
-            scenes.update(GameTime.getDelta());
-
-            // Update pass: fires onUpdate for every enabled container and element
-            for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
-                Container container = entry.getValue();
-                if (container.isEnabled()) {
-                    container.update(delta);
+            // Game time: every window's scenes take the fixed steps (as many as this frame covers), then their
+            // per-frame update
+            GameTime.advance(delta, () -> {
+                for (Host host : live) {
+                    select(host);
+                    host.window.getSceneManager().fixedUpdate();
                 }
+            });
+            for (Host host : live) {
+                select(host);
+                host.window.getSceneManager().update(GameTime.getDelta());
             }
 
-            window.followPopupAnchor(); // after the update pass, so layouts have placed the anchor
-
-            TooltipManager.update(window, delta);
-
-            // A plain Color is cleared directly, which is cheap and needs no extra draw
-            // call. A gradient cannot be, since Skia's canvas clear takes only one flat
-            // color, so it is drawn as a full-window quad first thing after begin().
-            // An opaque black clear goes underneath it so no pixel is left undefined at
-            // the very edges before that quad covers the whole canvas.
-            if (background instanceof Color solid) {
-                renderer.clear(solid.getR(), solid.getG(), solid.getB(), solid.getA());
-            } else {
-                renderer.clear(0f, 0f, 0f, 1f);
+            for (Host host : live) {
+                select(host);
+                updateAndDraw(host, delta);
             }
-
-            renderer.begin();
-
-            if (background instanceof LinearGradient gradient) {
-                // Passing gradient itself, not its unpacked colors, is what lets a
-                // ScrollingGradient window background actually scroll.
-                renderer.drawGradient(0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight(),
-                        gradient, 0f);
-            }
-
-            if (windowBackground != null) {
-                windowBackground.render(renderer, 0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight());
-            }
-
-            for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
-                Container container = entry.getValue();
-                if (container.isEnabled()) {
-                    container.renderWithTransitions(renderer);
-                }
-            }
-            TooltipManager.render(renderer, window); // above every container
-            renderer.end();
-
-            if (!mac) glfwSwapBuffers(glfWindow.getWindow());
-
-            if (!firstFrameRendered) firstFrameRendered = true;
 
             // Vsync off: this loop is the only thing pacing frames, so hold it to maxFPS.
             // Vsync on: the display paces it, except when that isn't happening (see the constant).
-            if (!vsync || System.nanoTime() - now < IMPLAUSIBLY_FAST_FRAME_NANOS) {
-                frameLimiter.limit(options.getMaxFPS());
+            Host pacer = pacingHost();
+            WindowOptions pacing = pacer != null ? pacer.window.getWindowOptions() : live.isEmpty() ? null : live.get(0).window.getWindowOptions();
+            if (pacing != null && (!pacing.isVsync() || System.nanoTime() - now < IMPLAUSIBLY_FAST_FRAME_NANOS)) {
+                frameLimiter.limit(pacing.getMaxFPS());
             }
         }
     }
 
     /**
-     * Render thread. Applies vsync to whichever backend is in use.
+     * Render thread. Runs one window's containers and draws it.
      */
-    private void applyVsync(boolean vsync) {
-        if (mac) {
-            metalContext.setVsync(vsync);
-        } else {
-            glfWindow.setVsync(vsync);
+    private void updateAndDraw(Host host, float delta) {
+        Window window = host.window;
+        Renderer renderer = host.renderer;
+
+        // Update pass: fires onUpdate for every enabled container and element
+        for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
+            Container container = entry.getValue();
+            if (container.isEnabled()) {
+                container.update(delta);
+            }
         }
-        appliedVsync = vsync;
-        frameLimiter.reset(); // pacing changed, so don't carry a deadline from the old mode
+
+        window.followPopupAnchor(); // after the update pass, so layouts have placed the anchor
+
+        TooltipManager.update(window, delta);
+
+        if (!mac) makeContextCurrent(host);
+
+        // A plain Color is cleared directly, which is cheap and needs no extra draw
+        // call. A gradient cannot be, since Skia's canvas clear takes only one flat
+        // color, so it is drawn as a full-window quad first thing after begin().
+        // An opaque black clear goes underneath it so no pixel is left undefined at
+        // the very edges before that quad covers the whole canvas.
+        Paint background = window.getBackgroundColor();
+        if (background instanceof Color solid) {
+            renderer.clear(solid.getR(), solid.getG(), solid.getB(), solid.getA());
+        } else {
+            renderer.clear(0f, 0f, 0f, 1f);
+        }
+
+        renderer.begin();
+
+        int width = window.getWindowOptions().getWidth();
+        int height = window.getWindowOptions().getHeight();
+        if (background instanceof LinearGradient gradient) {
+            // Passing gradient itself, not its unpacked colors, is what lets a
+            // ScrollingGradient window background actually scroll.
+            renderer.drawGradient(0f, 0f, width, height, gradient, 0f);
+        }
+
+        Background windowBackground = window.getBackground();
+        if (windowBackground != null) {
+            windowBackground.render(renderer, 0f, 0f, width, height);
+        }
+
+        for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
+            Container container = entry.getValue();
+            if (container.isEnabled()) {
+                container.renderWithTransitions(renderer);
+            }
+        }
+        TooltipManager.render(renderer, window); // above every container
+        renderer.end();
+
+        if (!mac) glfwSwapBuffers(host.handle);
+
+        if (!host.firstFrameRendered) host.firstFrameRendered = true;
+    }
+
+    /**
+     * Render thread. Points the static helpers that answer for "the window" (mouse position, cursor requests) at
+     * this one.
+     */
+    private void select(Host host) {
+        MouseTracker.select(host.window);
+        CursorManager.select(host.handle);
+    }
+
+    /**
+     * Render thread. Sets up a newly opened window's renderer.
+     */
+    private void initRenderer(Host host) {
+        if (mac) {
+            MetalSkikoRenderer metalRenderer = new MetalSkikoRenderer(host.metalContext);
+            metalRenderer.init();
+            metalRenderer.onResize(host.logicalW, host.logicalH, host.fbW, host.fbH);
+            host.renderer = metalRenderer;
+        } else {
+            host.glfWindow.initOpenGLContext();
+            currentContext = host.handle;
+            host.renderer = new SkikoRenderer(host.handle);
+        }
+        host.sizeDirty = false;
+        applyVsync(host);
+    }
+
+    /**
+     * Render thread. Frees a closing window's renderer, then lets the main thread destroy the window.
+     */
+    private void release(Host host) {
+        if (host.renderer != null) {
+            if (mac) {
+                ((MetalSkikoRenderer) host.renderer).dispose();
+            } else {
+                makeContextCurrent(host);
+                ((SkikoRenderer) host.renderer).dispose();
+                glfwMakeContextCurrent(NULL); // the context is destroyed with its window, on the main thread
+                currentContext = NULL;
+            }
+            host.renderer = null;
+        }
+        TooltipManager.forget(host.window);
+        MouseTracker.forget(host.window);
+        host.released = true;
+    }
+
+    private void makeContextCurrent(Host host) {
+        if (currentContext != host.handle) {
+            glfwMakeContextCurrent(host.handle);
+            currentContext = host.handle;
+        }
+    }
+
+    /**
+     * Render thread. Applies a window's vsync setting when it changes. Only the pacing window (see
+     * {@link #setPacingWindow}) waits for the display, and that wait paces the whole loop. With OpenGL each wait is a whole frame, so a second waiting window would
+     * halve the frame rate; with Metal, several waiting layers pace the loop unevenly (between 60 and 120 frames a
+     * second on a 120 Hz display). The other windows present as soon as they are drawn.
+     */
+    private void applyVsync(Host host) {
+        boolean pacer = host == pacingHost();
+        boolean vsync = host.window.getWindowOptions().isVsync() && pacer;
+        if (host.appliedVsync != null && host.appliedVsync == vsync) return;
+        if (mac) {
+            host.metalContext.setVsync(vsync);
+        } else {
+            makeContextCurrent(host);
+            host.glfWindow.setVsync(vsync);
+        }
+        host.appliedVsync = vsync;
+        if (pacer) frameLimiter.reset(); // pacing changed, so don't carry a deadline from the old mode
     }
 }

@@ -25,7 +25,6 @@ import static org.lwjgl.openal.AL10.*;
  * <p>
  * All methods may be called from any thread. {@link #onFinished} callbacks run on the render thread.
  */
-@GeneratedClass(prompter = "piitex", model = "Sonnet 5", reviewed = false)
 public final class Playback {
     private static final Logger log = LogManager.getLogger("Audio");
     private static final int STREAM_BUFFERS = 4;
@@ -70,7 +69,7 @@ public final class Playback {
      * @param position where to place it in the world (x, y, z), or null for a flat, non-3D playback
      */
     record Spec(Object owner, AudioChannel channel, int buffer, int channels, PcmStream stream, float volume,
-                boolean loop, long loopStart, long loopEnd, float[] position) {
+                float pitch, boolean loop, long loopStart, long loopEnd, float[] position) {
     }
 
     /**
@@ -92,6 +91,7 @@ public final class Playback {
         p.loopStart = spec.loopStart();
         p.loopEnd = spec.loopEnd();
         p.volume = Math.max(0f, spec.volume());
+        p.pitch = Math.max(0.1f, Math.min(4f, spec.pitch()));
         p.looping = spec.loop();
         if (spec.position() != null) {
             p.positional = true;
@@ -110,6 +110,10 @@ public final class Playback {
                 if (stream != null) stream.close();
                 return silent(channel);
             }
+            float[] attenuation = Audio.defaultAttenuation();
+            p.refDistance = attenuation[0];
+            p.maxDistance = attenuation[1];
+            p.rolloff = attenuation[2];
             p.applyPosition();
             alSourcef(p.source, AL_PITCH, p.pitch);
             p.applyGain();
@@ -165,6 +169,15 @@ public final class Playback {
             if (!finished) alSourcef(source, AL_PITCH, this.pitch);
         }
         return this;
+    }
+
+    /**
+     * The pitch it plays at: 1 unless set with {@link #pitch}, or varied by {@link Sound#pitchVariation}.
+     */
+    public float getPitch() {
+        synchronized (Audio.LOCK) {
+            return pitch;
+        }
     }
 
     /**

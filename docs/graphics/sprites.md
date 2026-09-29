@@ -110,8 +110,8 @@ none for the ground.
 `draw(renderer, visible)` skips sprites whose bounds don't overlap `visible`. Pass the camera's
 `getVisibleBounds()`. `draw(renderer)` draws everything.
 
-A tile map knows where its tiles are, so it should only add the tiles in view in the first place, as `SpriteDemo`
-does. Culling is for things that move.
+A tile map knows where its tiles are, so it should only add the tiles in view in the first place, as
+[`TileMap`](tile-maps.md) and `SpriteDemo` do. Culling is for things that move.
 
 ### Batching
 

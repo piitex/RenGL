@@ -44,7 +44,6 @@ import static org.lwjgl.system.MemoryUtil.NULL;
  * If OpenAL cannot start (no output device, missing driver) a warning is logged once and audio is switched off:
  * nothing throws, {@link #isAvailable()} returns false and every playback is silent. A game keeps running.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Sonnet 5", reviewed = false)
 public final class Audio {
     private static final Logger log = LogManager.getLogger("Audio");
 
@@ -70,6 +69,8 @@ public final class Audio {
     private static final AudioListener listener = new AudioListener();
     private static DistanceModel distanceModel = DistanceModel.INVERSE_CLAMPED;
     private static float dopplerFactor = 1f, speedOfSound = 343.3f;
+    // The attenuation each positioned playback starts with.
+    private static float defaultReferenceDistance = 1f, defaultMaxDistance = Float.MAX_VALUE, defaultRolloff = 1f;
 
     private static Playback music;
     private static String musicPath;
@@ -203,6 +204,72 @@ public final class Audio {
      */
     public static AudioListener listener() {
         return listener;
+    }
+
+    /**
+     * Sets up positioned sounds for a 2D game, in one call: a sound played at (x, y) is at full volume within
+     * {@code fullVolumeDistance} of the listener, fades evenly to silence at {@code silentDistance}, and is heard
+     * from the left or right by how far it is to either side. Then move the listener with the camera each frame and
+     * play sounds where they happen:
+     * <pre>{@code
+     * Audio.hearIn2D(300f, 1500f);                                  // once, in world units
+     * Audio.listener().setPosition(camera.getX(), camera.getY());   // each frame
+     * explosion.playAt(x, y);
+     * }</pre>
+     * The listener hovers half the silent distance in front of the plane, facing it with y down the screen, so a
+     * sound a little to one side comes a little from that side rather than all from one speaker. A one-shot started
+     * beyond {@code silentDistance} is skipped, as if it had played, so far-off sounds cost nothing and don't count
+     * towards a sound's {@link Sound#minGap}.
+     * <p>
+     * It sets the {@linkplain #setDistanceModel distance model} to {@link DistanceModel#LINEAR_CLAMPED}, the
+     * {@linkplain #setDefaultAttenuation default attenuation}, and the listener's orientation. Playbacks already
+     * playing keep their attenuation.
+     *
+     * @throws IllegalArgumentException if {@code fullVolumeDistance} is negative or not below {@code silentDistance}
+     */
+    public static void hearIn2D(float fullVolumeDistance, float silentDistance) {
+        if (!(fullVolumeDistance >= 0f) || !(silentDistance > fullVolumeDistance) || Float.isInfinite(silentDistance)) {
+            throw new IllegalArgumentException("need 0 <= fullVolumeDistance < silentDistance, got " + fullVolumeDistance + " and " + silentDistance);
+        }
+        float height = silentDistance / 2f;
+        synchronized (LOCK) {
+            // Facing the plane from in front of it, with up towards the top of the screen: x is still to the right.
+            listener.setOrientation(0f, 0f, 1f, 0f, -1f, 0f);
+            listener.setHeight(height);
+            setDistanceModel(DistanceModel.LINEAR_CLAMPED);
+            // Distances are measured from the hovering listener, so reach the plane's distances along the slant.
+            setDefaultAttenuation((float) Math.hypot(fullVolumeDistance, height), (float) Math.hypot(silentDistance, height), 1f);
+        }
+    }
+
+    /**
+     * Sets the {@linkplain Playback#attenuation attenuation} positioned playbacks start with, so it needn't be set on
+     * each one. The defaults are 1, unlimited and 1. Playbacks already playing keep theirs.
+     */
+    public static void setDefaultAttenuation(float referenceDistance, float maxDistance, float rolloff) {
+        synchronized (LOCK) {
+            defaultReferenceDistance = Math.max(0f, referenceDistance);
+            defaultMaxDistance = Math.max(defaultReferenceDistance, maxDistance);
+            defaultRolloff = Math.max(0f, rolloff);
+        }
+    }
+
+    /**
+     * {referenceDistance, maxDistance, rolloff} for a new positioned playback. Call with {@link #LOCK} held.
+     */
+    static float[] defaultAttenuation() {
+        return new float[]{defaultReferenceDistance, defaultMaxDistance, defaultRolloff};
+    }
+
+    /**
+     * Whether a one-shot at (x, y, z) would be silent from the start: the distance model fades linearly to nothing and
+     * the point is past the default max distance. Call with {@link #LOCK} held.
+     */
+    static boolean isOutOfEarshot(float x, float y, float z) {
+        if (distanceModel != DistanceModel.LINEAR_CLAMPED && distanceModel != DistanceModel.LINEAR) return false;
+        if (defaultMaxDistance == Float.MAX_VALUE || !(defaultRolloff >= 1f)) return false;
+        float dx = x - listener.getX(), dy = y - listener.getY(), dz = z - listener.getZ();
+        return dx * dx + dy * dy + dz * dz >= (double) defaultMaxDistance * defaultMaxDistance;
     }
 
     /**
@@ -370,6 +437,17 @@ public final class Audio {
 
     static void unregister(Playback p) {
         active.remove(p);
+    }
+
+    /**
+     * How many playbacks of {@code owner} haven't finished. Call with {@link #LOCK} held.
+     */
+    static int countPlaying(Object owner) {
+        int count = 0;
+        for (Playback p : active) {
+            if (p.owner() == owner && !p.isFinished()) count++;
+        }
+        return count;
     }
 
     static void stopOwnedBy(Object owner) {

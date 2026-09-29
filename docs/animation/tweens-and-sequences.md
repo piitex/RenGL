@@ -8,6 +8,11 @@ another: "wait 2 seconds, then open the door, then zoom in". Both are in `me.pii
 [Transitions](transitions.md) animate UI elements. Tweens are for everything else: a camera, a sprite, a score
 counting up, a value your `render` reads.
 
+An animation that depends only on time, such as a panel rising in as a scene opens or a glow that breathes, can
+also be worked out in `render` from a clock, with
+[`MathUtil.progress`, `pulse` and `fadeInOut`](../game/geometry.md#mathutil). There is then nothing to play or
+cancel.
+
 ## Playing one
 
 Nothing moves until you play it, and where you play it decides which clock it runs on:

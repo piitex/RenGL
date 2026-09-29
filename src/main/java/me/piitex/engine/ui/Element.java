@@ -45,6 +45,9 @@ public class Element {
     private int drawIndex;
     private boolean enabled = true;
     private double x, y, z, width, height;
+    // Set by setAnchor; x and y then follow the container's size. See applyAnchor.
+    private Anchor anchor, pivot;
+    private double anchorOffsetX, anchorOffsetY, anchorMargin = -1;
     private boolean hovered;
     private Layout.Alignment textAlignment;
     private CursorMode cursorMode;
@@ -69,6 +72,7 @@ public class Element {
 
     // Event handling
     private Consumer<MouseClickEvent> mouseClickListenerConsumer;
+    private boolean clickOnRelease;
     private Consumer<ElementRenderEvent> elementRenderEventConsumer;
     private Consumer<ElementUpdateEvent> elementUpdateEventConsumer;
 
@@ -138,14 +142,19 @@ public class Element {
      * (its top-left corner, and for a {@link me.piitex.engine.ui.scroll.ScrollContainer} the scrolled content
      * origin). For an element added straight to a {@link me.piitex.engine.Window} that is the window. Moving a
      * container moves everything inside it without touching their own x/y. Use {@link #getAbsoluteX()} for the
-     * position in the window.
+     * position in the window. For an {@link #setAnchor anchored} element it is where the anchor puts it.
      */
     public double getX() {
         return x;
     }
 
+    /**
+     * Moves the left edge to {@code x}, relative to the container. This drops any {@link #setAnchor anchor}, so the
+     * element stays where it is put.
+     */
     public void setX(double x) {
         this.x = x;
+        anchor = null;
     }
 
     /**
@@ -185,8 +194,13 @@ public class Element {
         return windowY - (getAbsoluteY() - y);
     }
 
+    /**
+     * Moves the top edge to {@code y}, relative to the container. Drops any {@link #setAnchor anchor}, as
+     * {@link #setX} does.
+     */
     public void setY(double y) {
         this.y = y;
+        anchor = null;
     }
 
     /**
@@ -205,10 +219,101 @@ public class Element {
 
     /**
      * Convenience for setting x and y together in one call, e.g. when moving an Element as part of an animation.
+     * Drops any {@link #setAnchor anchor}, as {@link #setX} does.
      */
     public void setPosition(double x, double y) {
         this.x = x;
         this.y = y;
+        anchor = null;
+    }
+
+    /**
+     * Keeps this element at the same place in its container however the container is resized, with no
+     * {@code onResize} code: {@code button.setAnchor(Anchor.BOTTOM_RIGHT, -16, -16)} keeps a button 16 points in
+     * from the container's bottom-right corner. The element's own point at {@code anchor} is put on the container's
+     * point at {@code anchor}, so {@link Anchor#CENTER} centers it and {@link Anchor#TOP_RIGHT} puts its top-right
+     * corner in the container's top-right corner. The offsets then move it, in points: positive is right and down.
+     * <p>
+     * The position is worked out right away, again whenever the container or this element is resized, and every
+     * frame. It is relative to the container's box, so it has no effect on an element with no container, such as a
+     * container added straight to the {@link me.piitex.engine.Window}, nor inside a
+     * {@link me.piitex.engine.ui.layout.Layout}, which places its children itself. Setting the position by hand
+     * ({@link #setX}, {@link #setY}, {@link #setPosition}, {@link #setBounds}, or dragging it) drops the anchor. So
+     * does passing null here.
+     */
+    public void setAnchor(Anchor anchor, double offsetX, double offsetY) {
+        setAnchor(anchor, anchor, offsetX, offsetY);
+    }
+
+    /**
+     * {@link #setAnchor(Anchor, double, double)} with no offset.
+     */
+    public void setAnchor(Anchor anchor) {
+        setAnchor(anchor, anchor, 0, 0);
+    }
+
+    /**
+     * As {@link #setAnchor(Anchor, double, double)}, but puts this element's point at {@code pivot} on the
+     * container's point at {@code anchor}, rather than the same point on both.
+     * {@code setAnchor(Anchor.at(0.5, 0.3), Anchor.TOP_CENTER, 0, 0)} centers the element across, with its top a
+     * 30% of the way down.
+     */
+    public void setAnchor(Anchor anchor, Anchor pivot, double offsetX, double offsetY) {
+        this.anchor = anchor;
+        this.pivot = pivot == null ? anchor : pivot;
+        this.anchorOffsetX = offsetX;
+        this.anchorOffsetY = offsetY;
+        applyAnchor();
+    }
+
+    /**
+     * The point in the container this element is anchored to, or null if it is not anchored. See
+     * {@link #setAnchor(Anchor, Anchor, double, double)}.
+     */
+    public Anchor getAnchor() {
+        return anchor;
+    }
+
+    /**
+     * The point of this element put on the {@link #getAnchor() anchor}, or null if it is not anchored.
+     */
+    public Anchor getPivot() {
+        return anchor == null ? null : pivot;
+    }
+
+    /**
+     * Keeps an {@link #setAnchor anchored} element at least {@code margin} points inside every edge of its container,
+     * so a small window can't push it off. When it is too big to fit, its top-left corner stays at the margin. A
+     * negative margin, the default, turns this off.
+     */
+    public void setAnchorMargin(double margin) {
+        this.anchorMargin = margin;
+        applyAnchor();
+    }
+
+    /**
+     * The margin set with {@link #setAnchorMargin}, or a negative number if there is none.
+     */
+    public double getAnchorMargin() {
+        return anchorMargin;
+    }
+
+    /**
+     * Moves an {@link #setAnchor anchored} element to where its anchor puts it in its container. Does nothing when it
+     * is not anchored, has no container or is in a {@link Layout}. The engine calls it whenever that could change,
+     * and every frame from the container's update, so there is rarely a need to call it.
+     */
+    public void applyAnchor() {
+        if (anchor == null || owner == null || owner instanceof Layout) return;
+        double boxWidth = owner.getWidth(), boxHeight = owner.getHeight();
+        double newX = boxWidth * anchor.x() - width * pivot.x() + anchorOffsetX;
+        double newY = boxHeight * anchor.y() - height * pivot.y() + anchorOffsetY;
+        if (anchorMargin >= 0) {
+            newX = Math.max(anchorMargin, Math.min(newX, boxWidth - width - anchorMargin));
+            newY = Math.max(anchorMargin, Math.min(newY, boxHeight - height - anchorMargin));
+        }
+        x = newX;
+        y = newY;
     }
 
     /**
@@ -220,6 +325,7 @@ public class Element {
 
     public void setWidth(double width) {
         this.width = width;
+        applyAnchor();
     }
 
     /**
@@ -231,6 +337,7 @@ public class Element {
 
     public void setHeight(double height) {
         this.height = height;
+        applyAnchor();
     }
 
     /**
@@ -802,13 +909,14 @@ public class Element {
     }
 
     /**
-     * Sets position and size together in one call.
+     * Sets position and size together in one call. Drops any {@link #setAnchor anchor}, as {@link #setX} does.
      */
     public void setBounds(double x, double y, double width, double height) {
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
+        anchor = null;
     }
 
     /**
@@ -828,10 +936,31 @@ public class Element {
     }
 
     /**
-     * Registers a callback invoked when this Element is pressed, with any mouse button. A press on a child that has no click listener of its own goes up to the nearest ancestor that has one, so this also fires for presses on the labels or icons inside this Element; only one listener runs per press. Only one listener is held at a time; calling this again replaces the previous listener rather than adding a second one.
+     * Registers a callback invoked when this Element is pressed, with any mouse button, or, if it
+     * {@link #setClickOnRelease clicks on release}, when a left press on it is released over it. A press on a child that has no click listener of its own goes up to the nearest ancestor that has one, so this also fires for presses on the labels or icons inside this Element; only one listener runs per press. Only one listener is held at a time; calling this again replaces the previous listener rather than adding a second one.
      */
     public void onMouseClick(Consumer<MouseClickEvent> mouseClickListenerConsumer) {
         this.mouseClickListenerConsumer = mouseClickListenerConsumer;
+    }
+
+    /**
+     * Whether the {@link #onMouseClick click listener} fires when the left button is released rather than pressed. See
+     * {@link #setClickOnRelease}.
+     */
+    public boolean isClickOnRelease() {
+        return clickOnRelease;
+    }
+
+    /**
+     * Makes the {@link #onMouseClick click listener} fire the way a button's does: when the left button is released,
+     * and only if it was pressed on this Element and is released still over it. Moving off before letting go cancels
+     * the click, and a press that began elsewhere, such as on a popup scene still in its
+     * {@link me.piitex.engine.game.Scene#setInputDelay input delay}, never fires it. Other mouse buttons are taken by
+     * this Element without firing it, so they don't reach game input either. {@link me.piitex.engine.ui.overlays.ButtonOverlay},
+     * the check box, radio button and toggle switch turn this on. Off by default, so a plain listener fires on the press.
+     */
+    public void setClickOnRelease(boolean clickOnRelease) {
+        this.clickOnRelease = clickOnRelease;
     }
 
     /**

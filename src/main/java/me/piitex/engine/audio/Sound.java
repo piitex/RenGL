@@ -8,6 +8,8 @@ import org.apache.logging.log4j.Logger;
 import org.lwjgl.openal.AL;
 import org.lwjgl.openal.SOFTLoopPoints;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import static org.lwjgl.openal.AL10.*;
 import static org.lwjgl.openal.AL11.alBufferiv;
 
@@ -24,6 +26,17 @@ import static org.lwjgl.openal.AL11.alBufferiv;
  * loads as a silent stand-in and every play does nothing.
  * <p>
  * {@link Audio#play(String)} does the loading and caching for you when you do not need to hold the sound.
+ * <h2>Variety and limits</h2>
+ * A sound played often, such as a gunshot or a hit, sounds mechanical when every copy is the same and turns into a
+ * roar when fifty play at once. Set these once, after loading:
+ * <pre>{@code
+ * Sound hit = Sound.load("sfx/hit.ogg")
+ *         .pitchVariation(0.08f)   // each play 8% higher or lower at most
+ *         .minGap(0.05f)           // plays closer together than this are skipped
+ *         .maxPlaying(4);          // and so are plays while 4 copies are still sounding
+ * }</pre>
+ * A skipped play returns a playback that has already {@linkplain Playback#isFinished() finished}. Loops are never
+ * skipped and keep the pitch they are given.
  */
 @GeneratedClass(prompter = "piitex", model = "Claude Sonnet 5", reviewed = false)
 public final class Sound implements AutoCloseable {
@@ -35,6 +48,10 @@ public final class Sound implements AutoCloseable {
     private final int channels, rate, frames;
     private AudioChannel channel = AudioChannel.SFX;
     private boolean closed;
+    private float pitchVariation, minGap;
+    private int maxPlaying = Integer.MAX_VALUE;
+    private long lastPlayNanos;
+    private boolean playedYet;
 
     private Sound(String name, Pcm pcm) {
         this.name = name;
@@ -95,11 +112,84 @@ public final class Sound implements AutoCloseable {
     }
 
     /**
+     * Makes a sound from samples the game generated itself, such as synthesized effects.
+     *
+     * @param name       a name for logs and {@link #getName()}
+     * @param samples    16-bit samples, interleaved left then right when there are two channels. Not copied, so don't
+     *                   change the array afterwards
+     * @param channels   1 for mono, 2 for stereo
+     * @param sampleRate samples per second of each channel, for example 44100
+     * @throws IllegalArgumentException if the channels aren't 1 or 2, the rate isn't above 0, or there are no samples
+     *                                  or a stereo sample is missing its other half
+     */
+    public static Sound fromSamples(String name, short[] samples, int channels, int sampleRate) {
+        if (channels != 1 && channels != 2) throw new IllegalArgumentException("channels must be 1 or 2: " + channels);
+        if (sampleRate <= 0) throw new IllegalArgumentException("sampleRate must be above 0: " + sampleRate);
+        if (samples.length == 0 || samples.length % channels != 0) {
+            throw new IllegalArgumentException("need a whole number of frames above 0, got " + samples.length + " samples");
+        }
+        return new Sound(name, Audio.isAvailable() ? new Pcm(samples, channels, sampleRate) : null);
+    }
+
+    /**
      * Sets the channel this sound plays on (default {@link AudioChannel#SFX}).
      */
     public Sound channel(AudioChannel channel) {
         this.channel = channel;
         return this;
+    }
+
+    /**
+     * Plays each copy of this sound up to {@code amount} higher or lower in pitch, picked at random, so repeats don't
+     * sound identical: 0.08 plays each from 0.92 to 1.08 times the normal pitch. 0, the default, plays every copy the
+     * same. The pitch changes the speed too, so a higher copy is a little shorter. Loops aren't varied.
+     */
+    public Sound pitchVariation(float amount) {
+        this.pitchVariation = Math.clamp(amount, 0f, 0.9f);
+        return this;
+    }
+
+    /**
+     * Skips a play of this sound that comes less than {@code seconds} after the last one that played, so fifty hits in
+     * one frame make one sound. 0, the default, never skips. It is measured in real time, so it holds in slow
+     * motion too. Loops are never skipped.
+     */
+    public Sound minGap(float seconds) {
+        this.minGap = Math.max(0f, seconds);
+        return this;
+    }
+
+    /**
+     * Skips a play of this sound while {@code count} copies of it are still sounding. There is no limit by default.
+     * Loops are never skipped, but they count towards the limit while they play.
+     *
+     * @throws IllegalArgumentException if {@code count} is below 1
+     */
+    public Sound maxPlaying(int count) {
+        if (count < 1) throw new IllegalArgumentException("count must be at least 1: " + count);
+        this.maxPlaying = count;
+        return this;
+    }
+
+    public float getPitchVariation() {
+        return pitchVariation;
+    }
+
+    public float getMinGap() {
+        return minGap;
+    }
+
+    public int getMaxPlaying() {
+        return maxPlaying;
+    }
+
+    /**
+     * How many copies of this sound are playing now, loops included.
+     */
+    public int getPlayingCount() {
+        synchronized (Audio.LOCK) {
+            return Audio.countPlaying(this);
+        }
     }
 
     /**
@@ -197,7 +287,19 @@ public final class Sound implements AutoCloseable {
     private Playback start(float volume, boolean loop, float[] position) {
         if (closed) throw new IllegalStateException("Sound is closed: " + name);
         if (buffer == 0) return Playback.silent(channel);
-        return Playback.start(new Playback.Spec(this, channel, buffer, channels, null, volume, loop, 0, 0, position));
+        float pitch = 1f;
+        synchronized (Audio.LOCK) {
+            if (!loop) {
+                if (position != null && Audio.isOutOfEarshot(position[0], position[1], position[2])) return Playback.silent(channel);
+                long now = System.nanoTime();
+                if (minGap > 0f && playedYet && now - lastPlayNanos < (long) (minGap * 1_000_000_000.0)) return Playback.silent(channel);
+                if (maxPlaying != Integer.MAX_VALUE && Audio.countPlaying(this) >= maxPlaying) return Playback.silent(channel);
+                lastPlayNanos = now;
+                playedYet = true;
+                if (pitchVariation > 0f) pitch = 1f + (ThreadLocalRandom.current().nextFloat() * 2f - 1f) * pitchVariation;
+            }
+            return Playback.start(new Playback.Spec(this, channel, buffer, channels, null, volume, pitch, loop, 0, 0, position));
+        }
     }
 
     /**

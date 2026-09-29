@@ -56,7 +56,13 @@ All coordinates are logical points, top-left origin.
 | `drawLine(x0, y0, x1, y1, Color, thickness)` | Line segment |
 | `drawPolyline(float[] points, pointCount, Color, thickness)` | Connected open line through packed `x0, y0, x1, y1, ...` points, with round joins and caps (no notches or doubled alpha at the joints) |
 | `drawCircle(x, y, radius, Color)` | Filled circle centered at (x, y) |
+| `drawPolygon(float[] points, pointCount, Color)` | Filled shape through packed `x0, y0, x1, y1, ...` points, closed back to the first. Concave shapes work, and one that crosses itself (a star in one stroke) is filled solid |
+| `drawPolygonOutline(float[] points, pointCount, Color, thickness)` | Its closed outline, with sharp corners |
+| `drawPolygon(Polygon, Color)` / `drawPolygonOutline(Polygon, Color, thickness)` | The same for a [`Polygon`](../game/geometry.md#polygon), such as a hit box |
+| `drawRegularPolygon(cx, cy, radius, sides, degrees, Color)` / `drawRegularPolygonOutline(..., Color, thickness)` | A triangle, hexagon and so on, filled or outlined: `sides` corners on a circle, the first straight right of the center, turned clockwise by `degrees` |
 | `drawText(text, x, y, Font, Paint)` | One line of text; (x, y) is its top-left |
+| `drawText(text, x, y, Font, Paint, TextAlign[, TextShadow])` | One line of text with x as its left edge, center or right edge (`TextAlign.LEFT`, `CENTER`, `RIGHT`), over an optional shadow |
+| `drawTextLines(List<String> lines, x, y, lineHeight, Font, Paint, TextAlign)` | Lines one below the other, each placed at x by the alignment. Returns the y below the last line |
 | `drawGradient(x, y, w, h, LinearGradient, cornerRadius)` | Gradient-filled rectangle. Pass the *original* gradient object so a [`ScrollingGradient`](../styling/colors-and-paints.md#scrolling-animated-gradients) keeps scrolling |
 | `drawImage(Image, x, y, w, h, cornerRadius, opacity[, Color tint])` | Scaled image, sampled smoothly |
 | `drawImageRegion(Image, srcX, srcY, srcW, srcH, x, y, w, h, Color, smooth)` | Part of an image, scaled into a rectangle. `Color` multiplies it (null for none); `smooth` false keeps hard pixel edges. Nothing outside the source rectangle shows |
@@ -68,6 +74,7 @@ All coordinates are logical points, top-left origin.
 | `pushScale(scale, pivotX, pivotY)` / `popScale()` | Scale subsequent drawing around (pivotX, pivotY), which stays in place. This is what [`Element.setScale`](../core/element.md#scale) uses |
 | `pushTransform(x, y, rotation, scaleX, scaleY, originX, originY)` / `popTransform()` | Move (originX, originY) to (x, y), turning by `rotation` degrees clockwise and scaling around it; a negative scale mirrors. This is what a [`Camera`](../graphics/camera.md) uses |
 | `pushOpacityLayer(x, y, w, h, opacity)` / `popOpacityLayer()` | Composite everything drawn in between as one unit at that opacity |
+| `pushAlpha(alpha)` / `popAlpha()` | Multiply the opacity of everything drawn in between: fills, lines, text, images and shaders. Nested pushes multiply; `getAlpha()` is the result. Free, unlike an opacity layer, but each thing fades on its own, so where two overlap the lower one shows through |
 | `pushEffect(ShaderEffect, x, y, w, h)` / `popEffect()` | Pass everything drawn in between through a [post effect](../graphics/shaders.md#post-effects), cut to the rectangle |
 
 Rules:
@@ -75,7 +82,7 @@ Rules:
 - A `null` color is a **no-op**, not an error, so you do not need to null-check before drawing. The image calls are
   the exception: there a null color or tint means the image's own colors.
 - Every `pushClip` needs exactly one `popClip`, every `pushOpacityLayer` exactly one `popOpacityLayer`, and the same
-  for `pushTranslate`/`popTranslate`, `pushScale`/`popScale`, `pushTransform`/`popTransform` and `pushEffect`/`popEffect`. Pushes nest. An unmatched push corrupts the rest
+  for `pushAlpha`/`popAlpha`, `pushTranslate`/`popTranslate`, `pushScale`/`popScale`, `pushTransform`/`popTransform` and `pushEffect`/`popEffect`. Pushes nest. An unmatched push corrupts the rest
   of the frame.
 - `drawQuad`/`drawBorder`/`drawLine`/`drawCircle` take a solid [`Color`](../styling/colors-and-paints.md#color). `drawText`, `drawGradient` and
   `drawGradientBorder` take gradients. `drawQuad` and `drawBorder` also have overloads that take any `Paint` and pick
@@ -117,6 +124,27 @@ public class Label extends Overlay {
 ```
 
 For most text needs, use or extend [`TextOverlay`](../overlays/text-overlay.md), which already handles fonts, sizing and theming.
+
+### Aligning, wrapping and shadowing
+
+For text drawn straight from `render` (a game's HUD or menus), `me.piitex.engine.ui.text` has the pieces that
+otherwise get written by hand:
+
+```java nocompile
+private static final TextShadow SHADOW = new TextShadow(new Color(0f, 0f, 0f, 0.5f), 2f); // 2 points right and down
+private final org.jetbrains.skia.Font font = Font.sized(16f); // the default typeface at 16 points
+private List<String> lines;
+
+// When the text or the width changes: break it into lines no wider than 240 points.
+lines = TextLayout.wrap(description, font, 240f);
+
+// In render:
+renderer.drawText("GAME OVER", width / 2f, 80f, bigFont, Color.WHITE, TextAlign.CENTER, SHADOW);
+renderer.drawTextLines(lines, width / 2f, 140f, TextLayout.lineHeight(font), font, Color.WHITE, TextAlign.CENTER);
+```
+
+`TextLayout.wrap` breaks between words and at `'\n'`, and breaks a word too long for a line on its own between
+characters, the same way [`TextFlowOverlay`](../overlays/text-flow-overlay.md) does.
 
 ## Handling input
 

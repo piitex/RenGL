@@ -147,7 +147,9 @@ More curves:
 `EASE_OUT_BACK` and `EASE_OUT_ELASTIC` go outside 0-1 on the way, so a value eased with them overshoots its target.
 
 It is a functional interface (`float apply(float t)`). `ProgressBarOverlay.animateTo`, [`Tween`](tweens-and-sequences.md)
-and [scene transitions](../game/transitions.md) take one. Your own transitions can use it the same way.
+and [scene transitions](../game/transitions.md) take one. Your own transitions can use it the same way, and
+[`MathUtil.progress(time, delay, duration, easing)`](../game/geometry.md#mathutil) eases a value worked out from a
+clock.
 
 ## Built-in transitions used by widgets
 

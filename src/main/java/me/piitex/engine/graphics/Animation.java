@@ -19,7 +19,6 @@ import java.util.List;
  * Each frame can carry an <b>event</b>, a name the player reports whenever that frame starts, for things that must
  * line up with the picture: a footstep sound, the moment a sword swing hits.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Animation {
 
     /**

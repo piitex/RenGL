@@ -1,13 +1,13 @@
 package me.piitex.engine.math;
 
-import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 /**
  * An axis-aligned rectangle: its top-left corner at ({@code x}, {@code y}), with y growing downwards like every other
  * coordinate in the engine. A width or height of 0 or less is empty: it contains no point, overlaps nothing and no
  * ray hits it.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public record Rect(float x, float y, float width, float height) implements Shape {
 
     /**

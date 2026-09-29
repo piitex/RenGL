@@ -2,12 +2,19 @@ package me.piitex.engine.gl.renderer;
 
 import me.piitex.engine.gl.renderer.metal.MetalSkikoRenderer;
 import me.piitex.engine.graphics.ShaderEffect;
+import me.piitex.engine.math.Polygon;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.LinearGradient;
 import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.text.TextAlign;
+import me.piitex.engine.ui.text.TextLayout;
+import me.piitex.engine.ui.text.TextShadow;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.Font;
 import org.jetbrains.skia.Image;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * The engine's drawing surface for a single frame, backed by Skia through either the
@@ -114,6 +121,112 @@ public interface Renderer {
     }
 
     /**
+     * Fills the polygon through the first {@code pointCount} points of {@code points}, packed as
+     * {@code x0, y0, x1, y1, ...} and closed back to the first. Any outline works: convex, concave (an arrow, a
+     * shield) or crossing itself. Where it crosses itself, the non-zero rule decides what is inside, so a five-point
+     * star drawn in one stroke is filled solid. A null {@code color} or fewer than three points is a no-op.
+     * <p>
+     * The default implementation fills it one row of points at a time with {@link #drawQuad}, with no anti-aliasing,
+     * so a custom Renderer keeps working without overriding this.
+     */
+    default void drawPolygon(float[] points, int pointCount, Color color) {
+        if (color == null || pointCount < 3) return;
+        float top = Float.MAX_VALUE, bottom = -Float.MAX_VALUE;
+        for (int i = 0; i < pointCount; i++) {
+            top = Math.min(top, points[i * 2 + 1]);
+            bottom = Math.max(bottom, points[i * 2 + 1]);
+        }
+        float[] crossings = new float[pointCount];
+        int[] directions = new int[pointCount];
+        for (int row = (int) Math.floor(top); row < bottom; row++) {
+            float y = row + 0.5f;
+            int count = 0;
+            for (int i = 0; i < pointCount; i++) {
+                int j = (i + 1) % pointCount;
+                float y0 = points[i * 2 + 1], y1 = points[j * 2 + 1];
+                if ((y0 <= y) == (y1 <= y)) continue; // this edge doesn't cross the row
+                float x0 = points[i * 2], x1 = points[j * 2];
+                float x = x0 + (y - y0) / (y1 - y0) * (x1 - x0);
+                int direction = y1 > y0 ? 1 : -1;
+                // Insertion sort by x: few edges cross any one row.
+                int k = count++;
+                while (k > 0 && crossings[k - 1] > x) {
+                    crossings[k] = crossings[k - 1];
+                    directions[k] = directions[k - 1];
+                    k--;
+                }
+                crossings[k] = x;
+                directions[k] = direction;
+            }
+            int winding = 0;
+            for (int k = 0; k < count - 1; k++) {
+                winding += directions[k];
+                if (winding != 0 && crossings[k + 1] > crossings[k]) {
+                    drawQuad(crossings[k], row, crossings[k + 1] - crossings[k], 1f, color, 0f);
+                }
+            }
+        }
+    }
+
+    /**
+     * The closed outline of the polygon through the first {@code pointCount} points of {@code points}, packed as
+     * {@code x0, y0, x1, y1, ...}, with sharp corners. The line is centered on the outline. A null {@code color}, a
+     * {@code thickness <= 0} or fewer than two points is a no-op.
+     * <p>
+     * The default implementation draws it with {@link #drawPolyline}, back to the first point.
+     */
+    default void drawPolygonOutline(float[] points, int pointCount, Color color, float thickness) {
+        if (color == null || thickness <= 0 || pointCount < 2) return;
+        float[] closed = Arrays.copyOf(points, pointCount * 2 + 2);
+        closed[pointCount * 2] = points[0];
+        closed[pointCount * 2 + 1] = points[1];
+        drawPolyline(closed, pointCount + 1, color, thickness);
+    }
+
+    /**
+     * Fills a {@link Polygon}, such as a hit box. See {@link #drawPolygon(float[], int, Color)}.
+     */
+    default void drawPolygon(Polygon polygon, Color color) {
+        if (polygon != null) drawPolygon(polygon.getPoints(), polygon.getPointCount(), color);
+    }
+
+    /**
+     * The outline of a {@link Polygon}. See {@link #drawPolygonOutline(float[], int, Color, float)}.
+     */
+    default void drawPolygonOutline(Polygon polygon, Color color, float thickness) {
+        if (polygon != null) drawPolygonOutline(polygon.getPoints(), polygon.getPointCount(), color, thickness);
+    }
+
+    /**
+     * Fills a regular polygon: {@code sides} corners on a circle of {@code radius} around (centerX, centerY), the
+     * first straight right of the center and turned clockwise by {@code degrees}, as in {@link Polygon#regular}. 3
+     * sides is a triangle, 6 a hexagon. Fewer than 3 sides or a {@code radius <= 0} is a no-op.
+     */
+    default void drawRegularPolygon(float centerX, float centerY, float radius, int sides, float degrees, Color color) {
+        if (sides < 3 || radius <= 0) return;
+        drawPolygon(regularPolygon(centerX, centerY, radius, sides, degrees), sides, color);
+    }
+
+    /**
+     * The outline of a regular polygon. See {@link #drawRegularPolygon} and {@link #drawPolygonOutline(float[], int, Color, float)}.
+     */
+    default void drawRegularPolygonOutline(float centerX, float centerY, float radius, int sides, float degrees, Color color, float thickness) {
+        if (sides < 3 || radius <= 0) return;
+        drawPolygonOutline(regularPolygon(centerX, centerY, radius, sides, degrees), sides, color, thickness);
+    }
+
+    private static float[] regularPolygon(float centerX, float centerY, float radius, int sides, float degrees) {
+        float[] points = new float[sides * 2];
+        double start = Math.toRadians(degrees);
+        for (int i = 0; i < sides; i++) {
+            double angle = start + Math.PI * 2 * i / sides;
+            points[i * 2] = centerX + radius * (float) Math.cos(angle);
+            points[i * 2 + 1] = centerY + radius * (float) Math.sin(angle);
+        }
+        return points;
+    }
+
+    /**
      * Draws a solid-color filled circle centered at (x, y) with the given {@code
      * radius}. A null {@code color} or a non-positive {@code radius} is a no-op, the
      * same convention {@link #drawQuad} uses for a null color.
@@ -132,6 +245,42 @@ public interface Renderer {
      * width/height rather than the element's full bounding box.
      */
     void drawText(String text, float x, float y, Font font, Paint color);
+
+    /**
+     * As {@link #drawText(String, float, float, Font, Paint)}, with {@code x} as the text's left edge, its center or
+     * its right edge, as {@code align} says. So {@code drawText(title, width / 2f, 40f, font, color, TextAlign.CENTER)}
+     * centers a title across the window. A null {@code align} is {@link TextAlign#LEFT}. {@code y} is the top.
+     */
+    default void drawText(String text, float x, float y, Font font, Paint color, TextAlign align) {
+        if (text == null || text.isEmpty() || font == null) return;
+        float left = align == null || align == TextAlign.LEFT ? x : x - align.fraction() * font.measureTextWidth(text);
+        drawText(text, left, y, font, color);
+    }
+
+    /**
+     * As {@link #drawText(String, float, float, Font, Paint, TextAlign)}, over {@code shadow}: the same text in the
+     * shadow's color, moved by its offset. A null {@code shadow} draws none.
+     */
+    default void drawText(String text, float x, float y, Font font, Paint color, TextAlign align, TextShadow shadow) {
+        if (shadow != null && shadow.color() != null) {
+            drawText(text, x + shadow.offsetX(), y + shadow.offsetY(), font, shadow.color(), align);
+        }
+        drawText(text, x, y, font, color, align);
+    }
+
+    /**
+     * Draws {@code lines} one below the other, the first with its top at {@code y} and each next one
+     * {@code lineHeight} lower, each placed at {@code x} as {@code align} says. For text broken into lines by
+     * {@link TextLayout#wrap}; {@link TextLayout#lineHeight} is a natural {@code lineHeight}. Returns the y just below
+     * the last line ({@code y + lines.size() * lineHeight}), where whatever follows can go.
+     */
+    default float drawTextLines(List<String> lines, float x, float y, float lineHeight, Font font, Paint color, TextAlign align) {
+        for (String line : lines) {
+            drawText(line, x, y, font, color, align);
+            y += lineHeight;
+        }
+        return y;
+    }
 
     /**
      * Draws a two-color linear-gradient filled rectangle with its top-left corner at
@@ -330,6 +479,41 @@ public interface Renderer {
      * everything drawn since then onto the canvas beneath it at that layer's opacity.
      */
     void popOpacityLayer();
+
+    /**
+     * Multiplies the opacity of everything drawn after this call by {@code alpha}, clamped to [0, 1], until the
+     * matching {@link #popAlpha()}: fills, outlines, lines, text, images and shaders. Nested pushes multiply, so
+     * {@code pushAlpha(0.5f)} inside {@code pushAlpha(0.5f)} draws at a quarter. For fading a panel in:
+     * <pre>{@code
+     * renderer.pushAlpha(fadeIn);
+     * renderer.drawQuad(x, y, width, height, PANEL, 12f);
+     * renderer.drawText("Paused", x + 16f, y + 16f, font, Color.WHITE);
+     * renderer.popAlpha();
+     * }</pre>
+     * Unlike {@link #pushOpacityLayer}, this draws nothing offscreen, so it costs nothing, but each thing is faded on
+     * its own: where two faded things overlap, the one below shows through the one above. Fade a group through an
+     * opacity layer when that matters. What a {@link #pushEffect post effect} makes of the drawing is not faded
+     * again. Must be paired with exactly one {@link #popAlpha()}; everything pushed is dropped at the next
+     * {@link #begin()}.
+     * <p>
+     * The default implementation ignores it, so a custom Renderer keeps working without overriding this, drawing at
+     * full opacity.
+     */
+    default void pushAlpha(float alpha) {
+    }
+
+    /**
+     * Pops the alpha most recently pushed by {@link #pushAlpha}.
+     */
+    default void popAlpha() {
+    }
+
+    /**
+     * The opacity {@link #pushAlpha} has set for what is drawn now, from 0 to 1: 1 when nothing is pushed.
+     */
+    default float getAlpha() {
+        return 1f;
+    }
 
     /**
      * Pushes a rectangular clip onto the canvas's save stack. Everything drawn after

@@ -63,6 +63,7 @@ TextOverlay label = new TextOverlay("Remember me", 14f, Color.BLACK);
 // Make the label clickable too, the way HTML labels are:
 label.setCursorMode(CursorMode.POINTER);
 label.onMouseClick(e -> box.toggle());
+label.setClickOnRelease(true); // toggle on release, as the box itself does
 
 row.addElement(box);
 row.addElement(label);

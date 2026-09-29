@@ -54,6 +54,7 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         // a themed Container.
         getStyling().applyThemeCornerRadius((float) (size / 2));
         onMouseClick(event -> select());
+        setClickOnRelease(true);
         ThemeManager.register(this);
     }
 

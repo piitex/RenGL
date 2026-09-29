@@ -14,16 +14,17 @@ import static org.lwjgl.openal.AL10.*;
  * }</pre>
  * By default it sits at the origin facing down the negative z axis with y up, the OpenGL camera convention: +x is
  * to the right, +y is up, and things in front of the listener have negative z. For a 2D game keep everything on the
- * plane {@code z = 0}, and left and right then come from x alone.
+ * plane {@code z = 0}, and left and right then come from x alone; {@link Audio#hearIn2D} sets the listener up for
+ * that.
  * <p>
  * All methods return the listener so they chain, and are safe from any thread. Values set before audio starts are
  * applied when it does.
  */
-@GeneratedClass(prompter = "HackusatePvP", model = "Claude Sonnet 5", reviewed = false)
 public final class AudioListener {
     private float x, y, z;
     private float vx, vy, vz;
     private final float[] orientation = {0f, 0f, -1f, 0f, 1f, 0f}; // forward, then up
+    private float height; // how far in front of the plane z = 0 a 2D listener hovers, set by Audio.hearIn2D
 
     AudioListener() {
     }
@@ -42,10 +43,22 @@ public final class AudioListener {
     }
 
     /**
-     * {@link #setPosition(float, float, float)} for a 2D game: moves to (x, y) on the plane {@code z = 0}.
+     * {@link #setPosition(float, float, float)} for a 2D game: moves over (x, y) on the plane {@code z = 0}. After
+     * {@link Audio#hearIn2D} it hovers a little in front of the plane, so sounds to either side don't come all from one
+     * speaker; otherwise it is on the plane.
      */
     public AudioListener setPosition(float x, float y) {
-        return setPosition(x, y, 0f);
+        synchronized (Audio.LOCK) {
+            return setPosition(x, y, -height);
+        }
+    }
+
+    /**
+     * Moves a 2D listener to hover {@code height} in front of the plane z = 0, keeping x and y. Holds {@link Audio#LOCK}.
+     */
+    void setHeight(float height) {
+        this.height = height;
+        setPosition(x, y, -height);
     }
 
     /**

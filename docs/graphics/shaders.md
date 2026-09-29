@@ -133,6 +133,9 @@ See [Element › Shader effect](../core/element.md#shader-effect).
 ## Things to know
 
 - **Render thread only,** like the rest of drawing. Set uniforms in `update` or `render`.
+- **Patterns fixed in the world:** `drawShader`'s `coord` starts at the rectangle's corner, wherever that is. A fill
+  that covers the camera's view moves with the view, so a pattern that should stay put in the world takes the corner
+  as a uniform and adds it: `coord + origin`, with `set("origin", view.x(), view.y())`, as `SpriteDemo`'s sea does.
 - **Closing:** a renderer never closes an effect. `close()` it when the scene that uses it exits, or leave it to the
   garbage collector.
 - **Custom renderers:** a `Renderer` that doesn't override `drawShader`, `pushEffect` and `popEffect` draws nothing for

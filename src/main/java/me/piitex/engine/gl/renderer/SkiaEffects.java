@@ -1,7 +1,7 @@
 package me.piitex.engine.gl.renderer;
 
 import me.piitex.engine.graphics.ShaderEffect;
-import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.*;
 
 import java.lang.invoke.MethodHandle;
@@ -13,7 +13,7 @@ import java.lang.reflect.Method;
  * every renderer that draws on a Skia {@link Canvas}. Not for use outside renderer implementations. Render thread
  * only.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class SkiaEffects {
     /**
      * RuntimeShaderBuilder.makeShader(localMatrix). Its JVM name is mangled because the matrix is a Kotlin value
@@ -42,7 +42,7 @@ public final class SkiaEffects {
     private SkiaEffects() {
     }
 
-    public static void drawShader(Canvas canvas, ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
+    public static void drawShader(Canvas canvas, ShaderEffect effect, float x, float y, float width, float height, float cornerRadius, float alpha) {
         if (effect == null || effect.isClosed() || !(width > 0) || !(height > 0)) return;
         Shader shader;
         try {
@@ -53,6 +53,7 @@ public final class SkiaEffects {
         try (Paint paint = new Paint()) {
             paint.setAntiAlias(true);
             paint.setShader(shader);
+            paint.setAlphaf(Math.clamp(alpha, 0f, 1f));
             canvas.save();
             canvas.translate(x, y); // so the shader's coordinates start at the rectangle's corner
             if (cornerRadius > 0) {

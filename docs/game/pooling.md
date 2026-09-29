@@ -15,6 +15,8 @@ bullet.fire(x, y, direction);
 bullets.free(bullet);             // reset, and kept for the next obtain
 ```
 
+For particles, a [`ParticleSystem`](../graphics/particles.md) already pools its own.
+
 Creating objects is cheap in Java, so a pool isn't always worth it. Reach for one when a profiler shows garbage
 collection pauses during play, or when an object is costly to set up.
 

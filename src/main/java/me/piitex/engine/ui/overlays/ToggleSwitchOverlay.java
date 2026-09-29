@@ -66,6 +66,7 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         getStyling().applyThemeHoverColor(Color.TRANSPARENT);
         getStyling().applyThemeBorderThickness(0f);
         onMouseClick(event -> toggle());
+        setClickOnRelease(true);
         ThemeManager.register(this);
     }
 

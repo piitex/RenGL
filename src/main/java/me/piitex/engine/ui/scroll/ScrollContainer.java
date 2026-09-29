@@ -402,7 +402,11 @@ public class ScrollContainer extends Container implements Scrollable {
         }
     }
 
-    private void renderScrollbars(Renderer renderer) {
+    /**
+     * Draws the scrollbars of the axes that have something to scroll. {@link #render} calls it last, over the
+     * children; a subclass that draws its own content calls it the same way.
+     */
+    protected void renderScrollbars(Renderer renderer) {
         if (verticalScrollEnabled && getMaxScrollY() > 0) {
             drawBar(renderer,
                     verticalTrackX(), verticalTrackY(), scrollBarStyle.getThickness(), verticalTrackHeight(),

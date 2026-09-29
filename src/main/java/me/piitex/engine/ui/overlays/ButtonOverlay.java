@@ -58,6 +58,7 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
         setHeight(height);
         setCursorMode(CursorMode.POINTER);
         onMouseClick(event -> fireAction());
+        setClickOnRelease(true);
         ThemeManager.register(this);
     }
 
@@ -70,6 +71,7 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
         setHeight(height);
         setCursorMode(CursorMode.POINTER);
         onMouseClick(event -> fireAction());
+        setClickOnRelease(true);
         ThemeManager.register(this);
     }
 

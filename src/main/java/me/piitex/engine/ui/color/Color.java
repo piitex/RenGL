@@ -48,6 +48,24 @@ public class Color implements Paint {
         return ((int) (a * 255) << 24) | ((int) (r * 255) << 16) | ((int) (g * 255) << 8) | (int) (b * 255);
     }
 
+    /**
+     * This color with its alpha set to {@code alpha}, clamped to [0, 1]. A new plain Color, so on a
+     * {@link RainbowColor} it holds the hue of the moment it was called.
+     */
+    public Color withAlpha(float alpha) {
+        return new Color(getR(), getG(), getB(), Math.clamp(alpha, 0f, 1f));
+    }
+
+    /**
+     * This color with its alpha multiplied by {@code opacity}, clamped to [0, 1]: for fading something in or out
+     * while keeping how see-through it already was. {@code withOpacity(0.5f)} on a color of alpha 0.8 gives 0.4.
+     * To fade everything drawn for a while, {@link me.piitex.engine.gl.renderer.Renderer#pushAlpha} saves passing
+     * the opacity to every color.
+     */
+    public Color withOpacity(float opacity) {
+        return new Color(getR(), getG(), getB(), getA() * Math.clamp(opacity, 0f, 1f));
+    }
+
     @Override
     public String toString() {
         return "(" + r + "," + g + "," + b + "," + a + ")";

@@ -578,13 +578,20 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         resetBlink();
     }
 
-    private void undo() {
+    /**
+     * Takes back the last edit, as Ctrl/Cmd+Z does. For an app whose own Undo menu item takes Cmd+Z on macOS, which
+     * keeps the key from reaching the field: the item can call this while the field has focus.
+     */
+    public void undo() {
         if (options.isReadOnly() || !options.isUndoEnabled()) return;
         TextUndoHistory.Snapshot previous = history.undo(snapshot());
         if (previous != null) restore(previous);
     }
 
-    private void redo() {
+    /**
+     * Puts back the last edit {@link #undo()} took back, as Ctrl/Cmd+Shift+Z does.
+     */
+    public void redo() {
         if (options.isReadOnly() || !options.isUndoEnabled()) return;
         TextUndoHistory.Snapshot next = history.redo(snapshot());
         if (next != null) restore(next);

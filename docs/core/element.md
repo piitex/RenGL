@@ -32,11 +32,41 @@ There is no single `setSize` method. Use `setWidth`/`setHeight` or `setBounds`.
 | `getWidth()/setWidth()`, `getHeight()/setHeight()` | Size in logical points |
 | `setPosition(x, y)` | Sets x and y together |
 | `setBounds(x, y, w, h)` | Sets all four |
+| `setAnchor(anchor[, pivot], offsetX, offsetY)`, `setAnchorMargin(margin)` | Keeps it in place in its container as that resizes. See [Anchoring](#anchoring) |
 | `contains(px, py)` | Whether a **window** point is inside this element. Used by hit-testing |
 | `getZ()/setZ()` | Reserved; not used by rendering or hit-testing |
 
 Some widgets compute their own size. [`TextOverlay`](../overlays/text-overlay.md) sizes itself to fit its text, and a [`Layout`](../layouts/README.md) sets its
 children's positions every frame, so a manual `setPosition` on a layout child is overwritten.
+
+### Anchoring
+
+An anchor keeps an element at the same place in its container however the container is resized, such as a
+[scene's](../game/scenes.md#the-scenes-container) when the window is. There's no need to reposition it in `onResize`.
+
+```java
+button.setAnchor(Anchor.CENTER);                   // centered
+close.setAnchor(Anchor.TOP_RIGHT, -12, 12);        // 12 points in from the top-right corner
+menu.setAnchor(Anchor.at(0.5, 0.3), Anchor.TOP_CENTER, 0, 0); // centered across, its top 30% of the way down
+menu.setAnchorMargin(20);                          // but never closer than 20 points to an edge
+```
+
+- `Anchor` (in `me.piitex.engine.ui`) is a point in a box as fractions of its size: `TOP_LEFT`, `TOP_CENTER`,
+  `TOP_RIGHT`, `CENTER_LEFT`, `CENTER`, `CENTER_RIGHT`, `BOTTOM_LEFT`, `BOTTOM_CENTER`, `BOTTOM_RIGHT`, or any
+  other with `Anchor.at(x, y)`.
+- `setAnchor(anchor, offsetX, offsetY)` puts the element's own point at `anchor` on the container's point at
+  `anchor`, then moves it by the offsets (positive is right and down). `setAnchor(anchor, pivot, offsetX, offsetY)`
+  puts the element's point at `pivot` there instead.
+- The position is updated at once when the anchor is set, the element is added, or either one is resized, and
+  every frame as well. `getX()`/`getY()` return it.
+- `setAnchorMargin(margin)` keeps the element at least that far inside every edge while it fits. When it doesn't
+  fit, its top-left corner stays at the margin. Negative, the default, turns it off.
+- Setting a position by hand (`setX`, `setY`, `setPosition`, `setBounds`, or dragging) drops the anchor, and so
+  does `setAnchor(null)`.
+- It has no effect without a container, such as on a container added straight to the window, nor inside a
+  layout, which places its children itself.
+
+To keep a group of elements together, put them in a plain `Container` at fixed positions and anchor the container.
 
 ## Enabled
 
@@ -92,12 +122,18 @@ element.onMouseClick(event -> {
     double x = event.getMouseX(); // window coordinates
     double y = event.getMouseY();
     int button = event.getButton(); // GLFW.GLFW_MOUSE_BUTTON_LEFT / RIGHT / MIDDLE
-    int action = event.getAction(); // always GLFW.GLFW_PRESS for a click
+    int action = event.getAction(); // GLFW.GLFW_PRESS, or GLFW_RELEASE if it clicks on release
 });
 ```
 
 - Fires on **press**, not on release, for **any** mouse button. Check `getButton()` if you only want the
   left button.
+- `setClickOnRelease(true)` makes it fire the way a button does: when the **left** button is released, and only
+  if the press began on this element and the cursor is still over it. Moving off before letting go cancels the
+  click, and other buttons are taken without firing it. `ButtonOverlay`, `CheckBoxOverlay`, `RadioButtonOverlay`
+  and `ToggleSwitchOverlay` turn it on. A press that started elsewhere never clicks it, including a click that
+  opened a popup with a button under the cursor, or one on a popup scene still in its
+  [input delay](../game/scenes.md#popup-scenes).
 - The press goes to the **topmost** element under the cursor if it has a click listener. If it has none, the
   press goes up to the nearest container above it that does, so pressing the label or icon inside a clickable
   row counts as pressing the row. Only that one listener runs: once an element with a listener is found, the
@@ -142,8 +178,8 @@ element.onRender(event -> {
 ```
 
 `Renderer` calls are documented in [Architecture](../architecture.md#rendering-backends). The common ones
-are `drawQuad`, `drawBorder`, `drawLine`, `drawCircle`, `drawText`, `drawGradient`, `drawGradientBorder`, `drawImage` and
-`drawImageRegion`.
+are `drawQuad`, `drawBorder`, `drawLine`, `drawCircle`, `drawPolygon`, `drawText`, `drawGradient`, `drawGradientBorder`,
+`drawImage` and `drawImageRegion`.
 
 The event classes are in `me.piitex.engine.ui.events`: `MouseClickEvent` (extends `MouseEvent`),
 `ElementUpdateEvent` and `ElementRenderEvent` (both extend `ElementEvent`, which has `getElement()`).
@@ -274,7 +310,7 @@ system. In practice you control order with `Container.addElement(element, index)
 
 | Group | Methods |
 |---|---|
-| Geometry | `getX/Y/Width/Height`, `setX/Y/Width/Height`, `setPosition`, `setBounds`, `contains` |
+| Geometry | `getX/Y/Width/Height`, `setX/Y/Width/Height`, `setPosition`, `setBounds`, `contains`, `setAnchor`, `getAnchor`, `getPivot`, `setAnchorMargin`, `getAnchorMargin`, `applyAnchor` |
 | State | `isEnabled/setEnabled`, `isHovered`, `getOpacity/setOpacity`, `getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin`, `getEffect/setEffect` |
 | Look | `getStyling/setStyling`, `followTheme`, `getBackground/setBackground`, `getCursorMode/setCursorMode`, `getTextAlignment/setTextAlignment` |
 | Focus | `isFocusTraversable/setFocusTraversable`, `getTabIndex/setTabIndex` |

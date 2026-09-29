@@ -24,7 +24,6 @@ import java.util.function.Consumer;
  * Callbacks run inside {@link #update}, in the order things happened, even when one update covers several frames.
  * Not thread-safe; use it on the render thread.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class AnimationPlayer {
     private final List<Consumer<String>> eventListeners = new ArrayList<>();
     private final List<Runnable> finishListeners = new ArrayList<>();

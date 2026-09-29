@@ -4,6 +4,7 @@ import me.piitex.engine.WindowOptions;
 import me.piitex.engine.WindowStyle;
 import me.piitex.engine.gl.renderer.SkikoRenderer;
 import me.piitex.engine.input.InputManager;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFWErrorCallback;
@@ -51,12 +52,14 @@ import static org.lwjgl.system.MemoryUtil.NULL;
  * platforms. {@link #pollEventsHighFrequency()} must run on the main thread, since it
  * is what delivers queued input and window events to their callbacks.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class GLFWindow {
     private static final Logger log = LogManager.getLogger("Engine");
     private static final boolean MAC = System.getProperty("os.name").toLowerCase().contains("mac");
     private long window = NULL;
     private final InputManager inputManager;
     private volatile Consumer<Boolean> iconifyHandler, maximizeHandler;
+    private volatile java.util.function.BooleanSupplier closeRequestHandler;
     private boolean fullscreen; // main thread only
     private int windowedX, windowedY, windowedW, windowedH; // bounds to return to when leaving fullscreen
     private final ConcurrentLinkedQueue<Runnable> mainThreadTasks = new ConcurrentLinkedQueue<>();
@@ -121,6 +124,14 @@ public class GLFWindow {
     }
 
     /**
+     * Asked on the main thread when the user asks to close the window (its close button, or Quit on macOS): true lets
+     * it close, false keeps it open. {@link #applyClose()} does not ask. Set before {@link #createWindow}.
+     */
+    public void setCloseRequestHandler(java.util.function.BooleanSupplier handler) {
+        this.closeRequestHandler = handler;
+    }
+
+    /**
      * Creates the actual GLFW window and wires up input callbacks. The window is
      * created hidden, since {@code GLFW_VISIBLE} was set to false above. The engine
      * shows it later, once the first frame has rendered, so the user never sees a blank
@@ -156,6 +167,10 @@ public class GLFWindow {
         glfwSetWindowMaximizeCallback(window, (w, maximized) -> {
             Consumer<Boolean> handler = maximizeHandler;
             if (handler != null) handler.accept(maximized);
+        });
+        glfwSetWindowCloseCallback(window, w -> {
+            java.util.function.BooleanSupplier handler = closeRequestHandler;
+            if (handler != null && !handler.getAsBoolean()) glfwSetWindowShouldClose(w, false);
         });
 
         return window;
@@ -366,10 +381,29 @@ public class GLFWindow {
      */
     public void pollEventsHighFrequency() {
         glfwPollEvents();
+        runMainThreadTasks();
+    }
+
+    /**
+     * Main thread only. Runs the tasks queued with {@link #runOnMainThread} for this window. With several windows
+     * open, the engine polls GLFW once and then calls this for each window.
+     */
+    public void runMainThreadTasks() {
         Runnable task;
         while ((task = mainThreadTasks.poll()) != null) {
             task.run();
         }
+    }
+
+    /**
+     * MAIN THREAD ONLY. Destroys the native window, and its OpenGL context with it; the render thread must be done
+     * with that context first. Tasks still queued for the window are dropped.
+     */
+    public void destroy() {
+        if (window == NULL) return;
+        glfwDestroyWindow(window);
+        window = NULL;
+        mainThreadTasks.clear();
     }
 
     /**
@@ -452,10 +486,21 @@ public class GLFWindow {
     }
 
     /**
-     * MAIN THREAD ONLY. Hidden keeps the cursor free-moving, unlike a captured cursor.
+     * MAIN THREAD ONLY. Hidden keeps the cursor free-moving; locked hides it and keeps it in the window, reporting
+     * only how far the mouse moves (GLFW's disabled cursor).
      */
-    public void applyCursorVisible(boolean visible) {
-        glfwSetInputMode(window, GLFW_CURSOR, visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+    public void applyCursorMode(boolean visible, boolean locked) {
+        glfwSetInputMode(window, GLFW_CURSOR, locked ? GLFW_CURSOR_DISABLED : visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+    }
+
+    /**
+     * MAIN THREAD ONLY. Moves the cursor, in window points, and reports it to the input, since not every platform
+     * sends an event for a cursor moved by the program. GLFW only moves it while the window has focus.
+     */
+    public void applyCursorPosition(double x, double y) {
+        if (glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_FALSE) return;
+        glfwSetCursorPos(window, x, y);
+        inputManager.onCursorPos(window, x, y);
     }
 
     /**
@@ -526,7 +571,8 @@ public class GLFWindow {
     }
 
     /**
-     * MAIN THREAD ONLY. Asks the engine loop to end, as if the user had clicked the close button.
+     * MAIN THREAD ONLY. Closes the window, as if the user had clicked its close button. Closing the engine's first
+     * window ends the engine loop.
      */
     public void applyClose() {
         glfwSetWindowShouldClose(window, true);

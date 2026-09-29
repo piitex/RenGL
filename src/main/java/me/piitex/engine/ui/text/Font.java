@@ -76,7 +76,10 @@ public final class Font {
             synchronized (Font.class) {
                 t = defaultTypeface;
                 if (t == null) {
-                    t = FontMgr.Companion.getDefault().matchFamilyStyle(null, FontStyle.Companion.getNORMAL());
+                    FontMgr fonts = FontMgr.Companion.getDefault();
+                    t = fonts.matchFamilyStyle(null, FontStyle.Companion.getNORMAL());
+                    // CoreText matches no family for a null name; the legacy lookup gives the system's default one.
+                    if (t == null) t = fonts.legacyMakeTypeface("", FontStyle.Companion.getNORMAL());
                     if (t == null) {
                         // Log a warning instead of crashing
                         System.err.println("Warning: FontMgr could not resolve a default typeface. Please provide a custom font file.");
@@ -99,6 +102,16 @@ public final class Font {
     public static Typeface getDefault() {
         File font = defaultFont;
         return font != null ? load(font) : systemDefault();
+    }
+
+    /**
+     * A Skia font of the {@link #getDefault() default typeface} at {@code size} points, for drawing text with
+     * {@link me.piitex.engine.gl.renderer.Renderer#drawText Renderer.drawText} and measuring it. Cheap: the typeface is
+     * loaded once and shared. Make the fonts a game draws with once, after {@link #setDefaultFont} is called, rather
+     * than every frame.
+     */
+    public static org.jetbrains.skia.Font sized(float size) {
+        return new org.jetbrains.skia.Font(getDefault(), size);
     }
 
     /**

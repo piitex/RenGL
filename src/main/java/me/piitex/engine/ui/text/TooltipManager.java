@@ -9,6 +9,9 @@ import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import org.jetbrains.skia.Typeface;
 
+import java.util.Map;
+import java.util.WeakHashMap;
+
 /**
  * Drives {@link Element#getTooltip()}: finds the deepest hovered Element that has a
  * tooltip, times how long the cursor has rested on it, and draws the bubble above
@@ -23,8 +26,8 @@ public final class TooltipManager {
     private static final float CURSOR_OFFSET_X = 12f;
     private static final float CURSOR_OFFSET_Y = 20f;
 
-    private static Element target;
-    private static float hoverTime;
+    // Each window has its own tooltip. Render thread only.
+    private static final Map<Window, Hover> hovers = new WeakHashMap<>();
     private static org.jetbrains.skia.Font font;
     private static Typeface fontTypeface;
 
@@ -35,20 +38,36 @@ public final class TooltipManager {
      * Advances the hover timer; restarts it whenever the tooltip-bearing Element under the cursor changes.
      */
     public static void update(Window window, float delta) {
+        Hover hover = hovers.computeIfAbsent(window, w -> new Hover());
         Element found = MouseTracker.isInWindow() ? findTarget(window) : null;
-        if (found != target) {
-            target = found;
-            hoverTime = 0f;
-        } else if (target != null) {
-            hoverTime += delta;
+        if (found != hover.target) {
+            hover.target = found;
+            hover.time = 0f;
+        } else if (hover.target != null) {
+            hover.time += delta;
         }
+    }
+
+    /**
+     * Drops a closed window's tooltip state.
+     */
+    public static void forget(Window window) {
+        hovers.remove(window);
+    }
+
+    private static final class Hover {
+        Element target;
+        float time;
     }
 
     /**
      * Draws the current tooltip, if its delay has elapsed.
      */
     public static void render(Renderer renderer, Window window) {
-        if (target == null || hoverTime < target.getTooltipDelay()) return;
+        Hover hover = hovers.get(window);
+        if (hover == null) return;
+        Element target = hover.target;
+        if (target == null || hover.time < target.getTooltipDelay()) return;
         String text = target.getTooltip();
         if (text == null || text.isEmpty()) return;
 

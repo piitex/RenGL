@@ -17,7 +17,6 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  * Supports {@code .ogg} (Vorbis), {@code .opus}, {@code .flac}, {@code .mp3} and {@code .wav}, mono or stereo. Each call to {@code play} starts an
  * independent playback.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Sonnet 5", reviewed = false)
 public final class Music implements AutoCloseable {
     private final String name;
     private final byte[] bytes;
@@ -109,7 +108,7 @@ public final class Music implements AutoCloseable {
         PcmStream stream = AudioDecoder.open(name, bytes);
         int rate = stream.sampleRate();
         Playback p = Playback.start(new Playback.Spec(this, AudioChannel.MUSIC, 0, stream.channels(), stream,
-                fadeIn > 0f ? 0f : 1f, loop, Math.round(loopStart * rate), Math.round(loopEnd * rate), null));
+                fadeIn > 0f ? 0f : 1f, 1f, loop, Math.round(loopStart * rate), Math.round(loopEnd * rate), null));
         if (fadeIn > 0f) p.fadeTo(1f, fadeIn);
         return p;
     }

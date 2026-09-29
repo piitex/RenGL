@@ -23,6 +23,11 @@ public class InputProcessor {
      * The Element a Draggable press started on, or null between drags. See {@link Draggable}.
      */
     private Element dragTarget;
+    /**
+     * The {@link Element#setClickOnRelease click-on-release} Element a left press started on, or null. Its click fires
+     * if the release lands on it.
+     */
+    private Element clickTarget;
 
     public void processEvents(Window window) {
         InputManager manager = window.getInputManager();
@@ -177,12 +182,18 @@ public class InputProcessor {
                 draggable.onDragEnd(absoluteMouseX, absoluteMouseY);
             }
             dragTarget = null;
+            Element target = clickTarget;
+            clickTarget = null;
+            if (target != null && target.getMouseClickListenerConsumer() != null && isUnderPointer(window, target)) {
+                target.getMouseClickListenerConsumer().accept(new MouseClickEvent(absoluteMouseX, absoluteMouseY, event.buttonOrKey, event.action));
+            }
             return;
         }
 
         if (event.action != GLFW.GLFW_PRESS) {
             return; // ignore anything that isn't a fresh press/release (mouse buttons don't repeat)
         }
+        if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) clickTarget = null; // a press whose release was never seen
 
         if (input.captureMouse(event.buttonOrKey, event.mods)) return; // a controls menu waiting for a binding
 
@@ -193,6 +204,7 @@ public class InputProcessor {
         }
 
         MouseClickEvent clickEvent = new MouseClickEvent(absoluteMouseX, absoluteMouseY, event.buttonOrKey, event.action);
+        Element focusBefore = window.getFocusedElement();
         Element hitElement = null;
         // Whether the interface used the press. If nothing did, it is game input.
         boolean taken = window.getPopup() != null || window.getModal() != null;
@@ -206,7 +218,12 @@ public class InputProcessor {
             // label or icon inside a clickable row or button counts as pressing the row or button.
             for (Element e = hitElement; e != null; e = e.owner) {
                 if (e.getMouseClickListenerConsumer() != null) {
-                    e.getMouseClickListenerConsumer().accept(clickEvent);
+                    // A button-like Element fires once the left button is released over it, not now.
+                    if (!e.isClickOnRelease()) {
+                        e.getMouseClickListenerConsumer().accept(clickEvent);
+                    } else if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                        clickTarget = e;
+                    }
                     taken = true;
                     break;
                 }
@@ -226,8 +243,12 @@ public class InputProcessor {
         }
 
         // Clicking a Focusable element (e.g. a text field) grants it keyboard focus;
-        // clicking anything else, including empty space, clears focus.
-        window.requestFocus(hitElement instanceof Focusable ? hitElement : null);
+        // clicking anything else, including empty space, clears focus. A click listener that moved the focus itself,
+        // such as a menu item that opens a field to type in, keeps it there.
+        Element focusNow = window.getFocusedElement();
+        if (focusNow == focusBefore || focusNow == null) {
+            window.requestFocus(hitElement instanceof Focusable ? hitElement : null);
+        }
         if (hitElement instanceof Focusable) taken = true;
 
         // Only the left button drags; a right-click opens a context menu and must not start a drag or a text selection.
@@ -251,6 +272,20 @@ public class InputProcessor {
             taken = true;
         }
         if (!taken) input.mousePressed(event.buttonOrKey, event.mods);
+    }
+
+    /**
+     * Whether {@code element} is, or contains, the topmost thing under the cursor, found the same way a press finds it.
+     */
+    private boolean isUnderPointer(Window window, Element element) {
+        for (Container container : window.getContainers().descendingMap().values()) {
+            if (!container.isEnabled() || !container.contains(absoluteMouseX, absoluteMouseY)) continue;
+            for (Element e = findTopmostHit(container, absoluteMouseX, absoluteMouseY); e != null; e = e.owner) {
+                if (e == element) return true;
+            }
+            return false;
+        }
+        return false;
     }
 
     private boolean acceptsDrag(Element element) {
