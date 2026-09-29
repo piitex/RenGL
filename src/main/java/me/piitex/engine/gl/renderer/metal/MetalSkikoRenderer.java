@@ -1,8 +1,10 @@
 package me.piitex.engine.gl.renderer.metal;
 
+import me.piitex.engine.gl.renderer.AlphaStack;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.SkiaEffects;
 import me.piitex.engine.gl.renderer.SkiaImages;
+import me.piitex.engine.gl.renderer.SkiaShapes;
 import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
@@ -34,6 +36,7 @@ public class MetalSkikoRenderer implements Renderer {
     private BackendRenderTarget renderTarget;
     private Surface surface;
     private Canvas canvas;
+    private final AlphaStack alphas = new AlphaStack();
 
     /**
      * Logical (points) size the UI layer draws in.
@@ -65,6 +68,7 @@ public class MetalSkikoRenderer implements Renderer {
 
     @Override
     public void begin() {
+        alphas.reset();
         frameValid = false;
 
         long drawable = metal.nextDrawable();
@@ -133,7 +137,7 @@ public class MetalSkikoRenderer implements Renderer {
         if (color == null || !frameValid) return;
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setAntiAlias(true);
             if (cornerRadius > 0) {
                 canvas.drawRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), paint);
@@ -148,7 +152,7 @@ public class MetalSkikoRenderer implements Renderer {
         if (color == null || thickness <= 0 || !frameValid) return;
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setAntiAlias(true);
@@ -165,7 +169,7 @@ public class MetalSkikoRenderer implements Renderer {
         if (color == null || thickness <= 0 || !frameValid) return;
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setAntiAlias(true);
@@ -183,7 +187,7 @@ public class MetalSkikoRenderer implements Renderer {
             for (int i = 1; i < pointCount; i++) {
                 builder.lineTo(points[i * 2], points[i * 2 + 1]);
             }
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setStrokeCap(PaintStrokeCap.ROUND);
@@ -203,11 +207,23 @@ public class MetalSkikoRenderer implements Renderer {
     }
 
     @Override
+    public void drawPolygon(float[] points, int pointCount, Color color) {
+        if (color == null || pointCount < 3 || !frameValid) return;
+        SkiaShapes.drawPolygon(canvas, points, pointCount, alphas.argb(color), 0f);
+    }
+
+    @Override
+    public void drawPolygonOutline(float[] points, int pointCount, Color color, float thickness) {
+        if (color == null || thickness <= 0 || pointCount < 2 || !frameValid) return;
+        SkiaShapes.drawPolygon(canvas, points, pointCount, alphas.argb(color), thickness);
+    }
+
+    @Override
     public void drawCircle(float x, float y, float radius, Color color) {
         if (color == null || radius <= 0 || !frameValid) return;
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setAntiAlias(true);
             canvas.drawCircle(x, y, radius, paint);
         }
@@ -226,7 +242,7 @@ public class MetalSkikoRenderer implements Renderer {
             paint.setAntiAlias(true);
 
             if (color instanceof Color c) {
-                paint.setColor(c.toARGB());
+                paint.setColor(alphas.argb(c));
             } else if (color instanceof LinearGradient grad) {
                 // Approximate text bounding box for the gradient shader coordinates
                 float textWidth = font.measureTextWidth(text);
@@ -234,6 +250,7 @@ public class MetalSkikoRenderer implements Renderer {
 
                 try (Shader shader = GradientUtil.buildShader(grad, x, y, x + textWidth, y + textHeight)) {
                     paint.setShader(shader);
+                    paint.setAlphaf(alphas.get());
                 }
             }
 
@@ -247,7 +264,7 @@ public class MetalSkikoRenderer implements Renderer {
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
             paint.setAntiAlias(true);
-            paint.setAlphaf(Math.max(0f, Math.min(1f, opacity)));
+            paint.setAlphaf(Math.max(0f, Math.min(1f, opacity)) * alphas.get());
             if (tint != null) {
                 try (ColorFilter filter = ColorFilter.Companion.makeBlend(tint.toARGB(), BlendMode.SRC_IN)) {
                     paint.setColorFilter(filter);
@@ -270,13 +287,13 @@ public class MetalSkikoRenderer implements Renderer {
     public void drawImageRegion(Image image, float srcX, float srcY, float srcWidth, float srcHeight,
                                 float x, float y, float width, float height, Color color, boolean smooth) {
         if (!frameValid) return;
-        SkiaImages.drawImageRegion(canvas, image, srcX, srcY, srcWidth, srcHeight, x, y, width, height, color, smooth);
+        SkiaImages.drawImageRegion(canvas, image, srcX, srcY, srcWidth, srcHeight, x, y, width, height, color, smooth, alphas.get());
     }
 
     @Override
     public void drawImageQuads(Image image, boolean smooth, float[] positions, float[] texCoords, int[] colors, int count) {
         if (!frameValid) return;
-        SkiaImages.drawImageQuads(canvas, image, smooth, positions, texCoords, colors, count);
+        SkiaImages.drawImageQuads(canvas, image, smooth, positions, texCoords, colors, count, alphas.get());
     }
 
     @Override
@@ -288,6 +305,7 @@ public class MetalSkikoRenderer implements Renderer {
 
             try (Shader shader = GradientUtil.buildShader(gradient, x, y, x + width, y + height)) {
                 paint.setShader(shader);
+                paint.setAlphaf(alphas.get());
 
                 if (cornerRadius > 0) {
                     canvas.drawRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), paint);
@@ -305,6 +323,7 @@ public class MetalSkikoRenderer implements Renderer {
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint();
              Shader shader = GradientUtil.buildShader(gradient, x, y, x + width, y + height)) {
             paint.setShader(shader);
+            paint.setAlphaf(alphas.get());
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setAntiAlias(true);
@@ -319,7 +338,7 @@ public class MetalSkikoRenderer implements Renderer {
     @Override
     public void drawShader(ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
         if (!frameValid) return;
-        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius);
+        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius, alphas.get());
     }
 
     @Override
@@ -332,6 +351,21 @@ public class MetalSkikoRenderer implements Renderer {
     public void popEffect() {
         if (!frameValid) return;
         SkiaEffects.popEffect(canvas);
+    }
+
+    @Override
+    public void pushAlpha(float alpha) {
+        alphas.push(alpha);
+    }
+
+    @Override
+    public void popAlpha() {
+        alphas.pop();
+    }
+
+    @Override
+    public float getAlpha() {
+        return alphas.get();
     }
 
     @Override
@@ -413,10 +447,21 @@ public class MetalSkikoRenderer implements Renderer {
         return canvas;
     }
 
+    /**
+     * Frees the surface and the GPU context, waiting for work already sent to finish. Render thread, between frames.
+     * The renderer can't be used afterwards; the {@link MetalContext} is left for its owner to close.
+     */
     public void dispose() {
         if (surface != null) surface.close();
         if (renderTarget != null) renderTarget.close();
-        if (directContext != null) directContext.close();
+        if (directContext != null) {
+            directContext.flush();
+            directContext.submit(true);
+            directContext.close();
+        }
+        surface = null;
+        renderTarget = null;
+        directContext = null;
     }
 
     private static int argb(float a, float r, float g, float b) {

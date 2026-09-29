@@ -1,11 +1,11 @@
 package me.piitex.engine.math;
 
-import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 /**
  * A circle centred on ({@code x}, {@code y}). A radius of 0 or less is empty for {@link #intersects}.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public record Circle(float x, float y, float radius) implements Shape {
 
     /**

@@ -17,6 +17,9 @@ element.onMouseClick(event -> {
 ```
 
 - Fires on **press** for **every** mouse button. Check `getButton()` if you only care about one.
+- Buttons, checkboxes, radio buttons and toggle switches instead fire when the left button is **released** over
+  them, and only if the press began on them. Give your own element that behavior with `setClickOnRelease(true)`.
+  See [Element](../core/element.md#onmouseclick).
 - The **topmost** element under the cursor gets it if it has a listener. If it has none, the press goes up to the
   nearest container above it that has one, so a press on the label or icon inside a clickable row counts as a press
   on the row. Only one listener runs per press: a child with its own listener stops the press there.
@@ -67,7 +70,8 @@ if (MouseTracker.isInWindow()) {
 ```
 
 `getX()/getY()` are stale while `isInWindow()` is false. Only read it from the render thread (an `onUpdate` or
-`onRender` hook).
+`onRender` hook). With [several windows](../core/engine.md#several-windows) open, it answers for the window whose
+elements are being updated or drawn.
 
 ## Dragging
 
@@ -166,7 +170,9 @@ public interface Focusable {
 }
 ```
 
-- **Clicking** a `Focusable` gives it focus. Clicking anything else, including empty space, clears focus.
+- **Clicking** a `Focusable` gives it focus. Clicking anything else, including empty space, clears focus. The
+  exception is a click listener (or a menu item it runs) that gives focus to something itself, such as a Rename item
+  that opens a field to type in: that focus stays.
 - While focused, it receives every char and key event except Tab, which moves focus, and an Escape that closes an
   open popup or modal. `onKeyPressed` gets presses, repeats and releases; `action` says which, and most controls
   ignore `GLFW_RELEASE`.

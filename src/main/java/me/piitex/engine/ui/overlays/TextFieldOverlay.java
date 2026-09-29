@@ -307,6 +307,16 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     }
 
     /**
+     * Selects all the text, as Ctrl/Cmd+A does.
+     */
+    public void selectAll() {
+        history.seal();
+        selectionAnchor = 0;
+        cursorIndex = text.length();
+        resetBlink();
+    }
+
+    /**
      * Clears any active selection without changing the cursor position.
      */
     public void clearSelection() {
@@ -405,13 +415,20 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         resetBlink();
     }
 
-    private void undo() {
+    /**
+     * Takes back the last edit, as Ctrl/Cmd+Z does. For an app whose own Undo menu item takes Cmd+Z on macOS, which
+     * keeps the key from reaching the field: the item can call this while the field has focus.
+     */
+    public void undo() {
         if (options.isReadOnly() || !options.isUndoEnabled()) return;
         TextUndoHistory.Snapshot previous = history.undo(snapshot());
         if (previous != null) restore(previous);
     }
 
-    private void redo() {
+    /**
+     * Puts back the last edit {@link #undo()} took back, as Ctrl/Cmd+Shift+Z does.
+     */
+    public void redo() {
         if (options.isReadOnly() || !options.isUndoEnabled()) return;
         TextUndoHistory.Snapshot next = history.redo(snapshot());
         if (next != null) restore(next);
@@ -524,12 +541,7 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         if (commandModifier) {
             switch (key) {
                 case GLFW.GLFW_KEY_A -> {
-                    if (options.isSelectionEnabled()) {
-                        history.seal();
-                        selectionAnchor = 0;
-                        cursorIndex = text.length();
-                        resetBlink();
-                    }
+                    if (options.isSelectionEnabled()) selectAll();
                     return;
                 }
                 case GLFW.GLFW_KEY_Z -> {

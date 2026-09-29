@@ -8,9 +8,11 @@ import me.piitex.engine.input.InputContext;
 import me.piitex.engine.scheduler.Playable;
 import me.piitex.engine.scheduler.Task;
 import me.piitex.engine.scheduler.Timers;
+import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.utils.flags.GeneratedClass;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -40,6 +42,37 @@ import java.util.function.Consumer;
  * keep running on real time even while the scene is paused. Scenes are drawn below every container added to the
  * window directly, so those (a debug overlay, say) stay on top of whatever scene is showing, as do popups and modals.
  * <p>
+ * <h2>Popup scenes</h2>
+ * A popup scene, such as a level-up choice or a "game over" box, is an {@link #setOverlay overlay} that pauses the game
+ * below. (It is a scene, not one of the window's own popups, such as a dropdown's list.) A few settings save writing
+ * the same code in each one:
+ * <ul>
+ *   <li>{@link #setBackdrop} dims the scenes below, fading in;</li>
+ *   <li>{@link #setInputDelay} ignores presses and clicks for a moment after it opens, so a click or key meant for the
+ *       game doesn't choose something in it by accident;</li>
+ *   <li>{@link #getAge()} is how long it has been open, to animate it by;</li>
+ *   <li>{@link #dismiss()} removes it, and does nothing when it is already gone, so it can be called twice;</li>
+ *   <li>the game queues it with {@link #queue} rather than pushing it, so it waits for any popup already open and
+ *       any transition playing.</li>
+ * </ul>
+ * <pre>{@code
+ * final class LevelUpPopup extends Scene {
+ *     LevelUpPopup() {
+ *         setOverlay(true);
+ *         setBackdrop(new Color(0f, 0f, 0f, 0.5f), 0.25f);
+ *         setInputDelay(0.4f);
+ *     }
+ *
+ *     protected void onEnter() {
+ *         ButtonOverlay ok = new ButtonOverlay("OK", 18f, Color.WHITE, 200, 44);
+ *         ok.onAction(this::dismiss);
+ *         getContainer().addElement(ok);
+ *     }
+ * }
+ *
+ * // In the game scene, when the player levels up:
+ * queue(new LevelUpPopup());
+ * }</pre>
  * A scene can be on at most one stack at a time, and can be pushed again after it has been removed.
  */
 @GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
@@ -50,6 +83,11 @@ public abstract class Scene {
     private boolean pausesBelow = true;
     private final List<InputContext> inputContexts = new ArrayList<>();
     private final List<Subscription> subscriptions = new ArrayList<>();
+    private final ArrayDeque<Queued> queued = new ArrayDeque<>();
+    private float inputDelay;
+    private Color backdrop;
+    private float backdropFade;
+    float age; // real seconds on the stack
 
     SceneManager manager; // non-null while on a stack
     SceneManager leaving; // non-null while drawn going out in a transition, until onExit
@@ -113,7 +151,7 @@ public abstract class Scene {
 
     /**
      * A key press or repeat that no focused element (a text field, say), popup or modal has taken, while this scene
-     * is running. Return true to consume it; otherwise it goes on to the scene below, if that one is running too.
+     * is running and its {@link #setInputDelay input delay} is over. Return true to consume it; otherwise it goes on to the scene below, if that one is running too.
      * <p>
      * Key releases are different: every scene on the stack gets every release, paused or not, even while a text field
      * has the keyboard, and consuming one doesn't stop it. So a scene tracking held keys never misses one being let
@@ -228,6 +266,117 @@ public abstract class Scene {
     }
 
     /**
+     * How long this scene has been on the stack, in real seconds: from 0 when it enters, counting on while it is paused
+     * and while game time is paused or slowed down. For animating a menu or popup as it opens. Starts again from 0 if
+     * the scene is pushed again.
+     */
+    public float getAge() {
+        return age;
+    }
+
+    /**
+     * For {@code seconds} after it enters, the scene takes no input: key presses skip its {@link #onKey}, presses its
+     * {@link InputContext}s bind are dropped (rather than going to the scenes below), and its elements take no clicks
+     * and show no hover. 0, the default, for none. For a popup that opens while the player is busy doing something
+     * else, so a click or key meant for the game doesn't pick something in it. A key or button held from before is
+     * ignored once the delay is over too, until it is pressed again.
+     */
+    public void setInputDelay(float seconds) {
+        this.inputDelay = Math.max(0f, seconds);
+    }
+
+    public float getInputDelay() {
+        return inputDelay;
+    }
+
+    /**
+     * Whether the scene takes input: its {@link #setInputDelay input delay} is over.
+     */
+    public boolean isReady() {
+        return age >= inputDelay;
+    }
+
+    /**
+     * Fills the window with {@code color} behind this scene's drawing, to dim the scenes below an
+     * {@link #setOverlay overlay}. Null for none, the default.
+     */
+    public void setBackdrop(Color color) {
+        setBackdrop(color, 0f);
+    }
+
+    /**
+     * As {@link #setBackdrop(Color)}, fading in from clear over {@code fadeInSeconds} after the scene enters.
+     */
+    public void setBackdrop(Color color, float fadeInSeconds) {
+        this.backdrop = color;
+        this.backdropFade = Math.max(0f, fadeInSeconds);
+    }
+
+    public Color getBackdrop() {
+        return backdrop;
+    }
+
+    /**
+     * Removes this scene from its stack, wherever it is in it. Returns false, doing nothing, if it isn't on one, so a
+     * popup whose close button and Escape key both call this closes only once.
+     */
+    public boolean dismiss() {
+        SceneManager current = manager;
+        return current != null && current.remove(this);
+    }
+
+    /**
+     * As {@link #dismiss()}, shown with {@code transition}; null for none.
+     */
+    public boolean dismiss(SceneTransition transition) {
+        SceneManager current = manager;
+        return current != null && current.remove(this, transition);
+    }
+
+    /**
+     * Pushes {@code next} above this scene as soon as this scene is on top of the stack and no
+     * {@link SceneTransition} is playing: at the end of this frame if it is already, otherwise once whatever is above
+     * it has closed. Queued scenes go one at a time, in the order they were queued, each once the one before has
+     * closed. For popups: several can be queued at once and show one after another, and none opens over a pause
+     * menu, or during the transition into the scene that queued it.
+     * <p>
+     * Queued scenes that haven't been pushed yet are dropped when this scene is removed.
+     */
+    public void queue(Scene next) {
+        queue(next, null);
+    }
+
+    /**
+     * As {@link #queue(Scene)}, pushed with {@code transition}; null for none.
+     */
+    public void queue(Scene next, SceneTransition transition) {
+        if (next == null) throw new IllegalArgumentException("scene must not be null");
+        if (next == this) throw new IllegalArgumentException("a scene can't queue itself");
+        queued.add(new Queued(next, transition));
+    }
+
+    /**
+     * Whether scenes this one {@link #queue queued} are still waiting to be pushed.
+     */
+    public boolean hasQueued() {
+        return !queued.isEmpty();
+    }
+
+    /**
+     * Takes the next queued scene, or null if there is none.
+     */
+    Queued pollQueued() {
+        return queued.poll();
+    }
+
+    void clearQueued() {
+        queued.clear();
+    }
+
+    record Queued(Scene scene, SceneTransition transition) {
+    }
+
+    /**
      * Runs {@code action} after {@code seconds} of this scene's game time: the timer is scaled by
      * {@link GameTime#setTimeScale}, stops while the scene is paused, and is cancelled if the scene is removed first.
      * Use {@link me.piitex.engine.scheduler.Scheduler#after} for a timer on real time instead.
@@ -310,7 +459,18 @@ public abstract class Scene {
         @Override
         protected void renderBackground(Renderer renderer) {
             super.renderBackground(renderer);
+            Color backdrop = scene.backdrop;
+            if (backdrop != null) {
+                float fade = scene.backdropFade > 0f ? Math.min(1f, scene.age / scene.backdropFade) : 1f;
+                renderer.drawQuad((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(), backdrop.withOpacity(fade), 0f);
+            }
             scene.render(renderer, GameTime.getAlpha());
+        }
+
+        @Override
+        public boolean interceptsPointer(double px, double py) {
+            // Until the input delay is over, the container takes the mouse itself, so its elements get no clicks.
+            return !scene.isReady() || super.interceptsPointer(px, py);
         }
     }
 }

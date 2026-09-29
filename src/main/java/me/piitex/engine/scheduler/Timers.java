@@ -22,7 +22,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * calls {@link #update}. An exception thrown by a timer's action is logged and does not stop other timers; a playable
  * that throws is logged and dropped.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Timers {
     private static final Logger log = LogManager.getLogger("Scheduler");
 

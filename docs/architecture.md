@@ -14,7 +14,7 @@ Window                       one per program
 
 | Class | Role |
 |---|---|
-| [`Engine`](core/engine.md) | Owns the OS window, the two threads and the frame loop |
+| [`Engine`](core/engine.md) | Owns the OS windows, the two threads and the frame loop |
 | [`Window`](core/window.md) | The top-level list of containers plus focus, popup and modal state |
 | [`Element`](core/element.md) | A rectangle with styling, events, tooltip and transitions |
 | [`Container`](containers/container.md) | An [`Element`](core/element.md) that also holds children |
@@ -30,8 +30,8 @@ separate renderers; RenGL does not.
 
 | Thread | Does |
 |---|---|
-| **Main** | Creates the GLFW window, calls `glfwPollEvents` in a tight loop, shows the window after the first frame, and services the clipboard and mouse cursor (both are main-thread-only in GLFW) |
-| **Render** | Runs the frame loop: drains input events, updates every element, draws everything, presents |
+| **Main** | Creates and destroys the GLFW windows, calls `glfwPollEvents` in a tight loop, shows each window after its first frame, and services the clipboard and mouse cursor (both are main-thread-only in GLFW) |
+| **Render** | Runs the frame loop for every open window: drains input events, updates every element, draws everything, presents |
 
 GLFW callbacks only enqueue events. The render thread drains that queue at the start of each frame.
 
@@ -59,6 +59,9 @@ thread at the start of the next frame.
 13. Present
 14. Pace the frame                      (vsync waits for the display; with vsync off, sleep to WindowOptions.maxFPS)
 ```
+
+With [several windows](core/engine.md#several-windows) open, steps 1 to 3 run for each window in turn, steps 4 and 5
+once, steps 6 and 7 for every window's scenes, and steps 8 to 13 for each window in turn.
 
 Steps 6 and 7 run on the game clock, which can be scaled and paused, except for scene transitions. Everything
 else runs on real time. See
@@ -111,8 +114,8 @@ go up the same way (see the table).
 | Input | What happens |
 |---|---|
 | Mouse move | Topmost element becomes `hovered` (and every container on the path to it); the OS cursor follows its [`CursorMode`](input/input-and-focus.md#hover-and-cursor-shape), or the nearest ancestor's if it has none; an active drag receives `onDragUpdate` |
-| Mouse press | Runs the `onMouseClick` listener of the topmost element, or of the nearest ancestor with one (on **press**, for any button); moves keyboard focus if the element is [`Focusable`](input/input-and-focus.md#keyboard-focus), otherwise clears focus; with the **left** button, starts a drag on the nearest [`Draggable`](input/input-and-focus.md#dragging) at or above the element |
-| Mouse release | The left button ends the drag; other buttons do not |
+| Mouse press | Runs the `onMouseClick` listener of the topmost element, or of the nearest ancestor with one (on **press**, for any button, unless the element [clicks on release](core/element.md#onmouseclick)); moves keyboard focus if the element is [`Focusable`](input/input-and-focus.md#keyboard-focus), otherwise clears focus; with the **left** button, starts a drag on the nearest [`Draggable`](input/input-and-focus.md#dragging) at or above the element |
+| Mouse release | The left button ends the drag, and clicks a button-like element if the press began on it and the cursor is still over it; other buttons do neither |
 | Scroll | Goes to the innermost [`Scrollable`](input/input-and-focus.md#scrolling) under the cursor, whatever child is directly beneath |
 | Key / char | Goes to the focused `Focusable`, except Tab (focus traversal) and Escape (closes a popup/modal first) |
 
@@ -137,7 +140,7 @@ Details on each: [Input and focus](input/input-and-focus.md), [Window](core/wind
 You never call these directly, but it helps to know what draws your UI:
 
 - **Skia (via Skiko)** is the 2D engine on every platform. All widgets draw through the [`Renderer`](reference/custom-elements.md#the-renderer)
-  interface (`drawQuad`, `drawBorder`, `drawLine`, `drawPolyline`, `drawCircle`, `drawText`, `drawGradient`, `drawGradientBorder`, `drawImage`,
+  interface (`drawQuad`, `drawBorder`, `drawLine`, `drawPolyline`, `drawCircle`, `drawPolygon`, `drawText`, `drawGradient`, `drawGradientBorder`, `drawImage`,
   `drawImageRegion`, `drawImageQuads`, `drawShader`, clips, translations, scales, transforms, opacity layers and
   shader effects).
 - **OpenGL 3.3 core** backs Skia on Windows and Linux (`SkikoRenderer`).

@@ -2,6 +2,7 @@ package me.piitex.engine.input;
 
 import me.piitex.engine.game.GameTime;
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 /**
  * Whether something is held, and when it was last pressed, released and repeated, for a key, a mouse button or an
@@ -10,7 +11,7 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  * one that matches where they are called from, so "just pressed" means "since the last frame" in
  * {@code Scene.update} and "since the last step" in {@code Scene.fixedUpdate}. Render thread only.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 final class PressState {
     boolean down;
     private long pressFrame = -1, pressTick = -1;

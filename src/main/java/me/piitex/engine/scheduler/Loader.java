@@ -1,6 +1,7 @@
 package me.piitex.engine.scheduler;
 
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -39,7 +40,7 @@ import java.util.function.Consumer;
  * <p>
  * Everything except the step bodies can be called from any thread. A loader runs once.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Loader extends Task {
     private static final Logger log = LogManager.getLogger("Loader");
 
@@ -140,7 +141,8 @@ public final class Loader extends Task {
     private synchronized Loader addStep(String name, float weight, boolean renderThread, Step step) {
         if (started) throw new IllegalStateException("steps can't be added after the loader has started");
         if (step == null) throw new IllegalArgumentException("step must not be null");
-        if (!(weight >= 0f) || !Float.isFinite(weight)) throw new IllegalArgumentException("weight must be 0 or more: " + weight);
+        if (!(weight >= 0f) || !Float.isFinite(weight))
+            throw new IllegalArgumentException("weight must be 0 or more: " + weight);
         steps.add(new Entry(name == null ? "" : name, weight, renderThread, step));
         totalWeight += weight;
         return this;

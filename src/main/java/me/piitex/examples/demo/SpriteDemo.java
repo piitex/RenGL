@@ -284,7 +284,7 @@ public class SpriteDemo {
 
             camera.begin(renderer);
             Rect view = camera.getVisibleBounds();
-            sea.set("time", (float) GameTime.getTime());
+            sea.set("time", (float) GameTime.getTime()).set("origin", view.x(), view.y());
             renderer.drawShader(sea, view.x(), view.y(), view.width(), view.height(), 0f); // in world units
             addTiles(view);
             addCharacters(alpha);

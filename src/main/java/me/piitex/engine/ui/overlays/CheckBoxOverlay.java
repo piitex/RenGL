@@ -54,6 +54,7 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
         setHeight(size);
         setCursorMode(CursorMode.POINTER);
         onMouseClick(event -> toggle());
+        setClickOnRelease(true);
         ThemeManager.register(this);
     }
 

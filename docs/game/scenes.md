@@ -60,7 +60,7 @@ public class Level extends Scene {
 | `update(delta)` | Once per frame after the fixed steps, while the scene is running. `delta` is game time. |
 | `render(renderer, alpha)` | Every frame the scene is visible, paused or not, and while a transition draws it going out. Draws below the scene's elements. Draw only; don't change state. |
 | `onKey(key, action, mods)` | A key no text field, popup or modal took. Return true to consume it. For controls, polling an [input context](../input/game-input.md) is usually simpler. |
-| `onResize(width, height)` | The window changed size. The container has already been resized. |
+| `onResize(width, height)` | The window changed size. The container has already been resized. To keep elements in place, [anchor](../core/element.md#anchoring) them rather than moving them here. |
 
 `onExit` is not called when the application closes. Save the game from [`window.onClose`](../core/window.md) instead.
 
@@ -69,6 +69,8 @@ public class Level extends Scene {
 `getContainer()` is an ordinary [`Container`](../containers/container.md) that covers the whole window and follows its
 size. Add buttons, text and other elements to it. They are drawn above what `render` draws, get mouse input as usual,
 and run on real time, so they keep animating while the scene is paused. It has no background unless you give it one.
+[Anchor](../core/element.md#anchoring) them, as the pause menu below does, to keep them in place when the window is
+resized.
 
 Scenes are drawn **below** every container added to the window with `addContainer`. A container added directly (an
 FPS counter, a debug panel) stays on top of whatever scene is showing, and so do popups, modals and tooltips.
@@ -94,7 +96,7 @@ public class PauseMenu extends Scene {
     protected void onEnter() {
         getContainer().getStyling().setBackgroundColor(new Color(0f, 0f, 0f, 0.55f));
         ButtonOverlay resume = new ButtonOverlay("Resume", 180, 40);
-        resume.setPosition(390, 260);
+        resume.setAnchor(Anchor.CENTER); // stays centered when the window is resized
         resume.onAction(() -> getSceneManager().pop());
         getContainer().addElement(resume);
     }
@@ -105,6 +107,65 @@ A HUD or chat box that should run alongside the game is an overlay that doesn't 
 `setPausesBelow(false)`.
 
 `isVisible()` and `isRunning()` tell you where a scene stands, and `isActive()` whether it is on a stack at all.
+
+## Popup scenes
+
+A popup scene, such as a level-up choice, an "are you sure?" box or a tutorial tip, is an overlay that pauses the game.
+(It is a scene, not one of the window's own popups, such as a dropdown's list.) A few settings save writing the same
+code in each one.
+
+| Method | What it does |
+|---|---|
+| `setBackdrop(color[, fadeInSeconds])` | Fills the window with `color` behind the scene's drawing, to dim the game below. It fades in from clear over `fadeInSeconds` after the scene enters. Null for none, the default |
+| `setInputDelay(seconds)` | For that long after it enters, the scene takes no input, so a click or key meant for the game doesn't pick something in it. See below. 0, the default, for none |
+| `isReady()` | Whether the input delay is over |
+| `getAge()` | Real seconds since the scene entered, counting on while it is paused or game time is slowed. For animating it as it opens. Starts from 0 each time it is pushed |
+| `dismiss()` / `dismiss(transition)` | Removes the scene from its stack. Returns `false` and does nothing if it isn't on one, so a close button and Escape can both call it |
+| `queue(scene[, transition])` | Pushes `scene` above this one once this one is on top and no transition is playing. See below |
+| `hasQueued()` | Whether scenes this one queued are still waiting |
+
+```java nocompile
+public class LevelUpPopup extends Scene {
+    public LevelUpPopup() {
+        setOverlay(true);
+        setBackdrop(new Color(0f, 0f, 0f, 0.5f), 0.25f);
+        setInputDelay(0.4f);
+    }
+
+    @Override
+    protected void onEnter() {
+        ButtonOverlay ok = new ButtonOverlay("OK", 180, 40);
+        ok.setPosition(390, 300);
+        ok.onAction(this::dismiss);
+        getContainer().addElement(ok);
+    }
+
+    @Override
+    protected void render(Renderer renderer, float alpha) {
+        renderer.pushAlpha(Math.min(1f, getAge() * 4f)); // fade in over a quarter of a second
+        renderer.drawText("LEVEL UP", 480, 200, font, Color.WHITE, TextAlign.CENTER);
+        renderer.popAlpha();
+    }
+}
+```
+
+**The input delay.** Until it is over, key presses skip the scene's `onKey`, presses its
+[input contexts](../input/game-input.md) bind are dropped (they don't go on to the scenes below), and its elements take
+no clicks and show no hover. A key or button held from before counts only once it is pressed again, as with any context
+that has just become active.
+
+**The queue.** A game scene calls `queue(popup)` instead of pushing it. The popup is pushed at the end of the frame,
+unless something is above the game scene (a pause menu, another popup) or a transition is playing, in which case it
+waits until they are gone. Several queued popups show one after another, in order, each once the one before has been
+dismissed. Scenes queued but not yet pushed are dropped when the scene that queued them is removed.
+
+```java nocompile
+// In the game scene:
+queue(new LevelUpPopup());   // over the game at the end of this frame, or once the pause menu closes
+queue(new NewWeaponPopup()); // after the level-up popup is dismissed
+```
+
+Queuing a popup from `onEnter` of a scene that comes in with a transition shows it once the transition is over.
 
 ## Changing scenes
 
@@ -125,7 +186,7 @@ before `Engine.start`. From another thread, use [`Scheduler.runLater`](../core/s
 The order of calls is: on `push`, the scene below gets `onPause`, then the new one gets `onEnter`. On `pop`, the old
 scene gets `onExit`, then the one below gets `onResume`.
 
-`push`, `pop`, `replace`, `set` and `clear` also take a [`SceneTransition`](transitions.md), which shows the change
+`push`, `pop`, `replace`, `set`, `remove` and `clear` also take a [`SceneTransition`](transitions.md), which shows the change
 with a fade, slide or wipe:
 
 ```java nocompile
@@ -139,7 +200,8 @@ The stack still changes at once. Scenes that leave get `onExit` only when the tr
 ## Keyboard input
 
 Key presses reach a scene's `onKey` when nothing in the UI wants them: no text field or other element has keyboard
-focus, and no popup or modal is open. They go to the running scenes top first, until one returns `true`.
+focus, and no popup or modal is open. They go to the running scenes top first, until one returns `true`, skipping any
+scene whose [input delay](#popup-scenes) isn't over.
 
 Key releases are always delivered to every scene on the stack, paused or not, even while a text field has focus. A
 scene that tracks which keys are held therefore never misses one being let go, for example when the player opens

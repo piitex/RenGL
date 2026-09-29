@@ -1,16 +1,20 @@
 package me.piitex.engine.math;
 
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * A convex polygon, such as a turned hit box or a slope. A concave outline (an L shape, a star) is built from several
- * convex ones. The points may be given in either winding; the polygon keeps them clockwise on screen.
+ * convex ones, which {@link #decompose} works out. The points may be given in either winding; the polygon keeps them
+ * clockwise on screen.
  * <p>
  * Immutable: {@link #translate} and {@link #rotate} return new polygons.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Polygon implements Shape {
     private final float[] points; // x0, y0, x1, y1, ... clockwise on screen (positive signed area with y down)
     private final Rect bounds;
@@ -62,6 +66,134 @@ public final class Polygon implements Shape {
             packed[i * 2 + 1] = centerY + radius * (float) Math.sin(angle);
         }
         return new Polygon(packed);
+    }
+
+    /**
+     * Cuts an outline of any shape, concave included (an L, a star, a hill), into convex polygons that together cover
+     * it exactly, as few as it easily can. A convex outline comes back as one polygon. The points are packed as
+     * {@code x0, y0, x1, y1, ...} in either winding; repeated points and points on a straight line are dropped.
+     * <pre>{@code
+     * for (Polygon piece : Polygon.decompose(0, 0, 90, 0, 90, 30, 30, 30, 30, 90, 0, 90)) walls.add(piece); // an L
+     * }</pre>
+     *
+     * @throws IllegalArgumentException if the outline crosses itself, has no area, or has fewer than 3 points
+     */
+    public static List<Polygon> decompose(float... outline) {
+        if (outline.length % 2 != 0) throw new IllegalArgumentException("points must be x, y pairs, got " + outline.length + " floats");
+        float[] p = simplify(outline);
+        if (p.length < 6 || !(signedArea(p) != 0f)) throw new IllegalArgumentException("outline has no area: " + Arrays.toString(outline));
+        if (signedArea(p) < 0f) reverse(p);
+        int n = p.length / 2;
+
+        // Ear clipping: cut off corners that bulge outwards and hold no other point, until a triangle is left.
+        List<Integer> left = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) left.add(i);
+        List<int[]> pieces = new ArrayList<>();
+        while (left.size() > 3) {
+            boolean cut = false;
+            for (int k = 0; k < left.size(); k++) {
+                int a = left.get((k + left.size() - 1) % left.size()), b = left.get(k), c = left.get((k + 1) % left.size());
+                if (!(cross(p, a, b, c) > 0f) || holdsAnother(p, left, a, b, c)) continue;
+                pieces.add(new int[]{a, b, c});
+                left.remove(k);
+                cut = true;
+                break;
+            }
+            if (!cut) throw new IllegalArgumentException("outline crosses itself: " + Arrays.toString(outline));
+        }
+        pieces.add(new int[]{left.get(0), left.get(1), left.get(2)});
+
+        // Hertel-Mehlhorn: join pieces across the cuts wherever the joined piece is still convex.
+        boolean joined = true;
+        while (joined) {
+            joined = false;
+            search:
+            for (int i = 0; i < pieces.size(); i++) {
+                for (int j = i + 1; j < pieces.size(); j++) {
+                    int[] merged = join(p, pieces.get(i), pieces.get(j));
+                    if (merged == null) continue;
+                    pieces.set(i, merged);
+                    pieces.remove(j);
+                    joined = true;
+                    break search;
+                }
+            }
+        }
+
+        List<Polygon> polygons = new ArrayList<>(pieces.size());
+        for (int[] piece : pieces) {
+            float[] packed = new float[piece.length * 2];
+            for (int i = 0; i < piece.length; i++) {
+                packed[i * 2] = p[piece[i] * 2];
+                packed[i * 2 + 1] = p[piece[i] * 2 + 1];
+            }
+            polygons.add(new Polygon(simplify(packed)));
+        }
+        return polygons;
+    }
+
+    /**
+     * The outline without repeated points or points in the middle of a straight edge.
+     */
+    private static float[] simplify(float[] points) {
+        List<Float> kept = new ArrayList<>();
+        int n = points.length / 2;
+        for (int i = 0; i < n; i++) {
+            float x = points[i * 2], y = points[i * 2 + 1];
+            float px = points[((i + n - 1) % n) * 2], py = points[((i + n - 1) % n) * 2 + 1];
+            float nx = points[((i + 1) % n) * 2], ny = points[((i + 1) % n) * 2 + 1];
+            if (x == px && y == py) continue;
+            float cross = (x - px) * (ny - y) - (y - py) * (nx - x);
+            float dot = (x - px) * (nx - x) + (y - py) * (ny - y);
+            float scale = (Math.abs(x - px) + Math.abs(y - py)) * (Math.abs(nx - x) + Math.abs(ny - y));
+            if (Math.abs(cross) <= 1e-6f * scale && dot > 0f) continue; // straight on
+            kept.add(x);
+            kept.add(y);
+        }
+        float[] out = new float[kept.size()];
+        for (int i = 0; i < out.length; i++) out[i] = kept.get(i);
+        return out.length < points.length ? simplify(out) : out;
+    }
+
+    private static float cross(float[] p, int a, int b, int c) {
+        return (p[b * 2] - p[a * 2]) * (p[c * 2 + 1] - p[b * 2 + 1]) - (p[b * 2 + 1] - p[a * 2 + 1]) * (p[c * 2] - p[b * 2]);
+    }
+
+    private static boolean holdsAnother(float[] p, List<Integer> left, int a, int b, int c) {
+        for (int i : left) {
+            if (i == a || i == b || i == c) continue;
+            float x = p[i * 2], y = p[i * 2 + 1];
+            if ((x == p[a * 2] && y == p[a * 2 + 1]) || (x == p[b * 2] && y == p[b * 2 + 1]) || (x == p[c * 2] && y == p[c * 2 + 1])) continue;
+            if (side(p, a, b, x, y) >= 0f && side(p, b, c, x, y) >= 0f && side(p, c, a, x, y) >= 0f) return true;
+        }
+        return false;
+    }
+
+    private static float side(float[] p, int a, int b, float x, float y) {
+        return (p[b * 2] - p[a * 2]) * (y - p[a * 2 + 1]) - (p[b * 2 + 1] - p[a * 2 + 1]) * (x - p[a * 2]);
+    }
+
+    /**
+     * The two pieces as one, if they share an edge and the result is convex; otherwise null.
+     */
+    private static int[] join(float[] p, int[] first, int[] second) {
+        for (int i = 0; i < first.length; i++) {
+            int u = first[i], v = first[(i + 1) % first.length];
+            for (int j = 0; j < second.length; j++) {
+                if (second[j] != v || second[(j + 1) % second.length] != u) continue;
+                // first runs ... u, v ...; second runs ... v, u ...: go round first from v to u, then second past u to v.
+                int[] merged = new int[first.length + second.length - 2];
+                int at = 0;
+                for (int k = 0; k < first.length; k++) merged[at++] = first[(i + 1 + k) % first.length];
+                for (int k = 2; k < second.length; k++) merged[at++] = second[(j + k) % second.length];
+                for (int k = 0; k < merged.length; k++) {
+                    int a = merged[k], b = merged[(k + 1) % merged.length], c = merged[(k + 2) % merged.length];
+                    if (cross(p, a, b, c) < 0f) return null;
+                }
+                return merged;
+            }
+        }
+        return null;
     }
 
     private Polygon(float[] points, Rect bounds) {

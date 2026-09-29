@@ -1,6 +1,7 @@
 package me.piitex.engine.scheduler;
 
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +23,7 @@ import java.util.function.BooleanSupplier;
  * #cancel()} stops it where it is, without calling {@link #onComplete}. A sequence that has finished can be played
  * again, and it starts over.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Sequence extends Task implements Playable {
     private final List<Playable> steps = new ArrayList<>();
     private int plays = 1; // 0 = forever

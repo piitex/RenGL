@@ -24,6 +24,7 @@ public class SkikoRenderer implements Renderer {
     private BackendRenderTarget renderTarget;
     private Surface surface;
     private Canvas canvas;
+    private final AlphaStack alphas = new AlphaStack();
 
     private int logicalWidth;
     private int logicalHeight;
@@ -36,6 +37,24 @@ public class SkikoRenderer implements Renderer {
         log.info("Using Skiko OpenGL backend...");
         directContext = DirectContext.Companion.makeGL();
         recreateSurface(windowHandle);
+    }
+
+    /**
+     * Frees the surface and the GPU context. Render thread, with this renderer's OpenGL context current. The renderer
+     * can't be used afterwards.
+     */
+    public void dispose() {
+        if (surface != null) surface.close();
+        if (renderTarget != null) renderTarget.close();
+        if (directContext != null) {
+            directContext.flush();
+            directContext.submit(true);
+            directContext.close();
+        }
+        surface = null;
+        renderTarget = null;
+        directContext = null;
+        canvas = null;
     }
 
     public void recreateSurface(long windowHandle) {
@@ -79,6 +98,7 @@ public class SkikoRenderer implements Renderer {
 
     @Override
     public void begin() {
+        alphas.reset();
         canvas.clear(argb(clearA, clearR, clearG, clearB));
         canvas.save();
         // Automatically scale Skia's grid to match the input coordinate space
@@ -118,7 +138,7 @@ public class SkikoRenderer implements Renderer {
         if (color == null) return;
 
         org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint();
-        paint.setColor(color.toARGB());
+        paint.setColor(alphas.argb(color));
         paint.setAntiAlias(true);
 
         if (cornerRadius > 0) {
@@ -135,7 +155,7 @@ public class SkikoRenderer implements Renderer {
         if (color == null || thickness <= 0) return;
 
         org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint();
-        paint.setColor(color.toARGB());
+        paint.setColor(alphas.argb(color));
         paint.setMode(PaintMode.STROKE);
         paint.setStrokeWidth(thickness);
         paint.setAntiAlias(true);
@@ -154,7 +174,7 @@ public class SkikoRenderer implements Renderer {
         if (color == null || thickness <= 0) return;
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setAntiAlias(true);
@@ -172,7 +192,7 @@ public class SkikoRenderer implements Renderer {
             for (int i = 1; i < pointCount; i++) {
                 builder.lineTo(points[i * 2], points[i * 2 + 1]);
             }
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setStrokeCap(PaintStrokeCap.ROUND);
@@ -192,11 +212,23 @@ public class SkikoRenderer implements Renderer {
     }
 
     @Override
+    public void drawPolygon(float[] points, int pointCount, Color color) {
+        if (color == null || pointCount < 3) return;
+        SkiaShapes.drawPolygon(canvas, points, pointCount, alphas.argb(color), 0f);
+    }
+
+    @Override
+    public void drawPolygonOutline(float[] points, int pointCount, Color color, float thickness) {
+        if (color == null || thickness <= 0 || pointCount < 2) return;
+        SkiaShapes.drawPolygon(canvas, points, pointCount, alphas.argb(color), thickness);
+    }
+
+    @Override
     public void drawCircle(float x, float y, float radius, Color color) {
         if (color == null || radius <= 0) return;
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
-            paint.setColor(color.toARGB());
+            paint.setColor(alphas.argb(color));
             paint.setAntiAlias(true);
             canvas.drawCircle(x, y, radius, paint);
         }
@@ -215,7 +247,7 @@ public class SkikoRenderer implements Renderer {
             paint.setAntiAlias(true);
 
             if (color instanceof Color c) {
-                paint.setColor(c.toARGB());
+                paint.setColor(alphas.argb(c));
             } else if (color instanceof LinearGradient grad) {
                 // Approximate text bounding box for the gradient shader coordinates
                 float textWidth = font.measureTextWidth(text);
@@ -223,6 +255,7 @@ public class SkikoRenderer implements Renderer {
 
                 try (Shader shader = GradientUtil.buildShader(grad, x, y, x + textWidth, y + textHeight)) {
                     paint.setShader(shader);
+                    paint.setAlphaf(alphas.get());
                 }
             }
 
@@ -236,7 +269,7 @@ public class SkikoRenderer implements Renderer {
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
             paint.setAntiAlias(true);
-            paint.setAlphaf(Math.max(0f, Math.min(1f, opacity)));
+            paint.setAlphaf(Math.max(0f, Math.min(1f, opacity)) * alphas.get());
             if (tint != null) {
                 try (ColorFilter filter = ColorFilter.Companion.makeBlend(tint.toARGB(), BlendMode.SRC_IN)) {
                     paint.setColorFilter(filter);
@@ -258,12 +291,12 @@ public class SkikoRenderer implements Renderer {
     @Override
     public void drawImageRegion(Image image, float srcX, float srcY, float srcWidth, float srcHeight,
                                 float x, float y, float width, float height, Color color, boolean smooth) {
-        SkiaImages.drawImageRegion(canvas, image, srcX, srcY, srcWidth, srcHeight, x, y, width, height, color, smooth);
+        SkiaImages.drawImageRegion(canvas, image, srcX, srcY, srcWidth, srcHeight, x, y, width, height, color, smooth, alphas.get());
     }
 
     @Override
     public void drawImageQuads(Image image, boolean smooth, float[] positions, float[] texCoords, int[] colors, int count) {
-        SkiaImages.drawImageQuads(canvas, image, smooth, positions, texCoords, colors, count);
+        SkiaImages.drawImageQuads(canvas, image, smooth, positions, texCoords, colors, count, alphas.get());
     }
 
     @Override
@@ -275,6 +308,7 @@ public class SkikoRenderer implements Renderer {
 
             try (Shader shader = GradientUtil.buildShader(gradient, x, y, x + width, y + height)) {
                 paint.setShader(shader);
+                paint.setAlphaf(alphas.get());
 
                 if (cornerRadius > 0) {
                     canvas.drawRRect(RRect.makeLTRB(x, y, x + width, y + height, cornerRadius), paint);
@@ -292,6 +326,7 @@ public class SkikoRenderer implements Renderer {
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint();
              Shader shader = GradientUtil.buildShader(gradient, x, y, x + width, y + height)) {
             paint.setShader(shader);
+            paint.setAlphaf(alphas.get());
             paint.setMode(PaintMode.STROKE);
             paint.setStrokeWidth(thickness);
             paint.setAntiAlias(true);
@@ -305,7 +340,7 @@ public class SkikoRenderer implements Renderer {
 
     @Override
     public void drawShader(ShaderEffect effect, float x, float y, float width, float height, float cornerRadius) {
-        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius);
+        SkiaEffects.drawShader(canvas, effect, x, y, width, height, cornerRadius, alphas.get());
     }
 
     @Override
@@ -316,6 +351,21 @@ public class SkikoRenderer implements Renderer {
     @Override
     public void popEffect() {
         SkiaEffects.popEffect(canvas);
+    }
+
+    @Override
+    public void pushAlpha(float alpha) {
+        alphas.push(alpha);
+    }
+
+    @Override
+    public void popAlpha() {
+        alphas.pop();
+    }
+
+    @Override
+    public float getAlpha() {
+        return alphas.get();
     }
 
     @Override

@@ -61,11 +61,15 @@ Except for the ones with a `Window` method in the table below, the applied optio
 | `setSizeLimits(minW, minH, maxW, maxH)` | Limits user resizing. A negative value means no limit on that side |
 | `setOpacity(float)` | 0 to 1 for the whole window. Not supported everywhere |
 | `setCursorVisible(boolean)` | Shows or hides the OS cursor over the window |
+| `setCursorLocked(boolean)`, `isCursorLocked()` | Locks the mouse to the window: the OS cursor is hidden and can't leave, and `Input` reports only how far the mouse moves. See [locking the mouse](../input/game-input.md#locking-the-mouse) |
+| `setCursorPosition(x, y)` | Moves the OS cursor, in window points. Only while the window has focus |
+| `isFocused()` | Whether the window has the OS focus |
 | `setVsync(boolean)`, `setMaxFPS(int)` | Same as the options, picked up next frame |
 | `setMinimized(boolean)`, `setMaximized(boolean)` | Set the state directly, so you can pass a flag instead of picking between `minimize()` / `maximize()` / `restore()`. A no-op if already in that state |
 | `minimize()`, `maximize()`, `restore()`, `focus()` | The usual window actions |
 | `hide()`, `show()`, `isHidden()` | Hide the window while the app keeps running (see below) |
-| `close()` | Ends the engine loop, like clicking the close button |
+| `close()` | Closes the window, like clicking its close button. Closing the first window ends the engine |
+| `open()` | Opens the window beside the running engine's others, or again after it was closed. See [Several windows](engine.md#several-windows) |
 
 A splash screen that becomes the main window, all in one OS window:
 
@@ -145,6 +149,19 @@ window.onClose(() -> {
 Fires once however the window closes: the user's close button, `window.close()`, or the engine stopping. It runs after the last frame has rendered and before `Engine.start` returns, so it is before the JVM exits when `start` is the last call in `main`. It runs on the main thread with the window already hidden, and exit waits for it to return.
 
 `Scheduler` tasks no longer run at that point, so do the cleanup directly instead of through `runLater` or `async`. An exception is logged and shutdown continues. It does not run if the process is killed or something calls `System.exit`.
+
+### Asking before closing
+
+```java nocompile
+window.onCloseRequest(() -> {
+    if (!hasUnsavedChanges()) window.close();
+    else askToSave(window::close); // a dialog that closes the window once the user has chosen
+});
+```
+
+With a listener set, the close button (and Quit on macOS) no longer closes the window. The listener runs on the render
+thread instead, and closes the window with `window.close()` when it is ready. `close()` itself, and the engine
+stopping, still close at once. Null gives the close button back.
 
 ## Hiding the window
 

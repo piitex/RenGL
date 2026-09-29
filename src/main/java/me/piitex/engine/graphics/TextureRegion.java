@@ -1,6 +1,7 @@
 package me.piitex.engine.graphics;
 
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +16,7 @@ import java.util.List;
  * stay lined up however much of each was trimmed. For an untrimmed region the offsets are 0 and the frame size is
  * the region's own size.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class TextureRegion {
     private final Texture texture;
     private final int x, y, width, height;

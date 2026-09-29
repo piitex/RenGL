@@ -20,7 +20,8 @@ All of them live in `me.piitex.engine.ui.layout`.
 ## How positioning works
 
 - A layout sets each child's `x`/`y` **every frame**, relative to the layout (in `update`) and once immediately on every `addElement`.
-  You do not call anything. Positioning a layout child by hand is pointless, because the layout overwrites it.
+  You do not call anything. Positioning a layout child by hand is pointless, because the layout overwrites it,
+  and an [anchor](../core/element.md#anchoring) set on one is ignored. Anchor the layout itself instead.
 - **Children keep their own size.** A layout positions children but does not resize them. ([`SplitContainer`](../containers/split-container.md)
   and [`TabContainer`](../containers/tab-container.md) are the exceptions. They resize their panes to fill the available space.)
 - **A layout keeps the size you gave it,** unless you turn on sizing to content (below). Children that

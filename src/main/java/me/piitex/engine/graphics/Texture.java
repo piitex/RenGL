@@ -21,7 +21,6 @@ import java.nio.file.Path;
  * Loading can happen on any thread, for example in a {@link me.piitex.engine.scheduler.Loader} step; the image goes
  * to the graphics card the first time it is drawn.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Texture {
     private final Image image;
     private volatile boolean smooth = true;

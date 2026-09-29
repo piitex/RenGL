@@ -41,7 +41,7 @@ Like `TextOverlay`, the background is **transparent with no border** by default.
 ## Alignment, spacing and padding
 
 ```java
-blurb.setTextAlign(TextFlowOverlay.TextAlign.CENTER); // LEFT (default), CENTER, RIGHT
+blurb.setTextAlign(TextAlign.CENTER); // me.piitex.engine.ui.text.TextAlign: LEFT (default), CENTER, RIGHT
 blurb.setLineSpacing(4f); // extra px between lines, default 2
 blurb.setPadding(10f); // inset on all four sides, default 0
 ```

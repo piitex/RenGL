@@ -37,7 +37,6 @@ import java.util.function.Consumer;
  * <p>
  * Keep one bus for the game, or one per scene, as suits: the engine keeps none of its own.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class EventBus {
     private static final Logger log = LogManager.getLogger("EventBus");
     private static final Map<Class<?>, List<Class<?>>> HIERARCHY = new ConcurrentHashMap<>();

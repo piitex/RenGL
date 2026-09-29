@@ -9,7 +9,6 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  * me.piitex.engine.ui.animation.Easing Easing} that overshoots, such as {@code EASE_OUT_BACK}, passes values a little
  * outside 0-1.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 @FunctionalInterface
 public interface Lerp<T> {
 

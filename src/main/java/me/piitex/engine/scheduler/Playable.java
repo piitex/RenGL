@@ -17,7 +17,6 @@ import java.util.function.BooleanSupplier;
  * A playable is played in one place at a time. Everything it does runs on the thread of the clock playing it, which
  * for a scene or the {@link Scheduler} is the render thread.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 @FunctionalInterface
 public interface Playable {
 

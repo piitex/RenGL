@@ -157,7 +157,7 @@ input.onSubmit(message -> {
 | Group | Methods |
 |---|---|
 | Text | `getText`, `setText`, `getMaxLength`, `setMaxLength` |
-| Read-only / undo | `isReadOnly/setReadOnly`, `isUndoEnabled/setUndoEnabled`, `getUndoHistory` |
+| Read-only / undo | `isReadOnly/setReadOnly`, `isUndoEnabled/setUndoEnabled`, `getUndoHistory`, `undo()`, `redo()` (the same as the keys; see the text field page for why an app might call them) |
 | Look | `getOptions/setOptions`, `getTextColor/setTextColor`, `getPlaceholder/setPlaceholder`, `getPlaceholderColor/setPlaceholderColor`, `getCaretColor/setCaretColor`, `getSelectionColor/setSelectionColor`, `getFontSize/setFontSize`, `setFontFile` |
 | Layout | `isWordWrap/setWordWrap`, `getLineSpacing/setLineSpacing`, `getPaddingX/setPaddingX`, `getPaddingY/setPaddingY` |
 | Scrolling | `getScrollSpeed/setScrollSpeed`, `isScrollbarVisible/setScrollbarVisible`, `getScrollBarStyle/setScrollBarStyle`, `getScrollOffsetY`, `getMaxScrollY`, `scrollBy`, `scrollTo` |

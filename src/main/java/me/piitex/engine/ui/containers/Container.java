@@ -110,6 +110,31 @@ public class Container extends Element implements Themeable, Draggable {
         if (child instanceof Container childContainer) {
             childContainer.parent = this;
         }
+        child.applyAnchor();
+    }
+
+    /**
+     * Also moves the {@link Element#setAnchor anchored} children to their new places.
+     */
+    @Override
+    public void setWidth(double width) {
+        super.setWidth(width);
+        applyChildAnchors();
+    }
+
+    /**
+     * Also moves the {@link Element#setAnchor anchored} children to their new places.
+     */
+    @Override
+    public void setHeight(double height) {
+        super.setHeight(height);
+        applyChildAnchors();
+    }
+
+    private void applyChildAnchors() {
+        for (Element element : elements.values()) {
+            element.applyAnchor();
+        }
     }
 
     /**
@@ -640,6 +665,7 @@ public class Container extends Element implements Themeable, Draggable {
         super.update(delta);
 
         for (Element element : elements.values()) {
+            element.applyAnchor(); // an anchored child may have been resized by something that doesn't say so
             element.update(delta);
         }
     }

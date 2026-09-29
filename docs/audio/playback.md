@@ -25,7 +25,7 @@ Audio.play("sfx/explosion.ogg").volume(0.8f).pitch(0.7f).pan(-0.5f);
 | Method | Description |
 |---|---|
 | `volume(float)` / `getVolume()` | This playback's own volume, 0 is silent and 1 is full. Multiplied by its channel and the master volume |
-| `pitch(float)` | Speed and pitch together, 1 is normal, 2 is an octave up. Clamped to 0.1 - 4 |
+| `pitch(float)` / `getPitch()` | Speed and pitch together, 1 is normal, 2 is an octave up. Clamped to 0.1 - 4. A sound with [`pitchVariation`](sound.md#variety-and-limits) starts each play at its own |
 | `pan(float)` | -1 (left) to 1 (right), 0 is centered. Mono and stereo |
 | `position(x, y)` / `position(x, y, z)` | Place it in the world. See [3D audio](spatial-audio.md). Replaces `pan` |
 | `velocity(x, y, z)` | How fast it moves, for the Doppler effect |

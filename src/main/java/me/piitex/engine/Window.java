@@ -64,9 +64,11 @@ public class Window implements Themeable {
     private ModalContainer modal;
     private volatile boolean hidden;
     private volatile boolean minimized, maximized;
+    private volatile boolean focused, cursorLocked;
     private volatile Runnable closeListener;
     private volatile Runnable minimizeListener, maximizeListener, restoreListener;
     private volatile java.util.function.BiConsumer<Integer, Integer> resizeListener;
+    private volatile Runnable closeRequestListener;
     private static final long FPS_SAMPLE_NANOS = 500_000_000L;
     private volatile double fps;
     private volatile double frameTime;
@@ -84,6 +86,7 @@ public class Window implements Themeable {
         glfWindow = new GLFWindow(inputManager);
         glfWindow.setIconifyHandler(this::notifyMinimized);
         glfWindow.setMaximizeHandler(this::notifyMaximized);
+        glfWindow.setCloseRequestHandler(this::notifyCloseRequested);
     }
 
     public WindowOptions getWindowOptions() {
@@ -221,13 +224,59 @@ public class Window implements Themeable {
     }
 
     /**
-     * Shows or hides the OS cursor over the window. It still moves freely. Safe from any thread.
+     * Shows or hides the OS cursor over the window. It still moves freely. While the cursor is
+     * {@link #setCursorLocked locked} it stays hidden, and this takes effect once it is freed. Safe from any thread.
      */
     public void setCursorVisible(boolean visible) {
         windowOptions.setShowCursor(visible);
         if (glfWindow != null) {
-            glfWindow.runOnMainThread(() -> glfWindow.applyCursorVisible(visible));
+            glfWindow.runOnMainThread(() -> glfWindow.applyCursorMode(visible, cursorLocked));
         }
+    }
+
+    /**
+     * Locks the mouse to the window, or frees it. While it is locked the OS cursor is hidden and can't leave the
+     * window, however far the mouse moves, so no click lands on another application; the keyboard can still switch
+     * away (Cmd+Tab, Alt+Tab), which frees it until the window has focus again. A locked mouse has no place on
+     * screen: {@link Input#getMouseX()} keeps counting past the edges. Draw a pointer of your own and move it by
+     * {@link Input#getMouseDeltaX()} and {@link Input#getMouseDeltaY()}. Where the platform supports raw mouse
+     * motion, those deltas come without the OS's pointer acceleration. The interface still reacts to the mouse
+     * where Input says it is, so free the mouse for menus. Safe from any thread.
+     */
+    public void setCursorLocked(boolean locked) {
+        cursorLocked = locked;
+        if (glfWindow != null) {
+            glfWindow.runOnMainThread(() -> glfWindow.applyCursorMode(windowOptions.isShowCursor(), locked));
+        }
+    }
+
+    public boolean isCursorLocked() {
+        return cursorLocked;
+    }
+
+    /**
+     * Moves the OS cursor to (x, y) in window points, the space of {@link Input#getMouseX()}. After freeing a
+     * {@link #setCursorLocked locked} mouse, this puts the cursor where the game's own pointer was. Does nothing while
+     * the window doesn't have {@link #isFocused() focus}. Safe from any thread; calls made in order take effect in
+     * order.
+     */
+    public void setCursorPosition(float x, float y) {
+        if (glfWindow != null) glfWindow.runOnMainThread(() -> glfWindow.applyCursorPosition(x, y));
+    }
+
+    /**
+     * Whether the window has the OS focus: it gets the keyboard, and is usually in front. False once the user switches
+     * to another application, until they come back. Safe from any thread.
+     */
+    public boolean isFocused() {
+        return focused;
+    }
+
+    /**
+     * Main thread, from the GLFW callback.
+     */
+    void notifyFocused(boolean focused) {
+        this.focused = focused;
     }
 
     /**
@@ -391,8 +440,9 @@ public class Window implements Themeable {
 
     /**
      * Runs once when the window is closing, by the user's close button, {@link #close()}, or the engine
-     * stopping, after rendering has stopped and before {@link Engine#start} returns (so before the JVM exits
-     * if that is the last thing {@code main} does). Use it for cleanup: saving state, closing files and
+     * stopping, after rendering has stopped. For the first window this is before {@link Engine#start} returns (so
+     * before the JVM exits if that is the last thing {@code main} does). Each time a window is opened again, it
+     * runs again when it next closes. Use it for cleanup: saving state, closing files and
      * connections, stopping your own threads.
      * <p>
      * It runs on the main thread, the window is already hidden, and it blocks the exit until it returns.
@@ -403,6 +453,26 @@ public class Window implements Themeable {
      */
     public void onClose(Runnable listener) {
         this.closeListener = listener;
+    }
+
+    /**
+     * Takes over the close button (and Quit on macOS): the window stays open and {@code listener} runs on the render
+     * thread instead. It closes the window with {@link #close()} when it is ready, after asking whether to save
+     * changes, say. {@link #close()} and the engine stopping still close the window at once. Pass null to let the
+     * close button close the window again.
+     */
+    public void onCloseRequest(Runnable listener) {
+        this.closeRequestListener = listener;
+    }
+
+    /**
+     * Main thread, from the GLFW close callback: whether the close goes ahead. See {@link #onCloseRequest}.
+     */
+    private boolean notifyCloseRequested() {
+        Runnable listener = closeRequestListener;
+        if (listener == null) return true;
+        fire(listener);
+        return false;
     }
 
     /**
@@ -458,10 +528,23 @@ public class Window implements Themeable {
     }
 
     /**
-     * Ends the engine loop, as if the user had clicked the close button. Safe from any thread.
+     * Closes the window, as if the user had clicked its close button. Closing the engine's first window, the one
+     * given to {@link Engine#start}, closes every window and ends the engine loop. Safe from any thread.
      */
     public void close() {
         if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyClose);
+    }
+
+    /**
+     * Opens this window beside the running engine's others, as {@link Engine#open} does. Safe from any thread. A
+     * window that was closed can be opened again.
+     *
+     * @throws IllegalStateException if no engine is running
+     */
+    public void open() {
+        Engine engine = Engine.getRunning();
+        if (engine == null) throw new IllegalStateException("No engine is running; start one with Engine.start(window)");
+        engine.open(this);
     }
 
     public InputManager getInputManager() {

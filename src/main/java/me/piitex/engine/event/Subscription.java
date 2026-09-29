@@ -6,7 +6,6 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  * A listener's place on an {@link EventBus}. Cancel it when the listener should stop hearing events, such as when the
  * thing that listens is removed. {@link #close()} does the same, for try-with-resources.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public interface Subscription extends AutoCloseable {
 
     /**

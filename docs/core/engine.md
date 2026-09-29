@@ -1,11 +1,14 @@
 # Engine
 [Documentation](../README.md) › [Core](README.md)
 
-`me.piitex.engine.Engine` is the entry point that turns a [`Window`](window.md) object into a real, running window.
-It has one public method.
+`me.piitex.engine.Engine` is the entry point that turns [`Window`](window.md) objects into real, running windows.
 
 ```java nocompile
-public void start(Window window);
+public void start(Window window);  // opens the first window and runs until it closes
+public void open(Window window);   // opens another window, from any thread
+public List<Window> getWindows();  // the windows open now
+public void setPacingWindow(Window window); // the window whose vsync and max FPS pace the loop (null: the first)
+public static Engine getRunning(); // the running engine, or null
 ```
 
 ## What `start` does
@@ -20,7 +23,8 @@ public void start(Window window);
    window is closed.
 6. Shows the window once the first frame has been drawn, so you never see a blank or garbage frame.
 
-**`start` blocks** until the user closes the window. Build all of your UI before calling it.
+**`start` blocks** until the user closes the window. Build the window's UI before calling it; other windows can be
+[opened](#several-windows) at any time.
 
 ```java
 Window window = new Window(new WindowOptions("My App").setDimensions(1280, 720));
@@ -44,6 +48,33 @@ follows the window on its own; for anything else, resize it yourself from
 [`window.onResize`](window.md#resize-event). [`WindowOptions`](window.md#windowoptions)' `getWidth()`/`getHeight()`
 always hold the current size. See [Known limitations](../reference/known-limitations.md).
 
-## One engine, one window
-An `Engine` drives exactly one [`Window`](window.md). Static helpers such as [`MouseTracker`](../input/input-and-focus.md#reading-the-mouse-directly), [`TooltipManager`](../input/tooltips.md), [`Clipboard`](../input/input-and-focus.md#clipboard)
-and `CursorManager` assume that. Create a single `Engine` per process.
+## Several windows
+One engine can drive any number of windows. The first is the one given to `start`; open more with
+`engine.open(window)` or `window.open()`, from any thread, before or after `start`. Each window has its own
+containers, [scenes](../game/scenes.md), input, focus, popups and tooltips.
+
+```java nocompile
+Window game = new Window(new WindowOptions("Game").setDimensions(960, 540));
+game.getSceneManager().set(EntityScene.load("scenes/level1.json"));
+game.onClose(() -> System.out.println("game window closed"));
+game.open(); // opens on the next pass of the main loop and shows once its first frame is drawn
+```
+
+- **Closing.** Closing a window (its close button or `window.close()`) closes only it, and its `onClose` runs.
+  Closing the first window closes every other window too and ends the engine; `start` then returns.
+- **Reopening.** A closed window can be opened again with `open()`. Its containers and scenes are where they were
+  left.
+- **One render thread.** Every window is updated and drawn on the same render thread, one after another each frame,
+  so a slow window slows the others.
+- **One game clock.** [Game time](../game/game-time.md) is shared: pausing it or changing its time scale affects the
+  scenes of every window.
+- **Frame rate.** One window paces the loop with its vsync and max-FPS settings: the first, unless
+  `engine.setPacingWindow(window)` picks another. Only that window waits for the display; the others present as
+  soon as they are drawn, at its rate, since several windows each waiting would slow or unsettle the frame rate.
+  Their own vsync and max-FPS settings are ignored until they pace. An editor makes the game window it opens on
+  Play the pacing window, so the game runs at its own settings; when that window closes, the first paces again.
+- **Per-window helpers.** [`MouseTracker`](../input/input-and-focus.md#reading-the-mouse-directly) answers for the window
+  being processed, and cursor changes go to the window they come from.
+
+Create a single `Engine` per process; `start` refuses to run a second one. `me.piitex.examples.demo.MultiWindowDemo`
+opens game windows from a button.

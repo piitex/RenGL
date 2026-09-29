@@ -6,6 +6,7 @@ import me.piitex.engine.math.Rect;
 import me.piitex.engine.math.Vec2;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.Font;
 import org.jetbrains.skia.Typeface;
 
@@ -41,7 +42,7 @@ import java.util.List;
  * Turn it off with {@link #setEnabled}, and every call returns at once, so debug calls can be left in release code.
  * Render thread only, which includes every {@code Scene} hook.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class DebugDraw {
     private static final int LINE = 0, ARROW = 1, RECT = 2, FILL_RECT = 3, CIRCLE = 4, FILL_CIRCLE = 5,
             POLYGON = 6, POINT = 7, TEXT = 8;

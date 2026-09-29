@@ -1,6 +1,8 @@
 package me.piitex.engine.graphics;
 
+import me.piitex.engine.io.Json;
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +41,7 @@ import java.util.Set;
  * Loading and building can happen on any thread, such as in a {@link me.piitex.engine.scheduler.Loader} step. Once
  * built, an atlas can be read from any thread as long as nothing is added to it any more.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class TextureAtlas {
     private final Map<String, TextureRegion> regions = new LinkedHashMap<>();
     private final Map<String, TextureRegion> withoutExtension = new LinkedHashMap<>();

@@ -109,7 +109,8 @@ Pass an `.ogg`, `.mp3` or `.wav` path as the first argument to try music crossfa
 | `Audio.play(path)` / `play(path, volume)` / `play(path, channel)` | Play a cached sound effect once. Returns a [`Playback`](playback.md) |
 | `Audio.playAt(path, x, y)` / `playAt(path, x, y, z)` | Play at a position in the world. See [3D audio](spatial-audio.md) |
 | `Audio.listener()` | The [listener](spatial-audio.md#the-listener) |
-| `Audio.setDistanceModel(model)` / `setDopplerFactor(f)` / `setSpeedOfSound(v)` | World-wide [3D settings](spatial-audio.md) |
+| `Audio.hearIn2D(fullVolumeDistance, silentDistance)` | Set up positioned sounds for a [2D game](spatial-audio.md#2d-games) in one call |
+| `Audio.setDistanceModel(model)` / `setDefaultAttenuation(ref, max, rolloff)` / `setDopplerFactor(f)` / `setSpeedOfSound(v)` | World-wide [3D settings](spatial-audio.md) |
 | `Audio.playMusic(path)` / `playMusic(path, fadeSeconds)` | Loop a track, crossfading from the current one. Does nothing if that track is already playing |
 | `Audio.stopMusic()` / `stopMusic(fadeSeconds)` | Fade out and stop the background music |
 | `Audio.getMusic()` | The current music `Playback`, or `null` |

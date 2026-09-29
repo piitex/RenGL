@@ -1,15 +1,17 @@
 package me.piitex.engine.math;
 
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 /**
  * A 2D area that can be tested against points, other shapes and rays: a {@link Rect}, a {@link Circle} or a convex
- * {@link Polygon}. These are queries only. Nothing moves or pushes anything apart; what a hit means is up to the game.
+ * {@link Polygon}. These are queries: {@link #overlap} says how to push two shapes apart, and {@link Slide#move} moves
+ * a shape among solid ones, but nothing moves by itself. What a hit means is up to the game.
  * <p>
  * Shapes are immutable. Keep a hit box relative to its owner and {@link #translate} it to the owner's position when
  * testing, or build a new one each step.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public sealed interface Shape permits Rect, Circle, Polygon {
 
     /**
@@ -28,6 +30,15 @@ public sealed interface Shape permits Rect, Circle, Polygon {
      */
     default boolean intersects(Shape other) {
         return Collide.intersects(this, other);
+    }
+
+    /**
+     * How to push this shape out of {@code other}, or null if they don't {@linkplain #intersects overlap}: move this
+     * shape {@link Overlap#depth} along {@link Overlap#normal} and the two only touch. It is the shortest way out.
+     * When two ways out of a rectangle or circle are equally short, up wins, which suits things landing on the ground.
+     */
+    default Overlap overlap(Shape other) {
+        return Collide.overlap(this, other);
     }
 
     /**

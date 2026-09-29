@@ -32,8 +32,9 @@ layout.addElement(submit);
 button.onAction(() -> System.out.println("clicked"));
 ```
 
-`onAction` fires on **press** of any mouse button. Only one action is held. Calling `onAction` again replaces
-it.
+`onAction` fires when the **left** button is **released** over the button, and only if the press began on it.
+Moving off before letting go cancels the click, and other mouse buttons do nothing. Only one action is held.
+Calling `onAction` again replaces it.
 
 > **Do not call `onMouseClick` on a button.** The constructor registers an internal click handler that fires
 > `onAction`. Replacing it silently breaks the button.

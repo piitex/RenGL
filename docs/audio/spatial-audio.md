@@ -81,18 +81,34 @@ Playback p = Sound.load("sfx/campfire.ogg").loopAt(x, y, z)
 | `INVERSE`, `LINEAR`, `EXPONENT` | The same without clamping (louder than full volume closer than the reference distance) |
 | `NONE` | No fading, direction only |
 
-### 2D games in pixels
+`Audio.setDefaultAttenuation(ref, max, rolloff)` sets the attenuation every positioned playback starts with, so it
+needn't be set on each one. Playbacks already playing keep theirs.
 
-Units matter: with positions in pixels a sound 300 px away is at 1/300 of its volume, which is nearly silent. Set a
-falloff that suits the screen:
+## 2D games
+
+Units matter: with the default falloff and positions in pixels, a sound 300 px away is at 1/300 of its volume, which
+is nearly silent. And with the listener on the plane, a sound a few pixels to the right comes entirely out of the
+right speaker. `Audio.hearIn2D` sets up both in one call:
 
 ```java
-Audio.setDistanceModel(DistanceModel.LINEAR_CLAMPED);
-// full volume within 100 px, silent at 900 px away
-Audio.playAt("sfx/explosion.ogg", x, y).attenuation(100f, 900f, 1f);
+Audio.hearIn2D(150f, 1500f);                                  // once: full volume within 150 units, silent at 1500
+
+Audio.listener().setPosition(camera.getX(), camera.getY());   // each frame: the ears follow the view
+explosion.playAt(x, y);                                       // where it happens
+hit.playAt(x, y, 0f, 0.5f);                                   // at half volume
 ```
 
-Or scale your world into small numbers first (`x / 100f`) and keep the default model.
+It does three things:
+
+- **Linear falloff.** The distance model becomes `LINEAR_CLAMPED` and the default attenuation is set, so a sound is at
+  full volume within the first distance of the listener and fades evenly to silence at the second.
+- **Gentle panning.** The listener hovers half the silent distance in front of the plane, facing it with y down the
+  screen, so a sound a little to one side comes a little from that side, and one far to the side mostly from it.
+- **Far sounds are skipped.** A one-shot started beyond the silent distance doesn't play at all, costs no audio source,
+  and doesn't count towards the sound's [`minGap`](sound.md#variety-and-limits). Loops still start, to be heard when
+  the listener comes near.
+
+Distances are in whatever units the positions are in: world units if you pass world positions, pixels if pixels.
 
 ## Doppler
 
@@ -117,3 +133,5 @@ unset, set the factor to 0, or set the speed of sound to a pixel value such as 3
 - **Mono files position best.** A stereo file is placed as a stereo pair around the point.
 - **Only the listener and positioned playbacks use these units.** Panned and flat playbacks never fade with distance.
 - **Positions are not tracked for you.** A playback stays where you last put it. Update it as the thing moves.
+- **`hearIn2D` turns the listener** to face the plane with y down the screen. Calling `setOrientation` afterwards
+  undoes that, so a 2D game shouldn't need to.

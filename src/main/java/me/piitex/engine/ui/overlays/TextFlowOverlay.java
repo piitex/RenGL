@@ -6,6 +6,8 @@ import me.piitex.engine.ui.scroll.Scrollable;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.scroll.ScrollBarStyle;
+import me.piitex.engine.ui.text.TextAlign;
+import me.piitex.engine.ui.text.TextLayout;
 import me.piitex.engine.ui.theme.Theme;
 import org.jetbrains.skia.Font;
 import org.jetbrains.skia.FontMetrics;
@@ -37,11 +39,6 @@ import java.util.List;
  * broken mid-word rather than overflowing.
  */
 public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggable {
-    /**
-     * Horizontal placement of each wrapped line within the box.
-     */
-    public enum TextAlign {LEFT, CENTER, RIGHT}
-
     private static final String ELLIPSIS = "…";
 
     private final List<String> lines = new ArrayList<>();
@@ -276,9 +273,7 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         Font font = getOrBuildFont();
         float innerWidth = Math.max(1f, (float) getWidth() - 2 * padding - (reserveBar ? barWidth() : 0f));
 
-        for (String paragraph : text.split("\n", -1)) {
-            wrapParagraph(paragraph, font, innerWidth);
-        }
+        lines.addAll(TextLayout.wrap(text, font, innerWidth));
 
         if (maxLines > 0 && lines.size() > maxLines) {
             while (lines.size() > maxLines) lines.remove(lines.size() - 1);
@@ -288,37 +283,6 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
             }
             lines.set(maxLines - 1, last.stripTrailing() + ELLIPSIS);
         }
-    }
-
-    private void wrapParagraph(String paragraph, Font font, float innerWidth) {
-        if (paragraph.isEmpty()) {
-            lines.add("");
-            return;
-        }
-
-        StringBuilder line = new StringBuilder();
-        for (String word : paragraph.split(" ", -1)) {
-            String candidate = line.length() == 0 ? word : line + " " + word;
-            if (font.measureTextWidth(candidate) <= innerWidth) {
-                line.setLength(0);
-                line.append(candidate);
-                continue;
-            }
-            if (line.length() > 0) {
-                lines.add(line.toString());
-                line.setLength(0);
-            }
-            // Word alone may still be too wide: break it by character.
-            String rest = word;
-            while (font.measureTextWidth(rest) > innerWidth && rest.length() > 1) {
-                int cut = 1;
-                while (cut < rest.length() && font.measureTextWidth(rest.substring(0, cut + 1)) <= innerWidth) cut++;
-                lines.add(rest.substring(0, cut));
-                rest = rest.substring(cut);
-            }
-            line.append(rest);
-        }
-        lines.add(line.toString());
     }
 
     @Override
@@ -337,7 +301,7 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
             if (line.isEmpty() || y + pitch < getY() || y > getY() + getHeight()) continue;
             float x = (float) getX() + padding;
             float slack = innerWidth - font.measureTextWidth(line);
-            float natural = textAlign == TextAlign.CENTER ? 0.5f : textAlign == TextAlign.RIGHT ? 1f : 0f;
+            float natural = textAlign.fraction();
             x += slack * textAlignH(natural);
             renderer.drawText(line, x, y, font, resolveTextColor(getTextColor()));
         }

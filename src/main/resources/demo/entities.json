@@ -1,0 +1,147 @@
+{
+  "format": 1,
+  "camera": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "background": [0.06, 0.07, 0.1, 1],
+  "nextId": 6,
+  "entities": [
+    {
+      "id": 1,
+      "name": "Sun",
+      "active": true,
+      "transform": {
+        "x": -80.609375,
+        "y": -97.89453,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1
+      },
+      "components": [
+        {
+          "type": "me.piitex.examples.entities.Quad",
+          "width": 90,
+          "height": 90,
+          "color": [1, 0.69803923, 0.24313726, 1],
+          "cornerRadius": 45
+        },
+        {
+          "type": "me.piitex.examples.entities.Spin",
+          "degreesPerSecond": 30
+        }
+      ],
+      "children": [
+        {
+          "id": 2,
+          "name": "Planet",
+          "active": true,
+          "transform": {
+            "x": 200,
+            "y": 0,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "components": [
+            {
+              "type": "me.piitex.examples.entities.Quad",
+              "width": 36,
+              "height": 36,
+              "color": [0.29803923, 0.5529412, 1, 1],
+              "cornerRadius": 18
+            },
+            {
+              "type": "me.piitex.examples.entities.Spin",
+              "degreesPerSecond": 120
+            }
+          ],
+          "children": [
+            {
+              "id": 3,
+              "name": "Moon",
+              "active": true,
+              "transform": {
+                "x": 44,
+                "y": 0,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "components": [
+                {
+                  "type": "me.piitex.examples.entities.Quad",
+                  "width": 12,
+                  "height": 12,
+                  "color": [0.78431374, 0.8, 0.83137256, 1],
+                  "cornerRadius": 6
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Sprite sheet",
+      "active": true,
+      "transform": {
+        "x": -330,
+        "y": -170,
+        "rotation": 0,
+        "scaleX": 0.5,
+        "scaleY": 0.5
+      },
+      "components": [
+        {
+          "type": "me.piitex.engine.entity.SpriteRenderer",
+          "texture": "src/main/resources/demo/sprites.png",
+          "color": [1, 1, 1, 1],
+          "pivotX": 0.5,
+          "pivotY": 0.5,
+          "flipX": false,
+          "flipY": false
+        },
+        {
+          "type": "me.piitex.examples.entities.Bob",
+          "height": 16,
+          "speed": 0.4
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Crate",
+      "active": true,
+      "transform": {
+        "x": 330,
+        "y": 190,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1
+      },
+      "components": [
+        {
+          "type": "me.piitex.examples.entities.Quad",
+          "width": 70,
+          "height": 50,
+          "color": [0.37254903, 0.7490196, 0.46666667, 1],
+          "cornerRadius": 6
+        },
+        {
+          "type": "me.piitex.engine.entity.BoxCollider",
+          "offsetX": 0,
+          "offsetY": 0,
+          "width": 70,
+          "height": 50
+        },
+        {
+          "type": "me.piitex.examples.entities.Spin",
+          "degreesPerSecond": 45
+        }
+      ]
+    }
+  ]
+}

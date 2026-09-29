@@ -4,6 +4,7 @@ import me.piitex.engine.Window;
 import me.piitex.engine.game.GameTime;
 import me.piitex.engine.game.Scene;
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
@@ -34,7 +35,7 @@ import java.util.function.Consumer;
  * frame. The mouse and wheel deltas work the same way. Everything here is for the render thread, where every scene
  * hook and element callback runs.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Input {
     private static final Logger log = LogManager.getLogger("Input");
     private static final int[] MODIFIER_KEYS = {GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT,
@@ -56,6 +57,7 @@ public final class Input {
 
     private final List<InputContext> contexts = new ArrayList<>();
     private List<InputContext> active = List.of();
+    private List<InputContext> muted = List.of(); // active, but in a scene whose input delay isn't over: presses dropped
 
     private Consumer<Binding> bindingListener;
     private int pendingModifier = -1;
@@ -213,6 +215,8 @@ public final class Input {
 
     /**
      * Every context receiving input, the window's and the running scenes', in the order a press is offered to them.
+     * Those of a scene whose {@link Scene#setInputDelay input delay} isn't over are included: they take the presses
+     * they bind, but drop them.
      */
     public List<InputContext> getActiveContexts() {
         refreshContexts();
@@ -396,7 +400,7 @@ public final class Input {
         for (InputContext context : active) {
             List<InputContext.Action> matched = context.match(device, code, mods);
             if (!matched.isEmpty()) {
-                context.press(source, matched, frame);
+                if (!containsSame(muted, context)) context.press(source, matched, frame);
                 return true;
             }
             if (context.isBlocking()) return true;
@@ -409,7 +413,7 @@ public final class Input {
         for (InputContext context : active) {
             List<InputContext.Action> matched = context.match(Binding.Device.WHEEL, direction, mods);
             if (!matched.isEmpty()) {
-                context.tap(matched, frame);
+                if (!containsSame(muted, context)) context.tap(matched, frame);
                 return;
             }
             if (context.isBlocking()) return;
@@ -422,14 +426,19 @@ public final class Input {
      */
     private void refreshContexts() {
         List<InputContext> next = new ArrayList<>();
+        List<InputContext> nextMuted = new ArrayList<>();
         boolean blocked = collect(contexts, next);
         if (!blocked) {
             List<Scene> scenes = window.getSceneManager().getScenes();
             for (int i = scenes.size() - 1; i >= 0 && !blocked; i--) {
                 Scene scene = scenes.get(i);
-                if (scene.isRunning()) blocked = collect(scene.getInputContexts(), next);
+                if (!scene.isRunning()) continue;
+                int first = next.size();
+                blocked = collect(scene.getInputContexts(), next);
+                if (!scene.isReady()) nextMuted.addAll(next.subList(first, next.size()));
             }
         }
+        muted = List.copyOf(nextMuted);
         for (InputContext old : active) {
             if (!containsSame(next, old)) old.deactivate(frame);
         }

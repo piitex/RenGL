@@ -28,12 +28,13 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Snapshots](core/snapshots.md) | Capture a container or the window as an image (PNG, or an `ImageOverlay`) |
 | [Scheduler](core/scheduler.md) | Timers, `runLater`, and background work with results delivered on the render thread |
 | [Loading](core/loading.md) | `Loader`: background loading in named steps, with progress for a loading screen |
-| **[Containers](containers/README.md)** | Container, ScrollContainer, ResizableContainer, ModalContainer, ReorderableGrid |
+| **[Containers](containers/README.md)** | Container, ScrollContainer, ResizableContainer, ModalContainer, ReorderableGrid, TreeView |
 | [Container](containers/container.md) | Holding children, dragging, collision, clipping |
 | [ScrollContainer](containers/scroll-container.md) | Scrollable, clipped content |
 | [ResizableContainer](containers/resizable-container.md) | Follows the window, scales its contents, drag-to-resize |
 | [ModalContainer](containers/modal-container.md) | Dialogs that block the rest of the UI |
 | [ReorderableGrid](containers/reorderable-grid.md) | Drag-to-rearrange grid of items |
+| [TreeView](containers/tree-view.md) | A tree of items, like an editor's hierarchy or a file browser |
 | **[Layouts](layouts/README.md)** | Automatic positioning |
 | [Layouts overview](layouts/README.md) | How automatic positioning works |
 | [VerticalLayout](layouts/vertical-layout.md) · [HorizontalLayout](layouts/horizontal-layout.md) · [GridLayout](layouts/grid-layout.md) · [StackLayout](layouts/stack-layout.md) · [SplitContainer](containers/split-container.md) · [TabContainer](containers/tab-container.md) | One page per layout |
@@ -45,23 +46,28 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | Images | [ImageOverlay](overlays/image-overlay.md) · [IconOverlay](overlays/icon-overlay.md) |
 | **[Game](game/README.md)** | Scenes and the game loop |
 | [Scenes](game/scenes.md) | `Scene` and `SceneManager`: menus, gameplay, pause menus, and moving between them |
+| [Entities and scene files](game/entities.md) | `EntityScene`, entities, components and `@Property`: levels as JSON files that load into running scenes |
 | [Game time](game/game-time.md) | Fixed-step updates, time scale, pausing, smooth drawing between steps |
 | [Scene transitions](game/transitions.md) | Fades, slides, wipes and custom effects when the scenes change |
-| [Geometry and raycasts](game/geometry.md) | `Vec2`, `Rect`, `Circle`, `Polygon`: overlap tests, raycasts, and number helpers |
+| [Geometry and raycasts](game/geometry.md) | `Vec2`, `Rect`, `Circle`, `Polygon`: overlap tests, raycasts, pushing apart, moving and sliding among walls, and number, angle and animation helpers |
+| [Spatial grid](game/spatial-grid.md) | `SpatialGrid`: find the things near a place quickly: in an area, within a radius, the nearest |
+| [Random numbers](game/random.md) | `Rng`: ranges, odds, picks, weighted picks and points in a circle, from a seed |
 | [Events](game/events.md) | `EventBus`: tell other parts of the game what happened without knowing about them |
 | [Object pools](game/pooling.md) | `Pool`: reuse bullets, particles and other short-lived objects instead of creating new ones |
 | **[Graphics](graphics/README.md)** | Drawing a 2D game world |
-| [Camera](graphics/camera.md) | `Camera`: position, zoom, rotation, viewports, and mouse to world coordinates |
+| [Camera](graphics/camera.md) | `Camera`: position, zoom, rotation, viewports, following, shake, and mouse to world coordinates |
 | [Sprites](graphics/sprites.md) | `Texture`, `TextureRegion`, `Sprite`, and `SpriteBatch` for drawing many in order and in few calls |
 | [Texture atlases](graphics/atlases.md) | `TextureAtlas`: packed sprite sheets from TexturePacker, Aseprite and similar tools |
+| [Tile maps](graphics/tile-maps.md) | `TileMap`: levels from the Tiled map editor: drawing, collision shapes, objects and properties |
 | [Sprite animation](graphics/sprite-animation.md) | `Animation` and `AnimationPlayer`: frame animation, loop modes, frame events |
+| [Particles](graphics/particles.md) | `ParticleSystem` and `ParticleEffect`: bursts of sparks, smoke and debris |
 | [Shaders and post effects](graphics/shaders.md) | `ShaderEffect`: SkSL shaders to fill shapes or post-process a scene or element |
 | [Debug drawing](graphics/debug-drawing.md) | `DebugDraw`: hit boxes, rays and labels drawn in world space |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
-| [Sound](audio/sound.md) | Short effects held in memory |
+| [Sound](audio/sound.md) | Short effects held in memory, with random pitch and limits on how often they play |
 | [Music](audio/music.md) | Streamed tracks, looping, crossfades |
 | [Playback](audio/playback.md) | Volume, pitch, pan, pause, fades and callbacks on a playing sound |
-| [3D audio](audio/spatial-audio.md) | Listener, positioned sounds, distance falloff, Doppler |
+| [3D audio](audio/spatial-audio.md) | Listener, positioned sounds, distance falloff, Doppler, and 2D hearing in one call |
 | **[Styling](styling/README.md)** | Colors, box styling, themes, backgrounds, fonts, images |
 | [Colors and paints](styling/colors-and-paints.md) | `Color`, `RainbowColor` (RGB cycling), gradients, animated paints |
 | [Styling](styling/styling.md) | Background, border, hover, and corner radius on every element |

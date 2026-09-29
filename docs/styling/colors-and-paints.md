@@ -40,6 +40,17 @@ From hue, saturation and brightness (hue is in turns and wraps: 0 red, 1/3 green
 Color orange = Color.fromHSV(0.08f, 1f, 1f, 1f);
 ```
 
+The same color, more or less see-through:
+
+```java
+Color half = orange.withAlpha(0.5f);      // alpha set to 0.5
+Color fading = half.withOpacity(0.5f);    // alpha multiplied by 0.5, so 0.25 here
+```
+
+`withOpacity` is for fading something in or out while keeping how see-through it already was. To fade everything
+drawn for a while, [`Renderer.pushAlpha`](../reference/custom-elements.md#the-renderer) saves passing the opacity to
+every color.
+
 There is no hex-string constructor. Convert hex values yourself:
 
 ```java

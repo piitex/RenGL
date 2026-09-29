@@ -120,11 +120,15 @@ field.getOptions().setUndoLimit(500); // default 200 steps
 field.getUndoHistory().clear(); // e.g. after loading a new document
 ```
 
+`field.undo()` and `field.redo()` do the same as the keys. On macOS, an app whose own Undo menu item has Cmd+Z
+takes that key before it reaches the field, so the item should call these while the field has focus.
+
 ## Selection and inspection
 
 ```java
 field.hasSelection();
 field.getSelectedText();
+field.selectAll(); // as Ctrl/Cmd+A does
 field.clearSelection();
 field.isFocused();
 ```
@@ -217,7 +221,7 @@ root.addElement(form);
 | Password | `isPassword/setPassword` |
 | Read-only | `isReadOnly/setReadOnly` |
 | Undo | `isUndoEnabled/setUndoEnabled`, `getUndoHistory` |
-| Selection | `hasSelection`, `getSelectedText`, `clearSelection` |
+| Selection | `hasSelection`, `getSelectedText`, `selectAll`, `clearSelection` |
 | State | `isFocused` |
 | Callbacks | `onTextChanged`, `onSubmit`, `onFocusChanged` |
 | Lifecycle | `dispose` |

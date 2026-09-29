@@ -2,6 +2,7 @@ package me.piitex.engine.gl;
 
 import me.piitex.engine.ui.menu.MenuItem;
 import me.piitex.engine.ui.menu.PopupMenu;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.system.macosx.ObjCRuntime;
@@ -50,6 +51,7 @@ import static org.lwjgl.system.macosx.ObjCRuntime.sel_getUid;
  * Because the native menu is rebuilt whenever the snapshot changes, enabling/disabling an item or flipping a
  * check item is picked up automatically. There is no separate refresh call.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class NativeMenuBar {
     private static final Logger log = LogManager.getLogger("Engine");
     private static final boolean MAC = System.getProperty("os.name").toLowerCase().contains("mac");

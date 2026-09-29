@@ -157,13 +157,32 @@ next input and at the start of the next frame.
 
 Contexts don't affect the raw state: it sees every key and button that reaches the game.
 
+## Locking the mouse
+
+A game aimed with the mouse can lock it to the window with `window.setCursorLocked(true)`, so a click near the edge
+never lands on another application. The OS cursor is hidden and stays in the window however far the mouse moves;
+switching away with the keyboard (Cmd+Tab, Alt+Tab) frees it until the window has focus again. A locked mouse has no
+place on screen, and `getMouseX()` keeps counting past the edges, so the game draws its own pointer and moves it by
+`getMouseDeltaX()` and `getMouseDeltaY()`. Where the platform supports raw mouse motion, the deltas come without the
+OS's pointer acceleration.
+
+The interface still reacts to the mouse where `Input` says it is, so free it for menus, and put the OS cursor where
+the game's pointer was:
+
+```java
+window.setCursorLocked(false);
+window.setCursorPosition(pointerX, pointerY);
+```
+
+Pausing when `window.isFocused()` turns false is a good habit for a locked game: the player has gone elsewhere.
+
 ## What reaches the game
 
 The interface gets input first, as it always has, and the game only sees what it leaves:
 
 | Input | Reaches the game unless |
 |---|---|
-| Key press or repeat | A text field or other [focused element](input-and-focus.md#keyboard-focus) has the keyboard, or a popup or modal is open. A scene's `onKey` that consumes the key keeps it from every context, but not from the raw state |
+| Key pres or repeat | A text field or other [focused element](input-and-focus.md#keyboard-focus) has the keyboard, or a popup or modal is open. A scene's `onKey` that consumes the key keeps it from every context, but not from the raw state |
 | Mouse press | It lands on an element that listens for clicks (a button, a checkbox, anything with `onMouseClick`), gives focus to a text field, opens a context menu or starts dragging a panel; or a popup or modal is open |
 | Wheel | It scrolls something, such as a scroll area or text area; or a popup or modal is open |
 | Releases | Always reach it, so nothing is left held down |
@@ -176,7 +195,7 @@ listener that does nothing: `panel.onMouseClick(e -> {})`.
 open. Otherwise the game gets it first, and it moves focus only if no scene's `onKey` consumed it and no context
 binds it. So a game can bind Tab to its map and still have Tab work in its forms.
 
-## Rebinding
+## Rebindings
 
 `input.listenForBinding(callback)` hands the next key, mouse button or wheel turn to the callback as a `Binding`,
 for the "press a key" prompt of a controls menu:

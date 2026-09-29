@@ -131,6 +131,13 @@ public class SceneManager {
     }
 
     /**
+     * As {@link #remove(Scene)}, shown with {@code transition}; null for none.
+     */
+    public boolean remove(Scene scene, SceneTransition transition) {
+        return change(transition, () -> remove(scene));
+    }
+
+    /**
      * Removes every scene, top first, then pushes {@code scene}: for moving between parts of the game, such as from
      * the main menu into a level. None of the removed scenes are resumed on the way out. If {@code scene} is already
      * on this stack it stays, resumed if it was paused, and only the others are removed.
@@ -259,6 +266,7 @@ public class SceneManager {
 
     private void enter(Scene scene) {
         scene.manager = this;
+        scene.age = 0f;
         Container container = scene.getContainer();
         container.setX(0);
         container.setY(0);
@@ -276,6 +284,7 @@ public class SceneManager {
         scene.running = false;
         scene.getTimers().cancelAll();
         scene.cancelSubscriptions();
+        scene.clearQueued();
         window.removeContainer(scene.getContainer());
         if (pendingExits != null) {
             scene.leaving = this; // onExit once the transition has finished drawing it
@@ -431,16 +440,36 @@ public class SceneManager {
 
     /**
      * Render thread, called by the engine once per frame after the fixed steps. Follows the window size, then runs
-     * each running scene's timers and {@link Scene#update}, bottom first.
+     * each running scene's timers and {@link Scene#update}, bottom first. Last, pushes the next scene the top scene
+     * {@link Scene#queue queued}, if any.
      */
     public void update(float delta) {
-        advanceTransition(GameTime.getRealDelta());
+        float realDelta = GameTime.getRealDelta();
+        advanceTransition(realDelta);
+        for (Scene scene : stack) scene.age += realDelta;
         followWindowSize();
         for (Scene scene : List.copyOf(stack)) {
             if (!scene.running || scene.manager != this) continue;
             scene.getTimers().update(delta);
             if (scene.running && scene.manager == this) scene.update(delta);
         }
+        pushQueued();
+    }
+
+    /**
+     * Pushes the next scene the top scene queued, unless a transition is playing. One a frame at most: the scene
+     * pushed is on top now, so the rest wait until it has closed.
+     */
+    private void pushQueued() {
+        Scene top = getTop();
+        if (top == null || active != null) return;
+        Scene.Queued next = top.pollQueued();
+        if (next == null) return;
+        if (next.scene().manager != null) {
+            log.warn("{} was queued but is already on a stack; skipped", next.scene().getClass().getName());
+            return;
+        }
+        push(next.scene(), next.transition());
     }
 
     /**
@@ -452,7 +481,7 @@ public class SceneManager {
         boolean release = action == GLFW.GLFW_RELEASE;
         boolean consumed = false;
         for (Scene scene : List.copyOf(stack).reversed()) {
-            if (scene.manager != this || (!release && !scene.running)) continue;
+            if (scene.manager != this || (!release && (!scene.running || !scene.isReady()))) continue;
             try {
                 consumed |= scene.onKey(key, action, mods);
             } catch (Throwable t) {

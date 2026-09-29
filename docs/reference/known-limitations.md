@@ -24,7 +24,12 @@ source. If you hit something not listed here, please add it.
   they are a [`ResizableContainer`](../containers/resizable-container.md).
 - **Contents do not reflow on resize,** except inside a `ResizableContainer`. Other containers keep their size.
   Resize them yourself from [`window.onResize`](../core/window.md#resize-event) if you want them to follow the window.
-- **One engine, one window per process.** Several engine helpers are static.
+  An [anchored](../core/element.md#anchoring) element keeps its place in a container that is resized, but not its size.
+- **One engine per process.** It can drive [several windows](../core/engine.md#several-windows), but they share one
+  render thread and one game clock, and one window's vsync and max-FPS settings pace them all (the first, or the one given to
+  `Engine.setPacingWindow`).
+- **The macOS system menu bar has one owner.** With several windows each showing a native
+  [menu bar](../input/menus.md), the first one that runs owns the system menu, whichever window has focus.
 - **No stop method on `Engine`.** `Engine.start` returns when the OS window closes. Call `window.close()` to close
   it from code.
 - **Callbacks run on the render thread.** To change the UI from another thread, post the work with
@@ -99,7 +104,8 @@ source. If you hit something not listed here, please add it.
 
 ## Input
 
-- **`onMouseClick` fires on press, not release,** for any mouse button. Only one listener runs per press: the
+- **`onMouseClick` fires on press, not release,** for any mouse button, unless the element
+  [clicks on release](../core/element.md#onmouseclick) as buttons do. Only one listener runs per press: the
   topmost element's, or the nearest ancestor's if the topmost has none. There is no way to let a press reach
   both a child and its container.
 - **One listener per hook.** `onMouseClick`, `onUpdate`, `onRender` and most `onXxx` callbacks replace the previous
@@ -129,6 +135,16 @@ source. If you hit something not listed here, please add it.
   turned. On screen, and for pixel-art textures, sprites side by side never leave gaps.
 - **Shaders are SkSL only.** GLSL, HLSL and Metal shaders can't be loaded directly; SkSL is close to GLSL, so most
   fragment shaders port by renaming the entry point and replacing texture reads with `eval`.
+- **Camera bounds hold the upright view.** A turned or shaking [camera](../graphics/camera.md#moving-it) can show a
+  little past `setBounds`, so draw the level a few units larger if that must never show.
+- **Tile maps are orthogonal only.** [`TileMap`](../graphics/tile-maps.md#loading) reads Tiled's square and
+  rectangular grids, not isometric, staggered or hexagonal maps, nor layers compressed with zstd or images embedded
+  in the file. Layer blend modes are ignored and text objects aren't drawn.
+- **Collision response is `Slide` only.** [`Slide.move`](../game/geometry.md#pushing-apart-and-sliding) moves one
+  shape among solid ones. There are no rigid bodies: nothing bounces, pushes other movers, stacks or rotates on
+  impact.
+- **Particles don't collide** with anything, and have no emitter that emits steadily over time: emit a few each
+  frame for a trail.
 - **Post effects on a turned camera are resampled.** Inside a turned `Camera`, `pushEffect`'s layer is drawn upright
   and turned afterwards, so its content is slightly softer than without the effect. Push effects outside the camera,
   in window coordinates, to avoid it.
@@ -137,7 +153,8 @@ source. If you hit something not listed here, please add it.
 
 - **Stretching children.** A layout can size itself to its children but cannot size children to itself (fill the
   width, share leftover space). Only `SplitContainer` and `TabContainer` size their panes.
-- **Reflow other than `ResizableContainer`.** There are no anchors or percent sizing for ordinary containers.
+- **Reflow other than `ResizableContainer`.** [Anchors](../core/element.md#anchoring) keep an element in place in
+  an ordinary container, but nothing sizes it by percent of the container.
 
 ## File dialogs
 

@@ -4,6 +4,7 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.SkiaImages;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.FilterTileMode;
 import org.jetbrains.skia.RuntimeEffect;
 import org.jetbrains.skia.RuntimeShaderBuilder;
@@ -56,7 +57,7 @@ import java.util.regex.Pattern;
  * Render thread only. An effect is not closed by the renderer; {@link #close()} it when it is no longer used, or leave
  * it to the garbage collector.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class ShaderEffect implements AutoCloseable {
     /**
      * The name of the child shader {@link Renderer#pushEffect} hands the drawing to.

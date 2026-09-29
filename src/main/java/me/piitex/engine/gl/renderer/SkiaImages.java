@@ -1,7 +1,7 @@
 package me.piitex.engine.gl.renderer;
 
 import me.piitex.engine.ui.color.Color;
-import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.*;
 
 import java.lang.invoke.MethodHandle;
@@ -15,7 +15,7 @@ import java.util.WeakHashMap;
  * {@link Renderer#pushTransform}, shared by every renderer that draws on a Skia {@link Canvas}. Not for use outside
  * renderer implementations. Render thread only.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class SkiaImages {
     /**
      * Blends neighbouring pixels when an image is drawn scaled. Skia's own default picks the nearest pixel, which
@@ -74,9 +74,10 @@ public final class SkiaImages {
     }
 
     public static void drawImageRegion(Canvas canvas, Image image, float srcX, float srcY, float srcWidth, float srcHeight,
-                                float x, float y, float width, float height, Color color, boolean smooth) {
+                                float x, float y, float width, float height, Color color, boolean smooth, float alpha) {
         if (image == null || !(srcWidth > 0) || !(srcHeight > 0) || !(width > 0) || !(height > 0)) return;
         int argb = color == null ? WHITE : color.toARGB();
+        if (alpha < 1f) argb = (Math.round((argb >>> 24) * Math.max(0f, alpha)) << 24) | (argb & 0x00FFFFFF);
         if ((argb >>> 24) == 0) return;
         try (Paint paint = new Paint()) {
             paint.setAntiAlias(false);
@@ -90,16 +91,17 @@ public final class SkiaImages {
         }
     }
 
-    public static void drawImageQuads(Canvas canvas, Image image, boolean smooth, float[] positions, float[] texCoords, int[] colors, int count) {
-        if (image == null || count <= 0) return;
+    public static void drawImageQuads(Canvas canvas, Image image, boolean smooth, float[] positions, float[] texCoords, int[] colors, int count, float alpha) {
+        if (image == null || count <= 0 || !(alpha > 0f)) return;
         if (smooth) {
-            drawSmoothQuads(canvas, image, positions, texCoords, colors, count);
+            drawSmoothQuads(canvas, image, positions, texCoords, colors, count, alpha);
             return;
         }
         Shader shader = pixelatedShader(image);
         try (Paint paint = new Paint()) {
             paint.setAntiAlias(false);
             paint.setShader(shader);
+            paint.setAlphaf(Math.min(1f, alpha));
             for (int first = 0; first < count; first += MAX_QUADS) {
                 int quads = Math.min(MAX_QUADS, count - first);
                 float[] pos = new float[quads * 8];
@@ -145,9 +147,10 @@ public final class SkiaImages {
      * otherwise pull in whatever lies next to it on the sheet, and drawVertices can't clamp per quad. On the GPU,
      * Skia still merges consecutive draws from one image.
      */
-    private static void drawSmoothQuads(Canvas canvas, Image image, float[] positions, float[] texCoords, int[] colors, int count) {
+    private static void drawSmoothQuads(Canvas canvas, Image image, float[] positions, float[] texCoords, int[] colors, int count, float alpha) {
         try (Paint paint = new Paint()) {
             paint.setAntiAlias(false);
+            paint.setAlphaf(Math.min(1f, alpha));
             int filterColor = WHITE;
             for (int q = 0; q < count; q++) {
                 int color = colors == null ? WHITE : colors[q];

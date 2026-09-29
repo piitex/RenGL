@@ -3,6 +3,7 @@ package me.piitex.engine.graphics;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.math.Rect;
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.Image;
 
 import java.util.Arrays;
@@ -38,7 +39,7 @@ import java.util.Comparator;
  * <p>
  * Not thread-safe. Use it on the render thread.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class SpriteBatch {
 
     /**

@@ -27,8 +27,8 @@ Font.setDefaultFont(null); // go back to the platform default
 `setDefaultFont` only affects widgets constructed **afterwards** that use the no-file constructors. It
 does not change widgets already built, and it never overrides a widget given its own font file.
 
-If you never set a default, the platform's default typeface is used (`Font.systemDefault()`). If the OS
-font manager cannot resolve one, a warning is printed to stderr and text can fail to draw. Shipping and setting a
+If you never set a default, the platform's default typeface is used (`Font.systemDefault()`: Helvetica on macOS).
+If the OS font manager cannot resolve one, a warning is printed to stderr and text can fail to draw. Shipping and setting a
 font of your own is the safe choice. The demo bundles `Roboto-Regular.ttf` in `src/main/resources`.
 
 ## Per-widget fonts
@@ -52,6 +52,7 @@ Cheap to call repeatedly with the same file, since the cache returns the same `T
 | `Font.getDefault()` | The default set with `setDefaultFont`, or `systemDefault()` |
 | `Font.setDefaultFont(File)` | Sets (or with `null`, clears) the default font file |
 | `Font.systemDefault()` | The platform default typeface. May return `null` (with a warning) if none resolves |
+| `Font.sized(size)` | A Skia `Font` of the default typeface at `size` points, for drawing text with the `Renderer` directly. Make it once, after `setDefaultFont`, not every frame |
 
 ## Sizing and metrics
 

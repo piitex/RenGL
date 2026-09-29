@@ -4,6 +4,7 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.math.Rect;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 /**
  * A {@link TextureRegion} placed in the world: where it is, how it is turned, scaled, mirrored and colored, and which
@@ -31,7 +32,7 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  * <p>
  * A sprite is not thread-safe. Change it and draw it on the render thread, in scene hooks.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class Sprite {
     private static final float[] scratchPositions = new float[8];
     private static final float[] scratchTexCoords = new float[8];

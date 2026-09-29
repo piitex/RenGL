@@ -2,6 +2,7 @@ package me.piitex.engine.scheduler;
 
 import me.piitex.engine.ui.animation.Easing;
 import me.piitex.engine.utils.flags.GeneratedClass;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -21,7 +22,7 @@ import java.util.function.Supplier;
  * For {@link me.piitex.engine.ui.Element elements}, the {@link me.piitex.engine.ui.animation.Transition transitions}
  * are usually the better fit; a tween is for any other value.
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
+@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class Tween extends Task implements Playable {
 
     /**

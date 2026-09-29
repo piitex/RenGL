@@ -1,4 +1,4 @@
-package me.piitex.engine.graphics;
+package me.piitex.engine.io;
 
 import me.piitex.engine.utils.flags.GeneratedClass;
 
@@ -8,11 +8,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A small JSON reader for {@link TextureAtlas}. Objects become {@link LinkedHashMap}s, keeping their key order,
- * arrays {@link List}s, numbers {@link Double}s, and the rest {@link String}, {@link Boolean} or null.
+ * A small JSON reader, as used by {@link me.piitex.engine.graphics.TextureAtlas} and
+ * {@link me.piitex.engine.tilemap.TileMap}. Objects become {@link LinkedHashMap}s, keeping their key order, arrays
+ * {@link List}s, numbers {@link Double}s, and the rest {@link String}, {@link Boolean} or null.
+ * <pre>{@code
+ * Map<?, ?> level = (Map<?, ?>) Json.parse(Files.readString(path));
+ * }</pre>
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
-final class Json {
+public final class Json {
     private final String text;
     private int at;
 
@@ -20,7 +23,12 @@ final class Json {
         this.text = text;
     }
 
-    static Object parse(String text) {
+    /**
+     * Reads one JSON value.
+     *
+     * @throws IllegalArgumentException if the text isn't valid JSON, giving the line and column
+     */
+    public static Object parse(String text) {
         Json json = new Json(text);
         json.skipSpace();
         Object value = json.value();

@@ -7,6 +7,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.lwjgl.system.MemoryUtil.NULL;
 
@@ -29,46 +30,76 @@ import static org.lwjgl.system.MemoryUtil.NULL;
  * {@link ImageLoader} make.
  */
 public final class CursorManager {
-    private static volatile long windowHandle = 0L;
     private static final Map<CursorMode, Long> cursorHandles = new EnumMap<>(CursorMode.class);
 
-    private static volatile CursorMode pendingMode = CursorMode.DEFAULT;
-    private static CursorMode lastAppliedMode = null; // null forces the very first pump() to actually apply DEFAULT
+    // Each window's cursor. request() goes to the selected one, the window the engine is processing.
+    private static final Map<Long, Slot> slots = new ConcurrentHashMap<>();
+    private static volatile Slot selected;
+
+    private static final class Slot {
+        final long windowHandle;
+        volatile CursorMode pendingMode = CursorMode.DEFAULT;
+        CursorMode lastAppliedMode = null; // main thread; null forces the very first pump() to actually apply DEFAULT
+
+        Slot(long windowHandle) {
+            this.windowHandle = windowHandle;
+        }
+    }
 
     private CursorManager() {
     }
 
     /**
-     * Main thread only. Call once, right after the GLFW window is created.
+     * Main thread only. Call once per window, right after the GLFW window is created. The first window attached is
+     * selected until {@link #select} says otherwise.
      */
     public static void attach(long windowHandle) {
-        CursorManager.windowHandle = windowHandle;
+        Slot slot = new Slot(windowHandle);
+        slots.put(windowHandle, slot);
+        if (selected == null) selected = slot;
     }
 
     /**
-     * Safe to call from any thread (typically the render thread, from hover detection): requests the OS cursor become {@code mode} on the next {@link #pump}. Null is treated as {@link CursorMode#DEFAULT}.
+     * Main thread only. Forgets a window that is being destroyed.
+     */
+    public static void detach(long windowHandle) {
+        Slot slot = slots.remove(windowHandle);
+        if (slot != null && selected == slot) selected = null;
+    }
+
+    /**
+     * Engine use, render thread: sends {@link #request} calls to this window's cursor until the next call.
+     */
+    public static void select(long windowHandle) {
+        Slot slot = slots.get(windowHandle);
+        if (slot != null) selected = slot;
+    }
+
+    /**
+     * Safe to call from any thread (typically the render thread, from hover detection): requests the OS cursor over the window being processed become {@code mode} on the next {@link #pump}. Null is treated as {@link CursorMode#DEFAULT}.
      */
     public static void request(CursorMode mode) {
-        pendingMode = mode == null ? CursorMode.DEFAULT : mode;
+        Slot slot = selected;
+        if (slot != null) slot.pendingMode = mode == null ? CursorMode.DEFAULT : mode;
     }
 
     /**
-     * Main thread only. Applies the most recently requested cursor if it changed. Call once per Engine main-loop iteration.
+     * Main thread only. Applies each window's most recently requested cursor if it changed. Call once per Engine main-loop iteration.
      */
     public static void pump() {
-        if (windowHandle == 0L) return;
+        for (Slot slot : slots.values()) {
+            CursorMode mode = slot.pendingMode;
+            if (mode == slot.lastAppliedMode) continue;
+            slot.lastAppliedMode = mode;
 
-        CursorMode mode = pendingMode;
-        if (mode == lastAppliedMode) return;
-        lastAppliedMode = mode;
+            if (mode == CursorMode.DEFAULT) {
+                GLFW.glfwSetCursor(slot.windowHandle, NULL); // NULL restores the platform's own default cursor
+                continue;
+            }
 
-        if (mode == CursorMode.DEFAULT) {
-            GLFW.glfwSetCursor(windowHandle, NULL); // NULL restores the platform's own default cursor
-            return;
+            long handle = cursorHandles.computeIfAbsent(mode, CursorManager::createStandardCursor);
+            GLFW.glfwSetCursor(slot.windowHandle, handle);
         }
-
-        long handle = cursorHandles.computeIfAbsent(mode, CursorManager::createStandardCursor);
-        GLFW.glfwSetCursor(windowHandle, handle);
     }
 
     private static long createStandardCursor(CursorMode mode) {
