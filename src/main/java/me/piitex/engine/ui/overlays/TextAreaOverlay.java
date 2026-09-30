@@ -442,6 +442,17 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     }
 
     /**
+     * False when this box has nothing to scroll in the wheel's direction (everything fits, or it is already at the
+     * top or bottom), so the wheel passes on to the enclosing scrollable, such as a form in a
+     * {@link me.piitex.engine.ui.scroll.ScrollContainer}, instead of being swallowed here.
+     */
+    @Override
+    public boolean canScroll(double deltaX, double deltaY) {
+        if (deltaY == 0) return false;
+        return deltaY > 0 ? scrollOffsetY > 0 : scrollOffsetY < getMaxScrollY();
+    }
+
+    /**
      * Mouse-wheel and trackpad scrolling. See {@link Scrollable}. The offset is negated
      * the same way {@link me.piitex.engine.ui.scroll.ScrollContainer#onScroll} negates
      * it, so a wheel gesture scrolls this box the same visual direction it would scroll

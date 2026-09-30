@@ -219,6 +219,14 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
     }
 
     /**
+     * Only a focused spinner takes the wheel; otherwise it passes on to the enclosing scrollable.
+     */
+    @Override
+    public boolean canScroll(double deltaX, double deltaY) {
+        return field.isFocused() && deltaY != 0;
+    }
+
+    /**
      * Wheel notches adjust the value while the field is focused; ignored otherwise.
      */
     @Override

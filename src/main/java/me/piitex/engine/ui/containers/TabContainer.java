@@ -679,6 +679,13 @@ public class TabContainer extends Layout {
         }
 
         @Override
+        public boolean canScroll(double deltaX, double deltaY) {
+            double delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
+            if (delta == 0) return false;
+            return delta > 0 ? scrollOffset > 0.5 : scrollOffset < maxScroll - 0.5;
+        }
+
+        @Override
         public void onScroll(double deltaX, double deltaY) {
             double delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
             scrollOffset = Math.max(0, Math.min(scrollOffset - delta * WHEEL_STEP, maxScroll));
