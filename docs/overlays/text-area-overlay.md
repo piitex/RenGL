@@ -68,7 +68,7 @@ Pasted newlines are preserved (CRLF and CR are normalized to `\n`).
 | Click and drag | Selects a range |
 | Double-click | Selects the word (or run of whitespace) |
 | **Triple-click** | Selects **all** the text |
-| Mouse wheel / trackpad | Scrolls vertically |
+| Mouse wheel / trackpad | Scrolls vertically. At the top or bottom (or when the text fits), the wheel passes on to the enclosing [`ScrollContainer`](../containers/scroll-container.md) |
 | Drag the scrollbar thumb | Scrolls |
 
 ## Layout

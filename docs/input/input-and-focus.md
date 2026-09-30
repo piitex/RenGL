@@ -148,12 +148,16 @@ An element that implements `Scrollable` receives wheel and trackpad input:
 ```java
 public interface Scrollable {
     void onScroll(double deltaX, double deltaY); // raw GLFW offsets; +y = up/away from the user
+    default boolean canScroll(double deltaX, double deltaY) { return true; } // would onScroll move anything?
 }
 ```
 
 The engine routes a scroll to the **innermost** `Scrollable` under the cursor, so a scrollable list nested inside
 another scrolls whichever the cursor is over. It fires whatever child is directly under the cursor. It is not
-limited to the scrollable's own empty background. [`ScrollContainer`](../containers/scroll-container.md), [`TextAreaOverlay`](../overlays/text-area-overlay.md), [`SpinnerOverlay`](../overlays/spinner-overlay.md)
+limited to the scrollable's own empty background. A `Scrollable` whose `canScroll` returns false for the event is
+skipped, so the wheel passes on to the next one outward. A `TextAreaOverlay` already at its top or bottom, for example,
+lets a form's `ScrollContainer` scroll on instead of trapping the wheel. Override `canScroll` in your own
+`Scrollable` if it can run out of room. [`ScrollContainer`](../containers/scroll-container.md), [`TextAreaOverlay`](../overlays/text-area-overlay.md), [`SpinnerOverlay`](../overlays/spinner-overlay.md)
 and the dropdown's open list implement it. While a [modal](../containers/modal-container.md) is up, scrolling is limited
 to it.
 
