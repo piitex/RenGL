@@ -362,11 +362,28 @@ public final class VulkanContext implements AutoCloseable {
                 .pApplicationName(stack.UTF8("RenGL"))
                 .pEngineName(stack.UTF8("RenGL"))
                 .apiVersion(requested);
+        // Skia draws triangle strips with primitive restart off, which Metal can't do; MoltenVK logs a warning for every
+        // such pipeline, which is a lot of console spam. Show only its errors, unless the user chose a level themselves.
+        boolean quietMoltenVk = available.contains("VK_EXT_layer_settings") && !validation
+                && System.getProperty("os.name", "").toLowerCase().contains("mac")
+                && System.getenv("MVK_CONFIG_LOG_LEVEL") == null && !Boolean.getBoolean("rengl.vulkan.mvkLog");
+        if (quietMoltenVk) extensions.add("VK_EXT_layer_settings");
+
         VkInstanceCreateInfo info = VkInstanceCreateInfo.calloc(stack).sType$Default()
                 .flags(portability ? VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR : 0)
                 .pApplicationInfo(app)
                 .ppEnabledExtensionNames(namesOf(stack, extensions));
         if (!layers.isEmpty()) info.ppEnabledLayerNames(namesOf(stack, layers));
+        if (quietMoltenVk) {
+            VkLayerSettingEXT.Buffer settings = VkLayerSettingEXT.calloc(1, stack);
+            settings.get(0)
+                    .pLayerName(stack.UTF8("MoltenVK"))
+                    .pSettingName(stack.UTF8("MVK_CONFIG_LOG_LEVEL"))
+                    .type(EXTLayerSettings.VK_LAYER_SETTING_TYPE_INT32_EXT)
+                    .valueCount(1)
+                    .pValues(stack.malloc(4).putInt(0, 1));
+            info.pNext(VkLayerSettingsCreateInfoEXT.calloc(stack).sType$Default().pSettings(settings));
+        }
 
         PointerBuffer pInstance = stack.mallocPointer(1);
         check(vkCreateInstance(info, null, pInstance), "create the Vulkan instance");

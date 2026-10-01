@@ -162,6 +162,7 @@ Vulkan debugging switches (system properties): `rengl.vulkan.validation=true` tu
 (on macOS also load the Vulkan loader with `-Dorg.lwjgl.vulkan.libname=/usr/local/lib/libvulkan.1.dylib`, since LWJGL
 otherwise loads MoltenVK directly and layers can't attach), `rengl.vulkan.gpu=<part of a GPU name>` picks a GPU, and
 `rengl.vulkan.dump=<file.png>` writes one frame read back from the GPU.
+On macOS the engine tells MoltenVK to log only errors, because Skia's pipelines make it print a harmless "Metal does not support disabling primitive restart" warning over and over. Set `MVK_CONFIG_LOG_LEVEL` yourself, or `-Drengl.vulkan.mvkLog=true`, to get MoltenVK's own logging back.
 
 `Renderer` calls are only legal on the render thread, between `begin()` and `end()`. That is
 already true inside `render`, `onRender` and `Transition.render`.
