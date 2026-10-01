@@ -46,6 +46,32 @@ public class VulkanSkikoRenderer extends SkiaRenderer {
         this.vulkan = vulkan;
     }
 
+    /**
+     * Whether the Skiko on the classpath was built with Vulkan support. Releases up to 0.150 have no
+     * {@code DirectContext.makeVulkan}, and calling it there is a NoSuchMethodError, so this looks for it by name first.
+     */
+    public static boolean skikoHasVulkan() {
+        try {
+            for (java.lang.reflect.Method method : Class.forName("org.jetbrains.skia.DirectContext$Companion").getMethods()) {
+                if (method.getName().equals("makeVulkan")) return true;
+            }
+        } catch (ClassNotFoundException | LinkageError ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * The jar the Skia classes were loaded from, for the message when Vulkan isn't there.
+     */
+    public static String skikoVersion() {
+        try {
+            java.security.CodeSource source = Font.class.getProtectionDomain().getCodeSource();
+            if (source != null) return java.nio.file.Path.of(source.getLocation().toURI()).getFileName().toString();
+        } catch (Exception ignored) {
+        }
+        return "unknown version";
+    }
+
     public void init() {
         log.info("Using Skiko Vulkan backend...");
         directContext = DirectContext.Companion.makeVulkan(

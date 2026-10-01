@@ -148,7 +148,7 @@ You never call these directly, but it helps to know what draws your UI:
   context.
 - **Vulkan** is opt-in on every platform (`VulkanSkikoRenderer`, with `VulkanContext` owning the instance, GPU,
   swapchain and synchronization). Ask for it with `WindowOptions.setRenderer(RenderAPI.VULKAN)`, or run any
-  app with `-Drengl.backend=vulkan`. A machine without a usable Vulkan GPU falls back to the platform default, and
+  app with `-Drengl.backend=vulkan`. A machine without a usable Vulkan GPU, or a classpath whose Skiko has no Vulkan support (see below), falls back to the platform default with a warning, and
   `Window.getRenderer()` tells you what you really got. On macOS it runs on MoltenVK, bundled with LWJGL.
 
 All three share one drawing implementation (`SkiaRenderer`); a backend only decides what the Skia canvas draws to.

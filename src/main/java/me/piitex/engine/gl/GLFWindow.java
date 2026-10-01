@@ -5,6 +5,7 @@ import me.piitex.engine.WindowOptions;
 import me.piitex.engine.WindowStyle;
 import me.piitex.engine.gl.renderer.SkikoRenderer;
 import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
+import me.piitex.engine.gl.renderer.vulkan.VulkanSkikoRenderer;
 import me.piitex.engine.input.InputManager;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
@@ -117,7 +118,11 @@ public class GLFWindow {
         }
 
         RenderAPI resolved = RenderAPI.resolve(requested);
-        if (resolved == RenderAPI.VULKAN && !VulkanContext.isSupported()) {
+        if (resolved == RenderAPI.VULKAN && !VulkanSkikoRenderer.skikoHasVulkan()) {
+            log.warn("Vulkan was requested, but the Skiko on the classpath ({}) has no Vulkan support; it needs a build that includes JetBrains/skiko#1201 (0.999.0-SNAPSHOT). Using {} instead.",
+                    VulkanSkikoRenderer.skikoVersion(), RenderAPI.platformDefault());
+            resolved = RenderAPI.platformDefault();
+        } else if (resolved == RenderAPI.VULKAN && !VulkanContext.isSupported()) {
             log.warn("Vulkan was requested but isn't usable here, using {} instead.", RenderAPI.platformDefault());
             resolved = RenderAPI.platformDefault();
         }
