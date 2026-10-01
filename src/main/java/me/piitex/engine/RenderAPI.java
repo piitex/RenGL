@@ -4,9 +4,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * The graphics API Skia draws a window with. Chosen per window with {@link WindowOptions#setRenderBackend}.
+ * The graphics API Skia draws a window with. Chosen per window with {@link WindowOptions#setRenderer}.
  */
-public enum RenderBackend {
+public enum RenderAPI {
     /**
      * The platform's default: Metal on macOS, OpenGL elsewhere. The {@code rengl.backend} system property
      * ({@code opengl}, {@code metal} or {@code vulkan}) overrides this, which is handy for trying a backend without
@@ -33,7 +33,7 @@ public enum RenderBackend {
     /**
      * Metal on macOS, OpenGL everywhere else.
      */
-    public static RenderBackend platformDefault() {
+    public static RenderAPI platformDefault() {
         return MAC ? METAL : OPENGL;
     }
 
@@ -42,8 +42,8 @@ public enum RenderBackend {
      * choice or the platform default, and a backend the platform can't have becomes the platform default. Whether
      * Vulkan has a usable GPU is not known here; the window checks that when it opens.
      */
-    public static RenderBackend resolve(RenderBackend requested) {
-        RenderBackend backend = requested == null ? AUTO : requested;
+    public static RenderAPI resolve(RenderAPI requested) {
+        RenderAPI backend = requested == null ? AUTO : requested;
         if (backend == AUTO) {
             String property = System.getProperty("rengl.backend");
             if (property != null && !property.isBlank()) {
