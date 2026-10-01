@@ -10,7 +10,7 @@ import static org.lwjgl.opengl.GL12C.GL_CLAMP_TO_EDGE;
 import static org.lwjgl.opengl.GL14C.GL_DEPTH_COMPONENT24;
 import static org.lwjgl.opengl.GL30C.*;
 
-final class GlRenderTarget implements RenderTarget {
+public final class GlRenderTarget implements RenderTarget {
     private final int width, height;
     private final boolean depth;
     int framebuffer;
@@ -96,7 +96,14 @@ final class GlRenderTarget implements RenderTarget {
     }
 
     /**
-     * The OpenGL texture the pass draws into, for wrapping in Skia.
+     * The OpenGL framebuffer object the pass draws into, for wrapping in Skia.
+     */
+    public int framebufferId() {
+        return framebuffer;
+    }
+
+    /**
+     * The OpenGL texture the pass draws into.
      */
     public int textureId() {
         return colorTexture;

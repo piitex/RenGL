@@ -1,5 +1,7 @@
 package me.piitex.engine.gl.renderer;
 
+import me.piitex.engine.RenderAPI;
+import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,7 +15,7 @@ import static org.lwjgl.glfw.GLFW.glfwGetWindowSize;
 import static org.lwjgl.opengl.GL11.*;
 
 @GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
-public class SkikoRenderer extends SkiaRenderer {
+public class SkikoRenderer extends SkiaRenderer implements GpuInterop {
     private static final Logger log = LogManager.getLogger(SkikoRenderer.class);
     private DirectContext directContext;
     private BackendRenderTarget renderTarget;
@@ -23,6 +25,8 @@ public class SkikoRenderer extends SkiaRenderer {
     private int logicalHeight;
     private float scaleX = 1.0f;
     private float scaleY = 1.0f;
+    private final java.util.List<Runnable> disposeListeners = new java.util.ArrayList<>();
+    private boolean disposed;
 
     public SkikoRenderer(long windowHandle) {
         log.info("Using Skiko OpenGL backend...");
@@ -35,6 +39,8 @@ public class SkikoRenderer extends SkiaRenderer {
      * can't be used afterwards.
      */
     public void dispose() {
+        disposed = true;
+        runDisposeListeners();
         if (surface != null) surface.close();
         if (renderTarget != null) renderTarget.close();
         if (directContext != null) {
@@ -46,6 +52,43 @@ public class SkikoRenderer extends SkiaRenderer {
         renderTarget = null;
         directContext = null;
         canvas = null;
+    }
+
+    @Override
+    public RenderAPI gpuApi() {
+        return RenderAPI.OPENGL;
+    }
+
+    @Override
+    public DirectContext skiaContext() {
+        return directContext;
+    }
+
+    @Override
+    public VulkanContext vulkanContext() {
+        return null;
+    }
+
+    @Override
+    public float pixelScale() {
+        return scaleX;
+    }
+
+    @Override
+    public void onDispose(Runnable cleanup) {
+        if (disposed) cleanup.run();
+        else disposeListeners.add(cleanup);
+    }
+
+    private void runDisposeListeners() {
+        for (Runnable cleanup : disposeListeners) {
+            try {
+                cleanup.run();
+            } catch (RuntimeException e) {
+                log.error("A GPU cleanup failed while closing the window", e);
+            }
+        }
+        disposeListeners.clear();
     }
 
     public void recreateSurface(long windowHandle) {
