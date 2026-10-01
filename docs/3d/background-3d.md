@@ -28,6 +28,7 @@ so the UI always draws over the 3D. See [One frame](../architecture.md#one-frame
 |---|---|
 | `new Background3D(Window, Content)` | The window is the one you will set it on: input is read from its `getInput()`. The content may be `null` and set later |
 | `setContent(Content)` / `getContent()` | What it shows. Takes effect next frame; the old content is disposed then |
+| `setSamples(int)` / `getSamples()` | Anti-aliasing, `4` by default; see [`Viewport3D`](viewport-3d.md#anti-aliasing) |
 | `setInputListener(InputListener)` | Where input goes. `null` (the default) means the content, if it implements `InputListener`, and nobody otherwise |
 | `setResolutionScale(float)` / `getResolutionScale()` | Picture pixels per window pixel, `0.1` to `4`, default `1`. `0.5` renders a quarter as many pixels and lets the UI layer scale it up |
 | `setEnabled(boolean)` / `isEnabled()` | Hides or shows the 3D without removing the background. A hidden background does not render, so it costs nothing |
@@ -51,8 +52,9 @@ A background has no place in the UI's hit testing, so `Background3D` is fed from
 | Press a key no text field, popup or modal took | Yes: `keyPressed` as press, repeat and release (releases always) |
 
 The listener gets the same calls a viewport sends, with positions in points from the window's top-left corner:
-a left-button `dragStarted`, `dragged` (with the movement), `dragEnded` when the button comes up, `scrolled`,
-`pointerMoved` and `keyPressed`.
+a left-button `dragStarted`, `dragged` (with the movement), `dragEnded` when the button comes up (followed by
+`clicked` if the mouse hardly moved, which is when to [pick](scenes.md#picking)), `scrolled`, `pointerMoved` and
+`keyPressed`.
 
 The important consequence: **a full-window root container with a click listener, or a draggable container under the
 mouse, takes the press and the background never sees it.** Give the root container that covers the window no click

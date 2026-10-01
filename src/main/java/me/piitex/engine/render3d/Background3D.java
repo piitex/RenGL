@@ -26,7 +26,8 @@ import org.lwjgl.glfw.GLFW;
  * {@link Viewport3D.InputListener} (set with {@link #setInputListener}, or the content itself if it implements one,
  * as {@code OrbitControls} does) gets:
  * <ul>
- *   <li>a left-button drag, from a press the UI didn't take until the button is released;</li>
+ *   <li>a left-button drag, from a press the UI didn't take until the button is released, and a click when the
+ *   mouse hardly moved in between;</li>
  *   <li>the wheel;</li>
  *   <li>the mouse moving ({@link Viewport3D.InputListener#pointerMoved}), which also fires while the mouse is over
  *   the UI and is never followed by {@code pointerExited};</li>
@@ -45,6 +46,8 @@ public class Background3D implements Background {
     private Viewport3D.InputListener input;
 
     private boolean dragging;
+    private float pressX, pressY;
+    private boolean pressMoved;
 
     /**
      * @param window the window it is a background of, whose {@link Window#getInput()} it reads. Set it with
@@ -91,6 +94,17 @@ public class Background3D implements Background {
 
     public float getResolutionScale() {
         return view.getResolutionScale();
+    }
+
+    /**
+     * Anti-aliasing samples per pixel: 4 by default, 1 for none; see {@link Viewport3D#setSamples}.
+     */
+    public void setSamples(int samples) {
+        view.setSamples(samples);
+    }
+
+    public int getSamples() {
+        return view.getSamples();
     }
 
     /**
@@ -158,17 +172,25 @@ public class Background3D implements Background {
             fed = true;
             dragging = false;
             listener.dragEnded(mouseX, mouseY);
+            if (!pressMoved && Math.hypot(mouseX - pressX, mouseY - pressY) <= Viewport3D.CLICK_SLOP) listener.clicked(mouseX, mouseY);
         } else if (!dragging && in.isMouseJustPressed(GLFW.GLFW_MOUSE_BUTTON_LEFT) && down) {
             fed = true;
             dragging = true;
+            pressX = mouseX;
+            pressY = mouseY;
+            pressMoved = false;
             listener.dragStarted(mouseX, mouseY);
         }
 
         float dx = in.getMouseDeltaX(), dy = in.getMouseDeltaY();
         if (dx != 0f || dy != 0f) {
             fed = true;
-            if (dragging) listener.dragged(mouseX, mouseY, dx, dy);
-            else if (in.isMouseInWindow()) listener.pointerMoved(mouseX, mouseY);
+            if (dragging) {
+                if (Math.hypot(mouseX - pressX, mouseY - pressY) > Viewport3D.CLICK_SLOP) pressMoved = true;
+                listener.dragged(mouseX, mouseY, dx, dy);
+            } else if (in.isMouseInWindow()) {
+                listener.pointerMoved(mouseX, mouseY);
+            }
         }
 
         float scrollX = in.getScrollX(), scrollY = in.getScrollY();

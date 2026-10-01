@@ -169,10 +169,15 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 **What the 3D renderer lacks**
 
-- **No shadows, skybox, anti-aliasing or mipmaps.** Edges are jagged (render at a higher
-  [resolution scale](../3d/viewport-3d.md#resolution) to hide it) and detailed textures shimmer at a distance.
-- **No normal or metallic-roughness maps, skeletal or glTF animation, ray picking or instancing.** Models with
+- **No shadows or skybox.**
+- **No anisotropic filtering.** Textures are mipmapped, which stops the shimmer, but a texture on a floor seen at a
+  grazing angle goes soft sooner than it would with it.
+- **No normal or metallic-roughness maps, skeletal or glTF animation or instancing.** Models with
   animations load, and the animations are logged and ignored.
+- **Picking has no spatial index.** [`Scene3D.pick`](../3d/scenes.md#picking) tests every triangle of the meshes whose
+  box the ray crosses, which is fine for a click or a hover and slow for a huge mesh tested many times a frame.
+- **Anti-aliasing is on by default and costs memory.** 4 samples hold about four times the colour and depth memory of
+  a plain target; [`setSamples`](../3d/viewport-3d.md#anti-aliasing) lowers it.
 - **Two light kinds, up to 8:** directional and point. Lighting is Lambert plus Blinn-Phong.
 - **Blended surfaces are sorted by their node's position,** so overlapping see-through objects can draw in the wrong order.
 

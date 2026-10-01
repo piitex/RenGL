@@ -44,13 +44,40 @@ public interface GpuDevice extends AutoCloseable {
     GpuBuffer createDynamicBuffer(BufferType type, long size);
 
     /**
-     * @param rgba tightly packed RGBA8, top row first, {@code width * height * 4} bytes
+     * A texture without mipmaps. See {@link #createTexture(int, int, ByteBuffer, boolean)}.
      */
-    GpuTexture createTexture(int width, int height, ByteBuffer rgba);
+    default GpuTexture createTexture(int width, int height, ByteBuffer rgba) {
+        return createTexture(width, height, rgba, false);
+    }
+
+    /**
+     * @param rgba    tightly packed RGBA8, top row first, {@code width * height * 4} bytes
+     * @param mipmaps also make the smaller versions of the picture and filter between them, so a texture seen from far
+     *                away doesn't shimmer. Costs a third more memory and a little time at creation
+     */
+    GpuTexture createTexture(int width, int height, ByteBuffer rgba, boolean mipmaps);
 
     Pipeline createPipeline(PipelineDesc desc);
 
-    RenderTarget createRenderTarget(int width, int height, boolean depth);
+    /**
+     * A target without multisampling. See {@link #createRenderTarget(int, int, boolean, int)}.
+     */
+    default RenderTarget createRenderTarget(int width, int height, boolean depth) {
+        return createRenderTarget(width, height, depth, 1);
+    }
+
+    /**
+     * @param samples anti-aliasing samples per pixel: 1 for none, or 2, 4 or 8. The GPU's limit ({@link #maxSamples()})
+     *                applies, and any other number is rounded down to a power of two. A pass draws into the
+     *                multisampled image and the result is resolved to an ordinary image when the pass ends, so
+     *                everything that reads the target, the UI layer included, sees one sample per pixel
+     */
+    RenderTarget createRenderTarget(int width, int height, boolean depth, int samples);
+
+    /**
+     * The most samples a render target can have on this GPU: at least 1, at most 8.
+     */
+    int maxSamples();
 
     /**
      * Starts drawing into the target, clearing it to the colour (and the depth buffer to the far plane).

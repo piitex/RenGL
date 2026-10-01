@@ -23,8 +23,11 @@ A `GpuDevice` is the layer's view of the GPU. You never create one: a viewport h
 | `createBuffer(BufferType, ByteBuffer)` | A buffer with fixed contents, copied from the data's position to its limit |
 | `createDynamicBuffer(BufferType, long size)` | A buffer you replace every frame with `update` |
 | `createTexture(width, height, ByteBuffer rgba)` | RGBA8, tightly packed, **top row first**. Sampled with linear filtering and repeat wrapping |
+| `createTexture(width, height, ByteBuffer rgba, boolean mipmaps)` | The same, and with `true` it also makes the smaller copies of the picture and filters between them (trilinear), so it doesn't shimmer when small on screen. A third more memory; `mipLevels()` tells how many there are |
 | `createPipeline(PipelineDesc)` | Shaders plus fixed-function state |
 | `createRenderTarget(width, height, boolean depth)` | An offscreen colour image, with a depth buffer if asked. A viewport makes the one you draw into; make your own for multi-pass effects |
+| `createRenderTarget(width, height, boolean depth, int samples)` | The same with anti-aliasing: `2`, `4` or `8` samples per pixel (any other number rounds down to a power of two, and `maxSamples()` caps it). See [Anti-aliasing](#anti-aliasing) |
+| `maxSamples()` | The most samples a target can have on this GPU, from 1 to 8 |
 | `frameNumber()` | The window's frame being drawn, the same for every viewport that draws in it. Compare it with the last one you saw to do something once per frame, however many viewports show your content |
 | `beginPass(RenderTarget, r, g, b, a)` | Starts drawing into a target, clearing it to the colour and the depth to the far plane |
 
@@ -89,6 +92,7 @@ methods return a changed copy:
 | `withDepthTest(boolean)` | Compare against and write to the depth buffer. Needs a target with depth |
 | `withCullBackFaces(boolean)` | Drop triangles that are clockwise on screen; counter-clockwise is the front |
 | `withBlend(boolean)` | Alpha-blend the fragment colour over the target |
+| `withFrontClockwise(boolean)` | Treat clockwise triangles as the front instead (default `false`). For geometry that was mirrored by a negative scale |
 
 `VertexLayout.of(formats...)` describes one interleaved vertex buffer of 32-bit floats. `VertexFormat` is `FLOAT1` to
 `FLOAT4`; the attribute's position in the list is its `layout(location = N)`, and `stride()` is computed.
@@ -106,6 +110,22 @@ methods return a changed copy:
 | `bindTexture(binding, GpuTexture)` | The sampler at that `binding` |
 | `draw(vertexCount)` / `drawIndexed(indexCount)` | Draw triangles |
 | `end()` | Finishes the pass and submits it. The target is ready for the UI layer afterwards |
+
+### Anti-aliasing
+
+A target made with `samples` greater than 1 is drawn into a multisampled image, and the pass resolves it into the
+ordinary image when it ends. You draw exactly as before; the same pipelines work with any sample count, and
+`readPixels()` and the UI layer see the finished single-sample picture. `RenderTarget.samples()` says what you got.
+
+```java nocompile
+RenderTarget target = device.createRenderTarget(512, 512, true, 4);
+try (RenderPass pass = device.beginPass(target, 0, 0, 0, 1)) {
+    // draw
+}   // resolved here
+```
+
+The viewport does this for its own target (see [`setSamples`](viewport-3d.md#anti-aliasing)); you only need it for
+targets you make yourself.
 
 ### Conventions
 
@@ -244,12 +264,13 @@ Run it with `-XstartOnFirstThread` on macOS. The same content works behind the w
 
 - Triangles only, with 32-bit indices, one vertex buffer per draw and no instancing.
 - Buffers and textures are created with fixed settings: textures are RGBA8 with linear filtering and repeat wrapping,
-  with **no mipmaps**; there is no way to pick a sampler or a texture format.
+  with mipmaps only if you ask for them; there is no way to pick a sampler (no anisotropic filtering, no clamping) or a
+  texture format.
 - On Vulkan, descriptor pools allow about 4096 sets per frame slot, so around **a thousand draws per frame** is the
   ceiling.
 - Uploads wait for the GPU, so creating large buffers or textures in the middle of a frame stalls it. Create them in
   `init`.
 - Both APIs are driven through one lowest-common-denominator interface, so there are no compute shaders, geometry
-  shaders or multi-sampled targets.
+  shaders, or sampling a multisampled target in a shader (it is resolved first).
 
 The reasons and the plans are in the [3D status document](../3d-status.md).

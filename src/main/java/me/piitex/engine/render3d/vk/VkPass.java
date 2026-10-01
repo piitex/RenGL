@@ -30,12 +30,13 @@ final class VkPass implements RenderPass {
             VkGpuDevice.check(vkBeginCommandBuffer(cmd, VkCommandBufferBeginInfo.calloc(stack).sType$Default()
                     .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)), "begin a command buffer");
 
-            VkClearValue.Buffer clears = VkClearValue.calloc(target.hasDepth() ? 2 : 1, stack);
+            // One clear value per attachment, by index; the resolve target of a multisampled pass is not cleared.
+            VkClearValue.Buffer clears = VkClearValue.calloc(target.attachmentCount(), stack);
             clears.get(0).color().float32(0, r).float32(1, g).float32(2, b).float32(3, a);
-            if (target.hasDepth()) clears.get(1).depthStencil().depth(1f).stencil(0);
+            if (target.hasDepth()) clears.get(target.depthAttachment()).depthStencil().depth(1f).stencil(0);
 
             VkRenderPassBeginInfo begin = VkRenderPassBeginInfo.calloc(stack).sType$Default()
-                    .renderPass(device.renderPass(target.hasDepth()))
+                    .renderPass(device.renderPass(target.hasDepth(), target.samples()))
                     .framebuffer(target.framebuffer)
                     .renderArea(area -> area.extent().width(target.width()).height(target.height()))
                     .pClearValues(clears);
@@ -54,7 +55,7 @@ final class VkPass implements RenderPass {
     public void bindPipeline(Pipeline pipeline) {
         this.pipeline = (VkPipe) pipeline;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                this.pipeline.forRenderPass(device.renderPass(target.hasDepth()), target.hasDepth()));
+                this.pipeline.forRenderPass(device.renderPass(target.hasDepth(), target.samples()), target.hasDepth(), target.samples()));
         descriptorsDirty = true;
     }
 

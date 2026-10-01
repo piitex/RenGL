@@ -11,13 +11,19 @@ import java.util.Objects;
  * @param depthTest      compare against and write to the depth buffer (needs a render target with depth)
  * @param cullBackFaces  drop triangles that are clockwise on screen; counter-clockwise is the front
  * @param blend          alpha-blend the fragment colour over the target
+ * @param frontClockwise treat clockwise triangles as the front instead, for geometry that was mirrored
  */
 public record PipelineDesc(String vertexSource, String fragmentSource, VertexLayout vertexLayout,
-                           boolean depthTest, boolean cullBackFaces, boolean blend) {
+                           boolean depthTest, boolean cullBackFaces, boolean blend, boolean frontClockwise) {
     public PipelineDesc {
         Objects.requireNonNull(vertexSource);
         Objects.requireNonNull(fragmentSource);
         Objects.requireNonNull(vertexLayout);
+    }
+
+    public PipelineDesc(String vertexSource, String fragmentSource, VertexLayout vertexLayout,
+                        boolean depthTest, boolean cullBackFaces, boolean blend) {
+        this(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, false);
     }
 
     public static PipelineDesc of(String vertexSource, String fragmentSource, VertexLayout layout) {
@@ -25,14 +31,18 @@ public record PipelineDesc(String vertexSource, String fragmentSource, VertexLay
     }
 
     public PipelineDesc withDepthTest(boolean depthTest) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise);
     }
 
     public PipelineDesc withCullBackFaces(boolean cull) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cull, blend);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cull, blend, frontClockwise);
     }
 
     public PipelineDesc withBlend(boolean blend) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise);
+    }
+
+    public PipelineDesc withFrontClockwise(boolean frontClockwise) {
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise);
     }
 }

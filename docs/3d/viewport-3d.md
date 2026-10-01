@@ -41,6 +41,7 @@ does not render and costs nothing.
 | `getContent()` | The current content |
 | `setInputListener(InputListener)` | Where [input](#input) goes. `null` (the default) means the content itself, if it implements `InputListener` |
 | `setResolutionScale(float)` / `getResolutionScale()` | See [Resolution](#resolution) |
+| `setSamples(int)` / `getSamples()` | Anti-aliasing, `4` by default. See [Anti-aliasing](#anti-aliasing) |
 | `setContinuous(boolean)` / `isContinuous()` | `true` (the default) draws every frame. See [Drawing only when needed](#drawing-only-when-needed) |
 | `requestRender()` | Asks for a redraw on the next frame, for a viewport that is not continuous. Safe from any thread |
 | `getPixelWidth()` / `getPixelHeight()` | The target's size in pixels, `0` before the first frame |
@@ -84,6 +85,7 @@ corner**, the same space as `getWidth()`.
 | `pointerMoved(x, y)` | The mouse moves over the viewport with no drag going on |
 | `pointerExited()` | The mouse leaves it |
 | `dragStarted(x, y)` · `dragged(x, y, dx, dy)` · `dragEnded(x, y)` | A left-button drag. `dx`/`dy` is the movement since the last call |
+| `clicked(x, y)` | A left-button click: the button came up without the mouse ever moving more than `Viewport3D.CLICK_SLOP` (4 points) from where it went down. It follows `dragEnded`. The place to [pick](scenes.md#picking) what was clicked |
 | `scrolled(dx, dy, x, y)` | The wheel or trackpad scrolls over it. `dy` is the usual zoom axis |
 | `keyPressed(key, action, mods)` | A key goes down, repeats or comes up while the viewport has focus. `action` is GLFW's `GLFW_PRESS`, `GLFW_REPEAT` or `GLFW_RELEASE` |
 | `charTyped(codepoint)` | A character is typed while it has focus |
@@ -123,7 +125,25 @@ view.setInputListener(new Viewport3D.InputListener() {
 |---|---|
 | `1` (default) | One rendered pixel per screen pixel |
 | `0.5` | A quarter as many pixels. The UI layer scales the picture up, so it is softer but cheaper |
-| `2` | Four times as many pixels: supersampling, which hides jagged edges because there is no [anti-aliasing](../reference/known-limitations.md#rendering-and-3d) yet |
+| `2` | Four times as many pixels: supersampling, the most thorough and the most expensive way to hide jagged edges. [Anti-aliasing](#anti-aliasing) is usually enough |
+
+## Anti-aliasing
+
+`setSamples(n)` sets how many samples per pixel the content is drawn with. It is **4 by default**, so edges are smooth
+without you asking.
+
+| Samples | Effect |
+|---|---|
+| `1` | Off. Jagged edges, the least memory and the fastest |
+| `2`, `4` (default), `8` | Smoother edges. Memory and fill time grow with the number |
+
+The GPU's limit applies and any other number rounds down to a power of two, so `setSamples(16)` on a GPU that tops out
+at 8 gives 8 (`getDevice().maxSamples()` tells you). The content draws into a multisampled target and the layer
+resolves it into an ordinary picture when the pass ends, so a [`Content`](#content) needs no changes and the UI sees one
+sample per pixel. Changing it remakes the target on the next frame.
+
+A content that makes its own [render targets](custom-rendering.md#the-gpu-device) chooses their samples when it creates
+them; only the target the viewport hands you follows `setSamples`.
 
 ## Several viewports and several windows
 
@@ -168,6 +188,7 @@ runs when the scene draws.
   (Metal, or the CPU renderer behind [snapshots](../core/snapshots.md)), it logs
   `A Viewport3D can only draw in a window running on OpenGL or Vulkan` once and leaves the rectangle empty. A
   snapshot of the UI therefore leaves a viewport out.
+- **Anti-aliasing costs memory.** 4 samples of a 4K viewport hold about four times the colour and depth memory of 1. For a background that fills a large window, or a weak GPU, lower it with `setSamples(2)` or `setSamples(1)`.
 - **It re-renders every frame by default,** even when nothing changed. For a still picture, use
   [`setContinuous(false)`](#drawing-only-when-needed).
 - **Don't keep the `GpuDevice` or its objects past `dispose`.** The device belongs to the window.

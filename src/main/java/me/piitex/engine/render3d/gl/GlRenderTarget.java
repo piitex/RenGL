@@ -11,16 +11,25 @@ import static org.lwjgl.opengl.GL14C.GL_DEPTH_COMPONENT24;
 import static org.lwjgl.opengl.GL30C.*;
 
 public final class GlRenderTarget implements RenderTarget {
-    private final int width, height;
+    private final int width, height, samples;
     private final boolean depth;
+    /**
+     * The framebuffer holding the finished picture: the texture. Skia wraps this one.
+     */
     int framebuffer;
+    /**
+     * The framebuffer a pass draws into. The same as {@link #framebuffer} unless the target is multisampled, when it
+     * holds multisampled renderbuffers that {@link #resolve()} copies into the texture.
+     */
+    int drawFramebuffer;
     int colorTexture;
-    private int depthBuffer;
+    private int depthBuffer, msaaColor;
 
-    GlRenderTarget(int width, int height, boolean depth) {
+    GlRenderTarget(int width, int height, boolean depth, int samples) {
         this.width = Math.max(1, width);
         this.height = Math.max(1, height);
         this.depth = depth;
+        this.samples = samples;
 
         int previous = glGetInteger(GL_FRAMEBUFFER_BINDING);
         colorTexture = glGenTextures();
@@ -38,11 +47,31 @@ public final class GlRenderTarget implements RenderTarget {
         if (depth) {
             depthBuffer = glGenRenderbuffers();
             glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, this.width, this.height);
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+            if (samples <= 1) {
+                glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, this.width, this.height);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+            }
             glBindRenderbuffer(GL_RENDERBUFFER, 0);
         }
         int status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        drawFramebuffer = framebuffer;
+        if (samples > 1) {
+            // The picture is drawn into multisampled renderbuffers and resolved into the texture when the pass ends.
+            // Colour and depth need the same sample count.
+            drawFramebuffer = glGenFramebuffers();
+            glBindFramebuffer(GL_FRAMEBUFFER, drawFramebuffer);
+            msaaColor = glGenRenderbuffers();
+            glBindRenderbuffer(GL_RENDERBUFFER, msaaColor);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, this.width, this.height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, msaaColor);
+            if (depth) {
+                glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
+                glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH_COMPONENT24, this.width, this.height);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+            }
+            glBindRenderbuffer(GL_RENDERBUFFER, 0);
+            if (status == GL_FRAMEBUFFER_COMPLETE) status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        }
         glBindFramebuffer(GL_FRAMEBUFFER, previous);
         if (status != GL_FRAMEBUFFER_COMPLETE) {
             close();
@@ -63,6 +92,21 @@ public final class GlRenderTarget implements RenderTarget {
     @Override
     public boolean hasDepth() {
         return depth;
+    }
+
+    @Override
+    public int samples() {
+        return samples;
+    }
+
+    /**
+     * Averages the multisampled picture into the texture. The caller keeps its own framebuffer binding.
+     */
+    void resolve() {
+        if (drawFramebuffer == framebuffer) return;
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, drawFramebuffer);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     }
 
     @Override
@@ -111,9 +155,11 @@ public final class GlRenderTarget implements RenderTarget {
 
     @Override
     public void close() {
+        if (drawFramebuffer != 0 && drawFramebuffer != framebuffer) glDeleteFramebuffers(drawFramebuffer);
         if (framebuffer != 0) glDeleteFramebuffers(framebuffer);
         if (colorTexture != 0) glDeleteTextures(colorTexture);
         if (depthBuffer != 0) glDeleteRenderbuffers(depthBuffer);
-        framebuffer = colorTexture = depthBuffer = 0;
+        if (msaaColor != 0) glDeleteRenderbuffers(msaaColor);
+        framebuffer = drawFramebuffer = colorTexture = depthBuffer = msaaColor = 0;
     }
 }

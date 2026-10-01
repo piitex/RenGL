@@ -74,10 +74,10 @@ final class VkPipe implements Pipeline {
     /**
      * The VkPipeline for drawing into the given kind of render pass, built the first time it is needed.
      */
-    long forRenderPass(long renderPass, boolean hasDepth) {
+    long forRenderPass(long renderPass, boolean hasDepth, int samples) {
         Long existing = pipelines.get(renderPass);
         if (existing != null) return existing;
-        long created = build(renderPass, hasDepth);
+        long created = build(renderPass, hasDepth, samples);
         pipelines.put(renderPass, created);
         return created;
     }
@@ -91,7 +91,7 @@ final class VkPipe implements Pipeline {
         };
     }
 
-    private long build(long renderPass, boolean hasDepth) {
+    private long build(long renderPass, boolean hasDepth, int samples) {
         try (MemoryStack stack = stackPush()) {
             VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(2, stack);
             stages.get(0).sType$Default().stage(VK_SHADER_STAGE_VERTEX_BIT).module(vertexModule).pName(stack.UTF8("main"));
@@ -117,10 +117,10 @@ final class VkPipe implements Pipeline {
             VkPipelineRasterizationStateCreateInfo raster = VkPipelineRasterizationStateCreateInfo.calloc(stack).sType$Default()
                     .polygonMode(VK_POLYGON_MODE_FILL)
                     .cullMode(desc.cullBackFaces() ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE)
-                    .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+                    .frontFace(desc.frontClockwise() ? VK_FRONT_FACE_CLOCKWISE : VK_FRONT_FACE_COUNTER_CLOCKWISE)
                     .lineWidth(1f);
             VkPipelineMultisampleStateCreateInfo multisample = VkPipelineMultisampleStateCreateInfo.calloc(stack).sType$Default()
-                    .rasterizationSamples(VK_SAMPLE_COUNT_1_BIT);
+                    .rasterizationSamples(samples); // VK_SAMPLE_COUNT_n_BIT is n
 
             boolean depth = desc.depthTest() && hasDepth;
             VkPipelineDepthStencilStateCreateInfo depthState = VkPipelineDepthStencilStateCreateInfo.calloc(stack).sType$Default()

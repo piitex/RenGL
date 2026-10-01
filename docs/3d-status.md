@@ -25,6 +25,7 @@ what is known to be wrong or missing, and what comes next. Last updated 2026-10-
 | 4 | `Viewport3D` element | Done | `c1574f9` |
 | 5 | Scene layer: meshes, materials, lights, camera, glTF/OBJ | Done | `013130e` |
 | 5b | `Scene3DDemo` | Done | `b9e7804` |
+| 6 | Ray picking, MSAA, mipmaps, `clicked` input event | Done, see below | see below |
 
 Step 3 was skipped on purpose at first ("I don't need a background mode right this second"), then built afterwards.
 
@@ -48,6 +49,14 @@ implement it. Metal and the CPU snapshot renderer do not, so a `Viewport3D` ther
 
 - Interfaces: `GpuDevice`, `GpuBuffer`, `GpuTexture`, `Pipeline` and `PipelineDesc`, `RenderTarget`, `RenderPass`,
   `VertexLayout`, `ShaderCompiler`. Implemented by `GlDevice` (GL 3.3 core) and `VkGpuDevice` (Vulkan 1.1, VMA, a frame ring of 2).
+- **MSAA:** `createRenderTarget(w, h, depth, samples)` and `maxSamples()` (1 to 8). A multisampled target keeps a single-sample
+  colour image that the pass resolves into, so Skia, `readPixels` and everything else still see one sample per pixel. On Vulkan
+  the render pass has a resolve attachment (render passes are made per sample count and depth) and pipelines are built per
+  render pass, so `PipelineDesc` has no sample count. On GL a second framebuffer holds multisampled renderbuffers and `end()`
+  blits them into the texture's framebuffer. `Viewport3D` and `Background3D` default to 4 samples (`setSamples`).
+- **Mipmaps:** `createTexture(w, h, rgba, mipmaps)`. Vulkan blits level to level (`vkCmdBlitImage`) and falls back to no mips if the
+  format can't blit; GL uses `glGenerateMipmap`. The scene layer turns them on for material textures. No anisotropic filtering.
+- `PipelineDesc.frontClockwise` (the scene uses it for mirrored nodes). The 6-argument constructor still exists.
 - Shaders are one GLSL 450 source. shaderc compiles it to SPIR-V for Vulkan. SPIRV-Cross turns the same SPIR-V into GLSL 330 for GL.
 - Conventions the code relies on: clip space is +Y up with depth 0..1 on both backends. GL targets have a bottom-left origin (`isBottomLeftOrigin()`), Vulkan ones top-left. `readPixels()` returns the top row first.
 - `Gpu3D` (package-private) makes one `GpuDevice` per window on the first draw of any viewport, and closes it when the window's renderer is disposed.
@@ -58,9 +67,11 @@ implement it. Metal and the CPU snapshot renderer do not, so a `Viewport3D` ther
   `width * pixelScale * resolutionScale`. The target is wrapped as a Skia render target, snapshotted, and drawn like an image.
 - An optional `InputListener` receives pointer, drag, scroll, key and focus events. Only the left button drags.
 - A `Content` can be shared by several viewports.
+- `InputListener.clicked(x, y)` fires after `dragEnded` when the mouse never left a 4 point radius of the press. `Background3D` does the same from the game `Input`.
 
 ### Scene layer (`render3d.scene`, `render3d.math`)
 
+- **Picking:** `Camera.screenRay`, `Scene3D.pick(x, y, w, h)`, `pick(Ray)`, `pickAll(Ray)`, `Node3D.setPickable`. A box test in scene space, then Moller-Trumbore against the mesh's CPU triangles in the mesh's own space (so non-uniform scale works). Back faces are skipped unless the material is double-sided, matching what is drawn. No spatial index. `Mat4.inverse()` and `math.Ray` are new.
 - `Scene3D` (root `Node3D`, `Camera`, up to 8 lights, ambient, background colour, update handler), `Node3D` (TRS, children, mesh and material), `Mesh` (cube, sphere, plane, computed normals), `Material` (colour, texture, specular, shininess, unlit, double-sided, blend, alpha cutoff), `Light` (directional, point), `OrbitControls`.
 - `Model.load` reads glTF, GLB, OBJ, FBX and Collada through LWJGL Assimp. It is CPU only, so it is safe on a background thread.
 - `SceneRenderer` (one per device): forward Lambert plus Blinn-Phong, opaque pass then blended nodes far to near, one dynamic uniform buffer per drawn node, mesh and texture caches evicted after 600 undrawn frames.
@@ -92,6 +103,10 @@ Run it with `-XstartOnFirstThread` on macOS. `-Drengl.demo.api=VULKAN|OPENGL` ov
 | `Background3DDemo` on Vulkan | A frame dump shows the 3D filling the window with the UI over it. The same validation layout error as the dump aid appears once after frame 90. Input forwarding was tested without a window by feeding the engine's `Input` press, move, wheel and key events: it produced hover, drag start, drag, wheel, drag end and key events as designed. Real mouse clicks were not driven. |
 | `Scene3DDemo` | Default scene dumped as a frame on Vulkan and checked by eye. The file dialog, sliders, check boxes, drag and scroll were **not** driven. Not run on GL. |
 | Update handler once per frame, `setContinuous(false)` | Vulkan, validation layer on: two viewports sharing a scene ran the handler 120 times in 2 s at 60 fps (once per frame); a non-continuous viewport drew 0 times while idle and once after `requestRender()`, and its picture stayed on screen. No validation errors. Not run on GL, and the input-triggered redraw path was not driven with a real mouse |
+| Picking | 22 headless checks (no GPU): cube and scaled+rotated box distances against a brute-force march, culled and double-sided from inside, a mirrored node, a sphere under a scaled parent, `setPickable`, visibility, `pickAll` order, `screenRay` at the centre and edges, the far clip, `Mat4.inverse`. Plus, on a real window, picking at each object's projected centre hit that object and the rendered pixel there had its colour |
+| MSAA, mipmaps | Vulkan (validation layer on, 0 errors) and GL 3.3, both on the Apple M5: a triangle rendered at 1, 2, 4, 8 and 16 (clamped to 8) samples gives 0 gray edge pixels at 1 and 129 to 278 above that; a 1-pixel checker at a grazing angle has a standard deviation of 40.8 without mips and 0.0 with. Zoomed crops show smooth sphere edges at 4 samples and stair-steps at 1. Skia composited the GL result correctly (upright, rounded corners) |
+| `clicked` | Viewport: click, drag, drag-and-return and a 5 point move. `Background3D` through the engine's `Input`: the same cases. Not driven with a real mouse |
+| Mirrored nodes | A cube with a negative X scale draws solid on both APIs |
 | Windows, Linux | **Never run.** |
 | Automated tests in the repo | **None** for the 3D layer. The harnesses live in a scratchpad. |
 | Code samples in the docs | The complete samples in [3D](3d/README.md), [Models](3d/models.md) and [Custom rendering](3d/custom-rendering.md) were compiled against the engine. The first-scene and spinning-triangle samples were run on Vulkan and dumped as frames |
@@ -113,7 +128,7 @@ Useful switches: `-Drengl.vulkan.validation=true` (with `-Dorg.lwjgl.vulkan.libn
 
 ### Missing 3D features
 
-No shadows, skybox, MSAA, mipmaps (textures shimmer at a distance), normal or metal-rough maps, skeletal animation or glTF animation (it is logged and ignored), picking or ray casting, or instancing.
+No shadows, skybox, anisotropic filtering, normal or metal-rough maps, skeletal animation or glTF animation (it is logged and ignored), a spatial index for picking, or instancing.
 
 ### `Background3D` specifics
 
@@ -134,9 +149,7 @@ No shadows, skybox, MSAA, mipmaps (textures shimmer at a distance), normal or me
 In suggested order:
 
 1. **In-repo smoke test** for the 3D layer. The repo has no test setup (no JUnit in the pom, an empty `src/test`), so this needs a decision first.
-2. **Ray picking** (screen to world ray, ray against bounds and triangles), so scenes can be clicked.
-3. **Image quality:** MSAA, mipmaps.
-4. **Content:** normal and metal-rough maps, shadows, a skybox, skeletal and glTF animation, instancing.
-5. **Platforms:** build Skiko with Vulkan for Windows and Linux, run the demo there, and move off the snapshot version when an official release has it.
-6. **Run the demos on OpenGL** on a platform where the engine really uses it (Windows or Linux), then the **macOS OpenGL fatal error**, when asked.
-7. **Your own list of other engine issues and changes**, which has not been sent yet.
+2. **Content:** normal and metal-rough maps, shadows, a skybox, skeletal and glTF animation, instancing. Anisotropic filtering needs the `samplerAnisotropy` device feature turned on in `VulkanContext`.
+3. **Platforms:** build Skiko with Vulkan for Windows and Linux, run the demo there, and move off the snapshot version when an official release has it.
+4. **Run the demos on OpenGL** on a platform where the engine really uses it (Windows or Linux), then the **macOS OpenGL fatal error**, when asked.
+5. **Your own list of other engine issues and changes**, which has not been sent yet.
