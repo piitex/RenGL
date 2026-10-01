@@ -32,6 +32,7 @@ public final class Node3D {
     private Mesh mesh;
     private Material material;
     private boolean visible = true;
+    private boolean pickable = true;
 
     public Node3D(String name) {
         this.name = name;
@@ -106,6 +107,19 @@ public final class Node3D {
      */
     public Node3D setVisible(boolean visible) {
         this.visible = visible;
+        return this;
+    }
+
+    public boolean isPickable() {
+        return pickable;
+    }
+
+    /**
+     * Whether {@link Scene3D#pick} can hit this node's own mesh (true by default). Its children are tested either way,
+     * so turn it off on a decoration that clicks should go through, such as a floor or a glass dome.
+     */
+    public Node3D setPickable(boolean pickable) {
+        this.pickable = pickable;
         return this;
     }
 
@@ -224,6 +238,7 @@ public final class Node3D {
         c.rotation = rotation;
         c.scale = scale;
         c.visible = visible;
+        c.pickable = pickable;
         for (Node3D child : children) c.add(child.copy());
         return c;
     }

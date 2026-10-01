@@ -41,7 +41,7 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_TILING_OPTIMAL;
  * <p>
  * Each frame the content draws into an offscreen {@link RenderTarget} the size of the viewport in pixels, which the
  * UI layer then draws as an image. The target is made again when the viewport is resized, so the picture stays sharp;
- * {@link #setResolutionScale} trades sharpness for speed. The 3D device is made the first time a viewport draws and is
+ * {@link #setResolutionScale} trades sharpness for speed, and {@link #setSamples} anti-aliases the edges (4 samples by default). The 3D device is made the first time a viewport draws and is
  * shared by every viewport in the window. A window with no viewport never starts it.
  * <p>
  * It needs a window that runs on OpenGL or Vulkan. On macOS that means asking for Vulkan with
@@ -131,6 +131,13 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
         }
 
         /**
+         * The left button went down and came up without the mouse moving more than {@link Viewport3D#CLICK_SLOP}
+         * points, so it was a click and not a drag. It follows {@link #dragEnded}. The place to pick what is under the mouse.
+         */
+        default void clicked(double x, double y) {
+        }
+
+        /**
          * The wheel or trackpad scrolled over the viewport. {@code y} is the usual zoom axis.
          */
         default void scrolled(double dx, double dy, double x, double y) {
@@ -150,9 +157,15 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
         }
     }
 
+    /**
+     * How far the mouse may move, in points, between a press and its release for the pair to count as a click.
+     */
+    public static final double CLICK_SLOP = 4;
+
     private Content content;
     private InputListener input;
     private float resolutionScale = 1f;
+    private volatile int samples = 4;
     private volatile boolean continuous = true;
     private volatile boolean renderRequested = true;
 
@@ -176,6 +189,8 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     private boolean dragging;
     private boolean pointerInside;
     private double lastDragX, lastDragY, lastHoverX = Double.NaN, lastHoverY = Double.NaN;
+    private double pressX, pressY;
+    private boolean pressMoved;
 
     public Viewport3D(double width, double height) {
         setWidth(width);
@@ -219,6 +234,22 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
 
     public float getResolutionScale() {
         return resolutionScale;
+    }
+
+    /**
+     * Anti-aliasing: how many samples per pixel the content is drawn with. 4 is the default, 1 turns it off and 2, 4 and
+     * 8 are the choices; the GPU's limit ({@link GpuDevice#maxSamples()}) applies, and another number is rounded down to
+     * a power of two. More smooths jagged edges at the cost of memory and fill time, which grow with the number. The
+     * content draws into a multisampled target and the result is resolved to an ordinary one, so a
+     * {@link Content} needs no changes.
+     */
+    public void setSamples(int samples) {
+        this.samples = Math.max(1, Math.min(16, samples));
+        renderRequested = true;
+    }
+
+    public int getSamples() {
+        return samples;
     }
 
     /**
@@ -331,9 +362,10 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
             activeContent.init(device);
             resized = true;
         }
-        if (target == null || target.width() != width || target.height() != height) {
+        int wantedSamples = Math.min(Integer.highestOneBit(samples), device.maxSamples());
+        if (target == null || target.width() != width || target.height() != height || target.samples() != wantedSamples) {
             if (target != null) target.close();
-            target = device.createRenderTarget(width, height, true);
+            target = device.createRenderTarget(width, height, true, wantedSamples);
             resized = true;
         }
         if (resized) {
@@ -441,8 +473,9 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     @Override
     public void onDragStart(double x, double y) {
         dragging = true;
-        lastDragX = localX(x);
-        lastDragY = localY(y);
+        pressMoved = false;
+        lastDragX = pressX = localX(x);
+        lastDragY = pressY = localY(y);
         InputListener listener = listener();
         if (listener != null) {
             renderRequested = true;
@@ -453,6 +486,7 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     @Override
     public void onDragUpdate(double x, double y) {
         double lx = localX(x), ly = localY(y);
+        if (Math.hypot(lx - pressX, ly - pressY) > CLICK_SLOP) pressMoved = true;
         InputListener listener = listener();
         if (listener != null) {
             renderRequested = true;
@@ -468,7 +502,9 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
         InputListener listener = listener();
         if (listener != null) {
             renderRequested = true;
-            listener.dragEnded(localX(x), localY(y));
+            double lx = localX(x), ly = localY(y);
+            listener.dragEnded(lx, ly);
+            if (!pressMoved && Math.hypot(lx - pressX, ly - pressY) <= CLICK_SLOP) listener.clicked(lx, ly);
         }
     }
 

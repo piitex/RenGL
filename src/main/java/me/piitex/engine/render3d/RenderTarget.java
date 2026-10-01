@@ -3,7 +3,7 @@ package me.piitex.engine.render3d;
 import java.nio.ByteBuffer;
 
 /**
- * An offscreen RGBA8 color image with an optional depth buffer: the thing a {@link RenderPass} draws into, and what the
+ * An offscreen RGBA8 color image with an optional depth buffer, optionally multisampled: the thing a {@link RenderPass} draws into, and what the
  * UI layer later draws as an image.
  */
 public interface RenderTarget extends AutoCloseable {
@@ -12,6 +12,11 @@ public interface RenderTarget extends AutoCloseable {
     int height();
 
     boolean hasDepth();
+
+    /**
+     * The samples per pixel it is drawn with; 1 when it is not multisampled.
+     */
+    int samples();
 
     /**
      * True when row 0 of the image in GPU memory is the bottom of the picture (OpenGL), false when it is the top

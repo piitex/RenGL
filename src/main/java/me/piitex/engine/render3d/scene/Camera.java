@@ -1,6 +1,7 @@
 package me.piitex.engine.render3d.scene;
 
 import me.piitex.engine.render3d.math.Mat4;
+import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
 
 /**
@@ -89,5 +90,25 @@ public final class Camera {
      */
     public Mat4 projection(float aspect) {
         return Mat4.perspective(fovY, aspect, near, far);
+    }
+
+    /**
+     * The ray from the camera through a point of the picture, for finding what is under the mouse. The point is in
+     * the same units as the picture's size, from its top-left corner, as the mouse positions of a
+     * {@link me.piitex.engine.render3d.Viewport3D.InputListener} are, so pass the viewport's own size.
+     *
+     * @param width  the picture's width, which with its height gives the aspect ratio the scene is drawn with
+     * @param height the picture's height
+     */
+    public Ray screenRay(double x, double y, double width, double height) {
+        double ndcX = 2.0 * x / Math.max(1e-6, width) - 1.0;
+        double ndcY = 1.0 - 2.0 * y / Math.max(1e-6, height);
+        double tan = Math.tan(fovY * 0.5);
+        double aspect = width / Math.max(1e-6, height);
+        Vec3 forward = target.sub(position).normalized();
+        Vec3 right = forward.cross(up).normalized();
+        Vec3 above = right.cross(forward);
+        Vec3 direction = forward.add(right.mul((float) (ndcX * tan * aspect))).add(above.mul((float) (ndcY * tan)));
+        return Ray.of(position, direction);
     }
 }

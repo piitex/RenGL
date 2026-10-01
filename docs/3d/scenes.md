@@ -41,6 +41,8 @@ Call `scene.lights().clear()` for different lighting.
 | `setAmbient(Color, float intensity)` | Light that reaches every surface from every side, so nothing is pitch black. Intensity `0` turns it off |
 | `getAmbient()` / `getAmbientIntensity()` | Read them back |
 | `setUpdateHandler(UpdateHandler)` | Runs once per frame before the scene is drawn, see below |
+| `pick(x, y, width, height)` | The nearest [`Hit`](#picking) under a point of the picture, or `null` |
+| `pick(Ray)` / `pickAll(Ray)` | The nearest hit along a ray, or all of them nearest first. See [Picking](#picking) |
 
 ### The update handler
 
@@ -79,6 +81,7 @@ arm.rotate(Vec3.UP, 0.5f);                      // the hand swings with it
 | `getParent()` / `getChildren()` | Read-only view of the children |
 | `setMesh` / `getMesh`, `setMaterial` / `getMaterial` | The drawable part. A node with a mesh and no material is drawn with a plain default material |
 | `setVisible(boolean)` / `isVisible()` | A node that isn't visible hides itself and everything under it |
+| `setPickable(boolean)` / `isPickable()` | Whether [picking](#picking) can hit this node's own mesh. On by default; its children are tested either way |
 | `setPosition(Vec3)` / `setPosition(x, y, z)` | Position in the parent's space |
 | `setRotation(Quat)` | Rotation in the parent's space |
 | `rotate(Vec3 axis, float radians)` | Turns by that much on top of the current rotation |
@@ -164,8 +167,9 @@ so it can be loaded on any thread and shared freely. Colours are sRGB, as in any
 | `new TextureData(width, height, byte[] rgba)` | From raw pixels, copied |
 | `width()` / `height()` | Its size |
 
-Textures are sampled with linear filtering and repeat wrapping, and have **no mipmaps yet**, so detailed textures
-shimmer when far away.
+Textures are sampled with linear filtering and repeat wrapping. The scene makes **mipmaps** for them when it uploads
+them (smaller copies of the picture that are blended between by distance), so a detailed texture stays smooth on a
+floor that runs off into the distance instead of shimmering. That costs a third more GPU memory per texture.
 
 ## Light
 
@@ -205,6 +209,7 @@ scene.camera().lookAt(new Vec3(0, 2, 6), new Vec3(0, 0.5f, 0)).setFovYDegrees(50
 | `setFovYDegrees(float)` | `60` | The vertical field of view, kept between 1 and 170 |
 | `setClip(near, far)` | `0.1`, `200` | What the camera sees lies between these distances. Needs `0 < near < far`. Keep the ratio modest: depth precision goes with it |
 | `view()` / `projection(aspect)` | | The matrices, if you are doing your own drawing |
+| `screenRay(x, y, width, height)` | | The `Ray` from the camera through a point of the picture. See [Picking](#picking) |
 
 ## Orbit controls
 
@@ -233,6 +238,95 @@ directly on the camera is overwritten then. Steer from code with the setters abo
 For another control scheme, write your own `InputListener` and move the camera in it (a first-person camera is a
 few lines of `Camera.lookAt`).
 
+## Picking
+
+To find what is under the mouse, cast a ray from the camera through the picture and see what it meets.
+`Scene3D.pick` does both, given a position and the picture's size, which for a viewport are the mouse position it hands
+its [listener](viewport-3d.md#input) (points from the top-left corner) and its own size:
+
+```java
+import me.piitex.engine.render3d.Viewport3D;
+import me.piitex.engine.render3d.scene.Hit;
+import me.piitex.engine.render3d.scene.Material;
+import me.piitex.engine.render3d.scene.Mesh;
+import me.piitex.engine.render3d.scene.Node3D;
+import me.piitex.engine.render3d.scene.OrbitControls;
+import me.piitex.engine.render3d.scene.Scene3D;
+import me.piitex.engine.ui.color.Color;
+
+public class ClickToSelect {
+    static Viewport3D build(Scene3D scene) {
+        Node3D cube = new Node3D("cube", Mesh.cube(1f), new Material(Color.CORNFLOWER_BLUE));
+        scene.add(cube);
+
+        Viewport3D view = new Viewport3D(640, 360);
+        view.setContent(scene);
+
+        OrbitControls orbit = new OrbitControls(scene.camera());
+        view.setInputListener(new Viewport3D.InputListener() {
+            @Override
+            public void dragged(double x, double y, double dx, double dy) {
+                orbit.dragged(x, y, dx, dy);
+            }
+
+            @Override
+            public void scrolled(double dx, double dy, double x, double y) {
+                orbit.scrolled(dx, dy, x, y);
+            }
+
+            @Override
+            public void clicked(double x, double y) {
+                Hit hit = scene.pick(x, y, view.getWidth(), view.getHeight());
+                if (hit != null) {
+                    hit.node().getMaterial().setColor(Color.ORANGE);   // highlight what was clicked
+                    System.out.println("Clicked " + hit.node().getName() + " at " + hit.point()
+                            + ", " + hit.distance() + " away");
+                }
+            }
+        });
+        return view;
+    }
+}
+```
+
+Use `clicked` rather than `dragStarted` for this: a press can be the start of an orbit, and `clicked` only fires when
+the mouse hardly moved between press and release. For hover, call `pick` from `pointerMoved`.
+
+A [`Hit`](#hit) holds the node, how far away it is, and where and which way the surface faces. `pick(x, y, w, h)` only
+finds what the camera can see (between its near and far planes); `pick(Ray)` has no limit, and `pickAll(Ray)` lists
+everything the ray crosses, one hit per node, nearest first, for picking through glass or listing what is stacked.
+
+| Method | Description |
+|---|---|
+| `scene.pick(x, y, width, height)` | The nearest hit under a point of the picture, or `null`. Uses the scene's camera |
+| `scene.pick(Ray)` | The nearest hit along a ray with no distance limit, or `null` |
+| `scene.pickAll(Ray)` | Every node the ray hits, nearest first |
+| `camera.screenRay(x, y, width, height)` | The ray itself, if you want to test it against something else |
+| `node.setPickable(false)` | Takes a node's own mesh out of picking, so clicks go through a floor, a glass dome or a decoration |
+
+### Hit
+
+| Field | Description |
+|---|---|
+| `node()` | The node whose mesh was hit |
+| `distance()` | How far along the ray. In scene units for a ray from `screenRay` |
+| `point()` | The hit position in scene space |
+| `normal()` | The unit normal of the triangle in scene space, on the side the ray came from. It is the flat face normal, not the smoothed one lighting uses |
+| `triangle()` | The triangle's index in the mesh, three entries of `Mesh.indices()` each |
+
+### How it decides
+
+- Only **visible** nodes with a mesh and `isPickable()` are tested. A node under an invisible parent is skipped.
+- Picking matches what is drawn: a triangle facing away from the ray is skipped, like back-face culling, unless the
+  node's material is [double-sided](#material). From inside a closed shape you hit nothing.
+- A mesh's box in scene space is tested first, then its triangles, so the cost grows with the triangles of the meshes
+  the ray passes through. A click or a hover is fine; thousands of rays per frame on a million-triangle model are not.
+  There is no spatial index yet.
+- It reads the mesh in memory, not the GPU, so it works on any thread while the scene isn't changing, and it hits
+  exactly the triangles that are drawn, scaled, rotated and moved by their nodes (a non-uniform scale is fine).
+- Alpha is ignored: a see-through material is hit like a solid one. Give it `setPickable(false)` or use `pickAll` to
+  look behind it.
+
 ## Math types
 
 In `me.piitex.engine.render3d.math`. They are small immutable value classes; every operation returns a new one.
@@ -241,8 +335,9 @@ In `me.piitex.engine.render3d.math`. They are small immutable value classes; eve
 |---|---|
 | `Vec3` | A record `(x, y, z)` with `add`, `sub`, `mul(float)`, `negate`, `dot`, `cross`, `length`, `normalized`, `lerp`, and the constants `ZERO`, `ONE`, `UP`, `X`, `Z` |
 | `Quat` | A unit quaternion: `fromAxisAngle(axis, radians)`, `fromEuler(pitch, yaw, roll)`, `mul`, `rotate(Vec3)`, `normalized`, `toMatrix`, and `IDENTITY`. `a.mul(b)` applies `b` first, then `a` |
-| `Mat4` | A column-major 4x4: `identity`, `translation`, `scale`, `compose(position, rotation, scale)`, `perspective`, `lookAt`, `mul`, `transformPoint`, `transformDirection`, `normalMatrix`, `decompose`, `toArray`, `put(ByteBuffer)` |
+| `Mat4` | A column-major 4x4: `identity`, `translation`, `scale`, `compose(position, rotation, scale)`, `perspective`, `lookAt`, `mul`, `inverse` (null when it can't be undone), `transformPoint`, `transformDirection`, `normalMatrix`, `decompose`, `toArray`, `put(ByteBuffer)` |
 | `Bounds` | An axis-aligned box `(min, max)` with `center`, `radius`, `union`, and `transform(Mat4)` |
+| `Ray` | A record `(origin, direction)` with `at(distance)` and `distanceTo(Bounds)` (-1 for a miss). `Ray.of(origin, direction)` normalizes the direction, so distances are in scene units |
 
 Projection matrices are Vulkan-style on both APIs (+Y up in clip space, depth `0` to `1`); see
 [Custom rendering](custom-rendering.md#conventions).
@@ -257,6 +352,7 @@ ones far to near, with one dynamic uniform buffer per drawn node. GPU meshes and
 ## Gotchas
 
 - **A node needs a mesh to draw anything.** A node with no mesh is only a group.
+- **Mirrored nodes work.** A negative scale (a model exported with a flipped axis) turns the triangles inside out, and the scene turns the culling around for it, so the model looks as it should.
 - **Loading and building never need the GPU**, so it is safe to build a big scene on a worker thread with
   [`Scheduler.async`](../core/scheduler.md) and add it from the result callback. The first frame that draws it will pause
   while it uploads (see [Known limitations](../reference/known-limitations.md#rendering-and-3d)).

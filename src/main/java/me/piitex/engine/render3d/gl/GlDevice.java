@@ -8,6 +8,7 @@ import java.nio.ByteBuffer;
 import java.util.function.LongSupplier;
 
 import static org.lwjgl.opengl.GL11C.*;
+import static org.lwjgl.opengl.GL30C.GL_MAX_SAMPLES;
 import static org.lwjgl.opengl.GL30C.glDeleteVertexArrays;
 import static org.lwjgl.opengl.GL30C.glGenVertexArrays;
 
@@ -22,6 +23,7 @@ public final class GlDevice implements GpuDevice {
     final int vertexArray;
     private final String name;
     private final LongSupplier frames;
+    private final int maxSamples;
 
     /**
      * @throws IllegalStateException when no OpenGL context is current or it is older than 3.3
@@ -35,6 +37,7 @@ public final class GlDevice implements GpuDevice {
         }
         name = glGetString(GL_RENDERER);
         vertexArray = glGenVertexArrays();
+        maxSamples = floorPowerOfTwo(Math.min(8, Math.max(1, glGetInteger(GL_MAX_SAMPLES))));
     }
 
     @Override
@@ -71,8 +74,8 @@ public final class GlDevice implements GpuDevice {
     }
 
     @Override
-    public GpuTexture createTexture(int width, int height, ByteBuffer rgba) {
-        return new GlTexture(width, height, rgba);
+    public GpuTexture createTexture(int width, int height, ByteBuffer rgba, boolean mipmaps) {
+        return new GlTexture(width, height, rgba, mipmaps);
     }
 
     @Override
@@ -81,8 +84,17 @@ public final class GlDevice implements GpuDevice {
     }
 
     @Override
-    public RenderTarget createRenderTarget(int width, int height, boolean depth) {
-        return new GlRenderTarget(width, height, depth);
+    public RenderTarget createRenderTarget(int width, int height, boolean depth, int samples) {
+        return new GlRenderTarget(width, height, depth, Math.min(floorPowerOfTwo(Math.max(1, samples)), maxSamples));
+    }
+
+    @Override
+    public int maxSamples() {
+        return maxSamples;
+    }
+
+    private static int floorPowerOfTwo(int n) {
+        return Integer.highestOneBit(Math.max(1, n));
     }
 
     @Override

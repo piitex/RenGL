@@ -120,6 +120,6 @@ path of the demos has not been run on Windows or Linux yet.
 
 ## Limits at a glance
 
-The scene layer is a small forward renderer. It has **no shadows, skybox, anti-aliasing, mipmaps, normal or
-metal-rough maps, animation, picking or instancing yet**, and about a thousand draws per frame is the ceiling on
-Vulkan. The full list, with the reasons, is in [Known limitations](../reference/known-limitations.md#rendering-and-3d).
+The scene layer is a small forward renderer. It has **no shadows, skybox, normal or metal-rough maps, animation or
+instancing yet**, and about a thousand draws per frame is the ceiling on Vulkan. Edges are anti-aliased (4 samples by
+default), textures are mipmapped, and nodes can be [picked](scenes.md#picking) with a ray. The full list, with the reasons, is in [Known limitations](../reference/known-limitations.md#rendering-and-3d).

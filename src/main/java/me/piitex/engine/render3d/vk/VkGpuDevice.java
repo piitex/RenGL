@@ -58,6 +58,10 @@ public final class VkGpuDevice implements GpuDevice {
     final int depthFormat;
     final int depthAspect;
     final long sampler;
+    /**
+     * Whether the colour format can be shrunk by {@code vkCmdBlitImage}, which is how mipmaps are made.
+     */
+    final boolean canBlitColor;
 
     private final String name;
     private final LongSupplier frames;
@@ -65,7 +69,8 @@ public final class VkGpuDevice implements GpuDevice {
     private final long[] commandPools = new long[FRAMES];
     final long[] descriptorPools = new long[FRAMES];
     private final long[] fences = new long[FRAMES];
-    private final long[] renderPasses = new long[2]; // [0] color only, [1] color + depth
+    private final java.util.Map<Integer, Long> renderPasses = new java.util.HashMap<>(); // by samples and depth
+    private final int maxSamples;
     private final ArrayDeque<Deferred> deferred = new ArrayDeque<>();
     private boolean closed;
 
@@ -88,6 +93,17 @@ public final class VkGpuDevice implements GpuDevice {
             depthFormat = pickDepthFormat(stack);
             depthAspect = depthFormat == VK_FORMAT_D32_SFLOAT ? VK_IMAGE_ASPECT_DEPTH_BIT
                     : VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+            VkFormatProperties colorProperties = VkFormatProperties.calloc(stack);
+            vkGetPhysicalDeviceFormatProperties(physical, COLOR_FORMAT, colorProperties);
+            int blitFeatures = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT
+                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+            canBlitColor = (colorProperties.optimalTilingFeatures() & blitFeatures) == blitFeatures;
+            VkPhysicalDeviceProperties properties = VkPhysicalDeviceProperties.calloc(stack);
+            vkGetPhysicalDeviceProperties(physical, properties);
+            int supported = properties.limits().framebufferColorSampleCounts() & properties.limits().framebufferDepthSampleCounts();
+            int most = 1;
+            for (int n = 2; n <= 8; n *= 2) if ((supported & n) != 0) most = n; // VK_SAMPLE_COUNT_n_BIT is n
+            maxSamples = most;
 
             VmaVulkanFunctions functions = VmaVulkanFunctions.calloc(stack).set(context.vkInstance(), device);
             VmaAllocatorCreateInfo info = VmaAllocatorCreateInfo.calloc(stack)
@@ -205,8 +221,8 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     @Override
-    public GpuTexture createTexture(int width, int height, ByteBuffer rgba) {
-        return new VkTex(this, width, height, rgba);
+    public GpuTexture createTexture(int width, int height, ByteBuffer rgba, boolean mipmaps) {
+        return new VkTex(this, width, height, rgba, mipmaps && canBlitColor);
     }
 
     @Override
@@ -215,8 +231,14 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     @Override
-    public RenderTarget createRenderTarget(int width, int height, boolean depth) {
-        return new VkTarget(this, width, height, depth);
+    public RenderTarget createRenderTarget(int width, int height, boolean depth, int samples) {
+        int wanted = Integer.highestOneBit(Math.max(1, samples));
+        return new VkTarget(this, width, height, depth, Math.min(wanted, maxSamples));
+    }
+
+    @Override
+    public int maxSamples() {
+        return maxSamples;
     }
 
     @Override
@@ -231,7 +253,8 @@ public final class VkGpuDevice implements GpuDevice {
         closed = true;
         vkDeviceWaitIdle(device);
         while (!deferred.isEmpty()) deferred.pollFirst().action.run();
-        for (long renderPass : renderPasses) if (renderPass != VK_NULL_HANDLE) vkDestroyRenderPass(device, renderPass, null);
+        for (long renderPass : renderPasses.values()) vkDestroyRenderPass(device, renderPass, null);
+        renderPasses.clear();
         vkDestroySampler(device, sampler, null);
         for (int i = 0; i < FRAMES; i++) {
             vkDestroyFence(device, fences[i], null);
@@ -305,11 +328,15 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     Alloc createImage(int width, int height, int format, int usage) {
+        return createImage(width, height, format, usage, 1, VK_SAMPLE_COUNT_1_BIT);
+    }
+
+    Alloc createImage(int width, int height, int format, int usage, int mipLevels, int samples) {
         try (MemoryStack stack = stackPush()) {
             VkImageCreateInfo info = VkImageCreateInfo.calloc(stack).sType$Default()
                     .imageType(VK_IMAGE_TYPE_2D).format(format)
                     .extent(e -> e.width(width).height(height).depth(1))
-                    .mipLevels(1).arrayLayers(1).samples(VK_SAMPLE_COUNT_1_BIT)
+                    .mipLevels(mipLevels).arrayLayers(1).samples(samples)
                     .tiling(VK_IMAGE_TILING_OPTIMAL).usage(usage).sharingMode(VK_SHARING_MODE_EXCLUSIVE)
                     .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
             VmaAllocationCreateInfo allocation = VmaAllocationCreateInfo.calloc(stack).usage(VMA_MEMORY_USAGE_AUTO);
@@ -321,10 +348,14 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     long createImageView(long image, int format, int aspect) {
+        return createImageView(image, format, aspect, 1);
+    }
+
+    long createImageView(long image, int format, int aspect, int levels) {
         try (MemoryStack stack = stackPush()) {
             VkImageViewCreateInfo info = VkImageViewCreateInfo.calloc(stack).sType$Default()
                     .image(image).viewType(VK_IMAGE_VIEW_TYPE_2D).format(format)
-                    .subresourceRange(r -> r.aspectMask(aspect).levelCount(1).layerCount(1));
+                    .subresourceRange(r -> r.aspectMask(aspect).levelCount(levels).layerCount(1));
             LongBuffer out = stack.mallocLong(1);
             check(vkCreateImageView(device, info, null, out), "create an image view");
             return out.get(0);
@@ -338,13 +369,18 @@ public final class VkGpuDevice implements GpuDevice {
 
     void barrier(VkCommandBuffer cmd, long image, int aspect, int oldLayout, int newLayout,
                  int srcStage, int dstStage, int srcAccess, int dstAccess) {
+        barrier(cmd, image, aspect, oldLayout, newLayout, srcStage, dstStage, srcAccess, dstAccess, 0, 1);
+    }
+
+    void barrier(VkCommandBuffer cmd, long image, int aspect, int oldLayout, int newLayout,
+                 int srcStage, int dstStage, int srcAccess, int dstAccess, int baseMip, int levels) {
         try (MemoryStack stack = stackPush()) {
             VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
                     .srcAccessMask(srcAccess).dstAccessMask(dstAccess)
                     .oldLayout(oldLayout).newLayout(newLayout)
                     .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED).dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
                     .image(image)
-                    .subresourceRange(r -> r.aspectMask(aspect).levelCount(1).layerCount(1));
+                    .subresourceRange(r -> r.aspectMask(aspect).baseMipLevel(baseMip).levelCount(levels).layerCount(1));
             vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, null, null, barrier);
         }
     }
@@ -353,21 +389,37 @@ public final class VkGpuDevice implements GpuDevice {
      * The render pass every target of this kind is drawn with. It clears on load, and leaves the colour image in
      * {@code COLOR_ATTACHMENT_OPTIMAL}: the layout the Skia wrapper declares. It starts from {@code UNDEFINED}, which is
      * how it takes the image back from Skia, which leaves it in {@code TRANSFER_SRC_OPTIMAL}.
+     * <p>
+     * With more than one sample the attachments are the multisampled colour (0), the single-sample colour it resolves
+     * into (1) and the multisampled depth (2). Without, they are the colour (0) and the depth (1). The multisampled
+     * images are only ever written within the pass, so their contents are not kept.
      */
-    long renderPass(boolean depth) {
-        int index = depth ? 1 : 0;
-        if (renderPasses[index] != VK_NULL_HANDLE) return renderPasses[index];
+    long renderPass(boolean depth, int samples) {
+        int key = samples * 2 + (depth ? 1 : 0);
+        Long existing = renderPasses.get(key);
+        if (existing != null) return existing;
+        boolean multisampled = samples > 1;
+        int sampleBit = samples; // VK_SAMPLE_COUNT_n_BIT is n
         try (MemoryStack stack = stackPush()) {
-            int count = depth ? 2 : 1;
+            int count = (multisampled ? 2 : 1) + (depth ? 1 : 0);
+            int depthIndex = multisampled ? 2 : 1;
             VkAttachmentDescription.Buffer attachments = VkAttachmentDescription.calloc(count, stack);
             attachments.get(0)
-                    .format(COLOR_FORMAT).samples(VK_SAMPLE_COUNT_1_BIT)
-                    .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR).storeOp(VK_ATTACHMENT_STORE_OP_STORE)
+                    .format(COLOR_FORMAT).samples(sampleBit)
+                    .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
+                    .storeOp(multisampled ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE)
                     .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
                     .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED).finalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            if (depth) {
+            if (multisampled) {
                 attachments.get(1)
-                        .format(depthFormat).samples(VK_SAMPLE_COUNT_1_BIT)
+                        .format(COLOR_FORMAT).samples(VK_SAMPLE_COUNT_1_BIT)
+                        .loadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).storeOp(VK_ATTACHMENT_STORE_OP_STORE)
+                        .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED).finalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            }
+            if (depth) {
+                attachments.get(depthIndex)
+                        .format(depthFormat).samples(sampleBit)
                         .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR).storeOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
                         .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
                         .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
@@ -378,9 +430,13 @@ public final class VkGpuDevice implements GpuDevice {
             VkSubpassDescription.Buffer subpass = VkSubpassDescription.calloc(1, stack)
                     .pipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS)
                     .colorAttachmentCount(1).pColorAttachments(color);
+            if (multisampled) {
+                subpass.pResolveAttachments(VkAttachmentReference.calloc(1, stack)
+                        .attachment(1).layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL));
+            }
             if (depth) {
                 subpass.pDepthStencilAttachment(VkAttachmentReference.calloc(stack)
-                        .attachment(1).layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL));
+                        .attachment(depthIndex).layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL));
             }
             int attachmentStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
                     | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
@@ -393,7 +449,8 @@ public final class VkGpuDevice implements GpuDevice {
                     .srcAccessMask(VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_SHADER_READ_BIT
                             | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
                     .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-            // Our colour writes are visible to whoever copies or samples the image next.
+            // Our colour writes (and the resolve, which happens at the same stage) are visible to whoever copies or
+            // samples the image next.
             dependencies.get(1)
                     .srcSubpass(0).dstSubpass(VK_SUBPASS_EXTERNAL)
                     .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
@@ -405,8 +462,8 @@ public final class VkGpuDevice implements GpuDevice {
                     .pAttachments(attachments).pSubpasses(subpass).pDependencies(dependencies);
             LongBuffer out = stack.mallocLong(1);
             check(vkCreateRenderPass(device, info, null, out), "create a render pass");
-            renderPasses[index] = out.get(0);
-            return renderPasses[index];
+            renderPasses.put(key, out.get(0));
+            return out.get(0);
         }
     }
 

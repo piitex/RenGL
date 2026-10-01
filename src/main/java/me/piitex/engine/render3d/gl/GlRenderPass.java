@@ -28,7 +28,7 @@ final class GlRenderPass implements RenderPass {
         previousFramebuffer = glGetInteger(GL_FRAMEBUFFER_BINDING);
         glGetIntegerv(GL_VIEWPORT, previousViewport);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, target.framebuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, target.drawFramebuffer);
         glViewport(0, 0, target.width(), target.height());
         // Skia shares this context and leaves its own state behind; take back what a pass depends on.
         glDisable(GL_SCISSOR_TEST);
@@ -60,7 +60,7 @@ final class GlRenderPass implements RenderPass {
         if (desc.cullBackFaces()) {
             glEnable(GL_CULL_FACE);
             glCullFace(GL_BACK);
-            glFrontFace(GL_CCW);
+            glFrontFace(desc.frontClockwise() ? GL_CW : GL_CCW);
         } else {
             glDisable(GL_CULL_FACE);
         }
@@ -134,6 +134,10 @@ final class GlRenderPass implements RenderPass {
     public void end() {
         if (ended) return;
         ended = true;
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_FRAMEBUFFER_SRGB);
+        glColorMask(true, true, true, true);
+        target.resolve();
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         glDisable(GL_BLEND);

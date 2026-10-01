@@ -3,6 +3,8 @@ package me.piitex.engine.render3d.scene;
 import me.piitex.engine.render3d.GpuDevice;
 import me.piitex.engine.render3d.RenderTarget;
 import me.piitex.engine.render3d.Viewport3D;
+import me.piitex.engine.render3d.math.Mat4;
+import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.ui.color.Color;
 
@@ -23,8 +25,8 @@ import java.util.Map;
  * container.addElement(view);
  * </pre>
  * and models come from {@link Model#load}. Everything is drawn with one forward renderer: Lambert and Blinn-Phong
- * lighting, textures, alpha blending, depth testing and back-face culling. There are no shadows, skybox,
- * anti-aliasing or animation yet.
+ * lighting, mipmapped textures, alpha blending, depth testing and back-face culling, and the viewport anti-aliases the
+ * edges. There are no shadows, skybox or animation yet. {@link #pick} finds what is under a point of the picture.
  * <p>
  * A new scene has a soft ambient light and one directional light, so the first thing you add is visible; clear
  * {@link #lights()} for different lighting.
@@ -124,6 +126,47 @@ public class Scene3D implements Viewport3D.Content {
         this.ambient = color;
         this.ambientIntensity = intensity;
         return this;
+    }
+
+    /**
+     * The nearest thing the ray hits, or null. Only visible nodes with a mesh are tested, and a triangle that faces away
+     * from the ray is skipped unless its material is double-sided, so a click goes through what you can't see. A node
+     * is skipped when {@link Node3D#setPickable} is off.
+     * <p>
+     * Call it from the render thread or while the scene isn't drawing, as with any change to the scene. The cost grows
+     * with the triangles of the meshes the ray passes through, so it suits a click or a hover, not thousands of rays
+     * per frame.
+     */
+    public Hit pick(Ray ray) {
+        List<Hit> hits = pickAll(ray);
+        return hits.isEmpty() ? null : hits.get(0);
+    }
+
+    /**
+     * What is under a point of the picture, using the camera: {@code pick(camera().screenRay(...))}, limited to what the
+     * camera can see. Pass a viewport's mouse position and size, in points from its top-left corner:
+     * <pre>
+     * public void clicked(double x, double y) {
+     *     Hit hit = scene.pick(x, y, view.getWidth(), view.getHeight());
+     * }
+     * </pre>
+     */
+    public Hit pick(double x, double y, double width, double height) {
+        List<Hit> hits = new ArrayList<>();
+        Picking.cast(root, Mat4.identity(), camera.screenRay(x, y, width, height), camera.getFar(), hits);
+        hits.sort((a, b) -> Float.compare(a.distance(), b.distance()));
+        return hits.isEmpty() ? null : hits.get(0);
+    }
+
+    /**
+     * Everything the ray hits, one {@link Hit} per node (its nearest), nearest first. For picking through glass or
+     * listing what is stacked under the mouse.
+     */
+    public List<Hit> pickAll(Ray ray) {
+        List<Hit> hits = new ArrayList<>();
+        Picking.cast(root, Mat4.identity(), ray, Float.POSITIVE_INFINITY, hits);
+        hits.sort((a, b) -> Float.compare(a.distance(), b.distance()));
+        return hits;
     }
 
     public Scene3D setUpdateHandler(UpdateHandler updateHandler) {

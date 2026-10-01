@@ -137,7 +137,7 @@ final class SceneRenderer {
         }
     }
 
-    private record Draw(Node3D node, Mesh mesh, Material material, Mat4 world, float distance) {
+    private record Draw(Node3D node, Mesh mesh, Material material, Mat4 world, float distance, boolean mirrored) {
     }
 
     private final GpuDevice device;
@@ -159,13 +159,13 @@ final class SceneRenderer {
         white.put((byte) 255).put((byte) 255).put((byte) 255).put((byte) 255).flip();
         whiteTexture = device.createTexture(1, 1, white);
         MemoryUtil.memFree(white);
-        pipeline(false, false); // the common one, so a broken shader shows up at init instead of mid-frame
+        pipeline(false, false, false); // the common one, so a broken shader shows up at init instead of mid-frame
     }
 
-    private Pipeline pipeline(boolean cull, boolean blend) {
-        int key = (cull ? 1 : 0) | (blend ? 2 : 0);
+    private Pipeline pipeline(boolean cull, boolean blend, boolean mirrored) {
+        int key = (cull ? 1 : 0) | (blend ? 2 : 0) | (mirrored ? 4 : 0);
         return pipelines.computeIfAbsent(key, k -> device.createPipeline(
-                new PipelineDesc(VERTEX, FRAGMENT, layout, true, cull, blend)));
+                new PipelineDesc(VERTEX, FRAGMENT, layout, true, cull, blend, mirrored)));
     }
 
     void render(Scene3D scene, RenderTarget target) {
@@ -196,9 +196,9 @@ final class SceneRenderer {
                     Material material = draw.material;
                     boolean cull = !material.isDoubleSided();
                     boolean blend = material.isBlend();
-                    int wanted = (cull ? 1 : 0) | (blend ? 2 : 0);
+                    int wanted = (cull ? 1 : 0) | (blend ? 2 : 0) | (draw.mirrored ? 4 : 0);
                     if (wanted != key) {
-                        pass.bindPipeline(pipeline(cull, blend));
+                        pass.bindPipeline(pipeline(cull, blend, draw.mirrored));
                         pass.bindUniformBuffer(0, frameBuffer);
                         key = wanted;
                     }
@@ -220,7 +220,10 @@ final class SceneRenderer {
         if (mesh != null) {
             Material material = node.getMaterial() != null ? node.getMaterial() : DEFAULT_MATERIAL;
             Vec3 origin = world.transformPoint(Vec3.ZERO);
-            Draw draw = new Draw(node, mesh, material, world, origin.sub(eye).length());
+            // A mirrored node (negative scale) turns its triangles around, so what was the front is clockwise on screen.
+            boolean mirrored = world.transformDirection(Vec3.X).cross(world.transformDirection(Vec3.UP))
+                    .dot(world.transformDirection(Vec3.Z)) < 0f;
+            Draw draw = new Draw(node, mesh, material, world, origin.sub(eye).length(), mirrored);
             (material.isBlend() ? blended : opaque).add(draw);
         }
         for (Node3D child : node.getChildren()) collect(child, world, eye, opaque, blended);
@@ -307,7 +310,7 @@ final class SceneRenderer {
         if (image == null) {
             ByteBuffer pixels = data.toBuffer();
             try {
-                image = new GpuImage(device.createTexture(data.width(), data.height(), pixels));
+                image = new GpuImage(device.createTexture(data.width(), data.height(), pixels, true));
             } finally {
                 MemoryUtil.memFree(pixels);
             }
