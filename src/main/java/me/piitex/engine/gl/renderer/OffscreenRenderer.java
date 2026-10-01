@@ -1,5 +1,6 @@
 package me.piitex.engine.gl.renderer;
 
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.GradientUtil;
@@ -189,7 +190,7 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
 
         // drawString's y is the baseline, not the top, so shift down by the ascent.
         // Skia reports ascent as negative, so subtracting it moves down.
-        FontMetrics metrics = font.getMetrics();
+        FontMetricsCompat metrics = FontMetricsCompat.of(font);
         float baselineY = y - metrics.getAscent();
 
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {

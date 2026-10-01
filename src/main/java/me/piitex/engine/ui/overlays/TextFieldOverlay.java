@@ -17,7 +17,7 @@ import me.piitex.engine.ui.text.TextUndoHistory.EditKind;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import me.piitex.engine.ui.theme.Themeable;
-import org.jetbrains.skia.FontMetrics;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import org.jetbrains.skia.Typeface;
 import org.lwjgl.glfw.GLFW;
 
@@ -930,7 +930,7 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         super.render(renderer);
 
         org.jetbrains.skia.Font font = getOrBuildFont();
-        FontMetrics metrics = font.getMetrics();
+        FontMetricsCompat metrics = FontMetricsCompat.of(font);
         float textHeight = -metrics.getAscent() + metrics.getDescent();
 
         float prefixWidth = prefixWidth();

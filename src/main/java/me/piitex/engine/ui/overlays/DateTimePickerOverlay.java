@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
@@ -389,7 +390,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         float icon = Math.max(12f, Math.min(h * 0.5f, 18f));
         org.jetbrains.skia.Font f = getFont();
         String text = getDisplayText();
-        float textH = f.getMetrics().getHeight();
+        float textH = FontMetricsCompat.of(f).getHeight();
 
         renderer.pushClip(x, y, w - icon - 2 * pad, h);
         String shown = text != null ? text : placeholder;
@@ -703,7 +704,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             DateTimePickerOverlay owner = DateTimePickerOverlay.this;
             float ax = (float) getX(), ay = (float) getY();
             org.jetbrains.skia.Font f = owner.getFont();
-            float textH = f.getMetrics().getHeight();
+            float textH = FontMetricsCompat.of(f).getHeight();
             Color text = owner.textColor.get(), dim = owner.placeholderColor.get();
             Color hoverFill = new Color(owner.selectionColor.get().getR(), owner.selectionColor.get().getG(),
                     owner.selectionColor.get().getB(), owner.selectionColor.get().getA() * 0.5f);
@@ -765,7 +766,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                 LocalTime t = shownTime();
                 boolean unset = time == null;
                 int[] hover = mouseOn ? timeHit(mx, my) : null;
-                float bigH = bigFont.getMetrics().getHeight();
+                float bigH = FontMetricsCompat.of(bigFont).getHeight();
 
                 for (int c = 0; c < colCount(); c++) {
                     float cx = ax + colX(c), cy = ay + timeY;

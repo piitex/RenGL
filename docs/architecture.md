@@ -146,6 +146,22 @@ You never call these directly, but it helps to know what draws your UI:
 - **OpenGL 3.3 core** backs Skia on Windows and Linux (`SkikoRenderer`).
 - **Metal** backs Skia on macOS (`MetalSkikoRenderer`). macOS windows are created without an OpenGL
   context.
+- **Vulkan** is opt-in on every platform (`VulkanSkikoRenderer`, with `VulkanContext` owning the instance, GPU,
+  swapchain and synchronization). Ask for it with `WindowOptions.setRenderBackend(RenderBackend.VULKAN)`, or run any
+  app with `-Drengl.backend=vulkan`. A machine without a usable Vulkan GPU falls back to the platform default, and
+  `Window.getRenderBackend()` tells you what you really got. On macOS it runs on MoltenVK, bundled with LWJGL.
+
+All three share one drawing implementation (`SkiaRenderer`); a backend only decides what the Skia canvas draws to.
+
+The Vulkan backend needs a Skiko build that has Vulkan support (JetBrains/skiko#1201, merged to Skiko's main branch on
+2026-09-30 and not in a tagged release yet). Until one ships, build Skiko from source and publish it locally with
+`./gradlew :skiko:publishToMavenLocal -Pdeploy.version=0.999.0`, once on each OS you target, and set `skiko.version` in
+the pom to `0.999.0-SNAPSHOT`.
+
+Vulkan debugging switches (system properties): `rengl.vulkan.validation=true` turns on the Khronos validation layer
+(on macOS also load the Vulkan loader with `-Dorg.lwjgl.vulkan.libname=/usr/local/lib/libvulkan.1.dylib`, since LWJGL
+otherwise loads MoltenVK directly and layers can't attach), `rengl.vulkan.gpu=<part of a GPU name>` picks a GPU, and
+`rengl.vulkan.dump=<file.png>` writes one frame read back from the GPU.
 
 `Renderer` calls are only legal on the render thread, between `begin()` and `end()`. That is
 already true inside `render`, `onRender` and `Transition.render`.

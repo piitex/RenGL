@@ -9,7 +9,7 @@ import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import me.piitex.engine.ui.theme.Themeable;
 import org.jetbrains.skia.Font;
-import org.jetbrains.skia.FontMetrics;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 
 import java.io.File;
 
@@ -126,7 +126,7 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
         if (label == null || label.isEmpty() || getTextColor() == null) return;
 
         Font font = getOrBuildFont();
-        FontMetrics metrics = font.getMetrics();
+        FontMetricsCompat metrics = FontMetricsCompat.of(font);
         float textWidth = font.measureTextWidth(label);
         float textHeight = -metrics.getAscent() + metrics.getDescent();
 

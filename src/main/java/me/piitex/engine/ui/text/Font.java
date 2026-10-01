@@ -77,9 +77,9 @@ public final class Font {
                 t = defaultTypeface;
                 if (t == null) {
                     FontMgr fonts = FontMgr.Companion.getDefault();
-                    t = fonts.matchFamilyStyle(null, FontStyle.Companion.getNORMAL());
+                    t = normalTypeface(fonts, "matchFamilyStyle", null);
                     // CoreText matches no family for a null name; the legacy lookup gives the system's default one.
-                    if (t == null) t = fonts.legacyMakeTypeface("", FontStyle.Companion.getNORMAL());
+                    if (t == null) t = normalTypeface(fonts, "legacyMakeTypeface", "");
                     if (t == null) {
                         // Log a warning instead of crashing
                         System.err.println("Warning: FontMgr could not resolve a default typeface. Please provide a custom font file.");
@@ -123,5 +123,33 @@ public final class Font {
      */
     public static void setDefaultFont(File defaultFont) {
         Font.defaultFont = defaultFont;
+    }
+    /**
+     * Calls one of FontMgr's family lookups with the normal style. Since Skiko 0.152 {@code FontStyle} is a Kotlin value
+     * class, so these methods take a bare int and carry a mangled name ({@code matchFamilyStyle-ooATI1c}) that Java
+     * source can't call; they are found by their prefix instead.
+     */
+    private static Typeface normalTypeface(FontMgr fonts, String method, String family) {
+        try {
+            int normal = 0;
+            boolean found = false;
+            for (java.lang.reflect.Method m : FontStyle.Companion.getClass().getMethods()) {
+                if (m.getName().startsWith("getNORMAL") && m.getParameterCount() == 0 && m.getReturnType() == int.class) {
+                    normal = (int) m.invoke(FontStyle.Companion);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return null;
+            for (java.lang.reflect.Method m : FontMgr.class.getMethods()) {
+                if (m.getName().startsWith(method) && m.getParameterCount() == 2
+                        && m.getParameterTypes()[0] == String.class && m.getParameterTypes()[1] == int.class) {
+                    return (Typeface) m.invoke(fonts, family, normal);
+                }
+            }
+        } catch (ReflectiveOperationException e) {
+            System.err.println("Warning: could not look up the default typeface: " + e);
+        }
+        return null;
     }
 }

@@ -32,6 +32,7 @@ WindowOptions options = new WindowOptions("My App")
 | `setShowCursor(boolean)` | `true` | **Yes.** `false` hides the OS cursor over the window (it still moves freely) |
 | `setMaxFPS(int)` | `60` | **Yes**, and can be changed while running. Only used while vsync is off. `0` or less means unlimited |
 | `setHandleFocus(boolean)` | `false` | **Yes.** Clears keyboard focus when the OS window loses focus |
+| `setRenderBackend(RenderBackend)` | `AUTO` | **Yes**, before the window opens. `AUTO` is Metal on macOS and OpenGL elsewhere (or the `rengl.backend` system property); `VULKAN` opts in to Vulkan and falls back to the default on a machine without a usable GPU. `Window.getRenderBackend()` reports what was used. See [Rendering backends](../architecture.md#rendering-backends) |
 | `setResizable(boolean)` | `true` | **Yes.** `false` locks the window size |
 | `setIcon(Image)` | `null` | **Yes.** An image from `ImageLoader.load(...)`. Wins over `setIconPath`. On macOS it sets the Dock icon. Can be changed at runtime with `Window.setIcon` |
 | `setIconPath(String)` | `null` | **Yes.** File path or classpath resource. Same platform behavior as `setIcon` |

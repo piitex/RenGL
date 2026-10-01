@@ -72,7 +72,7 @@ public final class TooltipManager {
         if (text == null || text.isEmpty()) return;
 
         org.jetbrains.skia.Font f = getFont();
-        float lineHeight = f.getMetrics().getHeight();
+        float lineHeight = FontMetricsCompat.of(f).getHeight();
         String[] lines = text.split("\n", -1);
         float textWidth = 0f;
         for (String line : lines) {

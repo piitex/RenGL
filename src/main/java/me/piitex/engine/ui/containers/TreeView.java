@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
@@ -972,7 +973,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         float x = (float) getX(), y = (float) getY(), w = (float) getWidth(), h = (float) getHeight();
         float scroll = (float) getScrollOffsetY();
         org.jetbrains.skia.Font f = getFont();
-        float textH = f.getMetrics().getHeight();
+        float textH = FontMetricsCompat.of(f).getHeight();
         Color text = textColor.get();
         Color selection = selectionColor.get();
         if (text != hoverFrom) {

@@ -15,7 +15,7 @@ import me.piitex.engine.ui.text.TextChecker;
 import me.piitex.engine.ui.text.TextIssue;
 import me.piitex.engine.ui.text.TextSpan;
 import me.piitex.engine.ui.text.TextSpanStyler;
-import org.jetbrains.skia.FontMetrics;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -254,7 +254,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
             int hoverRow = !empty && MouseTracker.isInWindow() && contains(MouseTracker.getX(), MouseTracker.getY())
                     ? (int) Math.floor((MouseTracker.getY() - y) / ROW_HEIGHT) : -1;
             org.jetbrains.skia.Font f = font();
-            float textHeight = f.getMetrics().getHeight();
+            float textHeight = FontMetricsCompat.of(f).getHeight();
             for (int i = 0; i < rows.size(); i++) {
                 float rowY = y + i * ROW_HEIGHT;
                 if (i == hoverRow) renderer.drawQuad(x, rowY, w, ROW_HEIGHT, theme.getFieldHoverBackground(), 0f);
@@ -288,7 +288,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
 
         String current = getText();
         int lineEnd = lineStart + lineText.length();
-        FontMetrics metrics = font.getMetrics();
+        FontMetricsCompat metrics = FontMetricsCompat.of(font);
         float underlineY = y - metrics.getAscent() + metrics.getDescent() * 0.6f;
 
         for (TextIssue issue : result.issues()) {

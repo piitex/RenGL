@@ -14,7 +14,7 @@ import me.piitex.engine.ui.scroll.Scrollable;
 import me.piitex.engine.ui.text.Font;
 import me.piitex.engine.ui.text.FontScalable;
 import me.piitex.engine.ui.theme.Theme;
-import org.jetbrains.skia.FontMetrics;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import org.jetbrains.skia.Typeface;
 import org.lwjgl.glfw.GLFW;
 
@@ -540,7 +540,7 @@ public class TabContainer extends Layout {
         }
 
         private float lineHeight() {
-            FontMetrics metrics = font().getMetrics();
+            FontMetricsCompat metrics = FontMetricsCompat.of(font());
             return -metrics.getAscent() + metrics.getDescent();
         }
 

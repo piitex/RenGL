@@ -83,7 +83,7 @@ public class Window implements Themeable {
     }
 
     protected void initializeGLFW() {
-        glfWindow = new GLFWindow(inputManager);
+        glfWindow = new GLFWindow(inputManager, windowOptions.getRenderBackend());
         glfWindow.setIconifyHandler(this::notifyMinimized);
         glfWindow.setMaximizeHandler(this::notifyMaximized);
         glfWindow.setCloseRequestHandler(this::notifyCloseRequested);
@@ -91,6 +91,15 @@ public class Window implements Themeable {
 
     public WindowOptions getWindowOptions() {
         return windowOptions;
+    }
+
+    /**
+     * The graphics API this window really draws with, which is what {@link WindowOptions#setRenderBackend} asked for
+     * unless the machine couldn't do that. {@link RenderBackend#AUTO} once resolved is never returned. Before the window
+     * opens this is just the resolved request, without the check that Vulkan has a usable GPU.
+     */
+    public RenderBackend getRenderBackend() {
+        return glfWindow != null ? glfWindow.getBackend() : RenderBackend.resolve(windowOptions.getRenderBackend());
     }
 
     protected GLFWindow getGlfWindow() {

@@ -12,7 +12,8 @@
         <lwjgl.version>3.4.3</lwjgl.version>
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
-        <skiko.version>0.150.1</skiko.version>
+        <!-- Local build of Skiko main for Vulkan support (JetBrains/skiko#1201): ./gradlew :skiko:publishToMavenLocal -Pdeploy.version=0.999.0 on each target OS. Return to an official release once one includes Vulkan. -->
+        <skiko.version>0.999.0-SNAPSHOT</skiko.version>
         <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
     </properties>
 

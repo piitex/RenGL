@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
@@ -366,7 +367,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         if (showHex && w - sw - 3 * pad > 20f) {
             org.jetbrains.skia.Font f = getFont();
             String hex = toHex(color, alphaEnabled);
-            float textH = f.getMetrics().getHeight();
+            float textH = FontMetricsCompat.of(f).getHeight();
             renderer.pushClip(x, y, w - pad, h);
             renderer.drawText(hex, sx + sw + 8f, y + (h - textH) / 2f, f, resolveTextColor(textColor.get()));
             renderer.popClip();
