@@ -8,6 +8,8 @@ import me.piitex.engine.gl.renderer.metal.MetalContext;
 import me.piitex.engine.gl.renderer.metal.MetalSkikoRenderer;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.SkikoRenderer;
+import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
+import me.piitex.engine.gl.renderer.vulkan.VulkanSkikoRenderer;
 import me.piitex.engine.input.Clipboard;
 import me.piitex.engine.input.CursorManager;
 import me.piitex.engine.input.FileDialog;
@@ -69,7 +71,6 @@ public class Engine {
     private volatile boolean running = true;
     private volatile boolean started;
 
-    private final boolean mac = System.getProperty("os.name").toLowerCase().contains("mac");
     private long currentContext = NULL; // render thread: the window whose OpenGL context is current
 
     private long lastFrameTimeNanos;
@@ -87,8 +88,10 @@ public class Engine {
         final Window window;
         final GLFWindow glfWindow;
         final long handle;
+        final RenderBackend backend;
         final InputProcessor inputProcessor = new InputProcessor();
-        MetalContext metalContext; // created on the main thread, closed there after the renderer is released
+        MetalContext metalContext;   // Metal only; created on the main thread, closed there after the renderer is released
+        VulkanContext vulkanContext; // Vulkan only; same lifetime, but closed before the GLFW window is destroyed
         Renderer renderer;         // render thread
         volatile int logicalW, logicalH, fbW, fbH;
         volatile boolean sizeDirty;
@@ -103,6 +106,7 @@ public class Engine {
             this.window = window;
             this.glfWindow = glfWindow;
             this.handle = handle;
+            this.backend = glfWindow.getBackend();
         }
     }
 
@@ -140,12 +144,14 @@ public class Engine {
         Clipboard.attach(main.handle); // GLFW's clipboard is system-wide; any window's handle will do
 
         String gpu;
-        if (mac) {
-            gpu = SystemInfo.gpuFromMetalDevice(main.metalContext.getDevice());
-        } else {
-            main.glfWindow.initOpenGLContext();
-            gpu = SystemInfo.gpuFromGL();
-            glfwMakeContextCurrent(NULL); // the render thread takes the context over; it can't be current on two threads
+        switch (main.backend) {
+            case METAL -> gpu = SystemInfo.gpuFromMetalDevice(main.metalContext.getDevice());
+            case VULKAN -> gpu = main.vulkanContext.gpuName();
+            default -> {
+                main.glfWindow.initOpenGLContext();
+                gpu = SystemInfo.gpuFromGL();
+                glfwMakeContextCurrent(NULL); // the render thread takes the context over; it can't be current on two threads
+            }
         }
         SystemInfo.collect(gpu).log();
         log.info("VSYNC: {}", window.getWindowOptions().isVsync());
@@ -296,7 +302,20 @@ public class Engine {
         }
         options.setDimensions(host.logicalW, host.logicalH);
 
-        if (mac) host.metalContext = new MetalContext(windowHandle);
+        switch (host.backend) {
+            case METAL -> host.metalContext = new MetalContext(windowHandle);
+            case VULKAN -> {
+                try {
+                    host.vulkanContext = new VulkanContext(windowHandle);
+                } catch (RuntimeException e) {
+                    // Past the startup probe the device still failed (no surface support, out of memory): the window
+                    // is already a context-less one, so there is nothing to fall back to.
+                    glfWindow.destroy();
+                    throw new IllegalStateException("Could not start Vulkan for the window: " + e.getMessage(), e);
+                }
+            }
+            default -> { }
+        }
 
         // Window size changed in screen coordinates (user drag-resized the border)
         glfwSetWindowSizeCallback(windowHandle, (w, newW, newH) -> {
@@ -334,6 +353,7 @@ public class Engine {
         host.glfWindow.applyHide();
         host.window.notifyClosing();
         CursorManager.detach(host.handle);
+        if (host.vulkanContext != null) host.vulkanContext.close(); // its surface belongs to the GLFW window
         host.glfWindow.destroy();
         if (host.metalContext != null) host.metalContext.close();
     }
@@ -372,12 +392,16 @@ public class Engine {
                 applyVsync(host);
 
                 if (host.sizeDirty) {
-                    if (mac) {
-                        host.metalContext.resize(host.fbW, host.fbH);
-                        ((MetalSkikoRenderer) host.renderer).onResize(host.logicalW, host.logicalH, host.fbW, host.fbH);
-                    } else {
-                        makeContextCurrent(host);
-                        ((SkikoRenderer) host.renderer).recreateSurface(host.handle);
+                    switch (host.backend) {
+                        case METAL -> {
+                            host.metalContext.resize(host.fbW, host.fbH);
+                            ((MetalSkikoRenderer) host.renderer).onResize(host.logicalW, host.logicalH, host.fbW, host.fbH);
+                        }
+                        case VULKAN -> ((VulkanSkikoRenderer) host.renderer).onResize(host.logicalW, host.logicalH);
+                        default -> {
+                            makeContextCurrent(host);
+                            ((SkikoRenderer) host.renderer).recreateSurface(host.handle);
+                        }
                     }
                     host.sizeDirty = false;
                 }
@@ -451,7 +475,7 @@ public class Engine {
 
         TooltipManager.update(window, delta);
 
-        if (!mac) makeContextCurrent(host);
+        if (host.backend == RenderBackend.OPENGL) makeContextCurrent(host);
 
         // A plain Color is cleared directly, which is cheap and needs no extra draw
         // call. A gradient cannot be, since Skia's canvas clear takes only one flat
@@ -489,7 +513,7 @@ public class Engine {
         TooltipManager.render(renderer, window); // above every container
         renderer.end();
 
-        if (!mac) glfwSwapBuffers(host.handle);
+        if (host.backend == RenderBackend.OPENGL) glfwSwapBuffers(host.handle);
 
         if (!host.firstFrameRendered) host.firstFrameRendered = true;
     }
@@ -507,15 +531,24 @@ public class Engine {
      * Render thread. Sets up a newly opened window's renderer.
      */
     private void initRenderer(Host host) {
-        if (mac) {
-            MetalSkikoRenderer metalRenderer = new MetalSkikoRenderer(host.metalContext);
-            metalRenderer.init();
-            metalRenderer.onResize(host.logicalW, host.logicalH, host.fbW, host.fbH);
-            host.renderer = metalRenderer;
-        } else {
-            host.glfWindow.initOpenGLContext();
-            currentContext = host.handle;
-            host.renderer = new SkikoRenderer(host.handle);
+        switch (host.backend) {
+            case METAL -> {
+                MetalSkikoRenderer metalRenderer = new MetalSkikoRenderer(host.metalContext);
+                metalRenderer.init();
+                metalRenderer.onResize(host.logicalW, host.logicalH, host.fbW, host.fbH);
+                host.renderer = metalRenderer;
+            }
+            case VULKAN -> {
+                VulkanSkikoRenderer vulkanRenderer = new VulkanSkikoRenderer(host.vulkanContext);
+                vulkanRenderer.init();
+                vulkanRenderer.onResize(host.logicalW, host.logicalH);
+                host.renderer = vulkanRenderer;
+            }
+            default -> {
+                host.glfWindow.initOpenGLContext();
+                currentContext = host.handle;
+                host.renderer = new SkikoRenderer(host.handle);
+            }
         }
         host.sizeDirty = false;
         applyVsync(host);
@@ -526,13 +559,15 @@ public class Engine {
      */
     private void release(Host host) {
         if (host.renderer != null) {
-            if (mac) {
-                ((MetalSkikoRenderer) host.renderer).dispose();
-            } else {
-                makeContextCurrent(host);
-                ((SkikoRenderer) host.renderer).dispose();
-                glfwMakeContextCurrent(NULL); // the context is destroyed with its window, on the main thread
-                currentContext = NULL;
+            switch (host.backend) {
+                case METAL -> ((MetalSkikoRenderer) host.renderer).dispose();
+                case VULKAN -> ((VulkanSkikoRenderer) host.renderer).dispose();
+                default -> {
+                    makeContextCurrent(host);
+                    ((SkikoRenderer) host.renderer).dispose();
+                    glfwMakeContextCurrent(NULL); // the context is destroyed with its window, on the main thread
+                    currentContext = NULL;
+                }
             }
             host.renderer = null;
         }
@@ -551,18 +586,20 @@ public class Engine {
     /**
      * Render thread. Applies a window's vsync setting when it changes. Only the pacing window (see
      * {@link #setPacingWindow}) waits for the display, and that wait paces the whole loop. With OpenGL each wait is a whole frame, so a second waiting window would
-     * halve the frame rate; with Metal, several waiting layers pace the loop unevenly (between 60 and 120 frames a
+     * halve the frame rate; with Metal (and likewise Vulkan), several waiting layers pace the loop unevenly (between 60 and 120 frames a
      * second on a 120 Hz display). The other windows present as soon as they are drawn.
      */
     private void applyVsync(Host host) {
         boolean pacer = host == pacingHost();
         boolean vsync = host.window.getWindowOptions().isVsync() && pacer;
         if (host.appliedVsync != null && host.appliedVsync == vsync) return;
-        if (mac) {
-            host.metalContext.setVsync(vsync);
-        } else {
-            makeContextCurrent(host);
-            host.glfWindow.setVsync(vsync);
+        switch (host.backend) {
+            case METAL -> host.metalContext.setVsync(vsync);
+            case VULKAN -> host.vulkanContext.setVsync(vsync);
+            default -> {
+                makeContextCurrent(host);
+                host.glfWindow.setVsync(vsync);
+            }
         }
         host.appliedVsync = vsync;
         if (pacer) frameLimiter.reset(); // pacing changed, so don't carry a deadline from the old mode

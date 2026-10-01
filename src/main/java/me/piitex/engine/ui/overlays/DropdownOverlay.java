@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.ui.text.FontScalable;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
@@ -280,7 +281,7 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
 
     private void drawLabel(Renderer renderer, String text, float x, float y, float h, Paint color) {
         org.jetbrains.skia.Font f = getFont();
-        float textH = f.getMetrics().getHeight();
+        float textH = FontMetricsCompat.of(f).getHeight();
         renderer.drawText(text, x, y + (h - textH) / 2f, f, color);
     }
 

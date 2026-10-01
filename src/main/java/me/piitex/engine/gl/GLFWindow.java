@@ -1,8 +1,10 @@
 package me.piitex.engine.gl;
 
+import me.piitex.engine.RenderBackend;
 import me.piitex.engine.WindowOptions;
 import me.piitex.engine.WindowStyle;
 import me.piitex.engine.gl.renderer.SkikoRenderer;
+import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
 import me.piitex.engine.input.InputManager;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
@@ -11,11 +13,13 @@ import org.lwjgl.glfw.GLFWErrorCallback;
 import org.jetbrains.skia.EncodedImageFormat;
 import org.jetbrains.skia.Image;
 import org.lwjgl.glfw.GLFWImage;
+import org.lwjgl.glfw.GLFWVulkan;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.vulkan.VK;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,9 +36,15 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 /**
  * Thin wrapper around a single GLFW window and its input callback wiring.
  * <p>
- * On every platform except macOS this window is a normal OpenGL-capable window. GLFW is
+ * Which graphics API the window is made for is the {@link RenderBackend}, resolved once in the constructor
+ * ({@link #getBackend()}).
+ * <p>
+ * With {@link RenderBackend#OPENGL} (the default off macOS) this is a normal OpenGL-capable window. GLFW is
  * asked for a GL 3.3 core-profile context, and the render thread later calls
  * {@link #initOpenGLContext()} to bind it before drawing with {@link SkikoRenderer}.
+ * <p>
+ * With {@link RenderBackend#VULKAN} the window has no client API at all ({@code GLFW_NO_API}); the engine creates a
+ * {@link VulkanContext} surface for it instead.
  * <p>
  * On macOS the window is intentionally created with {@code GLFW_CLIENT_API =
  * GLFW_NO_API}, so GLFW backs it with a plain {@code NSView} rather than an
@@ -63,6 +73,7 @@ public class GLFWindow {
     private boolean fullscreen; // main thread only
     private int windowedX, windowedY, windowedW, windowedH; // bounds to return to when leaving fullscreen
     private final ConcurrentLinkedQueue<Runnable> mainThreadTasks = new ConcurrentLinkedQueue<>();
+    private final RenderBackend backend;
 
     /**
      * Initializes GLFW and sets up window hints for the platform this is running on.
@@ -74,11 +85,16 @@ public class GLFWindow {
      * @throws IllegalStateException if GLFW itself fails to initialize.
      */
     public GLFWindow(InputManager inputManager) {
-        this.inputManager = inputManager;
+        this(inputManager, RenderBackend.AUTO);
+    }
 
-        if (MAC) {
-            log.info("Using Metal, requesting a windowing-only GLFW surface.");
-        }
+    /**
+     * Same as {@link #GLFWindow(InputManager)}, for a window that wants {@code requested}. What it really gets is
+     * {@link #getBackend()}: a backend the machine can't run (no Vulkan GPU, Metal off macOS) falls back to the
+     * platform default.
+     */
+    public GLFWindow(InputManager inputManager, RenderBackend requested) {
+        this.inputManager = inputManager;
 
         // GLFW_FORMAT_UNAVAILABLE is a normal, recoverable outcome of
         // glfwGetClipboardString (see me.piitex.engine.input.Clipboard) whenever the OS
@@ -92,21 +108,53 @@ public class GLFWindow {
             }
         }).set();
 
+        if (requested == RenderBackend.VULKAN || RenderBackend.resolve(requested) == RenderBackend.VULKAN) {
+            initVulkanLoader();
+        }
+
         if (!glfwInit()) {
             throw new IllegalStateException("Unable to initialize GLFW");
         }
+
+        RenderBackend resolved = RenderBackend.resolve(requested);
+        if (resolved == RenderBackend.VULKAN && !VulkanContext.isSupported()) {
+            log.warn("Vulkan was requested but isn't usable here, using {} instead.", RenderBackend.platformDefault());
+            resolved = RenderBackend.platformDefault();
+        }
+        this.backend = resolved;
+        log.info("Render backend: {}", backend);
 
         glfwDefaultWindowHints();
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // stay hidden until the first frame has rendered, to avoid a flash of an uninitialized/blank surface
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
-        if (MAC) {
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // <-- plain NSView, no NSOpenGLView
+        if (backend != RenderBackend.OPENGL) {
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Metal: a plain NSView, no NSOpenGLView. Vulkan: no context at all.
         } else {
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         }
+    }
+
+    /**
+     * Makes GLFW use the Vulkan library LWJGL loads (the bundled MoltenVK on macOS, the system loader elsewhere), so the
+     * surface GLFW creates and the instance the engine creates come from the same driver. A failure only means Vulkan
+     * isn't there, which {@link VulkanContext#isSupported()} reports.
+     */
+    private static void initVulkanLoader() {
+        try {
+            GLFWVulkan.glfwInitVulkanLoader(VK.getFunctionProvider().getFunctionAddress("vkGetInstanceProcAddr"));
+        } catch (Throwable t) {
+            log.debug("Could not hand GLFW the Vulkan loader: {}", t.toString());
+        }
+    }
+
+    /**
+     * The graphics API this window was made for, after fallbacks.
+     */
+    public RenderBackend getBackend() {
+        return backend;
     }
 
     /**

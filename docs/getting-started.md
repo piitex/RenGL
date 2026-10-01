@@ -6,7 +6,7 @@
 
 - **JDK 25.** The project compiles with `maven.compiler.source/target = 25`.
 - **Maven.** IntelliJ ships one, or install your own.
-- **A GPU/driver that supports OpenGL 3.3 core** (Windows/Linux) or **Metal** (macOS).
+- **A GPU/driver that supports OpenGL 3.3 core** (Windows/Linux) or **Metal** (macOS). Vulkan 1.1 is an optional alternative on any of them, see [Rendering backends](architecture.md#rendering-backends).
 
 ## Building
 

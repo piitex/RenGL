@@ -1,7 +1,6 @@
 package me.piitex.engine.ui.text;
 
 import org.jetbrains.skia.Font;
-import org.jetbrains.skia.FontMetrics;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,7 +72,7 @@ public final class TextLayout {
      * natural distance between lines. Add a little for looser lines.
      */
     public static float lineHeight(Font font) {
-        FontMetrics metrics = font.getMetrics();
+        FontMetricsCompat metrics = FontMetricsCompat.of(font);
         return -metrics.getAscent() + metrics.getDescent();
     }
 }

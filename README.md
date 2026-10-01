@@ -17,6 +17,7 @@ and verified before it can be merged. If generated code is not accepted you need
 * Skiko
 * OpenGL
 * Metal
+* Vulkan (opt-in)
 * OpenAL
 * Asset Manager
 * App Environment

@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.menu;
 
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
@@ -390,7 +391,7 @@ final class MenuPopup extends Container implements PopupKeyListener {
                 }
                 if (panel.checkCol) textX += CHECK_COL;
 
-                float textH = font.getMetrics().getHeight();
+                float textH = FontMetricsCompat.of(font).getHeight();
                 renderer.drawText(item.getLabel(), textX, rowY + (rowH - textH) / 2f, font, color);
 
                 String shortcut = item.getShortcut();

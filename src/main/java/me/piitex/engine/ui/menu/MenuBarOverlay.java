@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.menu;
 
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.NativeMenuBar;
 import me.piitex.engine.gl.renderer.Renderer;
@@ -300,7 +301,7 @@ public class MenuBarOverlay extends Overlay implements Themeable {
             hover = titleAt(MouseTracker.getX());
         }
 
-        float textH = f.getMetrics().getHeight();
+        float textH = FontMetricsCompat.of(f).getHeight();
         for (int i = 0; i < titles.size(); i++) {
             if (i == openIndex || (i == hover && openIndex < 0)) {
                 renderer.drawQuad(x + titleX[i], y + 3f, titleW[i], h - 6f, highlightColor.get(), 5f);

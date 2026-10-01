@@ -12,7 +12,7 @@ import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import me.piitex.engine.ui.theme.Themeable;
-import org.jetbrains.skia.FontMetrics;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import org.jetbrains.skia.Typeface;
 
 import java.util.function.Consumer;
@@ -641,7 +641,7 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         if (label == null || label.isEmpty()) return;
 
         org.jetbrains.skia.Font font = getOrBuildLabelFont();
-        FontMetrics metrics = font.getMetrics();
+        FontMetricsCompat metrics = FontMetricsCompat.of(font);
         float textWidth = font.measureTextWidth(label);
         float textHeight = -metrics.getAscent() + metrics.getDescent();
 

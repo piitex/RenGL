@@ -98,6 +98,7 @@ the simple name. The engine keeps its own, as it does internally, and writes Ski
 
 ```java
 import me.piitex.engine.ui.text.Font;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 
 public class Label extends Overlay {
     private final String text;
@@ -107,7 +108,7 @@ public class Label extends Overlay {
         this.text = text;
         font = new org.jetbrains.skia.Font(Font.getDefault(), 16f);
         setWidth(font.measureTextWidth(text));
-        setHeight(font.getMetrics().getHeight());
+        setHeight(FontMetricsCompat.of(font).getHeight());
     }
 
     @Override

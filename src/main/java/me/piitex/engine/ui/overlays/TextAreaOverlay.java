@@ -18,7 +18,7 @@ import me.piitex.engine.ui.text.TextUndoHistory.EditKind;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import me.piitex.engine.ui.theme.Themeable;
-import org.jetbrains.skia.FontMetrics;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import org.jetbrains.skia.Typeface;
 import org.lwjgl.glfw.GLFW;
 
@@ -1287,7 +1287,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
      * Font line height plus {@link #getLineSpacing()}, the vertical distance between consecutive lines' tops. Shared by every line-index and scroll-geometry calculation so they all agree with what {@link #render} actually draws.
      */
     private float linePitch() {
-        FontMetrics metrics = getOrBuildFont().getMetrics();
+        FontMetricsCompat metrics = FontMetricsCompat.of(getOrBuildFont());
         return (-metrics.getAscent() + metrics.getDescent()) + lineSpacing;
     }
 

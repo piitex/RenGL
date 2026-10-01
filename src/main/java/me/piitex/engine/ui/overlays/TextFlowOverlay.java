@@ -10,7 +10,7 @@ import me.piitex.engine.ui.text.TextAlign;
 import me.piitex.engine.ui.text.TextLayout;
 import me.piitex.engine.ui.theme.Theme;
 import org.jetbrains.skia.Font;
-import org.jetbrains.skia.FontMetrics;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -261,7 +261,7 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
     }
 
     private float linePitch() {
-        FontMetrics m = getOrBuildFont().getMetrics();
+        FontMetricsCompat m = FontMetricsCompat.of(getOrBuildFont());
         return -m.getAscent() + m.getDescent() + lineSpacing;
     }
 

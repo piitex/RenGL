@@ -11,7 +11,7 @@ import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import me.piitex.engine.ui.theme.Themeable;
 import me.piitex.engine.utils.flags.GeneratedClass;
-import org.jetbrains.skia.FontMetrics;
+import me.piitex.engine.ui.text.FontMetricsCompat;
 import org.jetbrains.skia.Typeface;
 
 import java.io.File;
@@ -227,7 +227,7 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
             }
 
             org.jetbrains.skia.Font font = getOrBuildFont();
-            FontMetrics metrics = font.getMetrics();
+            FontMetricsCompat metrics = FontMetricsCompat.of(font);
             if (!fixedWidth) setWidth(font.measureTextWidth(text));
             setHeight(-metrics.getAscent() + metrics.getDescent());
         } finally {
@@ -295,7 +295,7 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
             float x = (float) getX() + Math.max(0f, (float) getWidth() - font.measureTextWidth(text)) * textAlignH(0f);
             float y = (float) getY();
             if (getTextAlignment() != null) {
-                FontMetrics m = font.getMetrics();
+                FontMetricsCompat m = FontMetricsCompat.of(font);
                 y += Math.max(0f, (float) getHeight() - (-m.getAscent() + m.getDescent())) * textAlignV(0f);
             }
             renderer.drawText(text, x, y, font, resolveTextColor(textColor.get()));
