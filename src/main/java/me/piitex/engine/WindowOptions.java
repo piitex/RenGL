@@ -13,7 +13,7 @@ public class WindowOptions {
     private volatile boolean showCursor = true;
     private boolean handleFocus = false;
     private volatile boolean resizable = true;
-    private volatile RenderBackend renderBackend = RenderBackend.AUTO;
+    private volatile RenderAPI renderer = RenderAPI.AUTO;
     private volatile int maxFPS = 60;
     private String iconPath = null;
     private volatile Image icon = null;
@@ -67,12 +67,12 @@ public class WindowOptions {
     }
 
     /**
-     * The graphics API to draw with (default {@link RenderBackend#AUTO}). The window is created for one API, so this
+     * The graphics API to draw with (default {@link RenderAPI#AUTO}). The window is created for one API, so this
      * only has an effect before the window opens. A backend this machine can't run falls back to the platform default;
-     * {@link Window#getRenderBackend()} says what the window really uses.
+     * {@link Window#getRenderer()} says what the window really uses.
      */
-    public WindowOptions setRenderBackend(RenderBackend renderBackend) {
-        this.renderBackend = renderBackend == null ? RenderBackend.AUTO : renderBackend;
+    public WindowOptions setRenderer(RenderAPI renderer) {
+        this.renderer = renderer == null ? RenderAPI.AUTO : renderer;
         return this;
     }
 
@@ -170,8 +170,8 @@ public class WindowOptions {
         return handleFocus;
     }
 
-    public RenderBackend getRenderBackend() {
-        return renderBackend;
+    public RenderAPI getRenderer() {
+        return renderer;
     }
 
     public String getIconPath() {

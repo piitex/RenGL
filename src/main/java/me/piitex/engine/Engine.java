@@ -88,7 +88,7 @@ public class Engine {
         final Window window;
         final GLFWindow glfWindow;
         final long handle;
-        final RenderBackend backend;
+        final RenderAPI backend;
         final InputProcessor inputProcessor = new InputProcessor();
         MetalContext metalContext;   // Metal only; created on the main thread, closed there after the renderer is released
         VulkanContext vulkanContext; // Vulkan only; same lifetime, but closed before the GLFW window is destroyed
@@ -106,7 +106,7 @@ public class Engine {
             this.window = window;
             this.glfWindow = glfWindow;
             this.handle = handle;
-            this.backend = glfWindow.getBackend();
+            this.backend = glfWindow.getRenderAPI();
         }
     }
 
@@ -475,7 +475,7 @@ public class Engine {
 
         TooltipManager.update(window, delta);
 
-        if (host.backend == RenderBackend.OPENGL) makeContextCurrent(host);
+        if (host.backend == RenderAPI.OPENGL) makeContextCurrent(host);
 
         // A plain Color is cleared directly, which is cheap and needs no extra draw
         // call. A gradient cannot be, since Skia's canvas clear takes only one flat
@@ -513,7 +513,7 @@ public class Engine {
         TooltipManager.render(renderer, window); // above every container
         renderer.end();
 
-        if (host.backend == RenderBackend.OPENGL) glfwSwapBuffers(host.handle);
+        if (host.backend == RenderAPI.OPENGL) glfwSwapBuffers(host.handle);
 
         if (!host.firstFrameRendered) host.firstFrameRendered = true;
     }

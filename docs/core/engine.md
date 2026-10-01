@@ -18,7 +18,7 @@ public static Engine getRunning(); // the running engine, or null
 3. Creates the graphics context:
    - **macOS:** a Metal layer on the window's view.
    - **Windows/Linux:** an OpenGL 3.3 core context.
-   - **Any platform, if the window asks for [`RenderBackend.VULKAN`](../architecture.md#rendering-backends):** a
+   - **Any platform, if the window asks for [`RenderAPI.VULKAN`](../architecture.md#rendering-backends):** a
      Vulkan instance, GPU and swapchain.
 4. Starts the **render thread** (see [Architecture](../architecture.md#two-threads)).
 5. Loops on the main thread, delivering GLFW events and servicing the clipboard and cursor, until the
