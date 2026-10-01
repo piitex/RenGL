@@ -1,7 +1,8 @@
 # Vulkan and the optional 3D layer: status
 
 A working document, not API documentation. It records what has been built for the Vulkan backend and the 3D layer,
-what is known to be wrong or missing, and what comes next. Last updated 2026-10-01.
+what is known to be wrong or missing, and what comes next. Last updated 2026-10-01. The API itself is documented in
+[3D](3d/README.md) and [Rendering APIs](core/rendering-apis.md).
 
 ## Goals and decisions
 
@@ -10,7 +11,7 @@ what is known to be wrong or missing, and what comes next. Last updated 2026-10-
 | Vulkan for the 2D UI | Skiko 0.999.0-SNAPSHOT (a local build of JetBrains/skiko#1201) draws the UI through Vulkan. Pick it with `WindowOptions.setRenderer(RenderAPI.VULKAN)`. |
 | 3D is optional | Basic apps and 2D games must not pay for it: no 3D initialisation, no cost when unused, no 3D types in `Window` or `Element`. The `render3d` package is only touched by code that asks for it. |
 | Both OpenGL and Vulkan | The 3D layer runs on whichever API the window uses. The same GLSL source and the same scene code run on both. |
-| Both presentation modes | An embedded `Viewport3D` element (done) and whole-window 3D behind the UI (not done, step 3). |
+| Both presentation modes | An embedded `Viewport3D` element and whole-window 3D behind the UI (`Background3D`). Both done. |
 | macOS OpenGL fatal error | **Outline only, not implemented.** `RenderAPI.resolve` still warns and falls back to Metal. Implement only when asked. |
 
 ## Build order and status
@@ -92,6 +93,7 @@ Run it with `-XstartOnFirstThread` on macOS. `-Drengl.demo.api=VULKAN|OPENGL` ov
 | `Scene3DDemo` | Default scene dumped as a frame on Vulkan and checked by eye. The file dialog, sliders, check boxes, drag and scroll were **not** driven. Not run on GL. |
 | Windows, Linux | **Never run.** |
 | Automated tests in the repo | **None** for the 3D layer. The harnesses live in a scratchpad. |
+| Code samples in the docs | The complete samples in [3D](3d/README.md), [Models](3d/models.md) and [Custom rendering](3d/custom-rendering.md) were compiled against the engine. The first-scene and spinning-triangle samples were run on Vulkan and dumped as frames |
 
 Useful switches: `-Drengl.vulkan.validation=true` (with `-Dorg.lwjgl.vulkan.libname=/usr/local/lib/libvulkan.1.dylib` on macOS),
 `-Drengl.vulkan.dump=path.png` (writes frame 90), `-Dskiko.macos.opengl.enabled=true` for the GL harness.
@@ -124,14 +126,14 @@ No shadows, skybox, MSAA, mipmaps (textures shimmer at a distance), normal or me
 
 1. `skiko.version` is a local snapshot. Return to an official release once Skiko ships Vulkan. Windows and Linux builds of that Skiko were never made.
 2. The macOS OpenGL fatal error is outlined but not implemented.
-3. No docs page for the 3D layer in the user docs yet, and no in-repo tests.
+3. No in-repo tests for the 3D layer. (The user docs for it are written: see [3D](3d/README.md).)
 4. The Vulkan UI path and the 3D layer have only run on one machine (Apple M5, MoltenVK).
 
 ## Next steps
 
 In suggested order:
 
-1. **Quick fixes:** update handler once per frame per scene (issue 3), a render-on-demand mode for viewports (issue 7), a docs page for the 3D layer, an in-repo smoke test.
+1. **Quick fixes:** update handler once per frame per scene (issue 3), a render-on-demand mode for viewports (issue 7), an in-repo smoke test.
 2. **Ray picking** (screen to world ray, ray against bounds and triangles), so scenes can be clicked.
 3. **Image quality:** MSAA, mipmaps.
 4. **Content:** normal and metal-rough maps, shadows, a skybox, skeletal and glTF animation, instancing.

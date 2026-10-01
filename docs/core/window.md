@@ -32,7 +32,7 @@ WindowOptions options = new WindowOptions("My App")
 | `setShowCursor(boolean)` | `true` | **Yes.** `false` hides the OS cursor over the window (it still moves freely) |
 | `setMaxFPS(int)` | `60` | **Yes**, and can be changed while running. Only used while vsync is off. `0` or less means unlimited |
 | `setHandleFocus(boolean)` | `false` | **Yes.** Clears keyboard focus when the OS window loses focus |
-| `setRenderer(RenderAPI)` | `AUTO` | **Yes**, before the window opens. `AUTO` is Metal on macOS and OpenGL elsewhere (or the `rengl.backend` system property); `VULKAN` opts in to Vulkan and falls back to the default on a machine without a usable GPU. `Window.getRenderer()` reports what was used. See [Rendering backends](../architecture.md#rendering-backends) |
+| `setRenderer(RenderAPI)` | `AUTO` | **Yes**, before the window opens. `AUTO` is Metal on macOS and OpenGL elsewhere (or the `rengl.backend` system property); `OPENGL`, `METAL` and `VULKAN` ask for that API and fall back to the default, with a warning, where it can't be had. `Window.getRenderer()` reports what was used. [3D](../3d/README.md) needs `OPENGL` or `VULKAN`. See [Rendering APIs](rendering-apis.md) |
 | `setResizable(boolean)` | `true` | **Yes.** `false` locks the window size |
 | `setIcon(Image)` | `null` | **Yes.** An image from `ImageLoader.load(...)`. Wins over `setIconPath`. On macOS it sets the Dock icon. Can be changed at runtime with `Window.setIcon` |
 | `setIconPath(String)` | `null` | **Yes.** File path or classpath resource. Same platform behavior as `setIcon` |
@@ -251,6 +251,13 @@ window.setBackground(null); // remove it
 `setBackground` attaches one of the animated [background effects](../styling/backgrounds.md) to the whole
 window. It draws over the flat `setBackgroundColor` fill and behind every container, at the window's size. It is
 independent of theming: a theme switch does not change or remove it.
+
+A window holds **one** background effect, so `setBackground` replaces the previous one. The same hook takes a
+[`Background3D`](../3d/background-3d.md), which puts a live 3D scene behind the whole window with the UI drawn over it:
+
+```java nocompile
+window.setBackground(new Background3D(window, scene)); // needs a window on OpenGL or Vulkan
+```
 
 ## Focus
 

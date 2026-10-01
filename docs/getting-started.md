@@ -6,7 +6,7 @@
 
 - **JDK 25.** The project compiles with `maven.compiler.source/target = 25`.
 - **Maven.** IntelliJ ships one, or install your own.
-- **A GPU/driver that supports OpenGL 3.3 core** (Windows/Linux) or **Metal** (macOS). Vulkan 1.1 is an optional alternative on any of them, see [Rendering backends](architecture.md#rendering-backends).
+- **A GPU/driver that supports OpenGL 3.3 core** (Windows/Linux) or **Metal** (macOS). Vulkan 1.1 is an optional alternative on any of them, see [Rendering APIs](core/rendering-apis.md). The optional [3D layer](3d/README.md) needs OpenGL or Vulkan, so on macOS a 3D program asks for Vulkan.
 
 ## Building
 
@@ -32,8 +32,11 @@ Run the class that calls `Engine.start`. The bundled demo lists these JVM flags:
 -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
 ```
 
-- `-XstartOnFirstThread` matters on macOS, where windowing calls have to happen on the process's first thread.
+- `-XstartOnFirstThread` matters on macOS, where windowing calls have to happen on the process's first thread. It is needed for Vulkan too.
 - The other two flags reduce JVM warnings about native access.
+
+The window uses the platform's usual graphics API (Metal on macOS, OpenGL elsewhere). To use Vulkan, or to see which one
+you got, see [Rendering APIs](core/rendering-apis.md).
 
 ## Your first window
 
@@ -120,3 +123,4 @@ public class Form {
 - Positioning things automatically: [Layouts](layouts/README.md).
 - A tour of every widget: [Overlay catalog](overlays/README.md).
 - Colors, borders, and dark mode: [Styling](styling/styling.md) and [Theming](styling/theming.md).
+- 3D inside your UI, which is optional: [3D](3d/README.md).

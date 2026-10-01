@@ -1,7 +1,9 @@
 # RenGL Documentation
 
-RenGL is a Java window toolkit built on GLFW, Skia (through Skiko), and Metal on macOS. It draws its
-own widgets instead of wrapping a native widget set, and it has no CSS engine. Everything is styled from Java.
+RenGL is a Java window toolkit built on GLFW and Skia (through Skiko), drawing with Metal on macOS and OpenGL on
+Windows and Linux, or Vulkan if you ask for it. It draws its own widgets instead of wrapping a native widget set, and
+it has no CSS engine. Everything is styled from Java. An optional [3D layer](3d/README.md) adds OpenGL and Vulkan 3D to
+the same windows; programs that don't use it never pay for it.
 
 The API keeps the same four-level shape as RenEngine:
 
@@ -27,6 +29,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Element](core/element.md) | The base class of everything drawable: position, events, tooltips, scale, transitions |
 | [Overlay](core/overlay.md) | The base class of every widget, and how to write your own |
 | [Snapshots](core/snapshots.md) | Capture a container or the window as an image (PNG, or an `ImageOverlay`) |
+| [Rendering APIs](core/rendering-apis.md) | `RenderAPI`: OpenGL, Metal or Vulkan per window, fallbacks, and the Vulkan debugging switches |
 | [Scheduler](core/scheduler.md) | Timers, `runLater`, and background work with results delivered on the render thread |
 | [Loading](core/loading.md) | `Loader`: background loading in named steps, with progress for a loading screen |
 | **[Containers](containers/README.md)** | Container, ScrollContainer, ResizableContainer, ModalContainer, ReorderableGrid, TreeView |
@@ -64,6 +67,12 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Particles](graphics/particles.md) | `ParticleSystem` and `ParticleEffect`: bursts of sparks, smoke and debris |
 | [Shaders and post effects](graphics/shaders.md) | `ShaderEffect`: SkSL shaders to fill shapes or post-process a scene or element |
 | [Debug drawing](graphics/debug-drawing.md) | `DebugDraw`: hit boxes, rays and labels drawn in world space |
+| **[3D](3d/README.md)** (optional) | Showing 3D with OpenGL or Vulkan inside the UI |
+| [Viewport3D](3d/viewport-3d.md) | The element that shows 3D in a rectangle of the UI: `Content`, input, resolution, lifetime |
+| [Background3D](3d/background-3d.md) | 3D behind the whole window, with the UI drawn over it |
+| [Scenes](3d/scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material`, `Light`, `Camera`, `OrbitControls` and the math types |
+| [Models](3d/models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files |
+| [Custom rendering](3d/custom-rendering.md) | Your own 3D with `GpuDevice`, pipelines and one GLSL shader for both APIs |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
 | [Sound](audio/sound.md) | Short effects held in memory, with random pitch and limits on how often they play |
 | [Music](audio/music.md) | Streamed tracks, looping, crossfades |

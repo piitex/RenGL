@@ -134,7 +134,8 @@ source. If you hit something not listed here, please add it.
   renderer that [snapshots](../core/snapshots.md) use does this, and only for sprites of a smooth texture drawn
   turned. On screen, and for pixel-art textures, sprites side by side never leave gaps.
 - **Shaders are SkSL only.** GLSL, HLSL and Metal shaders can't be loaded directly; SkSL is close to GLSL, so most
-  fragment shaders port by renaming the entry point and replacing texture reads with `eval`.
+  fragment shaders port by renaming the entry point and replacing texture reads with `eval`. (The optional
+  [3D layer](../3d/custom-rendering.md#shaders) takes GLSL 450, but only for 3D drawing, not for `ShaderEffect`.)
 - **Camera bounds hold the upright view.** A turned or shaking [camera](../graphics/camera.md#moving-it) can show a
   little past `setBounds`, so draw the level a few units larger if that must never show.
 - **Tile maps are orthogonal only.** [`TileMap`](../graphics/tile-maps.md#loading) reads Tiled's square and
@@ -148,6 +149,53 @@ source. If you hit something not listed here, please add it.
 - **Post effects on a turned camera are resampled.** Inside a turned `Camera`, `pushEffect`'s layer is drawn upright
   and turned afterwards, so its content is slightly softer than without the effect. Push effects outside the camera,
   in window coordinates, to avoid it.
+
+## Rendering and 3D
+
+The 2D UI looks the same on every [rendering API](../core/rendering-apis.md). These limits are about Vulkan and the
+optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) has the reasons and the plans.
+
+**Vulkan and platforms**
+
+- **Vulkan has only been run on one machine:** macOS on Apple silicon, through MoltenVK. Windows and Linux are untested.
+- **Vulkan needs a Skiko build with Vulkan support.** Without one a `VULKAN` request falls back to the platform default
+  with a warning.
+- **The demos have never run on OpenGL** on a platform where the engine really uses it (Windows or Linux). The OpenGL
+  path of the 3D layer was only tested through a macOS harness.
+- **macOS windows have no OpenGL context.** An `OPENGL` request on macOS falls back to Metal with a warning, so 3D on
+  macOS means asking for Vulkan.
+- **3D needs OpenGL or Vulkan.** A [`Viewport3D`](../3d/viewport-3d.md) or [`Background3D`](../3d/background-3d.md) on a
+  Metal window, or in a [snapshot](../core/snapshots.md), logs one warning and draws nothing.
+
+**What the 3D renderer lacks**
+
+- **No shadows, skybox, anti-aliasing or mipmaps.** Edges are jagged (render at a higher
+  [resolution scale](../3d/viewport-3d.md#resolution) to hide it) and detailed textures shimmer at a distance.
+- **No normal or metallic-roughness maps, skeletal or glTF animation, ray picking or instancing.** Models with
+  animations load, and the animations are logged and ignored.
+- **Two light kinds, up to 8:** directional and point. Lighting is Lambert plus Blinn-Phong.
+- **Blended surfaces are sorted by their node's position,** so overlapping see-through objects can draw in the wrong order.
+
+**Performance and lifetime**
+
+- **About a thousand draws per frame is the ceiling on Vulkan,** and there is no instancing. 32-bit indices only, and no
+  push constants.
+- **A viewport or background re-renders every frame,** even when nothing changed. A [`Background3D`](../3d/background-3d.md)
+  renders a full-window picture plus a GPU copy each frame. There is no render-on-demand mode yet.
+- **GPU uploads stall.** A mesh or texture uploads the first time it is drawn and waits for the GPU, so a big model
+  causes a visible hitch on its first frame.
+- **A scene shown in several viewports runs its update handler once per viewport per frame,** so animation by `delta`
+  runs too fast. Show a scene once, or animate elsewhere.
+- **Dynamic buffers are per frame in flight.** A custom content must update each one every frame it draws.
+- **The first window's renderer is not released at exit,** so `Content.dispose` and the 3D device teardown do not run
+  there. Other windows' do run when they close.
+
+**`Background3D`**
+
+- **It sees game input only.** A container with a click listener, or a draggable or scrollable element under the
+  mouse, takes the event first and the 3D never sees it.
+- **`pointerMoved` also fires over the UI, and there is no `pointerExited`,** focus or typed text.
+- **Using it as an `Element` background** (3D behind one panel) is untested.
 
 ## Not implemented yet
 

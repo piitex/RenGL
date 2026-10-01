@@ -19,6 +19,17 @@ window's flat background color, behind every container, at the window's size:
 window.setBackground(new ConstellationBackground());
 ```
 
+## 3D behind the window
+
+`Window.setBackground` takes any `Background`, so a live 3D scene can sit behind the whole window, with every container drawn
+over it. [`Background3D`](../3d/background-3d.md) is that background:
+
+```java nocompile
+window.setBackground(new Background3D(window, scene));
+```
+
+It needs a window on OpenGL or Vulkan and is optional like the rest of the [3D layer](../3d/README.md).
+
 ## Why it is not a child element
 
 A [`Layout`](../layouts/README.md) positions every child it has. A full-size decorative effect added as a real child would be caught up in
