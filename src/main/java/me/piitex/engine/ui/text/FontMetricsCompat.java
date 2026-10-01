@@ -75,17 +75,47 @@ public final class FontMetricsCompat {
     }
 
     private static MethodHandle lookup() {
+        Method legacy = null;
         for (Method method : Font.class.getMethods()) {
-            if (method.getName().startsWith("getMetrics") && method.getParameterCount() == 0
-                    && method.getReturnType() == float[].class) {
-                try {
-                    return MethodHandles.publicLookup().unreflect(method)
-                            .asType(java.lang.invoke.MethodType.methodType(float[].class, Font.class));
-                } catch (IllegalAccessException e) {
-                    throw new ExceptionInInitializerError(e);
+            if (!method.getName().startsWith("getMetrics") || method.getParameterCount() != 0) continue;
+            if (method.getReturnType() == float[].class) return handle(method, float[].class);
+            if (method.getReturnType() == org.jetbrains.skia.FontMetrics.class) legacy = method;
+        }
+        if (legacy != null) {
+            // Skiko before 0.152: getMetrics() returns a FontMetrics object, read through its getters.
+            MethodHandle metrics = handle(legacy, org.jetbrains.skia.FontMetrics.class);
+            try {
+                MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+                Class<?> type = org.jetbrains.skia.FontMetrics.class;
+                MethodHandle[] getters = new MethodHandle[5];
+                String[] names = {"getTop", "getAscent", "getDescent", "getBottom", "getLeading"};
+                for (int i = 0; i < names.length; i++) {
+                    getters[i] = lookup.findVirtual(type, names[i], java.lang.invoke.MethodType.methodType(float.class));
                 }
+                MethodHandle read = MethodHandles.lookup().findStatic(FontMetricsCompat.class, "readLegacy",
+                        java.lang.invoke.MethodType.methodType(float[].class, MethodHandle[].class, Object.class));
+                return MethodHandles.filterReturnValue(metrics,
+                        MethodHandles.insertArguments(read, 0, (Object) getters).asType(
+                                java.lang.invoke.MethodType.methodType(float[].class, org.jetbrains.skia.FontMetrics.class)));
+            } catch (ReflectiveOperationException e) {
+                throw new ExceptionInInitializerError(e);
             }
         }
-        throw new ExceptionInInitializerError("This Skiko has no Font metrics accessor returning float[]");
+        throw new ExceptionInInitializerError("This Skiko has no Font metrics accessor");
+    }
+
+    private static MethodHandle handle(Method method, Class<?> returns) {
+        try {
+            return MethodHandles.publicLookup().unreflect(method)
+                    .asType(java.lang.invoke.MethodType.methodType(returns, Font.class));
+        } catch (IllegalAccessException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private static float[] readLegacy(MethodHandle[] getters, Object metrics) throws Throwable {
+        float[] values = new float[getters.length];
+        for (int i = 0; i < getters.length; i++) values[i] = (float) getters[i].invoke(metrics);
+        return values;
     }
 }
