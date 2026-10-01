@@ -25,6 +25,7 @@ A `GpuDevice` is the layer's view of the GPU. You never create one: a viewport h
 | `createTexture(width, height, ByteBuffer rgba)` | RGBA8, tightly packed, **top row first**. Sampled with linear filtering and repeat wrapping |
 | `createPipeline(PipelineDesc)` | Shaders plus fixed-function state |
 | `createRenderTarget(width, height, boolean depth)` | An offscreen colour image, with a depth buffer if asked. A viewport makes the one you draw into; make your own for multi-pass effects |
+| `frameNumber()` | The window's frame being drawn, the same for every viewport that draws in it. Compare it with the last one you saw to do something once per frame, however many viewports show your content |
 | `beginPass(RenderTarget, r, g, b, a)` | Starts drawing into a target, clearing it to the colour and the depth to the far plane |
 
 `beginFrame()` and `endFrame()` also exist, but the viewport calls them around `Content.render`, so you don't.

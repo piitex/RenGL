@@ -91,6 +91,7 @@ Run it with `-XstartOnFirstThread` on macOS. `-Drengl.demo.api=VULKAN|OPENGL` ov
 | 3D on GL 3.3 (macOS harness with `-Dskiko.macos.opengl.enabled=true`) | Visually identical to Vulkan, upright, Skia draws fine after the 3D pass. |
 | `Background3DDemo` on Vulkan | A frame dump shows the 3D filling the window with the UI over it. The same validation layout error as the dump aid appears once after frame 90. Input forwarding was tested without a window by feeding the engine's `Input` press, move, wheel and key events: it produced hover, drag start, drag, wheel, drag end and key events as designed. Real mouse clicks were not driven. |
 | `Scene3DDemo` | Default scene dumped as a frame on Vulkan and checked by eye. The file dialog, sliders, check boxes, drag and scroll were **not** driven. Not run on GL. |
+| Update handler once per frame, `setContinuous(false)` | Vulkan, validation layer on: two viewports sharing a scene ran the handler 120 times in 2 s at 60 fps (once per frame); a non-continuous viewport drew 0 times while idle and once after `requestRender()`, and its picture stayed on screen. No validation errors. Not run on GL, and the input-triggered redraw path was not driven with a real mouse |
 | Windows, Linux | **Never run.** |
 | Automated tests in the repo | **None** for the 3D layer. The harnesses live in a scratchpad. |
 | Code samples in the docs | The complete samples in [3D](3d/README.md), [Models](3d/models.md) and [Custom rendering](3d/custom-rendering.md) were compiled against the engine. The first-scene and spinning-triangle samples were run on Vulkan and dumped as frames |
@@ -104,11 +105,10 @@ Useful switches: `-Drengl.vulkan.validation=true` (with `-Dorg.lwjgl.vulkan.libn
 
 1. The primary window's renderer is never released at engine exit, so `Content.dispose` and the GPU device teardown do not run there. This is old behaviour.
 2. GPU uploads happen on a mesh's or texture's first draw and wait for the queue to go idle, so a big model causes a visible stall.
-3. A scene shown in several viewports runs its update handler once per viewport per frame, so animation runs too fast. Fix by giving the scene a frame counter, or by moving updates out of `render`.
 4. Dynamic buffers are per frame slot. A frame that skips `update()` sees stale data.
 5. Vulkan descriptor pools are 4096 sets x 4 buffers per frame slot, so about 1000 draws per frame is the ceiling. There is no instancing.
 6. 32-bit indices only. No push constants.
-7. A `Viewport3D` and a `Background3D` re-render every frame, even when nothing changed. A background costs a full-window offscreen target plus a GPU copy per frame.
+7. A `Viewport3D` and a `Background3D` re-render every frame by default. `setContinuous(false)` draws only on request, but the content must call `requestRender()` after changing a scene from code (input to the listener counts as a request).
 8. The `rengl.vulkan.dump` aid causes one validation layout warning. This is cosmetic.
 
 ### Missing 3D features
@@ -133,7 +133,7 @@ No shadows, skybox, MSAA, mipmaps (textures shimmer at a distance), normal or me
 
 In suggested order:
 
-1. **Quick fixes:** update handler once per frame per scene (issue 3), a render-on-demand mode for viewports (issue 7), an in-repo smoke test.
+1. **In-repo smoke test** for the 3D layer. The repo has no test setup (no JUnit in the pom, an empty `src/test`), so this needs a decision first.
 2. **Ray picking** (screen to world ray, ray against bounds and triangles), so scenes can be clicked.
 3. **Image quality:** MSAA, mipmaps.
 4. **Content:** normal and metal-rough maps, shadows, a skybox, skeletal and glTF animation, instancing.

@@ -49,6 +49,11 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_TILING_OPTIMAL;
  * draws nothing). A {@link me.piitex.engine.ui.Element#takeSnapshot snapshot} of the UI leaves the viewport out,
  * since a snapshot is drawn on the CPU.
  * <p>
+ * By default the content draws every frame. For a picture that rarely changes, {@link #setContinuous
+ * setContinuous(false)} draws it only when it is asked to ({@link #requestRender}), and otherwise shows the last
+ * picture again at no cost. Input that reaches the viewport's {@link InputListener} counts as a request, so an orbiting
+ * camera still redraws.
+ * <p>
  * The picture is opaque. Whatever alpha the content leaves in the target is drawn as premultiplied alpha.
  * <p>
  * Threading: the {@link Content} callbacks run on the render thread, with the window's graphics context current.
@@ -148,11 +153,17 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     private Content content;
     private InputListener input;
     private float resolutionScale = 1f;
+    private volatile boolean continuous = true;
+    private volatile boolean renderRequested = true;
 
     // Render thread
     private Content activeContent;
     private Gpu3D gpu;
     private RenderTarget target;
+    /**
+     * The picture of the last frame drawn, shown again by frames that don't redraw.
+     */
+    private Image picture;
     private boolean failed;
     private boolean reportedUnsupported;
     private float delta;
@@ -178,6 +189,7 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     public void setContent(Content content) {
         this.content = content;
         this.failed = false;
+        this.renderRequested = true;
     }
 
     public Content getContent() {
@@ -207,6 +219,28 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
 
     public float getResolutionScale() {
         return resolutionScale;
+    }
+
+    /**
+     * True (the default) draws the content every frame. False draws it only after {@link #requestRender}, a resize, new
+     * content, or input to the {@link InputListener}, and shows the last picture otherwise. Use false for a scene that
+     * doesn't move by itself: a model viewer, a preview. A scene with an update handler that animates it needs true.
+     */
+    public void setContinuous(boolean continuous) {
+        this.continuous = continuous;
+        if (!continuous) renderRequested = true;
+    }
+
+    public boolean isContinuous() {
+        return continuous;
+    }
+
+    /**
+     * Asks for the content to be drawn on the next frame. Only matters when {@link #setContinuous continuous} is
+     * false: call it after changing what the content shows. Safe from any thread.
+     */
+    public void requestRender() {
+        renderRequested = true;
     }
 
     /**
@@ -241,13 +275,19 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
             if (!pointerInside || x != lastHoverX || y != lastHoverY) {
                 lastHoverX = x;
                 lastHoverY = y;
-                if (listener != null) listener.pointerMoved(x, y);
+                if (listener != null) {
+                    renderRequested = true;
+                    listener.pointerMoved(x, y);
+                }
             }
             pointerInside = true;
         } else if (pointerInside && !dragging) {
             pointerInside = false;
             lastHoverX = lastHoverY = Double.NaN;
-            if (listener != null) listener.pointerExited();
+            if (listener != null) {
+                renderRequested = true;
+                listener.pointerExited();
+            }
         }
     }
 
@@ -296,17 +336,24 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
             target = device.createRenderTarget(width, height, true);
             resized = true;
         }
-        if (resized) activeContent.resize(device, width, height);
-
-        device.beginFrame();
-        try {
-            activeContent.render(device, target, delta);
-        } finally {
-            device.endFrame();
+        if (resized) {
+            activeContent.resize(device, width, height);
+            renderRequested = true;
         }
 
-        Image image = wrap(interop, target);
-        renderer.drawImage(image, (float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(),
+        if (continuous || renderRequested || picture == null) {
+            renderRequested = false;
+            device.beginFrame();
+            try {
+                activeContent.render(device, target, delta);
+            } finally {
+                device.endFrame();
+            }
+            if (picture != null) picture.close();
+            picture = null;
+            picture = wrap(interop, target);
+        }
+        renderer.drawImage(picture, (float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(),
                 getStyling().getCornerRadius(), 1f);
     }
 
@@ -336,9 +383,7 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
                 SurfaceColorFormat.RGBA_8888, ColorSpace.Companion.getSRGB(), new SurfaceProps());
         if (surface == null) throw new IllegalStateException("Skia could not wrap the 3D target");
         inFlight.add(surface);
-        Image image = surface.makeImageSnapshot();
-        inFlight.add(image);
-        return image;
+        return surface.makeImageSnapshot();
     }
 
     private void closeInFlight() {
@@ -365,6 +410,10 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
 
     void releaseGpu(GpuDevice device) {
         closeInFlight();
+        if (picture != null) {
+            picture.close();
+            picture = null;
+        }
         if (activeContent != null) {
             try {
                 activeContent.dispose(device);
@@ -395,14 +444,20 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
         lastDragX = localX(x);
         lastDragY = localY(y);
         InputListener listener = listener();
-        if (listener != null) listener.dragStarted(lastDragX, lastDragY);
+        if (listener != null) {
+            renderRequested = true;
+            listener.dragStarted(lastDragX, lastDragY);
+        }
     }
 
     @Override
     public void onDragUpdate(double x, double y) {
         double lx = localX(x), ly = localY(y);
         InputListener listener = listener();
-        if (listener != null) listener.dragged(lx, ly, lx - lastDragX, ly - lastDragY);
+        if (listener != null) {
+            renderRequested = true;
+            listener.dragged(lx, ly, lx - lastDragX, ly - lastDragY);
+        }
         lastDragX = lx;
         lastDragY = ly;
     }
@@ -411,13 +466,19 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     public void onDragEnd(double x, double y) {
         dragging = false;
         InputListener listener = listener();
-        if (listener != null) listener.dragEnded(localX(x), localY(y));
+        if (listener != null) {
+            renderRequested = true;
+            listener.dragEnded(localX(x), localY(y));
+        }
     }
 
     @Override
     public void onScroll(double deltaX, double deltaY) {
         InputListener listener = listener();
-        if (listener != null) listener.scrolled(deltaX, deltaY, localX(MouseTracker.getX()), localY(MouseTracker.getY()));
+        if (listener != null) {
+            renderRequested = true;
+            listener.scrolled(deltaX, deltaY, localX(MouseTracker.getX()), localY(MouseTracker.getY()));
+        }
     }
 
     @Override
@@ -428,24 +489,36 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     @Override
     public void onFocusGained() {
         InputListener listener = listener();
-        if (listener != null) listener.focusChanged(true);
+        if (listener != null) {
+            renderRequested = true;
+            listener.focusChanged(true);
+        }
     }
 
     @Override
     public void onFocusLost() {
         InputListener listener = listener();
-        if (listener != null) listener.focusChanged(false);
+        if (listener != null) {
+            renderRequested = true;
+            listener.focusChanged(false);
+        }
     }
 
     @Override
     public void onCharTyped(int codepoint) {
         InputListener listener = listener();
-        if (listener != null) listener.charTyped(codepoint);
+        if (listener != null) {
+            renderRequested = true;
+            listener.charTyped(codepoint);
+        }
     }
 
     @Override
     public void onKeyPressed(int key, int action, int mods) {
         InputListener listener = listener();
-        if (listener != null) listener.keyPressed(key, action, mods);
+        if (listener != null) {
+            renderRequested = true;
+            listener.keyPressed(key, action, mods);
+        }
     }
 }

@@ -5,6 +5,7 @@ import me.piitex.engine.render3d.*;
 import org.lwjgl.opengl.GL;
 
 import java.nio.ByteBuffer;
+import java.util.function.LongSupplier;
 
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL30C.glDeleteVertexArrays;
@@ -20,11 +21,13 @@ public final class GlDevice implements GpuDevice {
 
     final int vertexArray;
     private final String name;
+    private final LongSupplier frames;
 
     /**
      * @throws IllegalStateException when no OpenGL context is current or it is older than 3.3
      */
-    public GlDevice() {
+    public GlDevice(LongSupplier frames) {
+        this.frames = frames;
         if (GL.getCapabilities() == null) GL.createCapabilities();
         if (!GL.getCapabilities().OpenGL33) {
             throw new IllegalStateException("The 3D layer needs OpenGL 3.3, this context is "
@@ -42,6 +45,11 @@ public final class GlDevice implements GpuDevice {
     @Override
     public String name() {
         return name;
+    }
+
+    @Override
+    public long frameNumber() {
+        return frames.getAsLong();
     }
 
     @Override

@@ -180,12 +180,12 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 - **About a thousand draws per frame is the ceiling on Vulkan,** and there is no instancing. 32-bit indices only, and no
   push constants.
-- **A viewport or background re-renders every frame,** even when nothing changed. A [`Background3D`](../3d/background-3d.md)
-  renders a full-window picture plus a GPU copy each frame. There is no render-on-demand mode yet.
+- **A viewport or background re-renders every frame by default,** even when nothing changed. A
+  [`Background3D`](../3d/background-3d.md) renders a full-window picture plus a GPU copy each frame. For a scene that
+  only changes on request, [`setContinuous(false)`](../3d/viewport-3d.md#drawing-only-when-needed) draws it only when
+  asked.
 - **GPU uploads stall.** A mesh or texture uploads the first time it is drawn and waits for the GPU, so a big model
   causes a visible hitch on its first frame.
-- **A scene shown in several viewports runs its update handler once per viewport per frame,** so animation by `delta`
-  runs too fast. Show a scene once, or animate elsewhere.
 - **Dynamic buffers are per frame in flight.** A custom content must update each one every frame it draws.
 - **The first window's renderer is not released at exit,** so `Content.dispose` and the 3D device teardown do not run
   there. Other windows' do run when they close.

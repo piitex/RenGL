@@ -132,6 +132,7 @@ public class SkikoRenderer extends SkiaRenderer implements GpuInterop {
 
     @Override
     public void begin() {
+        frames++;
         alphas.reset();
         frameValid = true; // the OpenGL surface lives across frames, so there is always something to draw to
         canvas.clear(argb(clearA, clearR, clearG, clearB));
