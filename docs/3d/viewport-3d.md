@@ -41,6 +41,8 @@ does not render and costs nothing.
 | `getContent()` | The current content |
 | `setInputListener(InputListener)` | Where [input](#input) goes. `null` (the default) means the content itself, if it implements `InputListener` |
 | `setResolutionScale(float)` / `getResolutionScale()` | See [Resolution](#resolution) |
+| `setContinuous(boolean)` / `isContinuous()` | `true` (the default) draws every frame. See [Drawing only when needed](#drawing-only-when-needed) |
+| `requestRender()` | Asks for a redraw on the next frame, for a viewport that is not continuous. Safe from any thread |
 | `getPixelWidth()` / `getPixelHeight()` | The target's size in pixels, `0` before the first frame |
 | `getDevice()` | The [`GpuDevice`](custom-rendering.md#the-gpu-device) the content draws with, `null` before the first frame |
 | `close()` | Frees the content and target now, for a viewport you remove before the window closes. It can draw again afterwards, starting afresh |
@@ -135,8 +137,30 @@ thumbnail.getStyling().setCornerRadius(10f);
 ```
 
 Viewports in one window share a device, so scenes and their GPU meshes are shared too. A scene shown in several
-viewports is drawn once per viewport per frame (and runs its [update handler](scenes.md#the-update-handler) once per
-viewport, see the note there).
+viewports is drawn once per viewport per frame, and runs its [update handler](scenes.md#the-update-handler) once per
+frame, before the first of them draws.
+
+## Drawing only when needed
+
+A viewport redraws its content every frame by default, which a moving scene needs. A viewport that shows something
+still, such as a model viewer or a preview, can skip that work:
+
+```java nocompile
+view.setContinuous(false);   // draw on request
+// ... later, after changing the scene from code:
+view.requestRender();
+```
+
+A viewport that is not continuous draws when:
+
+- it draws for the first time, is resized, or gets new content;
+- the [`InputListener`](#input) receives anything (drag, scroll, a key, the mouse moving), so an
+  [`OrbitControls`](scenes.md#orbit-controls) camera still redraws as you turn it;
+- `requestRender()` is called, which is what you do after changing a node, light or camera yourself.
+
+Between those frames it shows the last picture again, which costs no 3D work and no GPU copy. A scene with an
+[update handler](scenes.md#the-update-handler) that animates it needs a continuous viewport, because the handler only
+runs when the scene draws.
 
 ## Gotchas
 
@@ -144,6 +168,7 @@ viewport, see the note there).
   (Metal, or the CPU renderer behind [snapshots](../core/snapshots.md)), it logs
   `A Viewport3D can only draw in a window running on OpenGL or Vulkan` once and leaves the rectangle empty. A
   snapshot of the UI therefore leaves a viewport out.
-- **It re-renders every frame,** even when nothing changed. There is no render-on-demand mode yet.
+- **It re-renders every frame by default,** even when nothing changed. For a still picture, use
+  [`setContinuous(false)`](#drawing-only-when-needed).
 - **Don't keep the `GpuDevice` or its objects past `dispose`.** The device belongs to the window.
 - A viewport removed from its container without `close()` keeps its GPU objects until the window closes.

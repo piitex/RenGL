@@ -22,6 +22,13 @@ public interface GpuDevice extends AutoCloseable {
      */
     String name();
 
+    /**
+     * The number of the window's frame being drawn, the same for every viewport drawn in that frame and up by one for
+     * the next. {@link Viewport3D.Content}s that must do something once per frame, however many viewports show them,
+     * compare it with the last one they saw.
+     */
+    long frameNumber();
+
     void beginFrame();
 
     void endFrame();

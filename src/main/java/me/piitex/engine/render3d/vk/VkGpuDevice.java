@@ -15,6 +15,7 @@ import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 import java.util.ArrayDeque;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.*;
@@ -59,6 +60,7 @@ public final class VkGpuDevice implements GpuDevice {
     final long sampler;
 
     private final String name;
+    private final LongSupplier frames;
     private final long uploadPool;
     private final long[] commandPools = new long[FRAMES];
     final long[] descriptorPools = new long[FRAMES];
@@ -71,7 +73,8 @@ public final class VkGpuDevice implements GpuDevice {
     long frameCounter;
     boolean frameActive;
 
-    public VkGpuDevice(VulkanContext context) {
+    public VkGpuDevice(VulkanContext context, LongSupplier frames) {
+        this.frames = frames;
         if (VK_API_VERSION_MAJOR(context.apiVersion()) == 1 && VK_API_VERSION_MINOR(context.apiVersion()) < 1) {
             throw new IllegalStateException("The 3D layer needs Vulkan 1.1 or newer; this GPU reports "
                     + VK_API_VERSION_MAJOR(context.apiVersion()) + "." + VK_API_VERSION_MINOR(context.apiVersion()));
@@ -157,6 +160,11 @@ public final class VkGpuDevice implements GpuDevice {
     @Override
     public String name() {
         return name;
+    }
+
+    @Override
+    public long frameNumber() {
+        return frames.getAsLong();
     }
 
     @Override

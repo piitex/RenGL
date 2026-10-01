@@ -35,6 +35,12 @@ public interface GpuInterop {
     float pixelScale();
 
     /**
+     * The number of the window's frame being drawn, up by one for every frame. Two draws with the same number are in
+     * the same frame.
+     */
+    long frameNumber();
+
+    /**
      * Runs {@code cleanup} when the renderer is disposed, first, while the GPU context is still usable and before
      * Skia's is closed, so a GPU layer can free what it made. Runs once; a renderer that is already gone runs it
      * right away.

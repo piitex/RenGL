@@ -48,13 +48,14 @@ Call `scene.lights().clear()` for different lighting.
 scene.setUpdateHandler((s, delta) -> cube.rotate(Vec3.UP, delta * 0.6f));
 ```
 
-The handler is where scene logic goes: it runs on the render thread right before each draw, with `delta` in seconds.
+The handler is where scene logic goes: it runs on the render thread right before the scene draws, **once per frame**,
+with `delta` in seconds.
 Changing nodes, lights or the camera there is safe. The scene's data is plain Java, so it can be built on any thread,
 but change it *while it is drawn* only from the render thread.
 
-> **Several viewports:** a scene shown by more than one viewport runs its update handler once per viewport per frame,
-> so animation by `delta` runs too fast. Show a scene in one place, or do the animation outside the handler (for
-> example in an element's `onUpdate`). Fixing this is on the [plan](../3d-status.md#known-issues-and-limits).
+> **Several viewports:** a scene shown by more than one viewport still runs its update handler once per frame, before
+> the first of them draws, so animation by `delta` runs at the right speed. The other viewports draw the updated scene.
+> A viewport that is [not continuous](viewport-3d.md#drawing-only-when-needed) only runs the handler when it draws.
 
 ## Node3D
 
@@ -251,7 +252,7 @@ Projection matrices are Vulkan-style on both APIs (+Y up in clip space, depth `0
 A scene makes one `SceneRenderer` per GPU device it is shown on, shared by that scene's viewports. It draws all opaque nodes, then the blended
 ones far to near, with one dynamic uniform buffer per drawn node. GPU meshes and textures are cached and freed after
 600 frames without being drawn. You never touch it directly; it is how the scene follows its `Content` lifecycle:
-`init` makes the renderer, `render` runs the update handler and draws, `dispose` frees it when the last viewport lets go.
+`init` makes the renderer, `render` runs the update handler (once per frame) and draws, `dispose` frees it when the last viewport lets go.
 
 ## Gotchas
 

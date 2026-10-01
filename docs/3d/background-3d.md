@@ -31,6 +31,8 @@ so the UI always draws over the 3D. See [One frame](../architecture.md#one-frame
 | `setInputListener(InputListener)` | Where input goes. `null` (the default) means the content, if it implements `InputListener`, and nobody otherwise |
 | `setResolutionScale(float)` / `getResolutionScale()` | Picture pixels per window pixel, `0.1` to `4`, default `1`. `0.5` renders a quarter as many pixels and lets the UI layer scale it up |
 | `setEnabled(boolean)` / `isEnabled()` | Hides or shows the 3D without removing the background. A hidden background does not render, so it costs nothing |
+| `setContinuous(boolean)` / `isContinuous()` | `true` (the default) draws every frame. `false` draws only after `requestRender()`, a window resize, new content, or input that reaches the listener, the same as [a viewport](viewport-3d.md#drawing-only-when-needed) |
+| `requestRender()` | Asks for a redraw on the next frame, when it isn't continuous |
 | `getDevice()` | The GPU device, `null` before the first frame |
 | `close()` | Frees the content and target. For a background removed before the window closes: call `window.setBackground(null)` first. It happens by itself when the window closes |
 
@@ -86,7 +88,8 @@ Run it with `-XstartOnFirstThread`, and `-Drengl.demo.api=VULKAN` or `OPENGL` to
 - **There is no `pointerExited`.** `pointerMoved` also fires while the mouse is over UI, so don't treat it as "the
   mouse is over the 3D".
 - **It re-renders a full-window picture every frame,** an offscreen target plus a GPU copy. Lower
-  `setResolutionScale`, or `setEnabled(false)` while a full-screen menu covers it.
+  `setResolutionScale`, `setEnabled(false)` while a full-screen menu covers it, or `setContinuous(false)` if the scene
+  only changes when you say so.
 - **Window backgrounds replace each other.** `window.setBackground(...)` holds one `Background`, so setting a
   `Background3D` removes an effect such as a [`ConstellationBackground`](../styling/backgrounds.md) you set before.
 - **Untested as an element background.** `Background` can also be set on an `Element`, but a `Background3D`'s input

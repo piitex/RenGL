@@ -129,6 +129,7 @@ public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
 
     @Override
     public void begin() {
+        frames++;
         alphas.reset();
         frameValid = false;
         imageAcquired = false;

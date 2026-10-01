@@ -41,8 +41,8 @@ final class Gpu3D {
         if (existing != null) return existing;
 
         GpuDevice device = interop.gpuApi() == RenderAPI.VULKAN
-                ? new VkGpuDevice(interop.vulkanContext())
-                : new GlDevice();
+                ? new VkGpuDevice(interop.vulkanContext(), interop::frameNumber)
+                : new GlDevice(interop::frameNumber);
         Gpu3D created = new Gpu3D(interop, device);
         BY_RENDERER.put(interop, created);
         interop.onDispose(created::shutdown);

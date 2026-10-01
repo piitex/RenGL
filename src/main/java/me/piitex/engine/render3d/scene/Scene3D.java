@@ -31,7 +31,7 @@ import java.util.Map;
  * <p>
  * The scene's data is plain Java and can be built on any thread, but change it while it is drawn only from the render
  * thread, such as in an {@link #setUpdateHandler update handler}. One scene can be shown by several viewports; it is
- * then drawn, and its update handler run, once per viewport per frame.
+ * then drawn once per viewport per frame, and its update handler runs once per frame, before the first of them.
  */
 public class Scene3D implements Viewport3D.Content {
     /**
@@ -63,6 +63,7 @@ public class Scene3D implements Viewport3D.Content {
     private static final class Shared {
         final SceneRenderer renderer;
         int users;
+        long updatedFrame = -1;
 
         Shared(SceneRenderer renderer) {
             this.renderer = renderer;
@@ -142,9 +143,12 @@ public class Scene3D implements Viewport3D.Content {
 
     @Override
     public void render(GpuDevice device, RenderTarget target, float delta) {
-        if (updateHandler != null) updateHandler.update(this, delta);
         Shared shared = renderers.get(device);
         if (shared == null) throw new IllegalStateException("The scene was drawn before it was initialised for this device");
+        // Several viewports can show the scene in one frame; only the first runs the update.
+        long frame = device.frameNumber();
+        if (updateHandler != null && shared.updatedFrame != frame) updateHandler.update(this, delta);
+        shared.updatedFrame = frame;
         shared.renderer.render(this, target);
     }
 

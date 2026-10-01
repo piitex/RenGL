@@ -105,6 +105,26 @@ public class Background3D implements Background {
     }
 
     /**
+     * True (the default) draws the content every frame. False draws it only after {@link #requestRender}, a window
+     * resize, new content, or input that reaches the listener, and shows the last picture otherwise; see
+     * {@link Viewport3D#setContinuous}.
+     */
+    public void setContinuous(boolean continuous) {
+        view.setContinuous(continuous);
+    }
+
+    public boolean isContinuous() {
+        return view.isContinuous();
+    }
+
+    /**
+     * Asks for the content to be drawn on the next frame, when it is not {@link #setContinuous continuous}.
+     */
+    public void requestRender() {
+        view.requestRender();
+    }
+
+    /**
      * The device the content draws with, or null before the first frame.
      */
     public GpuDevice getDevice() {
@@ -133,29 +153,45 @@ public class Background3D implements Background {
         float mouseX = in.getMouseX() - x, mouseY = in.getMouseY() - y;
 
         boolean down = in.isMouseDown(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        boolean fed = false;
         if (dragging && !down) {
+            fed = true;
             dragging = false;
             listener.dragEnded(mouseX, mouseY);
         } else if (!dragging && in.isMouseJustPressed(GLFW.GLFW_MOUSE_BUTTON_LEFT) && down) {
+            fed = true;
             dragging = true;
             listener.dragStarted(mouseX, mouseY);
         }
 
         float dx = in.getMouseDeltaX(), dy = in.getMouseDeltaY();
         if (dx != 0f || dy != 0f) {
+            fed = true;
             if (dragging) listener.dragged(mouseX, mouseY, dx, dy);
             else if (in.isMouseInWindow()) listener.pointerMoved(mouseX, mouseY);
         }
 
         float scrollX = in.getScrollX(), scrollY = in.getScrollY();
-        if (scrollX != 0f || scrollY != 0f) listener.scrolled(scrollX, scrollY, mouseX, mouseY);
+        if (scrollX != 0f || scrollY != 0f) {
+            fed = true;
+            listener.scrolled(scrollX, scrollY, mouseX, mouseY);
+        }
 
         int mods = in.getModifiers();
         for (int key = FIRST_KEY; key <= GLFW.GLFW_KEY_LAST; key++) {
-            if (in.isKeyJustPressed(key)) listener.keyPressed(key, GLFW.GLFW_PRESS, mods);
-            else if (in.isKeyRepeated(key)) listener.keyPressed(key, GLFW.GLFW_REPEAT, mods);
-            if (in.isKeyJustReleased(key)) listener.keyPressed(key, GLFW.GLFW_RELEASE, mods);
+            if (in.isKeyJustPressed(key)) {
+                fed = true;
+                listener.keyPressed(key, GLFW.GLFW_PRESS, mods);
+            } else if (in.isKeyRepeated(key)) {
+                fed = true;
+                listener.keyPressed(key, GLFW.GLFW_REPEAT, mods);
+            }
+            if (in.isKeyJustReleased(key)) {
+                fed = true;
+                listener.keyPressed(key, GLFW.GLFW_RELEASE, mods);
+            }
         }
+        if (fed) view.requestRender();
     }
 
     /**

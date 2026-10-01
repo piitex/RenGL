@@ -28,6 +28,19 @@ public abstract class SkiaRenderer implements Renderer {
      */
     protected boolean frameValid;
 
+    /**
+     * Frames begun so far. Each backend's {@link #begin()} increments it.
+     */
+    protected long frames;
+
+    /**
+     * The number of the frame being drawn, which goes up by one per frame. A GPU layer such as the 3D one uses it to
+     * tell a new frame from a second draw in the same frame.
+     */
+    public long frameNumber() {
+        return frames;
+    }
+
     protected float clearR = 1f, clearG = 1f, clearB = 1f, clearA = 1f;
 
     @Override
