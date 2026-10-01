@@ -3,8 +3,11 @@
 [Documentation](../README.md) › [Graphics](README.md)
 
 A `ShaderEffect` (`me.piitex.engine.graphics`) is a shader written in SkSL, Skia's shading language, with the values of
-its uniforms. It runs the same on every backend: Metal, OpenGL, and the CPU renderer that
+its uniforms. It runs the same on every backend: Metal, OpenGL, Vulkan, and the CPU renderer that
 [snapshots](../core/snapshots.md) use. The engine only runs shaders; the effects themselves are yours to write.
+
+These are 2D, Skia-side effects. Shaders for the optional [3D layer](../3d/README.md) are a different thing: GLSL 450,
+run on the GPU by OpenGL or Vulkan, see [Custom rendering](../3d/custom-rendering.md#shaders).
 
 There are two ways to use one:
 

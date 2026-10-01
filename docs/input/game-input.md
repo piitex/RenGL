@@ -188,7 +188,8 @@ The interface gets input first, as it always has, and the game only sees what it
 | Releases | Always reach it, so nothing is left held down |
 
 A click on an element that ignores clicks, such as a label, an image or a plain panel, counts as game input, so the
-world can be clicked through text drawn over it. To keep clicks on a HUD panel from the game, give the panel a click
+world can be clicked through text drawn over it. A [`Background3D`](../3d/background-3d.md) is driven by exactly this:
+it turns the game input into drag, wheel, pointer and key events for its camera controls. To keep clicks on a HUD panel from the game, give the panel a click
 listener that does nothing: `panel.onMouseClick(e -> {})`.
 
 **Tab** moves [keyboard focus](input-and-focus.md#tab-order) while an element has focus or a popup or modal is

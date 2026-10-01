@@ -24,8 +24,13 @@ slot.addElement(new ImageOverlay(new File("saves/slot1.png"), 320, 180));
 | `window.takeSnapshot(scale)` | The window backdrop plus every enabled container, at the window size |
 | `takeSnapshotAsync(scale, callback)` | Waits for the next frame, then calls `callback` on the render thread. Safe from any thread |
 
-Snapshots are drawn by a CPU `OffscreenRenderer`, not read back from the screen, so they work the same on OpenGL and Metal, do
+Snapshots are drawn by a CPU `OffscreenRenderer`, not read back from the screen, so they work the same on OpenGL, Vulkan and Metal, do
 not flicker the window, and can be a different size than what is on screen.
+
+For the same reason a snapshot **leaves out [3D](../3d/README.md)**: a [`Viewport3D`](../3d/viewport-3d.md) or
+[`Background3D`](../3d/background-3d.md) is drawn by the GPU, so the CPU renderer has nothing to draw there (a viewport logs
+a warning once). To save what a 3D view shows, read the picture back from its target with `RenderTarget.readPixels()` in a
+[custom content](../3d/custom-rendering.md).
 
 ## Using the result
 

@@ -46,14 +46,14 @@ thread at the start of the next frame.
 ```text
  1. Handle window resize                (recreate the drawing surface if needed)
  2. InputProcessor.processEvents        (mouse move, click and scroll, keys, typed chars; the game's Input state)
- 3. Advance the window background       (an animated paint, and the window's Background effect if set)
+ 3. Advance the window background       (an animated paint, and the window's Background effect if set; a Background3D reads the game's Input here)
  4. Deliver queued callbacks            (native menu choices, file dialog results)
  5. Scheduler.update                    (runLater tasks, timers, async results)
  6. Scene fixed steps                   (Scene.fixedUpdate, as many ticks as this frame's game time covers)
  7. Scene updates                       (scene transition clock, then scene timers and Scene.update with the frame's game time)
  8. container.update(delta)             (every enabled top-level container, recursively)
  9. TooltipManager.update
-10. Clear the canvas; draw the window background and its Background effect
+10. Clear the canvas; draw the window background and its Background effect (a [`Background3D`](3d/background-3d.md) renders its picture here)
 11. container.renderWithTransitions     (every enabled top-level container, in index order; scenes, or a scene transition, come first)
 12. TooltipManager.render               (above every container)
 13. Present
@@ -123,7 +123,7 @@ Whatever the interface leaves is game input. A key press no focused element, pop
 scenes' `onKey`, top first, and then to the polled [`Input`](input/game-input.md) state and its input contexts. A
 mouse press no element used (no click listener, focus, context menu or drag) and a wheel turn nothing scrolled go to
 `Input` too. Releases always reach the game. A controls menu waiting for a binding
-([`listenForBinding`](input/game-input.md#rebinding)) gets the next press before all of this. See
+([`listenForBinding`](input/game-input.md#rebindings)) gets the next press before all of this. See
 [What reaches the game](input/game-input.md#what-reaches-the-game).
 
 Two special layers sit above normal containers:
@@ -147,22 +147,19 @@ You never call these directly, but it helps to know what draws your UI:
 - **Metal** backs Skia on macOS (`MetalSkikoRenderer`). macOS windows are created without an OpenGL
   context.
 - **Vulkan** is opt-in on every platform (`VulkanSkikoRenderer`, with `VulkanContext` owning the instance, GPU,
-  swapchain and synchronization). Ask for it with `WindowOptions.setRenderer(RenderAPI.VULKAN)`, or run any
-  app with `-Drengl.backend=vulkan`. A machine without a usable Vulkan GPU, or a classpath whose Skiko has no Vulkan support (see below), falls back to the platform default with a warning, and
-  `Window.getRenderer()` tells you what you really got. On macOS it runs on MoltenVK, bundled with LWJGL.
+  swapchain and synchronization). On macOS it runs on MoltenVK, bundled with LWJGL.
 
 All three share one drawing implementation (`SkiaRenderer`); a backend only decides what the Skia canvas draws to.
+Pick one per window with `WindowOptions.setRenderer(RenderAPI.VULKAN)`, or for any app with
+`-Drengl.backend=vulkan`. A request the machine can't meet falls back to the platform default with a warning, and
+`Window.getRenderer()` tells you what you really got. The choices, the fallbacks, and the Vulkan debugging switches are
+on [Rendering APIs](core/rendering-apis.md).
 
-The Vulkan backend needs a Skiko build that has Vulkan support (JetBrains/skiko#1201, merged to Skiko's main branch on
-2026-09-30 and not in a tagged release yet). Until one ships, build Skiko from source and publish it locally with
-`./gradlew :skiko:publishToMavenLocal -Pdeploy.version=0.999.0`, once on each OS you target, and set `skiko.version` in
-the pom to `0.999.0-SNAPSHOT`.
-
-Vulkan debugging switches (system properties): `rengl.vulkan.validation=true` turns on the Khronos validation layer
-(on macOS also load the Vulkan loader with `-Dorg.lwjgl.vulkan.libname=/usr/local/lib/libvulkan.1.dylib`, since LWJGL
-otherwise loads MoltenVK directly and layers can't attach), `rengl.vulkan.gpu=<part of a GPU name>` picks a GPU, and
-`rengl.vulkan.dump=<file.png>` writes one frame read back from the GPU.
-On macOS the engine tells MoltenVK to log only errors, because Skia's pipelines make it print a harmless "Metal does not support disabling primitive restart" warning over and over. Set `MVK_CONFIG_LOG_LEVEL` yourself, or `-Drengl.vulkan.mvkLog=true`, to get MoltenVK's own logging back.
+The OpenGL and Vulkan renderers also implement `GpuInterop`, the one hook the optional [3D layer](3d/README.md) uses to
+share Skia's GPU context: 3D renders into an offscreen picture and Skia draws it like an image, in a
+[`Viewport3D`](3d/viewport-3d.md) element or behind the window as a [`Background3D`](3d/background-3d.md). The Metal
+renderer and the CPU renderer behind [snapshots](core/snapshots.md) don't implement it, so 3D needs OpenGL or Vulkan.
+Nothing in the core knows about 3D: a program that never uses it never starts it.
 
 `Renderer` calls are only legal on the render thread, between `begin()` and `end()`. That is
 already true inside `render`, `onRender` and `Transition.render`.
