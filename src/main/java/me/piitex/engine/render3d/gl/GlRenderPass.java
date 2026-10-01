@@ -29,7 +29,10 @@ final class GlRenderPass implements RenderPass {
 
         glBindFramebuffer(GL_FRAMEBUFFER, target.framebuffer);
         glViewport(0, 0, target.width(), target.height());
+        // Skia shares this context and leaves its own state behind; take back what a pass depends on.
         glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_FRAMEBUFFER_SRGB);
         glColorMask(true, true, true, true);
         glDepthMask(true);
         glClearColor(r, g, b, a);

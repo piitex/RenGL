@@ -1,5 +1,7 @@
 package me.piitex.engine.gl.renderer.vulkan;
 
+import me.piitex.engine.RenderAPI;
+import me.piitex.engine.gl.renderer.GpuInterop;
 import me.piitex.engine.gl.renderer.SkiaRenderer;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
@@ -20,7 +22,7 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_TILING_OPTIMAL;
  * Threading: construct {@link VulkanContext} on the main thread, then call everything here on the render thread.
  */
 @GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
-public class VulkanSkikoRenderer extends SkiaRenderer {
+public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
     private static final Logger log = LogManager.getLogger("Engine");
 
     private final VulkanContext vulkan;
@@ -29,6 +31,8 @@ public class VulkanSkikoRenderer extends SkiaRenderer {
     private Surface surface;
     private boolean imageAcquired;
     private boolean reportedSurfaceFailure;
+    private final java.util.List<Runnable> disposeListeners = new java.util.ArrayList<>();
+    private boolean disposed;
 
     // Debug aid: -Drengl.vulkan.dump=frame.png writes one real frame, read back from the GPU, once DUMP_AFTER_FRAMES
     // have been drawn. It's how Vulkan output can be checked without a screen to look at.
@@ -85,6 +89,32 @@ public class VulkanSkikoRenderer extends SkiaRenderer {
                 vulkan.apiVersion(),
                 null
         );
+    }
+
+    @Override
+    public RenderAPI gpuApi() {
+        return RenderAPI.VULKAN;
+    }
+
+    @Override
+    public DirectContext skiaContext() {
+        return directContext;
+    }
+
+    @Override
+    public VulkanContext vulkanContext() {
+        return vulkan;
+    }
+
+    @Override
+    public float pixelScale() {
+        return (float) vulkan.width() / logicalWidth;
+    }
+
+    @Override
+    public void onDispose(Runnable cleanup) {
+        if (disposed) cleanup.run();
+        else disposeListeners.add(cleanup);
     }
 
     /**
@@ -190,6 +220,15 @@ public class VulkanSkikoRenderer extends SkiaRenderer {
      */
     public void dispose() {
         vulkan.waitIdle();
+        disposed = true;
+        for (Runnable cleanup : disposeListeners) {
+            try {
+                cleanup.run();
+            } catch (RuntimeException e) {
+                log.error("A GPU cleanup failed while closing the window", e);
+            }
+        }
+        disposeListeners.clear();
         if (surface != null) surface.close();
         if (renderTarget != null) renderTarget.close();
         if (directContext != null) {
