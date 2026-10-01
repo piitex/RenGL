@@ -15,9 +15,23 @@
         <!-- Local build of Skiko main for Vulkan support (JetBrains/skiko#1201): ./gradlew :skiko:publishToMavenLocal -Pdeploy.version=0.999.0 on each target OS. Return to an official release once one includes Vulkan. -->
         <skiko.version>0.999.0-SNAPSHOT</skiko.version>
         <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
+        <junit.version>5.10.2</junit.version>
+        <!-- JVM arguments for the test JVM. The macOS profile below adds -XstartOnFirstThread, which GLFW needs for the GPU tests. -->
+        <rengl.test.jvmargs>--enable-native-access=ALL-UNNAMED</rengl.test.jvmargs>
     </properties>
 
     <profiles>
+        <profile>
+            <id>test-macos</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+            </activation>
+            <properties>
+                <rengl.test.jvmargs>-XstartOnFirstThread --enable-native-access=ALL-UNNAMED</rengl.test.jvmargs>
+            </properties>
+        </profile>
         <profile>
             <id>lwjgl-natives-linux-amd64</id>
             <activation>
@@ -588,6 +602,17 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
+                <configuration>
+                    <argLine>${rengl.test.jvmargs}</argLine>
+                    <!-- One JVM for all test classes: the GPU tests start a window and the engine's static state is shared. -->
+                    <reuseForks>true</reuseForks>
+                    <trimStackTrace>false</trimStackTrace>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
                 <version>3.3.1</version>
                 <executions>
@@ -646,6 +671,12 @@
 
 
     <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Pure-Java Hunspell engine for the offline spell checker (HunspellChecker). -->
         <dependency>
             <groupId>org.apache.lucene</groupId>
