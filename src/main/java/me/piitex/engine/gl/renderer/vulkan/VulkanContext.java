@@ -157,6 +157,15 @@ public final class VulkanContext implements AutoCloseable {
 
     // ---- handles Skia needs -------------------------------------------------------------------------------------
 
+    /**
+     * The LWJGL objects behind the raw handles below, for the optional 3D layer, which records its own Vulkan work on
+     * this device and queue.
+     */
+    public VkInstance vkInstance() { return instance; }
+    public VkPhysicalDevice vkPhysicalDevice() { return physicalDevice; }
+    public VkDevice vkDevice() { return device; }
+    public VkQueue vkQueue() { return queue; }
+
     public long instance() { return instance.address(); }
     public long physicalDevice() { return physicalDevice.address(); }
     public long device() { return device.address(); }

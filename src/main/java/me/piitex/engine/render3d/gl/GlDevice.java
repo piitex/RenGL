@@ -1,0 +1,89 @@
+package me.piitex.engine.render3d.gl;
+
+import me.piitex.engine.RenderAPI;
+import me.piitex.engine.render3d.*;
+import org.lwjgl.opengl.GL;
+
+import java.nio.ByteBuffer;
+
+import static org.lwjgl.opengl.GL11C.*;
+import static org.lwjgl.opengl.GL30C.glDeleteVertexArrays;
+import static org.lwjgl.opengl.GL30C.glGenVertexArrays;
+
+/**
+ * {@link GpuDevice} on OpenGL 3.3 core. It uses whatever context is current on the calling thread, which is the
+ * window's own: Skia draws with the same context, so call Skia's {@code resetGLAll} after a 3D pass and before Skia
+ * draws again.
+ */
+public final class GlDevice implements GpuDevice {
+    static final int MAX_ATTRIBUTES = 16;
+
+    final int vertexArray;
+    private final String name;
+
+    /**
+     * @throws IllegalStateException when no OpenGL context is current or it is older than 3.3
+     */
+    public GlDevice() {
+        if (GL.getCapabilities() == null) GL.createCapabilities();
+        if (!GL.getCapabilities().OpenGL33) {
+            throw new IllegalStateException("The 3D layer needs OpenGL 3.3, this context is "
+                    + glGetString(GL_VERSION));
+        }
+        name = glGetString(GL_RENDERER);
+        vertexArray = glGenVertexArrays();
+    }
+
+    @Override
+    public RenderAPI api() {
+        return RenderAPI.OPENGL;
+    }
+
+    @Override
+    public String name() {
+        return name;
+    }
+
+    @Override
+    public void beginFrame() {
+    }
+
+    @Override
+    public void endFrame() {
+    }
+
+    @Override
+    public GpuBuffer createBuffer(BufferType type, ByteBuffer data) {
+        return new GlBuffer(type, data.remaining(), data, false);
+    }
+
+    @Override
+    public GpuBuffer createDynamicBuffer(BufferType type, long size) {
+        return new GlBuffer(type, size, null, true);
+    }
+
+    @Override
+    public GpuTexture createTexture(int width, int height, ByteBuffer rgba) {
+        return new GlTexture(width, height, rgba);
+    }
+
+    @Override
+    public Pipeline createPipeline(PipelineDesc desc) {
+        return new GlPipeline(desc);
+    }
+
+    @Override
+    public RenderTarget createRenderTarget(int width, int height, boolean depth) {
+        return new GlRenderTarget(width, height, depth);
+    }
+
+    @Override
+    public RenderPass beginPass(RenderTarget target, float r, float g, float b, float a) {
+        return new GlRenderPass(this, (GlRenderTarget) target, r, g, b, a);
+    }
+
+    @Override
+    public void close() {
+        glDeleteVertexArrays(vertexArray);
+    }
+}
