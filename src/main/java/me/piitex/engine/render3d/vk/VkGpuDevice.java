@@ -37,7 +37,11 @@ import static org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1;
 public final class VkGpuDevice implements GpuDevice {
     static final int FRAMES = 2;
     static final int COLOR_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
-    private static final int DESCRIPTORS_PER_FRAME = 2048;
+    private static final int DESCRIPTORS_PER_FRAME = 4096;
+    /**
+     * A set holds a few uniform buffers (a scene's frame and object blocks) and a sampler; the pool is sized for that.
+     */
+    private static final int BUFFERS_PER_SET = 4;
 
     record Alloc(long handle, long allocation, long mapped) {
     }
@@ -100,7 +104,7 @@ public final class VkGpuDevice implements GpuDevice {
                 VkDescriptorPoolCreateInfo pool = VkDescriptorPoolCreateInfo.calloc(stack).sType$Default()
                         .maxSets(DESCRIPTORS_PER_FRAME)
                         .pPoolSizes(VkDescriptorPoolSize.calloc(2, stack)
-                                .apply(0, s -> s.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(DESCRIPTORS_PER_FRAME))
+                                .apply(0, s -> s.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(DESCRIPTORS_PER_FRAME * BUFFERS_PER_SET))
                                 .apply(1, s -> s.type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(DESCRIPTORS_PER_FRAME)));
                 LongBuffer out = stack.mallocLong(1);
                 check(vkCreateDescriptorPool(device, pool, null, out), "create a descriptor pool");
