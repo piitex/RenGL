@@ -58,7 +58,11 @@ final class GpuHarness {
     }
 
     static Run run(RenderAPI api, int viewportSize, Consumer<Viewport3D> setup, Checks checks) {
-        if (RenderAPI.resolve(api) != api) {
+        try {
+            if (RenderAPI.resolve(api) != api) {
+                return new Run(false, api + " does not exist on this platform", null, null, Map.of());
+            }
+        } catch (IllegalStateException e) {
             return new Run(false, api + " does not exist on this platform", null, null, Map.of());
         }
         Recorder recorder = new Recorder();
