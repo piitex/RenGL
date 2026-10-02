@@ -70,8 +70,8 @@ final class Picking {
     }
 
     /**
-     * Poses the mesh in the scene with the skin's current joints and tests every triangle: there is no stored hierarchy
-     * because the shape changes with every pose.
+     * Poses the mesh in the scene with the skin's current joints and searches it with a hierarchy built just for this
+     * pick: nothing is stored, because the shape changes with every pose.
      */
     private static Hit castSkinned(Node3D node, Mesh mesh, boolean frontOnly, Ray ray, float maxDistance) {
         Skin skin = node.getSkin();
@@ -104,7 +104,7 @@ final class Picking {
         result.distance = maxDistance;
         Vec3 o = ray.origin(), d = ray.direction();
         int[] idx = mesh.indices();
-        // Reuse the triangle test of the hierarchy on a throwaway one-leaf structure over the posed positions.
+        // The same hierarchy and triangle test as for any mesh, over the posed positions.
         new Bvh(posed, idx, 3).nearest(o.x(), o.y(), o.z(), d.x(), d.y(), d.z(), frontOnly, result);
         if (result.triangle < 0) return null;
         Vec3 normal = new Vec3(result.nx, result.ny, result.nz).normalized();
