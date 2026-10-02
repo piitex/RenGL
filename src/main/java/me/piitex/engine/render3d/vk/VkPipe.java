@@ -133,14 +133,16 @@ final class VkPipe implements Pipeline {
 
             boolean depth = desc.depthTest() && hasDepth;
             VkPipelineDepthStencilStateCreateInfo depthState = VkPipelineDepthStencilStateCreateInfo.calloc(stack).sType$Default()
-                    .depthTestEnable(depth).depthWriteEnable(depth).depthCompareOp(VK_COMPARE_OP_LESS);
+                    .depthTestEnable(depth).depthWriteEnable(depth && desc.depthWrite()).depthCompareOp(VK_COMPARE_OP_LESS);
 
             VkPipelineColorBlendAttachmentState.Buffer blendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack)
                     .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
                     .blendEnable(desc.blend())
-                    .srcColorBlendFactor(VK_BLEND_FACTOR_SRC_ALPHA).dstColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+                    .srcColorBlendFactor(VK_BLEND_FACTOR_SRC_ALPHA)
+                    .dstColorBlendFactor(desc.additive() ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
                     .colorBlendOp(VK_BLEND_OP_ADD)
-                    .srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE).dstAlphaBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+                    .srcAlphaBlendFactor(desc.additive() ? VK_BLEND_FACTOR_ZERO : VK_BLEND_FACTOR_ONE)
+                    .dstAlphaBlendFactor(desc.additive() ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
                     .alphaBlendOp(VK_BLEND_OP_ADD);
             VkPipelineColorBlendStateCreateInfo blend = VkPipelineColorBlendStateCreateInfo.calloc(stack).sType$Default()
                     .pAttachments(blendAttachment);

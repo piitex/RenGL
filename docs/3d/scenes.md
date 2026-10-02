@@ -45,6 +45,7 @@ Call `scene.lights().clear()` for different lighting.
 | `setAmbient(Color, float intensity)` | Light that reaches every surface from every side, so nothing is pitch black. Intensity `0` turns it off |
 | `getAmbient()` / `getAmbientIntensity()` | Read them back |
 | `setSkybox(Skybox)` / `getSkybox()` | The sky drawn behind everything, see [Skybox](lighting.md#skybox) |
+| `setFog(Color, float density)` / `setFog(Color, density, heightFalloff)` | Fades distant things into a colour, see [Fog](lighting.md#fog). Off by default |
 | `setShadowMapSize(int)`, `setShadowDistance(float)`, `setShadowBias(float)` | The quality of [shadows](lighting.md#shadows) |
 | `animate(AnimationPlayer)` / `stopAnimating(AnimationPlayer)` | Registers a player that advances once per frame, see [Animation](animation.md) |
 | `setUpdateHandler(UpdateHandler)` | Runs once per frame before the scene is drawn, see below |
@@ -170,7 +171,8 @@ Material glass = new Material(new Color(0.6f, 0.8f, 1f, 0.35f)).setBlend(true).s
 | `setShininess(float)` | `32` | Classic: highlight tightness, a few for a broad glow, a few hundred for a pin-point shine |
 | `setUnlit(boolean)` | `false` | Skips lighting; the surface is drawn in its plain colour |
 | `setDoubleSided(boolean)` | `false` | Draws the back of triangles too, lit from the side that faces the camera. Off skips them |
-| `setBlend(boolean)` | `false` | Mixes the surface with what is behind it by its alpha. Blended nodes are drawn after the solid ones, farthest first, **ordered by their node's position**, so overlapping see-through surfaces can still look wrong. Blended surfaces do not cast shadows |
+| `setAdditive(boolean)` | `false` | Adds the colour, times its alpha, to what is behind instead of mixing: for light-like things (flames, sparks, glows). Turns blending on; drawn with the blended nodes, casts no shadow, and fades out in fog |
+| `setBlend(boolean)` | `false` | Mixes the surface with what is behind it by its alpha. Blended nodes are drawn after the solid ones, farthest first, **ordered by their node's position**, so overlapping see-through surfaces can still look wrong. They test against the depth buffer but don't write to it. Blended surfaces do not cast shadows |
 | `setAlphaCutoff(float)` | `0` | Pixels whose alpha (texture times colour) is below this are not drawn at all: a cut-out for leaves and fences that needs no sorting. `0` draws everything. Cut-outs cast shadows with their holes |
 | `setPbr(boolean)` | `false` | Physically based shading, see above |
 | `setMetallic(float)` | `0` | PBR: `0` for plastic, wood and stone, `1` for bare metal, which tints its reflections with the colour. Multiplied with the blue channel of the metallic-roughness map |
@@ -208,7 +210,7 @@ the system property `rengl.3d.anisotropy` changes the level, and `1` turns it of
 
 ## Light
 
-A scene uses its first 8 lights, either directional or point. Both are made with factory methods, and the setters
+A scene uses its first 8 lights: directional, point or spot. They are made with factory methods, and the setters
 return the light.
 
 ```java nocompile
@@ -223,10 +225,12 @@ scene.lights().add(lamp);
 |---|---|
 | `Light.directional(direction, color, intensity)` | Like the sun. `direction` is the way the light *travels*, so `(0, -1, 0)` shines straight down |
 | `Light.point(position, color, intensity, range)` | Fades to nothing at `range`, the distance where it is gone |
-| `getType()` | `Light.Type.DIRECTIONAL` or `POINT` |
-| `setVector(Vec3)` / `getVector()` | The direction of a directional light, or the position of a point light. Move a point light every frame from the update handler |
+| `Light.spot(position, direction, color, intensity, range, innerDegrees, outerDegrees)` | A point light that shines only inside a cone: full strength inside the inner half-angle, gone at the outer one (at most 85) |
+| `getType()` | `Light.Type.DIRECTIONAL`, `POINT` or `SPOT` |
+| `setVector(Vec3)` / `getVector()` | The direction of a directional light, or the position of a point or spot light. Move a light every frame from the update handler |
+| `setDirection(Vec3)`, `setCone(inner, outer)` | Where a spot light points and how wide it is |
 | `setColor(Color)`, `setIntensity(float)`, `setRange(float)` | Change it later |
-| `setCastShadow(boolean)` | A directional light can make the scene's [shadows](lighting.md#shadows) |
+| `setCastShadow(boolean)` | A directional or spot light can make the scene's [shadows](lighting.md#shadows) |
 
 [Lighting](lighting.md) covers shadows, the skybox and how the lights add up.
 

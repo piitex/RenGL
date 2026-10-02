@@ -26,9 +26,9 @@ import java.util.Map;
  * </pre>
  * and models come from {@link Model#load}. Everything is drawn with one forward renderer: classic (Lambert and
  * Blinn-Phong) or physically based shading with normal, metallic-roughness, occlusion and emissive maps, up to
- * {@link #MAX_LIGHTS} lights, {@link Light#setCastShadow shadows} from a directional light, a {@link Skybox},
+ * {@link #MAX_LIGHTS} lights, {@link Light#setCastShadow shadows} from a directional or spot light, {@link #setFog fog}, a {@link Skybox},
  * mipmapped and anisotropically filtered textures, {@link Instances instanced} drawing, {@link Skin skinned} meshes
- * moved by {@link AnimationPlayer}s, alpha blending, depth testing and back-face culling; the viewport anti-aliases the
+ * moved by {@link AnimationPlayer}s, alpha and additive blending, depth testing and back-face culling; the viewport anti-aliases the
  * edges. There is no image-based lighting or reflection. {@link #pick} finds what is under a point of the picture.
  * <p>
  * A new scene has a soft ambient light and one directional light, so the first thing you add is visible; clear
@@ -66,6 +66,9 @@ public class Scene3D implements Viewport3D.Content {
     private int shadowMapSize = 2048;
     private float shadowDistance = 60f;
     private float shadowBias = 1f;
+    private Color fogColor = Color.WHITE;
+    private float fogDensity;
+    private float fogHeightFalloff;
     private final List<AnimationPlayer> animators = new ArrayList<>();
 
     private final Map<GpuDevice, Shared> renderers = new IdentityHashMap<>();
@@ -172,6 +175,39 @@ public class Scene3D implements Viewport3D.Content {
      */
     public Scene3D setShadowDistance(float distance) {
         this.shadowDistance = Math.max(0.1f, distance);
+        return this;
+    }
+
+    public Color getFogColor() {
+        return fogColor;
+    }
+
+    public float getFogDensity() {
+        return fogDensity;
+    }
+
+    public float getFogHeightFalloff() {
+        return fogHeightFalloff;
+    }
+
+    /**
+     * Fades distant things into {@code color}. The strength is {@code 1 - exp(-(distance * density)^2)}: nothing close
+     * up, thick far away. {@code 0.02} hazes things 40 units away; {@code 0} switches fog off (the default). Match the
+     * colour to the {@link Skybox} at the horizon so the world melts into the sky. Fog applies to everything but
+     * the skybox.
+     */
+    public Scene3D setFog(Color color, float density) {
+        return setFog(color, density, 0f);
+    }
+
+    /**
+     * Fog that is thicker low down, like mist over a meadow. {@code heightFalloff} is how fast it thins with height:
+     * 0 is the same at every height, {@code 0.3} halves it about every 2.3 units up.
+     */
+    public Scene3D setFog(Color color, float density, float heightFalloff) {
+        this.fogColor = color;
+        this.fogDensity = Math.max(0f, density);
+        this.fogHeightFalloff = Math.max(0f, heightFalloff);
         return this;
     }
 

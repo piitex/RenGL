@@ -37,7 +37,8 @@ import static me.piitex.engine.render3d.scene.SceneShaders.*;
 final class SceneRenderer {
     private static final Logger log = LogManager.getLogger("Engine");
 
-    private static final int FRAME_BLOCK_SIZE = 64 + 16 * 5 + 16 * Scene3D.MAX_LIGHTS * 2 + 64;
+    private static final int FRAME_BLOCK_SIZE = 64 + 16 * 5 + 16 * Scene3D.MAX_LIGHTS * 4 + 64 + 32;
+    private static final int SHADOW_BLOCK_SIZE = 64 + 16;
     private static final int INSTANCE_BYTES = INSTANCE_FLOATS * 4;
     private static final int JOINT_BLOCK_SIZE = Skin.MAX_JOINTS * 64;
     private static final int SKY_BLOCK_SIZE = 16 * 6;
@@ -48,7 +49,7 @@ final class SceneRenderer {
     private static final int SWEEP_EVERY = 120;
     private static final Material DEFAULT_MATERIAL = new Material();
 
-    private static final int KEY_CULL = 1, KEY_BLEND = 2, KEY_MIRRORED = 4, KEY_SKINNED = 8, KEY_SHADOW = 16;
+    private static final int KEY_CULL = 1, KEY_BLEND = 2, KEY_MIRRORED = 4, KEY_SKINNED = 8, KEY_SHADOW = 16, KEY_ADDITIVE = 32;
 
     private static final class GpuMesh {
         final GpuBuffer vertices;
@@ -91,7 +92,7 @@ final class SceneRenderer {
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
-            shadowFrame = device.createDynamicBuffer(BufferType.UNIFORM, 64);
+            shadowFrame = device.createDynamicBuffer(BufferType.UNIFORM, SHADOW_BLOCK_SIZE);
             sky = device.createDynamicBuffer(BufferType.UNIFORM, SKY_BLOCK_SIZE);
         }
 
@@ -185,8 +186,12 @@ final class SceneRenderer {
             desc = new PipelineDesc(shadowVertex(skinned), SHADOW_FRAGMENT, meshLayout, true, false, false, false,
                     skinned ? List.of(instanceLayout, skinLayout) : List.of(instanceLayout));
         } else {
-            desc = new PipelineDesc(vertex(skinned), FRAGMENT, meshLayout, true, (key & KEY_CULL) != 0, (key & KEY_BLEND) != 0,
-                    (key & KEY_MIRRORED) != 0, skinned ? List.of(instanceLayout, skinLayout) : List.of(instanceLayout));
+            boolean blend = (key & KEY_BLEND) != 0;
+            // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
+            // something drawn after it.
+            desc = new PipelineDesc(vertex(skinned), FRAGMENT, meshLayout, true, (key & KEY_CULL) != 0, blend,
+                    (key & KEY_MIRRORED) != 0, skinned ? List.of(instanceLayout, skinLayout) : List.of(instanceLayout),
+                    (key & KEY_ADDITIVE) != 0, !blend);
         }
         Pipeline created = device.createPipeline(desc);
         pipelines.put(key, created);
@@ -232,11 +237,17 @@ final class SceneRenderer {
 
         Light shadowLight = shadowCaster(scene);
         boolean shadows = shadowLight != null && opaqueGroups.stream().anyMatch(g -> g.cast);
-        float[] shadowParams = new float[4];
+        float[] shadowParams = new float[8];
         Mat4 lightViewProj = Mat4.identity();
         if (shadows) {
-            lightViewProj = shadowMatrices(scene, camera, aspect, opaque, shadowLight, shadowParams);
-            writeUniform(res.shadowFrame, lightViewProj);
+            lightViewProj = shadowLight.getType() == Light.Type.SPOT
+                    ? spotShadowMatrices(scene, shadowLight, shadowParams)
+                    : shadowMatrices(scene, camera, aspect, opaque, shadowLight, shadowParams);
+            scratch.clear();
+            lightViewProj.put(scratch);
+            scratch.putFloat(shadowParams[4]).putFloat(shadowParams[5]).putFloat(shadowParams[6]).putFloat(0f);
+            scratch.flip();
+            res.shadowFrame.update(scratch);
             shadowPass(scene, opaqueGroups, res);
         }
         writeFrameBlock(res.frame, scene, camera, viewProj, shadows ? shadowLight : null, lightViewProj, shadowParams);
@@ -318,7 +329,7 @@ final class SceneRenderer {
             if (node.getSkin() != null && !mesh.isSkinned()) {
                 log.warn("The node {} has a skin but its mesh has no skinning data; drawing it unskinned.", node.getName());
             }
-            draw.key = (draw.material.isDoubleSided() ? 0 : KEY_CULL) | (draw.material.isBlend() ? KEY_BLEND : 0)
+            draw.key = (draw.material.isDoubleSided() ? 0 : KEY_CULL) | (draw.material.isBlend() ? KEY_BLEND : 0) | (draw.material.isAdditive() ? KEY_ADDITIVE : 0)
                     | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0);
             if (node.getInstances() != null && node.getInstances().size() == 0 && !skinned) {
                 // nothing to draw
@@ -443,7 +454,7 @@ final class SceneRenderer {
             b.putFloat(tr).putFloat(tg).putFloat(tb).putFloat(ta);
             b.putFloat(p0).putFloat(p1).putFloat(mode).putFloat(m.getAlphaCutoff());
             b.putFloat(m.getEmissiveRed()).putFloat(m.getEmissiveGreen()).putFloat(m.getEmissiveBlue()).putFloat(flags);
-            b.putFloat(m.getNormalScale()).putFloat(0f).putFloat(0f).putFloat(0f);
+            b.putFloat(m.getNormalScale()).putFloat(m.isAdditive() ? 1f : 0f).putFloat(0f).putFloat(0f);
         }
     }
 
@@ -489,7 +500,7 @@ final class SceneRenderer {
         List<Light> lights = scene.lights();
         for (int i = 0; i < Math.min(lights.size(), Scene3D.MAX_LIGHTS); i++) {
             Light light = lights.get(i);
-            if (light.isCastShadow() && light.getType() == Light.Type.DIRECTIONAL) return light;
+            if (light.isCastShadow() && light.getType() != Light.Type.POINT) return light;
         }
         return null;
     }
@@ -563,6 +574,39 @@ final class SceneRenderer {
         return proj.mul(view);
     }
 
+    /**
+     * The perspective matrix of a spot light's cone. The map stores the distance along the axis, so the offsets grow
+     * with the distance from the light, as the texels do.
+     *
+     * @param params as for {@link #shadowMatrices}, plus {@code {perspective, near, far}} at 4 to 6
+     */
+    private Mat4 spotShadowMatrices(Scene3D scene, Light light, float[] params) {
+        int size = scene.getShadowMapSize();
+        if (shadowTarget == null || shadowTargetSize != size) {
+            if (shadowTarget != null) shadowTarget.close();
+            shadowTarget = device.createSampledTarget(size, size, true, false);
+            shadowTargetSize = size;
+        }
+        Vec3 position = light.getVector();
+        Vec3 dir = light.getDirection();
+        Vec3 ref = Math.abs(dir.y()) > 0.99f ? Vec3.X : Vec3.UP;
+        float far = light.getRange();
+        float near = Math.max(0.05f, far * 0.005f);
+        float half = (float) Math.toRadians(light.getOuterAngle());
+        Mat4 view = Mat4.lookAt(position, position.add(dir), ref);
+        Mat4 proj = Mat4.perspective(Math.min(half * 2f + 0.05f, 3.0f), 1f, near, far);
+        // The width of one texel at distance 1 along the axis.
+        float texel = 2f * (float) Math.tan(Math.min(half + 0.025f, 1.5f)) / size;
+        params[0] = texel * 1.5f * scene.getShadowBias();
+        params[1] = texel * 2.5f * scene.getShadowBias() / (far - near);
+        params[2] = 1f / size;
+        params[3] = shadowTarget.isBottomLeftOrigin() ? 1f : 0f;
+        params[4] = 1f;
+        params[5] = near;
+        params[6] = far;
+        return proj.mul(view);
+    }
+
     private void shadowPass(Scene3D scene, List<Group> groups, Resources res) {
         try (RenderPass pass = device.beginPass(shadowTarget, 1f, 1f, 1f, 1f)) {
             int[] state = {-1, 0};
@@ -574,13 +618,6 @@ final class SceneRenderer {
     }
 
     // ---- uniform blocks ----------------------------------------------------------------------------------------
-
-    private void writeUniform(GpuBuffer buffer, Mat4 matrix) {
-        scratch.clear();
-        matrix.put(scratch);
-        scratch.flip();
-        buffer.update(scratch);
-    }
 
     private static float linear(float srgb) {
         return (float) Math.pow(Math.max(0f, srgb), 2.2);
@@ -605,12 +642,12 @@ final class SceneRenderer {
         scratch.putFloat(count).putFloat(0f).putFloat(0f).putFloat(0f);
         int shadowIndex = shadowLight == null ? -1 : lights.indexOf(shadowLight);
         scratch.putFloat(shadowIndex).putFloat(shadow[3]).putFloat(shadow[2]).putFloat(shadow[1]);
-        scratch.putFloat(shadow[0]).putFloat(0f).putFloat(0f).putFloat(0f);
+        scratch.putFloat(shadow[0]).putFloat(shadow[4]).putFloat(shadow[5]).putFloat(shadow[6]);
         for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) {
             if (i < count) {
                 Light light = lights.get(i);
                 Vec3 v = light.getType() == Light.Type.DIRECTIONAL ? light.getVector().negate() : light.getVector();
-                scratch.putFloat(v.x()).putFloat(v.y()).putFloat(v.z()).putFloat(light.getType() == Light.Type.POINT ? 1f : 0f);
+                scratch.putFloat(v.x()).putFloat(v.y()).putFloat(v.z()).putFloat(light.getType() == Light.Type.DIRECTIONAL ? 0f : light.getType() == Light.Type.POINT ? 1f : 2f);
             } else {
                 scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(0f);
             }
@@ -625,7 +662,24 @@ final class SceneRenderer {
                 scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(1f);
             }
         }
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) { // spot directions, with the cosine of the outer angle
+            if (i < count && lights.get(i).getType() == Light.Type.SPOT) {
+                Light light = lights.get(i);
+                Vec3 d = light.getDirection();
+                scratch.putFloat(d.x()).putFloat(d.y()).putFloat(d.z()).putFloat((float) Math.cos(Math.toRadians(light.getOuterAngle())));
+            } else {
+                scratch.putFloat(0f).putFloat(-1f).putFloat(0f).putFloat(-1f);
+            }
+        }
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) { // the cosine of the inner angle
+            float inner = i < count && lights.get(i).getType() == Light.Type.SPOT
+                    ? (float) Math.cos(Math.toRadians(lights.get(i).getInnerAngle())) : 1f;
+            scratch.putFloat(inner).putFloat(0f).putFloat(0f).putFloat(0f);
+        }
         lightViewProj.put(scratch);
+        Color fog = scene.getFogColor();
+        scratch.putFloat(linear(fog.getR())).putFloat(linear(fog.getG())).putFloat(linear(fog.getB())).putFloat(scene.getFogDensity());
+        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(0f).putFloat(0f).putFloat(0f);
         scratch.flip();
         buffer.update(scratch);
     }
