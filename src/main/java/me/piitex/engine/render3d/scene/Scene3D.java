@@ -28,8 +28,9 @@ import java.util.Map;
  * Blinn-Phong) or physically based shading with normal, metallic-roughness, occlusion and emissive maps, up to
  * {@link #MAX_LIGHTS} lights, {@link Light#setCastShadow shadows} from a directional or spot light, {@link #setFog fog}, a {@link Skybox},
  * mipmapped and anisotropically filtered textures, {@link Instances instanced} drawing, {@link Skin skinned} meshes
- * moved by {@link AnimationPlayer}s, alpha and additive blending, depth testing and back-face culling; the viewport anti-aliases the
- * edges. There is no image-based lighting or reflection. {@link #pick} finds what is under a point of the picture.
+ * moved by {@link AnimationPlayer}s, alpha and additive blending, {@link #setEnvironmentLighting light and reflections from the
+ * skybox}, depth testing, back-face culling and frustum culling; the viewport anti-aliases the edges. {@link #pick} finds
+ * what is under a point of the picture.
  * <p>
  * A new scene has a soft ambient light and one directional light, so the first thing you add is visible; clear
  * {@link #lights()} for different lighting.
@@ -66,6 +67,9 @@ public class Scene3D implements Viewport3D.Content {
     private int shadowMapSize = 2048;
     private float shadowDistance = 60f;
     private float shadowBias = 1f;
+    private float shadowSoftness = 1f;
+    private float environmentLighting;
+    private Stats stats = new Stats(0, 0, 0, 0);
     private Color fogColor = Color.WHITE;
     private float fogDensity;
     private float fogHeightFalloff;
@@ -176,6 +180,58 @@ public class Scene3D implements Viewport3D.Content {
     public Scene3D setShadowDistance(float distance) {
         this.shadowDistance = Math.max(0.1f, distance);
         return this;
+    }
+
+    public float getShadowSoftness() {
+        return shadowSoftness;
+    }
+
+    /**
+     * How wide the soft edge of a shadow is, as a multiple of the default (1). Larger blurs the edge, from 0.25 to 4;
+     * more than about 2 starts to show the sampling pattern unless the shadow map is large.
+     */
+    public Scene3D setShadowSoftness(float softness) {
+        this.shadowSoftness = Math.max(0.25f, Math.min(4f, softness));
+        return this;
+    }
+
+    public float getEnvironmentLighting() {
+        return environmentLighting;
+    }
+
+    /**
+     * Lights the scene from its {@link Skybox}, the way the real sky would: surfaces are lit softly by the colour of the
+     * sky in front of them, and shiny and metallic materials ({@link Material#setPbr physically based}) reflect it, blurred
+     * by their roughness. {@code intensity} multiplies it; 0 (the default) turns it off, 1 is the sky as drawn. Where it
+     * is on, it takes the place of the flat {@link #setAmbient ambient light}. It needs a skybox ({@link Skybox#cube},
+     * {@link Skybox#equirect} or {@link Skybox#gradient}), has no effect without one, and does not make shadows: the
+     * sky is a soft light from every direction, while {@link #lights()} still give the sun and lamps.
+     * <p>
+     * Skybox pictures are ordinary 8-bit images, so a bright sun in one doesn't light the scene more than white does.
+     */
+    public Scene3D setEnvironmentLighting(float intensity) {
+        this.environmentLighting = Math.max(0f, intensity);
+        return this;
+    }
+
+    /**
+     * What the last render of this scene did: nodes drawn, nodes skipped because they were outside the view, instanced
+     * copies drawn and GPU draw calls (shadow pass not counted). Useful for checking that culling and batching work.
+     *
+     * @param nodes     nodes drawn, an instanced node counting once
+     * @param culled    nodes left out because they were wholly outside the camera's view and cast no visible shadow
+     * @param instances records drawn: a plain node is one, an instanced node one per instance
+     * @param drawCalls GPU draw calls in the main pass
+     */
+    public record Stats(int nodes, int culled, int instances, int drawCalls) {
+    }
+
+    public Stats getStats() {
+        return stats;
+    }
+
+    void setStats(Stats stats) {
+        this.stats = stats;
     }
 
     public Color getFogColor() {

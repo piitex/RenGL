@@ -169,18 +169,22 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 **What the 3D renderer lacks**
 
-- **No image-based lighting or reflections.** The [skybox](../3d/lighting.md#skybox) is a picture, not a light, and a
-  fully metallic material is only lit by the scene's lights and shows no reflection of its surroundings.
-- **Shadows come from one directional light,** with a fixed-width soft edge. Point lights cast none, and a shadow only
+- **Light from the sky is an approximation.** [Environment lighting](../3d/lighting.md#light-from-the-sky) lights surfaces
+  from nine spherical-harmonic terms and blurs reflections with the sky's mipmaps instead of filtering a real
+  environment map, and the sky pictures are 8-bit, so there is no bright sun in them and a sharp reflection of a small
+  bright thing is out of reach. Off by default; a sky is a plain picture until you turn it on.
+- **Shadows come from one directional or spot light,** with a soft edge of the same width everywhere
+  ([`setShadowSoftness`](../3d/lighting.md#shadows) scales it). Point lights cast none, and a directional shadow only
   covers the camera's view out to the [shadow distance](../3d/lighting.md#shadows).
 - **No morph targets.** A model's blend shapes are ignored. [Skinned](../3d/animation.md) meshes follow at most four
   bones per vertex and 256 per mesh.
-- **No culling of what is off screen.** Everything visible in the tree is drawn, and every [instance](../3d/instancing.md).
+- **Frustum culling is per node,** by a sphere: an [instanced](../3d/instancing.md) node is kept or dropped as a whole,
+  and a skinned mesh is never culled. There is no occlusion culling, so things hidden behind other things are still drawn.
 - **Skinned meshes are picked by posing them on the CPU,** which follows the animation but costs a pass over the vertices
   per pick. Other meshes use a hierarchy of boxes built on first pick.
 - **Anti-aliasing is on by default and costs memory.** 4 samples hold about four times the colour and depth memory of
   a plain target; [`setSamples`](../3d/viewport-3d.md#anti-aliasing) lowers it.
-- **Two light kinds, up to 8:** directional and point. Materials are classic (Lambert plus Blinn-Phong) or physically based.
+- **Three light kinds, up to 8:** directional, point and spot. Materials are classic (Lambert plus Blinn-Phong) or physically based.
 - **Blended surfaces are sorted by their node's position,** so overlapping see-through objects can draw in the wrong order.
 
 **Performance and lifetime**

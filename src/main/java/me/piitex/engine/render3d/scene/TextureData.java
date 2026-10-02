@@ -41,6 +41,13 @@ public final class TextureData {
     }
 
     /**
+     * The pixels themselves, not a copy: read only.
+     */
+    byte[] pixels() {
+        return rgba;
+    }
+
+    /**
      * Fills a new direct buffer with the pixels, for the device to upload. The caller frees it with
      * {@link MemoryUtil#memFree}.
      */

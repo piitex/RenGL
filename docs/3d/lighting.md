@@ -19,11 +19,10 @@ light from every side, plus each light's share by the angle between the surface 
   back to show them, so two half-bright lights make a surface look as bright as one full one should.
 - Nothing is clamped or tone-mapped: a surface lit by more than `1` in total simply shows white.
 - `scene.setAmbient(color, intensity)` is the light nothing blocks. It is what keeps the dark side of an object from being
-  black, and what a [skybox](#skybox) does not provide: the sky is a picture, not a light, so match the ambient light and
-  the lights to it by eye.
-- Metals reflect the lights, not their surroundings. There is no image-based lighting yet, so a fully metallic material
-  under only ambient light looks dark, and shows its colour in the highlights of the lights. Keep a light or two in a
-  scene with metal.
+  black. A [skybox](#skybox) is only a picture unless you turn on [light from the sky](#light-from-the-sky); then it
+  lights the scene in place of the flat ambient light.
+- Without light from the sky, metals reflect the lights, not their surroundings: a fully metallic material under only
+  ambient light looks dark, and shows its colour in the highlights of the lights. With it, they reflect the sky.
 
 ## Spot lights
 
@@ -58,6 +57,7 @@ lamp.setCastShadow(false);          // a node (a Node3D) that throws no shadow
 | `Scene3D.setShadowDistance(float)` | `60` | How far from the camera a directional light's shadows are drawn, in scene units, and never past the camera's far plane. Shorter means sharper shadows near the camera. A spot light's shadows cover its whole cone out to its range |
 | `Scene3D.setShadowMapSize(int)` | `2048` | The width and height of the shadow picture, `256` to `8192`. Each doubling quadruples the memory (about 32 MB at 2048) and the cost |
 | `Scene3D.setShadowBias(float)` | `1` | Scales the offset that stops a surface shadowing itself. Raise it if a lit surface shows stripes; lower it if shadows float away from what casts them |
+| `Scene3D.setShadowSoftness(float)` | `1` | How wide the soft edge is, as a multiple of the default: `0.25` to `4`. Above about `2` the filter pattern starts to show unless the shadow map is large |
 | `Node3D.setCastShadow(boolean)` | `true` | Whether the node's mesh throws a shadow |
 | `Node3D.setReceiveShadow(boolean)` | `true` | Whether shadows fall on it. Turn it off for something that should stay evenly lit |
 
@@ -67,7 +67,10 @@ How it works, so you know what to expect:
   looks each surface up in it. The picture covers the part of the camera's view between the near plane and the shadow
   distance, and its position snaps to the picture's own pixels, so shadows don't crawl as the camera moves.
 - Edges are softened over a few pixels of the shadow picture. A bigger `setShadowMapSize` or a shorter distance makes
-  them crisper; there is no variable-width soft shadow.
+  them crisper, and `setShadowSoftness` widens or narrows the edge. The width is the same everywhere: a shadow does not
+  get softer the farther it falls from what casts it (no variable-width soft shadows).
+- A node outside the camera's view still casts its shadow into it: [frustum culling](scenes.md#frustum-culling) only
+  skips drawing it.
 - [Skinned](animation.md) and [instanced](instancing.md) meshes cast shadows in their current pose. A cut-out material
   (`setAlphaCutoff`) casts a shadow with its holes. A **blended** (see-through) material casts none.
 - A shadow can only fall on surfaces inside the part of the view it covers. The sun itself has no position, so a tall
@@ -116,9 +119,35 @@ scene.setSkybox(null);                                                  // back 
 `Skybox.setBrightness(float)` scales the sky (`1` as drawn). One skybox can be set on any number of scenes. The pictures
 are uploaded when first drawn and freed some time after the scene stops using them, like any texture.
 
+### Light from the sky
+
+By default the sky is only a picture. Turn on environment lighting and it becomes a light, the way the real sky is:
+
+```java nocompile
+scene.setSkybox(Skybox.equirect(TextureData.load(Path.of("sky.png"))));
+scene.setEnvironmentLighting(1f);   // 1 is the sky as drawn, 0 (the default) is off
+scene.setAmbient(Color.WHITE, 0f);  // no longer used where the sky lights the scene, but harmless
+```
+
+- **Diffuse:** each surface is lit softly by the colour of the sky it faces: blue from above on a clear day, warm from a
+  sunset side. The sky is reduced to nine spherical-harmonic coefficients per colour once, on the CPU, when the sky is
+  first used, so it costs a handful of multiplications per pixel.
+- **Reflections:** [physically based](scenes.md#material) materials reflect the sky, blurred by their roughness. A polished
+  metal sphere shows the sky around it; a rough one shows an average of it. The blur comes from the sky's mipmaps, and the
+  strength of the reflection from a fit to the usual split-sum integral, so it is a good approximation and not a
+  filtered environment map. Classic materials get the diffuse part only.
+- **It replaces the flat ambient light** wherever it is on. Your [lights](scenes.md#light) still add their own light on
+  top, and only they cast shadows: the sky lights every surface from every side whether or not something shades it.
+- Works with all three kinds of skybox. The gradient is evaluated directly; a cube map or panorama is read from its
+  mipmaps.
+- The skybox pictures are ordinary 8-bit images, so a bright sun in one adds no more light than white does. Put the sun
+  in as a directional light.
+- It is a **per-scene** setting and costs one more texture binding in the shader programs of the scenes that use it.
+
 ## Gotchas
 
-- **The sky doesn't light the scene.** Set the ambient light and the lights to match it.
+- **The sky doesn't light the scene** unless you call [`setEnvironmentLighting`](#light-from-the-sky). Otherwise set the
+  ambient light and the lights to match it.
 - **Only the first 8 lights count,** and the shadow-casting one must be among them, or it is ignored.
 - **Shadow memory adds up:** the shadow picture is one per scene and device, shared by its viewports, but a size of 4096 or more
   is hundreds of megabytes of GPU memory on top of the picture itself. 2048 is sharp enough for most scenes.
