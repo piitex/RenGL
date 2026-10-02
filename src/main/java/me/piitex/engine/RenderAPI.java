@@ -14,7 +14,8 @@ public enum RenderAPI {
      */
     AUTO,
     /**
-     * OpenGL 3.3 core. Windows and Linux only; macOS windows have no OpenGL context.
+     * OpenGL 3.3 core. Windows and Linux only; macOS windows have no OpenGL context, and asking for OpenGL there is a
+     * fatal error that tells you to use {@link #VULKAN}.
      */
     OPENGL,
     /**
@@ -39,8 +40,12 @@ public enum RenderAPI {
 
     /**
      * Turns a request into a backend that can exist on this platform: {@link #AUTO} becomes the system property's
-     * choice or the platform default, and a backend the platform can't have becomes the platform default. Whether
+     * choice or the platform default, and Metal off macOS becomes the platform default, with a warning. Whether
      * Vulkan has a usable GPU is not known here; the window checks that when it opens.
+     *
+     * @throws IllegalStateException when OpenGL is asked for on macOS, which has no OpenGL context for windows. This is
+     *                               a fatal error on purpose: a game written for OpenGL would otherwise quietly run
+     *                               on another API. The message says to use {@link #VULKAN}
      */
     public static RenderAPI resolve(RenderAPI requested) {
         RenderAPI backend = requested == null ? AUTO : requested;
@@ -60,8 +65,11 @@ public enum RenderAPI {
             return platformDefault();
         }
         if (backend == OPENGL && MAC) {
-            log.warn("macOS windows have no OpenGL context, using {} instead.", platformDefault());
-            return platformDefault();
+            String message = "OpenGL is not available on macOS: its windows have no OpenGL context. Use RenderAPI.VULKAN "
+                    + "(required for the 3D layer; windowOptions.setRenderer(RenderAPI.VULKAN)), or RenderAPI.AUTO for Metal "
+                    + "(2D only). Remove -Drengl.backend=opengl if that is what asked for OpenGL.";
+            log.fatal(message);
+            throw new IllegalStateException(message);
         }
         return backend;
     }

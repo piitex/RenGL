@@ -454,6 +454,19 @@ public class Engine {
                 frameLimiter.limit(pacing.getMaxFPS());
             }
         }
+
+        // The engine is stopping. The windows still open (the first one always is) release their renderers here, on the
+        // render thread, as a window closed on its own would, so a 3D viewport's content and GPU device are torn down
+        // properly instead of being left to process exit.
+        for (Host host : hosts) {
+            if (!host.released) {
+                try {
+                    release(host);
+                } catch (RuntimeException e) {
+                    log.error("Could not release the renderer of the window \"{}\"", host.window.getWindowOptions().getTitle(), e);
+                }
+            }
+        }
     }
 
     /**
