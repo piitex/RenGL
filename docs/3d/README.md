@@ -124,10 +124,10 @@ path of the demos has not been run on Windows or Linux yet.
 ## Limits at a glance
 
 The scene layer is a forward renderer with classic and physically based materials (normal, metallic-roughness, occlusion
-and emissive maps), shadows from one directional light, a skybox, instancing, skinned animation, mipmapped and
-anisotropically filtered textures, 4x anti-aliasing by default, and ray [picking](scenes.md#picking). It has **no
-image-based lighting or reflections, no point-light or soft variable-width shadows, no morph targets, no post-processing and
-no culling of what is off screen**. It was written and tested on one machine so far: macOS on Apple silicon, with Vulkan
+and emissive maps), shadows from one directional or spot light, a skybox that can light and be reflected, instancing,
+skinned animation, frustum culling, mipmapped and anisotropically filtered textures, 4x anti-aliasing by default, and ray
+[picking](scenes.md#picking). It has **no point-light or variable-width soft shadows, no morph targets and no
+post-processing**. It was written and tested on one machine so far: macOS on Apple silicon, with Vulkan
 (MoltenVK) and, in a harness, OpenGL 3.3; Windows and Linux are untested. The full list, with the reasons, is in
 [Known limitations](../reference/known-limitations.md#rendering-and-3d). The code that checks it all is in `src/test`: run
 `./mvnw test`, which skips the GPU tests when the machine has no usable GPU.

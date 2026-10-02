@@ -6,7 +6,8 @@ package me.piitex.engine.render3d.scene;
  * (static or skinned) and render state, not one per material.
  * <p>
  * Binding numbers are shared by every program: 0 is the frame block, 1 the joint matrices (skinned programs), 2 to 6
- * the material's textures (base colour, normal, metallic-roughness, occlusion, emissive) and 7 the shadow map.
+ * the material's textures (base colour, normal, metallic-roughness, occlusion, emissive), 7 the shadow map and 8 the
+ * environment (the skybox, in programs that light from it).
  */
 final class SceneShaders {
     private SceneShaders() {
@@ -65,6 +66,11 @@ final class SceneShaders {
                 mat4 lightViewProj;
                 vec4 fog;
                 vec4 fogParams;
+                vec4 envParams;
+                vec4 envSh[9];
+                vec4 envTop;
+                vec4 envHorizon;
+                vec4 envBottom;
             };
             """;
 
@@ -102,7 +108,17 @@ final class SceneShaders {
                 """;
     }
 
-    static final String FRAGMENT = "#version 450\n" + """
+    static final int ENV_NONE = 0, ENV_GRADIENT = 1, ENV_CUBE = 2, ENV_EQUIRECT = 3;
+
+    /**
+     * The scene's fragment shader. {@code env} says what lights the scene from the sky: nothing, or a gradient, cube or
+     * equirectangular skybox, each its own program.
+     */
+    static String fragment(int env) {
+        return "#version 450\n#define ENV_KIND " + env + "\n" + FRAGMENT_BODY;
+    }
+
+    private static final String FRAGMENT_BODY = """
             layout(location = 0) in vec3 vWorldPos;
             layout(location = 1) in vec3 vNormal;
             layout(location = 2) in vec2 vUv;
@@ -117,9 +133,48 @@ final class SceneShaders {
             layout(set = 0, binding = 5) uniform sampler2D occlusionTexture;
             layout(set = 0, binding = 6) uniform sampler2D emissiveTexture;
             layout(set = 0, binding = 7) uniform sampler2D shadowMap;
+            #if ENV_KIND == 2
+            layout(set = 0, binding = 8) uniform samplerCube envMap;
+            #elif ENV_KIND == 3
+            layout(set = 0, binding = 8) uniform sampler2D envMap;
+            #endif
             layout(location = 0) out vec4 outColor;
 
             const float PI = 3.14159265;
+
+            #if ENV_KIND != 0
+            // The light the sky gives a surface facing n, divided by pi: spherical harmonics worked out on the CPU.
+            vec3 envDiffuse(vec3 n) {
+                vec3 e = envSh[0].rgb + envSh[1].rgb * n.y + envSh[2].rgb * n.z + envSh[3].rgb * n.x
+                       + envSh[4].rgb * (n.x * n.y) + envSh[5].rgb * (n.y * n.z) + envSh[6].rgb * (3.0 * n.z * n.z - 1.0)
+                       + envSh[7].rgb * (n.x * n.z) + envSh[8].rgb * (n.x * n.x - n.y * n.y);
+                return max(e, vec3(0.0)) * envParams.x;
+            }
+
+            // The sky seen along r, blurred as much as roughness asks for, in linear colour.
+            vec3 envSpecular(vec3 r, float roughness) {
+            #if ENV_KIND == 1
+                float t = mix(r.y, 0.0, roughness * roughness * 0.8);
+                vec3 c = t >= 0.0 ? mix(envHorizon.rgb, envTop.rgb, pow(t, 0.6)) : mix(envHorizon.rgb, envBottom.rgb, pow(-t, 0.6));
+            #elif ENV_KIND == 2
+                vec3 c = textureLod(envMap, r, roughness * envParams.z).rgb;
+            #else
+                vec2 uv = vec2(atan(r.x, -r.z) / (2.0 * PI) + 0.5, acos(clamp(r.y, -1.0, 1.0)) / PI);
+                vec3 c = textureLod(envMap, uv, roughness * envParams.z).rgb;
+            #endif
+                return pow(c, vec3(2.2)) * envParams.w * envParams.x;
+            }
+
+            // How much of a surface's reflection the sky supplies: a fit to the split-sum integral.
+            vec3 envBrdf(vec3 f0, float roughness, float nv) {
+                const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+                const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+                vec4 r = roughness * c0 + c1;
+                float a004 = min(r.x * r.x, exp2(-9.28 * nv)) * r.x + r.y;
+                vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
+                return f0 * ab.x + ab.y;
+            }
+            #endif
 
             float unpackDepth(vec3 c) {
                 return dot(c, vec3(1.0, 1.0 / 255.0, 1.0 / 65025.0));
@@ -149,7 +204,9 @@ final class SceneShaders {
                     float wx = x == -1 ? 1.0 - f.x : (x == 2 ? f.x : 1.0);
                     for (int y = -1; y <= 2; y++) {
                         float wy = y == -1 ? 1.0 - f.y : (y == 2 ? f.y : 1.0);
-                        float stored = unpackDepth(textureLod(shadowMap, base + vec2(float(x), float(y)) * shadowA.z, 0.0).rgb);
+                        // The pattern is stretched about the point by the scene's softness, 1 for the plain filter.
+                        vec2 tap = uv + ((base - uv) + vec2(float(x), float(y)) * shadowA.z) * fogParams.y;
+                        float stored = unpackDepth(textureLod(shadowMap, tap, 0.0).rgb);
                         lit += wx * wy * ((depth - bias > stored) ? 0.0 : 1.0);
                     }
                 }
@@ -226,7 +283,14 @@ final class SceneShaders {
                         float a2 = a * a;
                         float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
                         float nv = max(dot(n, v), 1e-4);
+            #if ENV_KIND != 0
+                        vec3 refl = reflect(-v, n);
+                        refl = normalize(mix(refl, n, a));
+                        vec3 reflectance = envBrdf(f0, roughness, nv);
+                        lit = occlusion * (envDiffuse(n) * diffuseColor * (1.0 - reflectance) + envSpecular(refl, roughness) * reflectance);
+            #else
                         lit = ambient.rgb * occlusion * (diffuseColor + f0 * mix(1.0, 0.3, roughness));
+            #endif
                         for (int i = 0; i < 8; i++) {
                             if (i >= count) break;
                             vec3 l;
@@ -245,7 +309,11 @@ final class SceneShaders {
                         }
                         lit += vExtra.xyz * pow(texture(emissiveTexture, vUv).rgb, vec3(2.2));
                     } else {
+            #if ENV_KIND != 0
+                        lit = envDiffuse(n) * albedo;
+            #else
                         lit = ambient.rgb * albedo;
+            #endif
                         for (int i = 0; i < 8; i++) {
                             if (i >= count) break;
                             vec3 l;
@@ -368,7 +436,7 @@ final class SceneShaders {
             void main() {
                 vec3 d = normalize(vDir);
                 vec2 uv = vec2(atan(d.x, -d.z) / (2.0 * 3.14159265) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / 3.14159265);
-                outColor = vec4(texture(skyTexture, uv).rgb * top.a, 1.0);
+                outColor = vec4(textureLod(skyTexture, uv, 0.0).rgb * top.a, 1.0);
             }
             """;
 }

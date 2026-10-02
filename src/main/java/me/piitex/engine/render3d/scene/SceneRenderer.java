@@ -37,7 +37,7 @@ import static me.piitex.engine.render3d.scene.SceneShaders.*;
 final class SceneRenderer {
     private static final Logger log = LogManager.getLogger("Engine");
 
-    private static final int FRAME_BLOCK_SIZE = 64 + 16 * 5 + 16 * Scene3D.MAX_LIGHTS * 4 + 64 + 32;
+    private static final int FRAME_BLOCK_SIZE = 64 + 16 * 5 + 16 * Scene3D.MAX_LIGHTS * 4 + 64 + 32 + 16 * 13;
     private static final int SHADOW_BLOCK_SIZE = 64 + 16;
     private static final int INSTANCE_BYTES = INSTANCE_FLOATS * 4;
     private static final int JOINT_BLOCK_SIZE = Skin.MAX_JOINTS * 64;
@@ -49,7 +49,7 @@ final class SceneRenderer {
     private static final int SWEEP_EVERY = 120;
     private static final Material DEFAULT_MATERIAL = new Material();
 
-    private static final int KEY_CULL = 1, KEY_BLEND = 2, KEY_MIRRORED = 4, KEY_SKINNED = 8, KEY_SHADOW = 16, KEY_ADDITIVE = 32;
+    private static final int KEY_CULL = 1, KEY_BLEND = 2, KEY_MIRRORED = 4, KEY_SKINNED = 8, KEY_SHADOW = 16, KEY_ADDITIVE = 32, KEY_ENV_SHIFT = 6;
 
     private static final class GpuMesh {
         final GpuBuffer vertices;
@@ -117,6 +117,7 @@ final class SceneRenderer {
         float distance;
         boolean cast;
         boolean receive;
+        boolean inView = true;
         int key;
     }
 
@@ -128,6 +129,7 @@ final class SceneRenderer {
         Material material;
         int key;
         boolean cast;
+        boolean inView = true; // false: only drawn into the shadow map
         int first, count;
         int joints = -1; // index into the render call's joint buffers, for a skinned group
     }
@@ -144,6 +146,7 @@ final class SceneRenderer {
     private final Map<Mesh, GpuMesh> meshes = new HashMap<>();
     private final Map<TextureData, GpuImage> images = new IdentityHashMap<>();
     private final Map<Skybox, GpuImage> skies = new IdentityHashMap<>();
+    private final Map<Skybox, float[]> skyLight = new IdentityHashMap<>();
     private final List<Resources> resourcePool = new ArrayList<>();
     private final GpuTexture whiteTexture, flatNormalTexture;
     private final GpuBuffer skyTriangle;
@@ -189,7 +192,7 @@ final class SceneRenderer {
             boolean blend = (key & KEY_BLEND) != 0;
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
-            desc = new PipelineDesc(vertex(skinned), FRAGMENT, meshLayout, true, (key & KEY_CULL) != 0, blend,
+            desc = new PipelineDesc(vertex(skinned), fragment((key >> KEY_ENV_SHIFT) & 3), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, skinned ? List.of(instanceLayout, skinLayout) : List.of(instanceLayout),
                     (key & KEY_ADDITIVE) != 0, !blend);
         }
@@ -224,7 +227,9 @@ final class SceneRenderer {
 
         List<Draw> opaque = new ArrayList<>();
         List<Draw> blended = new ArrayList<>();
-        collect(scene.root(), Mat4.identity(), camera.getPosition(), opaque, blended);
+        float[] planes = frustumPlanes(viewProj);
+        int[] counts = {0, 0};
+        collect(scene.root(), Mat4.identity(), camera.getPosition(), planes, counts, opaque, blended);
         opaque.sort(Comparator.<Draw>comparingInt(d -> d.key).thenComparingInt(d -> System.identityHashCode(d.material))
                 .thenComparingInt(d -> System.identityHashCode(d.mesh)));
         blended.sort((a, b) -> Float.compare(b.distance, a.distance));
@@ -250,21 +255,42 @@ final class SceneRenderer {
             res.shadowFrame.update(scratch);
             shadowPass(scene, opaqueGroups, res);
         }
-        writeFrameBlock(res.frame, scene, camera, viewProj, shadows ? shadowLight : null, lightViewProj, shadowParams);
         Skybox sky = scene.getSkybox();
+        int env = environmentKind(scene, sky);
+        writeFrameBlock(res.frame, scene, camera, viewProj, shadows ? shadowLight : null, lightViewProj, shadowParams, env);
         if (sky != null) writeSky(res.sky, camera, aspect, sky);
 
         Color bg = scene.getBackground();
+        int drawCalls = 0, drawnRecords = 0;
         try (RenderPass pass = device.beginPass(target, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
             pass.bindTexture(7, shadows ? shadowTarget.texture() : whiteTexture);
+            if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
             int[] state = {-1, 0};
             Material[] lastMaterial = {null};
             for (List<Group> list : List.of(opaqueGroups, blendedGroups)) {
-                for (Group group : list) drawGroup(pass, res, group, state, lastMaterial, false);
+                for (Group group : list) {
+                    if (!group.inView) continue;
+                    drawGroup(pass, res, group, state, lastMaterial, false, env);
+                    drawCalls++;
+                    drawnRecords += group.count;
+                }
             }
         }
+        scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls));
         if (frame % SWEEP_EVERY == 0) sweep();
+    }
+
+    /**
+     * What lights the scene from the sky this frame: {@code ENV_NONE} when the scene doesn't ask for it or has no sky.
+     */
+    private static int environmentKind(Scene3D scene, Skybox sky) {
+        if (sky == null || scene.getEnvironmentLighting() <= 0f) return ENV_NONE;
+        return switch (sky.kind) {
+            case GRADIENT -> ENV_GRADIENT;
+            case CUBE -> ENV_CUBE;
+            case EQUIRECT -> ENV_EQUIRECT;
+        };
     }
 
     private void drawSky(RenderPass pass, Resources res, Skybox sky) {
@@ -278,8 +304,8 @@ final class SceneRenderer {
     /**
      * @param state        [0] the pipeline key in use, -1 for none
      */
-    private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass) {
-        int key = shadowPass ? (group.key & KEY_SKINNED) | KEY_SHADOW : group.key;
+    private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int env) {
+        int key = shadowPass ? (group.key & KEY_SKINNED) | KEY_SHADOW : group.key | (env << KEY_ENV_SHIFT);
         GpuMesh mesh = gpuMesh(group.mesh);
         if (key != state[0]) {
             pass.bindPipeline(pipeline(key));
@@ -308,7 +334,7 @@ final class SceneRenderer {
 
     // ---- collecting and building the instance stream -----------------------------------------------------------
 
-    private void collect(Node3D node, Mat4 parentWorld, Vec3 eye, List<Draw> opaque, List<Draw> blended) {
+    private void collect(Node3D node, Mat4 parentWorld, Vec3 eye, float[] planes, int[] counts, List<Draw> opaque, List<Draw> blended) {
         if (!node.isVisible()) return;
         Mat4 world = parentWorld.mul(node.localMatrix());
         Mesh mesh = node.getMesh();
@@ -333,11 +359,106 @@ final class SceneRenderer {
                     | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0);
             if (node.getInstances() != null && node.getInstances().size() == 0 && !skinned) {
                 // nothing to draw
-            } else {
+            } else if (skinned || !node.isFrustumCulled() || inFrustum(planes, world, mesh, node.getInstances())) {
+                counts[0]++;
                 (draw.material.isBlend() ? blended : opaque).add(draw);
+            } else {
+                counts[1]++;
+                if (draw.cast) {
+                    // Out of view, but its shadow may fall into it.
+                    draw.inView = false;
+                    opaque.add(draw);
+                }
             }
         }
-        for (Node3D child : node.getChildren()) collect(child, world, eye, opaque, blended);
+        for (Node3D child : node.getChildren()) collect(child, world, eye, planes, counts, opaque, blended);
+    }
+
+    /**
+     * The six planes of the view volume, each as (a, b, c, d) with a unit normal pointing inside, for {@code ax + by + cz + d >= 0}.
+     */
+    private static float[] frustumPlanes(Mat4 viewProj) {
+        float[] m = viewProj.toArray();
+        // Each plane is the w row times 0 or 1 plus a signed row of x, y or z: left w + x, right w - x, bottom w + y,
+        // top w - y, near z (depth runs 0 to 1) and far w - z.
+        int[] row = {0, 0, 1, 1, 2, 2};
+        float[] sign = {1f, -1f, 1f, -1f, 1f, -1f};
+        float[] withW = {1f, 1f, 1f, 1f, 0f, 1f};
+        float[] planes = new float[24];
+        for (int p = 0; p < 6; p++) {
+            int r = row[p];
+            float[] plane = new float[4];
+            for (int c = 0; c < 4; c++) plane[c] = withW[p] * m[c * 4 + 3] + sign[p] * m[c * 4 + r];
+            float len = (float) Math.sqrt(plane[0] * plane[0] + plane[1] * plane[1] + plane[2] * plane[2]);
+            if (len < 1e-12f) len = 1f;
+            for (int c = 0; c < 4; c++) planes[p * 4 + c] = plane[c] / len;
+        }
+        return planes;
+    }
+
+    /**
+     * Whether a sphere around the mesh (or around every instance of it) reaches into the view volume. Conservative: a
+     * node that is only just outside can still be drawn, one that is inside never is skipped.
+     */
+    private static boolean inFrustum(float[] planes, Mat4 world, Mesh mesh, Instances instances) {
+        Bounds bounds = mesh.bounds();
+        Vec3 c = bounds.center();
+        float radius = bounds.radius();
+        float[] w = world.toArray();
+        float cx = c.x(), cy = c.y(), cz = c.z();
+        float lx, ly, lz, lr;
+        if (instances == null) {
+            lx = cx;
+            ly = cy;
+            lz = cz;
+            lr = radius;
+        } else {
+            int n = instances.size();
+            float[] data = instances.matrixData();
+            float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, minZ = Float.MAX_VALUE;
+            float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
+            for (int i = 0; i < n; i++) {
+                int o = i * 16;
+                float x = data[o] * cx + data[o + 4] * cy + data[o + 8] * cz + data[o + 12];
+                float y = data[o + 1] * cx + data[o + 5] * cy + data[o + 9] * cz + data[o + 13];
+                float z = data[o + 2] * cx + data[o + 6] * cy + data[o + 10] * cz + data[o + 14];
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+                minZ = Math.min(minZ, z);
+                maxZ = Math.max(maxZ, z);
+            }
+            lx = (minX + maxX) * 0.5f;
+            ly = (minY + maxY) * 0.5f;
+            lz = (minZ + maxZ) * 0.5f;
+            lr = 0f;
+            for (int i = 0; i < n; i++) {
+                int o = i * 16;
+                float x = data[o] * cx + data[o + 4] * cy + data[o + 8] * cz + data[o + 12] - lx;
+                float y = data[o + 1] * cx + data[o + 5] * cy + data[o + 9] * cz + data[o + 13] - ly;
+                float z = data[o + 2] * cx + data[o + 6] * cy + data[o + 10] * cz + data[o + 14] - lz;
+                lr = Math.max(lr, (float) Math.sqrt(x * x + y * y + z * z) + radius * maxColumn(data, o));
+            }
+        }
+        float x = w[0] * lx + w[4] * ly + w[8] * lz + w[12];
+        float y = w[1] * lx + w[5] * ly + w[9] * lz + w[13];
+        float z = w[2] * lx + w[6] * ly + w[10] * lz + w[14];
+        float r = lr * maxColumn(w, 0);
+        for (int p = 0; p < 6; p++) {
+            if (planes[p * 4] * x + planes[p * 4 + 1] * y + planes[p * 4 + 2] * z + planes[p * 4 + 3] < -r) return false;
+        }
+        return true;
+    }
+
+    /**
+     * The longest of the three axes of a matrix's upper 3x3, the most it stretches any direction.
+     */
+    private static float maxColumn(float[] m, int o) {
+        float a = m[o] * m[o] + m[o + 1] * m[o + 1] + m[o + 2] * m[o + 2];
+        float b = m[o + 4] * m[o + 4] + m[o + 5] * m[o + 5] + m[o + 6] * m[o + 6];
+        float c = m[o + 8] * m[o + 8] + m[o + 9] * m[o + 9] + m[o + 10] * m[o + 10];
+        return (float) Math.sqrt(Math.max(a, Math.max(b, c)));
     }
 
     /**
@@ -354,13 +475,14 @@ final class SceneRenderer {
             ensureScratch(cursor[0] + count);
 
             boolean merge = last != null && !skinned && last.joints < 0 && last.mesh == draw.mesh && last.material == draw.material
-                    && last.key == draw.key && last.cast == draw.cast;
+                    && last.key == draw.key && last.cast == draw.cast && last.inView == draw.inView;
             if (!merge) {
                 last = new Group();
                 last.mesh = draw.mesh;
                 last.material = draw.material;
                 last.key = draw.key;
                 last.cast = draw.cast;
+                last.inView = draw.inView;
                 last.first = cursor[0];
                 if (skinned) last.joints = writeJoints(res, draw.node.getSkin());
                 groups.add(last);
@@ -612,7 +734,7 @@ final class SceneRenderer {
             int[] state = {-1, 0};
             Material[] lastMaterial = {null};
             for (Group group : groups) {
-                if (group.cast) drawGroup(pass, res, group, state, lastMaterial, true);
+                if (group.cast) drawGroup(pass, res, group, state, lastMaterial, true, ENV_NONE);
             }
         }
     }
@@ -624,7 +746,7 @@ final class SceneRenderer {
     }
 
     private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, Camera camera, Mat4 viewProj, Light shadowLight,
-                                 Mat4 lightViewProj, float[] shadow) {
+                                 Mat4 lightViewProj, float[] shadow, int env) {
         scratch.clear();
         viewProj.put(scratch);
         Vec3 eye = camera.getPosition();
@@ -679,7 +801,20 @@ final class SceneRenderer {
         lightViewProj.put(scratch);
         Color fog = scene.getFogColor();
         scratch.putFloat(linear(fog.getR())).putFloat(linear(fog.getG())).putFloat(linear(fog.getB())).putFloat(scene.getFogDensity());
-        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(0f).putFloat(0f).putFloat(0f);
+        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(scene.getShadowSoftness()).putFloat(0f).putFloat(0f);
+        Skybox sky = scene.getSkybox();
+        if (env == ENV_NONE) {
+            for (int i = 0; i < 13; i++) scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(0f);
+        } else {
+            scratch.putFloat(scene.getEnvironmentLighting()).putFloat(env).putFloat(Environment.maxLod(sky)).putFloat(sky.getBrightness());
+            float[] sh = skyIrradiance(sky);
+            for (int i = 0; i < 9; i++) scratch.putFloat(sh[i * 3]).putFloat(sh[i * 3 + 1]).putFloat(sh[i * 3 + 2]).putFloat(0f);
+            if (sky.kind == Skybox.Kind.GRADIENT) {
+                for (Color c : new Color[]{sky.top, sky.horizon, sky.bottom}) scratch.putFloat(c.getR()).putFloat(c.getG()).putFloat(c.getB()).putFloat(0f);
+            } else {
+                for (int i = 0; i < 3; i++) scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(0f);
+            }
+        }
         scratch.flip();
         buffer.update(scratch);
     }
@@ -762,6 +897,10 @@ final class SceneRenderer {
         return image.texture;
     }
 
+    private float[] skyIrradiance(Skybox sky) {
+        return skyLight.computeIfAbsent(sky, Environment::irradiance);
+    }
+
     private GpuTexture gpuSky(Skybox sky) {
         GpuImage image = skies.get(sky);
         if (image == null) {
@@ -776,7 +915,7 @@ final class SceneRenderer {
             } else {
                 ByteBuffer pixels = sky.panorama.toBuffer();
                 try {
-                    image = new GpuImage(device.createTexture(sky.panorama.width(), sky.panorama.height(), pixels, false));
+                    image = new GpuImage(device.createTexture(sky.panorama.width(), sky.panorama.height(), pixels, true));
                 } finally {
                     MemoryUtil.memFree(pixels);
                 }
@@ -823,6 +962,7 @@ final class SceneRenderer {
         meshes.clear();
         images.clear();
         skies.clear();
+        skyLight.clear();
         resourcePool.clear();
         pipelines.clear();
         skyPipelines.clear();

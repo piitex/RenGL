@@ -35,6 +35,7 @@ public final class Node3D {
     private boolean pickable = true;
     private boolean castShadow = true;
     private boolean receiveShadow = true;
+    private boolean frustumCulled = true;
     private Instances instances;
     private Skin skin;
 
@@ -136,6 +137,20 @@ public final class Node3D {
      */
     public Node3D setCastShadow(boolean castShadow) {
         this.castShadow = castShadow;
+        return this;
+    }
+
+    public boolean isFrustumCulled() {
+        return frustumCulled;
+    }
+
+    /**
+     * Whether the node is skipped when it is entirely outside the camera's view (true by default). Turn it off for a mesh
+     * whose picture is not where its box is. A skinned mesh is never skipped, because its box does not follow the pose.
+     * A node outside the view still throws its shadow.
+     */
+    public Node3D setFrustumCulled(boolean frustumCulled) {
+        this.frustumCulled = frustumCulled;
         return this;
     }
 
@@ -302,6 +317,7 @@ public final class Node3D {
         c.pickable = pickable;
         c.castShadow = castShadow;
         c.receiveShadow = receiveShadow;
+        c.frustumCulled = frustumCulled;
         c.instances = instances == null ? null : instances.copy();
         c.skin = skin;
         for (Node3D child : children) c.add(child.copyTree());

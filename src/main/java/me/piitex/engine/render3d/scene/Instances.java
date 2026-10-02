@@ -48,9 +48,6 @@ public final class Instances {
     }
 
     /**
-     * Replaces an instance's transform.
-     */
-    /**
      * Adds an instance from a column-major 4x4 matrix of 16 floats, the layout of {@link Mat4#toArray()}. Cheaper than
      * building a {@link Mat4} when thousands of instances move every frame.
      */

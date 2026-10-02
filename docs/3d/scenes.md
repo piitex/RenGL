@@ -18,10 +18,10 @@ Scene3D ──┬── root Node3D ──┬── Node3D (mesh + material)
 
 Everything is drawn by one forward renderer: classic (Lambert and Blinn-Phong) or [physically based](#material)
 shading with normal, metallic-roughness, occlusion and emissive maps, [shadows](lighting.md#shadows) from a directional
-light, a [skybox](lighting.md#skybox), mipmapped and anisotropically filtered textures, alpha blending,
-[instanced](instancing.md) drawing, [skinned meshes and animation](animation.md), depth testing and back-face culling.
-There is no image-based lighting (reflections of the sky) yet. For models from files see [Models](models.md); for your
-own shaders see [Custom rendering](custom-rendering.md).
+or spot light, a [skybox](lighting.md#skybox) that can [light the scene and be reflected](lighting.md#light-from-the-sky),
+mipmapped and anisotropically filtered textures, alpha blending, [instanced](instancing.md) drawing, [skinned meshes and
+animation](animation.md), depth testing, back-face culling and [frustum culling](#frustum-culling). For models from
+files see [Models](models.md); for your own shaders see [Custom rendering](custom-rendering.md).
 
 ## Scene3D
 
@@ -46,7 +46,9 @@ Call `scene.lights().clear()` for different lighting.
 | `getAmbient()` / `getAmbientIntensity()` | Read them back |
 | `setSkybox(Skybox)` / `getSkybox()` | The sky drawn behind everything, see [Skybox](lighting.md#skybox) |
 | `setFog(Color, float density)` / `setFog(Color, density, heightFalloff)` | Fades distant things into a colour, see [Fog](lighting.md#fog). Off by default |
-| `setShadowMapSize(int)`, `setShadowDistance(float)`, `setShadowBias(float)` | The quality of [shadows](lighting.md#shadows) |
+| `setShadowMapSize(int)`, `setShadowDistance(float)`, `setShadowBias(float)`, `setShadowSoftness(float)` | The quality of [shadows](lighting.md#shadows) |
+| `setEnvironmentLighting(float)` / `getEnvironmentLighting()` | Light and reflections from the skybox, `0` (off, the default) or more, see [Light from the sky](lighting.md#light-from-the-sky) |
+| `getStats()` | A `Scene3D.Stats(nodes, culled, instances, drawCalls)` for the last time the scene was drawn, see [Frustum culling](#frustum-culling) |
 | `animate(AnimationPlayer)` / `stopAnimating(AnimationPlayer)` | Registers a player that advances once per frame, see [Animation](animation.md) |
 | `setUpdateHandler(UpdateHandler)` | Runs once per frame before the scene is drawn, see below |
 | `pick(x, y, width, height)` | The nearest [`Hit`](#picking) under a point of the picture, or `null` |
@@ -397,6 +399,20 @@ before the solid nodes, and the blended ones last, far to near. GPU meshes and t
 frames without being drawn. You never touch it directly; it is how the scene follows its `Content` lifecycle: `init`
 makes the renderer, `render` advances the animation players and runs the update handler (once per frame) and draws,
 `dispose` frees it when the last viewport lets go.
+
+## Frustum culling
+
+A node whose mesh is wholly outside the camera's view is not drawn, so a big world with the camera in a corner of it costs
+what is in front of the camera. The test is cheap and conservative: a sphere around the mesh against the six sides of the
+view volume, so a node just outside may still be drawn, and one inside is never dropped.
+
+- A node with [`Instances`](instancing.md) is tested as a whole: one sphere around all of its copies. Spread a huge field
+  over several nodes (one per tile, say) so most of them can be skipped.
+- **Shadows don't care.** A node out of view that casts a shadow into the view is still drawn into the shadow picture.
+- A skinned mesh is never culled, because its box doesn't follow the animation. `node.setFrustumCulled(false)` turns it
+  off for a node whose picture is not where its mesh's box is.
+- `scene.getStats()` says what the last frame did: nodes drawn, nodes culled, instance records and draw calls. It is the
+  quickest way to see that culling and batching are working.
 
 ## Gotchas
 
