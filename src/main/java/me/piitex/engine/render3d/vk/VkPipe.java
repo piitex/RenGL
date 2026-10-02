@@ -97,17 +97,26 @@ final class VkPipe implements Pipeline {
             stages.get(0).sType$Default().stage(VK_SHADER_STAGE_VERTEX_BIT).module(vertexModule).pName(stack.UTF8("main"));
             stages.get(1).sType$Default().stage(VK_SHADER_STAGE_FRAGMENT_BIT).module(fragmentModule).pName(stack.UTF8("main"));
 
-            VertexLayout vertexLayout = desc.vertexLayout();
-            VkVertexInputAttributeDescription.Buffer attributes =
-                    VkVertexInputAttributeDescription.calloc(vertexLayout.attributes().size(), stack);
-            for (int i = 0; i < attributes.capacity(); i++) {
-                VertexLayout.Attribute attribute = vertexLayout.attributes().get(i);
-                attributes.get(i).location(attribute.location()).binding(0)
-                        .format(vertexFormat(attribute.format().components)).offset(attribute.offset());
+            // Buffer binding 0 is the main layout, 1 and up the extra ones, each with the rate its layout asks for.
+            List<VertexLayout> layouts = new java.util.ArrayList<>();
+            layouts.add(desc.vertexLayout());
+            layouts.addAll(desc.extraLayouts());
+            int attributeCount = 0;
+            for (VertexLayout layout : layouts) attributeCount += layout.attributes().size();
+            VkVertexInputAttributeDescription.Buffer attributes = VkVertexInputAttributeDescription.calloc(attributeCount, stack);
+            VkVertexInputBindingDescription.Buffer bindingDescriptions = VkVertexInputBindingDescription.calloc(layouts.size(), stack);
+            int next = 0;
+            for (int binding = 0; binding < layouts.size(); binding++) {
+                VertexLayout layout = layouts.get(binding);
+                bindingDescriptions.get(binding).binding(binding).stride(layout.stride())
+                        .inputRate(layout.rate() == VertexLayout.Rate.INSTANCE ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX);
+                for (VertexLayout.Attribute attribute : layout.attributes()) {
+                    attributes.get(next++).location(attribute.location()).binding(binding)
+                            .format(vertexFormat(attribute.format().components)).offset(attribute.offset());
+                }
             }
             VkPipelineVertexInputStateCreateInfo vertexInput = VkPipelineVertexInputStateCreateInfo.calloc(stack).sType$Default()
-                    .pVertexBindingDescriptions(VkVertexInputBindingDescription.calloc(1, stack)
-                            .binding(0).stride(vertexLayout.stride()).inputRate(VK_VERTEX_INPUT_RATE_VERTEX))
+                    .pVertexBindingDescriptions(bindingDescriptions)
                     .pVertexAttributeDescriptions(attributes);
 
             VkPipelineInputAssemblyStateCreateInfo assembly = VkPipelineInputAssemblyStateCreateInfo.calloc(stack).sType$Default()

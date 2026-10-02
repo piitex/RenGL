@@ -38,11 +38,15 @@ import static org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1;
 public final class VkGpuDevice implements GpuDevice {
     static final int FRAMES = 2;
     static final int COLOR_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
-    private static final int DESCRIPTORS_PER_FRAME = 4096;
     /**
-     * A set holds a few uniform buffers (a scene's frame and object blocks) and a sampler; the pool is sized for that.
+     * Sets in each descriptor pool. A frame that needs more gets another pool, so this is a step, not a ceiling.
+     */
+    private static final int SETS_PER_POOL = 1024;
+    /**
+     * A set holds a few uniform buffers and up to this many samplers; the pools are sized for that.
      */
     private static final int BUFFERS_PER_SET = 4;
+    private static final int SAMPLERS_PER_SET = 8;
 
     record Alloc(long handle, long allocation, long mapped) {
     }
@@ -57,7 +61,15 @@ public final class VkGpuDevice implements GpuDevice {
     final long allocator;
     final int depthFormat;
     final int depthAspect;
+    /**
+     * The sampler for ordinary textures: linear, repeating, and anisotropic where the GPU can.
+     */
     final long sampler;
+    /**
+     * Samplers for render targets that are read as textures: clamped to the edge, nearest or linear.
+     */
+    final long clampNearestSampler, clampLinearSampler;
+    private final int maxAnisotropy;
     /**
      * Whether the colour format can be shrunk by {@code vkCmdBlitImage}, which is how mipmaps are made.
      */
@@ -67,9 +79,11 @@ public final class VkGpuDevice implements GpuDevice {
     private final LongSupplier frames;
     private final long uploadPool;
     private final long[] commandPools = new long[FRAMES];
-    final long[] descriptorPools = new long[FRAMES];
+    private final java.util.List<java.util.List<Long>> descriptorPools = new java.util.ArrayList<>(); // per slot
+    private final int[] activePool = new int[FRAMES];
+    private VkCommandBuffer pendingUploads;
     private final long[] fences = new long[FRAMES];
-    private final java.util.Map<Integer, Long> renderPasses = new java.util.HashMap<>(); // by samples and depth
+    private final java.util.Map<Integer, Long> renderPasses = new java.util.HashMap<>(); // by samples, depth and sampled
     private final int maxSamples;
     private final ArrayDeque<Deferred> deferred = new ArrayDeque<>();
     private boolean closed;
@@ -104,6 +118,11 @@ public final class VkGpuDevice implements GpuDevice {
             int most = 1;
             for (int n = 2; n <= 8; n *= 2) if ((supported & n) != 0) most = n; // VK_SAMPLE_COUNT_n_BIT is n
             maxSamples = most;
+            VkPhysicalDeviceFeatures features = VkPhysicalDeviceFeatures.calloc(stack);
+            vkGetPhysicalDeviceFeatures(physical, features);
+            // The window's context turns on every feature the GPU has, so reported support is enabled support.
+            float limit = features.samplerAnisotropy() ? properties.limits().maxSamplerAnisotropy() : 1f;
+            maxAnisotropy = (int) Math.max(1f, Math.min(limit, Integer.getInteger("rengl.3d.anisotropy", 8)));
 
             VmaVulkanFunctions functions = VmaVulkanFunctions.calloc(stack).set(context.vkInstance(), device);
             VmaAllocatorCreateInfo info = VmaAllocatorCreateInfo.calloc(stack)
@@ -120,14 +139,8 @@ public final class VkGpuDevice implements GpuDevice {
             for (int i = 0; i < FRAMES; i++) {
                 commandPools[i] = createCommandPool(stack, 0);
 
-                VkDescriptorPoolCreateInfo pool = VkDescriptorPoolCreateInfo.calloc(stack).sType$Default()
-                        .maxSets(DESCRIPTORS_PER_FRAME)
-                        .pPoolSizes(VkDescriptorPoolSize.calloc(2, stack)
-                                .apply(0, s -> s.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(DESCRIPTORS_PER_FRAME * BUFFERS_PER_SET))
-                                .apply(1, s -> s.type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(DESCRIPTORS_PER_FRAME)));
+                descriptorPools.add(new java.util.ArrayList<>(java.util.List.of(createDescriptorPool(stack))));
                 LongBuffer out = stack.mallocLong(1);
-                check(vkCreateDescriptorPool(device, pool, null, out), "create a descriptor pool");
-                descriptorPools[i] = out.get(0);
 
                 VkFenceCreateInfo fence = VkFenceCreateInfo.calloc(stack).sType$Default()
                         .flags(VK_FENCE_CREATE_SIGNALED_BIT);
@@ -135,17 +148,52 @@ public final class VkGpuDevice implements GpuDevice {
                 fences[i] = out.get(0);
             }
 
-            VkSamplerCreateInfo samplerInfo = VkSamplerCreateInfo.calloc(stack).sType$Default()
-                    .magFilter(VK_FILTER_LINEAR).minFilter(VK_FILTER_LINEAR)
-                    .mipmapMode(VK_SAMPLER_MIPMAP_MODE_LINEAR)
-                    .addressModeU(VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                    .addressModeV(VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                    .addressModeW(VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                    .maxLod(VK_LOD_CLAMP_NONE)
-                    .borderColor(VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
-            LongBuffer pSampler = stack.mallocLong(1);
-            check(vkCreateSampler(device, samplerInfo, null, pSampler), "create a sampler");
-            sampler = pSampler.get(0);
+            sampler = createSampler(stack, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, maxAnisotropy);
+            clampNearestSampler = createSampler(stack, VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, 1);
+            clampLinearSampler = createSampler(stack, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, 1);
+        }
+    }
+
+    private long createSampler(MemoryStack stack, int filter, int address, int anisotropy) {
+        VkSamplerCreateInfo info = VkSamplerCreateInfo.calloc(stack).sType$Default()
+                .magFilter(filter).minFilter(filter)
+                .mipmapMode(filter == VK_FILTER_LINEAR ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST)
+                .addressModeU(address).addressModeV(address).addressModeW(address)
+                .anisotropyEnable(anisotropy > 1).maxAnisotropy(anisotropy)
+                .maxLod(VK_LOD_CLAMP_NONE)
+                .borderColor(VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
+        LongBuffer out = stack.mallocLong(1);
+        check(vkCreateSampler(device, info, null, out), "create a sampler");
+        return out.get(0);
+    }
+
+    private long createDescriptorPool(MemoryStack stack) {
+        VkDescriptorPoolCreateInfo pool = VkDescriptorPoolCreateInfo.calloc(stack).sType$Default()
+                .maxSets(SETS_PER_POOL)
+                .pPoolSizes(VkDescriptorPoolSize.calloc(2, stack)
+                        .apply(0, s -> s.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(SETS_PER_POOL * BUFFERS_PER_SET))
+                        .apply(1, s -> s.type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(SETS_PER_POOL * SAMPLERS_PER_SET)));
+        LongBuffer out = stack.mallocLong(1);
+        check(vkCreateDescriptorPool(device, pool, null, out), "create a descriptor pool");
+        return out.get(0);
+    }
+
+    /**
+     * A descriptor set from the frame's pools, valid until the slot's next {@link #beginFrame()}. When the pool in use
+     * is full the frame moves on to another, so the number of draws that bind different resources is not capped.
+     */
+    long allocateDescriptorSet(MemoryStack stack, long layout) {
+        java.util.List<Long> pools = descriptorPools.get(slot);
+        LongBuffer set = stack.mallocLong(1);
+        while (true) {
+            VkDescriptorSetAllocateInfo info = VkDescriptorSetAllocateInfo.calloc(stack).sType$Default()
+                    .descriptorPool(pools.get(activePool[slot])).pSetLayouts(stack.longs(layout));
+            int result = vkAllocateDescriptorSets(device, info, set);
+            if (result == VK_SUCCESS) return set.get(0);
+            if (result != org.lwjgl.vulkan.VK11.VK_ERROR_OUT_OF_POOL_MEMORY && result != VK_ERROR_FRAGMENTED_POOL) {
+                check(result, "allocate a descriptor set");
+            }
+            if (++activePool[slot] == pools.size()) pools.add(createDescriptorPool(stack));
         }
     }
 
@@ -191,7 +239,8 @@ public final class VkGpuDevice implements GpuDevice {
         check(vkWaitForFences(device, fences[slot], true, Long.MAX_VALUE), "wait for the frame fence");
         check(vkResetFences(device, fences[slot]), "reset the frame fence");
         check(vkResetCommandPool(device, commandPools[slot], 0), "reset the command pool");
-        check(vkResetDescriptorPool(device, descriptorPools[slot], 0), "reset the descriptor pool");
+        for (long pool : descriptorPools.get(slot)) check(vkResetDescriptorPool(device, pool, 0), "reset a descriptor pool");
+        activePool[slot] = 0;
         // Frames up to counter-FRAMES are finished now (this slot's fence covered the one before).
         while (!deferred.isEmpty() && deferred.peekFirst().frame <= frameCounter - FRAMES) {
             deferred.pollFirst().action.run();
@@ -201,6 +250,7 @@ public final class VkGpuDevice implements GpuDevice {
     @Override
     public void endFrame() {
         if (!frameActive) throw new IllegalStateException("endFrame() without beginFrame()");
+        flushUploads();
         try (MemoryStack stack = stackPush()) {
             // Nothing to submit: the fence signals once every earlier submission on the queue has finished.
             VkSubmitInfo submit = VkSubmitInfo.calloc(stack).sType$Default();
@@ -222,7 +272,13 @@ public final class VkGpuDevice implements GpuDevice {
 
     @Override
     public GpuTexture createTexture(int width, int height, ByteBuffer rgba, boolean mipmaps) {
-        return new VkTex(this, width, height, rgba, mipmaps && canBlitColor);
+        return new VkTex(this, width, height, 1, new ByteBuffer[]{rgba}, mipmaps && canBlitColor);
+    }
+
+    @Override
+    public GpuTexture createCubeTexture(int size, ByteBuffer[] faces, boolean mipmaps) {
+        if (faces.length != 6) throw new IllegalArgumentException("A cube texture needs six faces");
+        return new VkTex(this, size, size, 6, faces, mipmaps && canBlitColor);
     }
 
     @Override
@@ -233,7 +289,17 @@ public final class VkGpuDevice implements GpuDevice {
     @Override
     public RenderTarget createRenderTarget(int width, int height, boolean depth, int samples) {
         int wanted = Integer.highestOneBit(Math.max(1, samples));
-        return new VkTarget(this, width, height, depth, Math.min(wanted, maxSamples));
+        return new VkTarget(this, width, height, depth, Math.min(wanted, maxSamples), false, true);
+    }
+
+    @Override
+    public RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear) {
+        return new VkTarget(this, width, height, depth, 1, true, linear);
+    }
+
+    @Override
+    public int maxAnisotropy() {
+        return maxAnisotropy;
     }
 
     @Override
@@ -256,9 +322,11 @@ public final class VkGpuDevice implements GpuDevice {
         for (long renderPass : renderPasses.values()) vkDestroyRenderPass(device, renderPass, null);
         renderPasses.clear();
         vkDestroySampler(device, sampler, null);
+        vkDestroySampler(device, clampNearestSampler, null);
+        vkDestroySampler(device, clampLinearSampler, null);
         for (int i = 0; i < FRAMES; i++) {
             vkDestroyFence(device, fences[i], null);
-            vkDestroyDescriptorPool(device, descriptorPools[i], null);
+            for (long pool : descriptorPools.get(i)) vkDestroyDescriptorPool(device, pool, null);
             vkDestroyCommandPool(device, commandPools[i], null);
         }
         vkDestroyCommandPool(device, uploadPool, null);
@@ -285,6 +353,7 @@ public final class VkGpuDevice implements GpuDevice {
      * Records and runs a one-off command buffer, waiting for it. For uploads and readbacks, not for frames.
      */
     void immediate(Consumer<VkCommandBuffer> record) {
+        flushUploads();
         try (MemoryStack stack = stackPush()) {
             VkCommandBufferAllocateInfo info = VkCommandBufferAllocateInfo.calloc(stack).sType$Default()
                     .commandPool(uploadPool).level(VK_COMMAND_BUFFER_LEVEL_PRIMARY).commandBufferCount(1);
@@ -302,6 +371,61 @@ public final class VkGpuDevice implements GpuDevice {
             } finally {
                 vkFreeCommandBuffers(device, uploadPool, cmd);
             }
+        }
+    }
+
+    /**
+     * Records an upload to run before the frame's next pass, instead of stopping to wait for the GPU: a mesh or texture
+     * made in the middle of a frame costs the copy, not a stall. {@code cleanup} (freeing the staging memory) runs once
+     * the GPU has finished with the frame. Outside a frame it is the plain blocking upload.
+     */
+    void upload(Consumer<VkCommandBuffer> record, Runnable cleanup) {
+        if (!frameActive) {
+            immediate(record);
+            cleanup.run();
+            return;
+        }
+        if (pendingUploads == null) {
+            pendingUploads = allocateFrameCommandBuffer();
+            try (MemoryStack stack = stackPush()) {
+                check(vkBeginCommandBuffer(pendingUploads, VkCommandBufferBeginInfo.calloc(stack).sType$Default()
+                        .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)), "begin the upload command buffer");
+            }
+        }
+        record.accept(pendingUploads);
+        destroyLater(cleanup);
+    }
+
+    /**
+     * The finished upload commands to submit ahead of a pass, or null when nothing was uploaded since the last one.
+     */
+    VkCommandBuffer takeUploads() {
+        VkCommandBuffer cmd = pendingUploads;
+        if (cmd == null) return null;
+        pendingUploads = null;
+        try (MemoryStack stack = stackPush()) {
+            // Copies are done before anything reads what they wrote: vertices, indices, uniforms and textures.
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    0, VkMemoryBarrier.calloc(1, stack).sType$Default()
+                            .srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT)
+                            .dstAccessMask(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT
+                                    | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT),
+                    null, null);
+            check(vkEndCommandBuffer(cmd), "end the upload command buffer");
+        }
+        return cmd;
+    }
+
+    /**
+     * Submits pending uploads on their own, for when no pass is about to carry them.
+     */
+    void flushUploads() {
+        VkCommandBuffer cmd = takeUploads();
+        if (cmd == null) return;
+        try (MemoryStack stack = stackPush()) {
+            check(vkQueueSubmit(queue, VkSubmitInfo.calloc(stack).sType$Default().pCommandBuffers(stack.pointers(cmd)),
+                    VK_NULL_HANDLE), "submit uploads");
         }
     }
 
@@ -332,11 +456,19 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     Alloc createImage(int width, int height, int format, int usage, int mipLevels, int samples) {
+        return createImage(width, height, format, usage, mipLevels, samples, 1);
+    }
+
+    /**
+     * @param layers 1 for an ordinary image, 6 for a cube map
+     */
+    Alloc createImage(int width, int height, int format, int usage, int mipLevels, int samples, int layers) {
         try (MemoryStack stack = stackPush()) {
             VkImageCreateInfo info = VkImageCreateInfo.calloc(stack).sType$Default()
+                    .flags(layers == 6 ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0)
                     .imageType(VK_IMAGE_TYPE_2D).format(format)
                     .extent(e -> e.width(width).height(height).depth(1))
-                    .mipLevels(mipLevels).arrayLayers(1).samples(samples)
+                    .mipLevels(mipLevels).arrayLayers(layers).samples(samples)
                     .tiling(VK_IMAGE_TILING_OPTIMAL).usage(usage).sharingMode(VK_SHARING_MODE_EXCLUSIVE)
                     .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
             VmaAllocationCreateInfo allocation = VmaAllocationCreateInfo.calloc(stack).usage(VMA_MEMORY_USAGE_AUTO);
@@ -352,10 +484,14 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     long createImageView(long image, int format, int aspect, int levels) {
+        return createImageView(image, format, aspect, levels, 1);
+    }
+
+    long createImageView(long image, int format, int aspect, int levels, int layers) {
         try (MemoryStack stack = stackPush()) {
             VkImageViewCreateInfo info = VkImageViewCreateInfo.calloc(stack).sType$Default()
-                    .image(image).viewType(VK_IMAGE_VIEW_TYPE_2D).format(format)
-                    .subresourceRange(r -> r.aspectMask(aspect).levelCount(levels).layerCount(1));
+                    .image(image).viewType(layers == 6 ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D).format(format)
+                    .subresourceRange(r -> r.aspectMask(aspect).levelCount(levels).layerCount(layers));
             LongBuffer out = stack.mallocLong(1);
             check(vkCreateImageView(device, info, null, out), "create an image view");
             return out.get(0);
@@ -363,7 +499,11 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     void upload(Alloc target, ByteBuffer data) {
-        memCopy(memAddress(data), target.mapped(), data.remaining());
+        upload(target, 0, data);
+    }
+
+    void upload(Alloc target, long offset, ByteBuffer data) {
+        memCopy(memAddress(data), target.mapped() + offset, data.remaining());
         vmaFlushAllocation(allocator, target.allocation(), 0, VK_WHOLE_SIZE);
     }
 
@@ -374,13 +514,18 @@ public final class VkGpuDevice implements GpuDevice {
 
     void barrier(VkCommandBuffer cmd, long image, int aspect, int oldLayout, int newLayout,
                  int srcStage, int dstStage, int srcAccess, int dstAccess, int baseMip, int levels) {
+        barrier(cmd, image, aspect, oldLayout, newLayout, srcStage, dstStage, srcAccess, dstAccess, baseMip, levels, 1);
+    }
+
+    void barrier(VkCommandBuffer cmd, long image, int aspect, int oldLayout, int newLayout,
+                 int srcStage, int dstStage, int srcAccess, int dstAccess, int baseMip, int levels, int layers) {
         try (MemoryStack stack = stackPush()) {
             VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
                     .srcAccessMask(srcAccess).dstAccessMask(dstAccess)
                     .oldLayout(oldLayout).newLayout(newLayout)
                     .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED).dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
                     .image(image)
-                    .subresourceRange(r -> r.aspectMask(aspect).baseMipLevel(baseMip).levelCount(levels).layerCount(1));
+                    .subresourceRange(r -> r.aspectMask(aspect).baseMipLevel(baseMip).levelCount(levels).layerCount(layers));
             vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, null, null, barrier);
         }
     }
@@ -395,7 +540,15 @@ public final class VkGpuDevice implements GpuDevice {
      * images are only ever written within the pass, so their contents are not kept.
      */
     long renderPass(boolean depth, int samples) {
-        int key = samples * 2 + (depth ? 1 : 0);
+        return renderPass(depth, samples, false);
+    }
+
+    /**
+     * @param sampled the colour image is read by shaders afterwards, so it is left in {@code SHADER_READ_ONLY_OPTIMAL}
+     *                instead (single sample only; such a target is never shown by the UI layer)
+     */
+    long renderPass(boolean depth, int samples, boolean sampled) {
+        int key = (samples << 2) | (sampled ? 2 : 0) | (depth ? 1 : 0);
         Long existing = renderPasses.get(key);
         if (existing != null) return existing;
         boolean multisampled = samples > 1;
@@ -409,7 +562,8 @@ public final class VkGpuDevice implements GpuDevice {
                     .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
                     .storeOp(multisampled ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE)
                     .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
-                    .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED).finalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                    .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                    .finalLayout(sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             if (multisampled) {
                 attachments.get(1)
                         .format(COLOR_FORMAT).samples(VK_SAMPLE_COUNT_1_BIT)

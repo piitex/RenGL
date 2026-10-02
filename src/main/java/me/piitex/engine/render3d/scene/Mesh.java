@@ -20,6 +20,9 @@ public final class Mesh {
     private final float[] vertices;
     private final int[] indices;
     private final Bounds bounds;
+    private int[] skinJoints;
+    private float[] skinWeights;
+    private volatile Bvh bvh;
 
     /**
      * @param positions x, y, z per vertex
@@ -69,6 +72,56 @@ public final class Mesh {
      */
     public float[] vertices() {
         return vertices;
+    }
+
+    /**
+     * Attaches skinning to the mesh: up to four joints per vertex, and how much of each one's movement the vertex takes.
+     * A node with this mesh also needs a {@link Skin} ({@link Node3D#setSkin}), which says what the joint numbers are.
+     * Model files with bones set this up themselves.
+     *
+     * @param joints  four joint numbers per vertex (index into the skin's joints); use 0 with weight 0 for unused slots
+     * @param weights four weights per vertex, which should add up to 1
+     */
+    public Mesh setSkinning(int[] joints, float[] weights) {
+        int count = vertexCount();
+        if (joints.length != count * 4 || weights.length != count * 4) {
+            throw new IllegalArgumentException("Skinning needs four joints and four weights per vertex (" + count + " vertices)");
+        }
+        this.skinJoints = joints.clone();
+        this.skinWeights = weights.clone();
+        return this;
+    }
+
+    public boolean isSkinned() {
+        return skinJoints != null;
+    }
+
+    /**
+     * Four joint numbers per vertex, or null when the mesh is not skinned. The array is the mesh's own.
+     */
+    public int[] skinJoints() {
+        return skinJoints;
+    }
+
+    /**
+     * Four weights per vertex, or null when the mesh is not skinned. The array is the mesh's own.
+     */
+    public float[] skinWeights() {
+        return skinWeights;
+    }
+
+    /**
+     * The triangle search structure used for picking, built on first use.
+     */
+    Bvh bvh() {
+        Bvh built = bvh;
+        if (built == null) {
+            synchronized (this) {
+                built = bvh;
+                if (built == null) bvh = built = new Bvh(vertices, indices, FLOATS_PER_VERTEX);
+            }
+        }
+        return built;
     }
 
     /**

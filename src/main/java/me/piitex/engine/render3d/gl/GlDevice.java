@@ -24,6 +24,7 @@ public final class GlDevice implements GpuDevice {
     private final String name;
     private final LongSupplier frames;
     private final int maxSamples;
+    private final float anisotropy;
 
     /**
      * @throws IllegalStateException when no OpenGL context is current or it is older than 3.3
@@ -38,6 +39,11 @@ public final class GlDevice implements GpuDevice {
         name = glGetString(GL_RENDERER);
         vertexArray = glGenVertexArrays();
         maxSamples = floorPowerOfTwo(Math.min(8, Math.max(1, glGetInteger(GL_MAX_SAMPLES))));
+        float supported = 1f;
+        if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic) {
+            supported = glGetFloat(org.lwjgl.opengl.EXTTextureFilterAnisotropic.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+        }
+        anisotropy = Math.max(1f, Math.min(supported, Integer.getInteger("rengl.3d.anisotropy", 8)));
     }
 
     @Override
@@ -75,7 +81,12 @@ public final class GlDevice implements GpuDevice {
 
     @Override
     public GpuTexture createTexture(int width, int height, ByteBuffer rgba, boolean mipmaps) {
-        return new GlTexture(width, height, rgba, mipmaps);
+        return new GlTexture(width, height, rgba, mipmaps, anisotropy);
+    }
+
+    @Override
+    public GpuTexture createCubeTexture(int size, ByteBuffer[] faces, boolean mipmaps) {
+        return new GlTexture(size, faces, mipmaps, anisotropy);
     }
 
     @Override
@@ -86,6 +97,16 @@ public final class GlDevice implements GpuDevice {
     @Override
     public RenderTarget createRenderTarget(int width, int height, boolean depth, int samples) {
         return new GlRenderTarget(width, height, depth, Math.min(floorPowerOfTwo(Math.max(1, samples)), maxSamples));
+    }
+
+    @Override
+    public RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear) {
+        return new GlRenderTarget(width, height, depth, 1, true, linear);
+    }
+
+    @Override
+    public int maxAnisotropy() {
+        return (int) anisotropy;
     }
 
     @Override

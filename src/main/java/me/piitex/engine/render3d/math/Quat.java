@@ -33,6 +33,33 @@ public record Quat(float x, float y, float z, float w) {
                 w * o.w - x * o.x - y * o.y - z * o.z);
     }
 
+    /**
+     * The rotation {@code t} of the way from this one to {@code o} (0 is this, 1 is {@code o}), turning the short way
+     * round at constant speed.
+     */
+    public Quat slerp(Quat o, float t) {
+        float dot = x * o.x + y * o.y + z * o.z + w * o.w;
+        float ox = o.x, oy = o.y, oz = o.z, ow = o.w;
+        if (dot < 0f) { // q and -q are the same rotation; take the nearer
+            dot = -dot;
+            ox = -ox;
+            oy = -oy;
+            oz = -oz;
+            ow = -ow;
+        }
+        float a, b;
+        if (dot > 0.9995f) { // nearly the same: a straight blend is accurate and avoids dividing by a tiny sine
+            a = 1f - t;
+            b = t;
+        } else {
+            float angle = (float) Math.acos(dot);
+            float sin = (float) Math.sin(angle);
+            a = (float) Math.sin((1f - t) * angle) / sin;
+            b = (float) Math.sin(t * angle) / sin;
+        }
+        return new Quat(a * x + b * ox, a * y + b * oy, a * z + b * oz, a * w + b * ow).normalized();
+    }
+
     public Quat normalized() {
         float length = (float) Math.sqrt(x * x + y * y + z * z + w * w);
         return length < 1e-12f ? IDENTITY : new Quat(x / length, y / length, z / length, w / length);

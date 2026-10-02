@@ -15,6 +15,7 @@ public final class Light {
     private Color color = Color.WHITE;
     private float intensity = 1f;
     private float range = 10f;
+    private boolean castShadow;
 
     private Light(Type type, Vec3 vector) {
         this.type = type;
@@ -75,6 +76,20 @@ public final class Light {
 
     public Light setRange(float range) {
         this.range = Math.max(0.001f, range);
+        return this;
+    }
+
+    public boolean isCastShadow() {
+        return castShadow;
+    }
+
+    /**
+     * Makes the things in the scene cast shadows from this light. Only a directional light can, and a scene draws the
+     * shadows of the first one that is switched on; see {@link Scene3D#setShadowDistance} and
+     * {@link Scene3D#setShadowMapSize} for the quality.
+     */
+    public Light setCastShadow(boolean castShadow) {
+        this.castShadow = castShadow;
         return this;
     }
 }

@@ -18,6 +18,7 @@ final class VkPass implements RenderPass {
     private final VkCommandBuffer cmd;
     private final Map<Integer, VkBuf> uniformBuffers = new HashMap<>();
     private final Map<Integer, VkTex> textures = new HashMap<>();
+    private final long renderPass;
     private VkPipe pipeline;
     private boolean descriptorsDirty;
     private boolean ended;
@@ -25,6 +26,7 @@ final class VkPass implements RenderPass {
     VkPass(VkGpuDevice device, VkTarget target, float r, float g, float b, float a) {
         this.device = device;
         this.target = target;
+        this.renderPass = device.renderPass(target.hasDepth(), target.samples(), target.sampled());
         cmd = device.allocateFrameCommandBuffer();
         try (MemoryStack stack = stackPush()) {
             VkGpuDevice.check(vkBeginCommandBuffer(cmd, VkCommandBufferBeginInfo.calloc(stack).sType$Default()
@@ -36,7 +38,7 @@ final class VkPass implements RenderPass {
             if (target.hasDepth()) clears.get(target.depthAttachment()).depthStencil().depth(1f).stencil(0);
 
             VkRenderPassBeginInfo begin = VkRenderPassBeginInfo.calloc(stack).sType$Default()
-                    .renderPass(device.renderPass(target.hasDepth(), target.samples()))
+                    .renderPass(renderPass)
                     .framebuffer(target.framebuffer)
                     .renderArea(area -> area.extent().width(target.width()).height(target.height()))
                     .pClearValues(clears);
@@ -55,14 +57,14 @@ final class VkPass implements RenderPass {
     public void bindPipeline(Pipeline pipeline) {
         this.pipeline = (VkPipe) pipeline;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                this.pipeline.forRenderPass(device.renderPass(target.hasDepth(), target.samples()), target.hasDepth(), target.samples()));
+                this.pipeline.forRenderPass(renderPass, target.hasDepth(), target.samples()));
         descriptorsDirty = true;
     }
 
     @Override
-    public void bindVertexBuffer(GpuBuffer buffer) {
+    public void bindVertexBuffer(int binding, GpuBuffer buffer) {
         try (MemoryStack stack = stackPush()) {
-            vkCmdBindVertexBuffers(cmd, 0, stack.longs(((VkBuf) buffer).handle()), stack.longs(0));
+            vkCmdBindVertexBuffers(cmd, binding, stack.longs(((VkBuf) buffer).handle()), stack.longs(0));
         }
     }
 
@@ -73,14 +75,12 @@ final class VkPass implements RenderPass {
 
     @Override
     public void bindUniformBuffer(int binding, GpuBuffer buffer) {
-        uniformBuffers.put(binding, (VkBuf) buffer);
-        descriptorsDirty = true;
+        if (uniformBuffers.put(binding, (VkBuf) buffer) != buffer) descriptorsDirty = true;
     }
 
     @Override
     public void bindTexture(int binding, GpuTexture texture) {
-        textures.put(binding, (VkTex) texture);
-        descriptorsDirty = true;
+        if (textures.put(binding, (VkTex) texture) != texture) descriptorsDirty = true;
     }
 
     /**
@@ -90,11 +90,7 @@ final class VkPass implements RenderPass {
         if (pipeline == null) throw new IllegalStateException("Bind a pipeline before drawing");
         if (!descriptorsDirty || pipeline.bindings.isEmpty()) return;
         try (MemoryStack stack = stackPush()) {
-            LongBuffer set = stack.mallocLong(1);
-            VkGpuDevice.check(vkAllocateDescriptorSets(device.device, VkDescriptorSetAllocateInfo.calloc(stack).sType$Default()
-                            .descriptorPool(device.descriptorPools[device.slot])
-                            .pSetLayouts(stack.longs(pipeline.descriptorLayout)), set),
-                    "allocate a descriptor set (too many draws with changing resources in one frame?)");
+            LongBuffer set = stack.longs(device.allocateDescriptorSet(stack, pipeline.descriptorLayout));
 
             VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(pipeline.bindings.size(), stack);
             for (int i = 0; i < pipeline.bindings.size(); i++) {
@@ -106,7 +102,7 @@ final class VkPass implements RenderPass {
                     if (texture == null) throw new IllegalStateException("No texture bound at binding " + binding.binding());
                     write.descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                             .pImageInfo(VkDescriptorImageInfo.calloc(1, stack)
-                                    .sampler(device.sampler).imageView(texture.view)
+                                    .sampler(texture.sampler).imageView(texture.view)
                                     .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
                 } else {
                     VkBuf buffer = uniformBuffers.get(binding.binding());
@@ -123,15 +119,15 @@ final class VkPass implements RenderPass {
     }
 
     @Override
-    public void draw(int vertexCount) {
+    public void draw(int vertexCount, int instanceCount, int firstInstance) {
         flushDescriptors();
-        vkCmdDraw(cmd, vertexCount, 1, 0, 0);
+        vkCmdDraw(cmd, vertexCount, instanceCount, 0, firstInstance);
     }
 
     @Override
-    public void drawIndexed(int indexCount) {
+    public void drawIndexed(int indexCount, int instanceCount, int firstInstance) {
         flushDescriptors();
-        vkCmdDrawIndexed(cmd, indexCount, 1, 0, 0, 0);
+        vkCmdDrawIndexed(cmd, indexCount, instanceCount, 0, 0, firstInstance);
     }
 
     @Override
@@ -141,7 +137,10 @@ final class VkPass implements RenderPass {
         vkCmdEndRenderPass(cmd);
         VkGpuDevice.check(vkEndCommandBuffer(cmd), "end a command buffer");
         try (MemoryStack stack = stackPush()) {
-            VkSubmitInfo submit = VkSubmitInfo.calloc(stack).sType$Default().pCommandBuffers(stack.pointers(cmd));
+            // Uploads made while this pass was recorded go first, in the same submission.
+            VkCommandBuffer uploads = device.takeUploads();
+            VkSubmitInfo submit = VkSubmitInfo.calloc(stack).sType$Default()
+                    .pCommandBuffers(uploads == null ? stack.pointers(cmd) : stack.pointers(uploads, cmd));
             VkGpuDevice.check(vkQueueSubmit(device.queue, submit, VK_NULL_HANDLE), "submit a pass");
         }
     }

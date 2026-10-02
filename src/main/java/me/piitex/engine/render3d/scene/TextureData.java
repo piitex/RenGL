@@ -68,7 +68,7 @@ public final class TextureData {
             if (pixels == null) throw new IOException("Could not decode the image " + name + ": " + STBImage.stbi_failure_reason());
             try {
                 byte[] rgba = new byte[w.get(0) * h.get(0) * 4];
-                pixels.get(rgba);
+                pixels.get(0, rgba); // absolute: the free below uses the buffer's address plus its position
                 return new TextureData(w.get(0), h.get(0), rgba);
             } finally {
                 STBImage.stbi_image_free(pixels);

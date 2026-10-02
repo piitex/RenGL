@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -12,18 +13,27 @@ import java.util.Objects;
  * @param cullBackFaces  drop triangles that are clockwise on screen; counter-clockwise is the front
  * @param blend          alpha-blend the fragment colour over the target
  * @param frontClockwise treat clockwise triangles as the front instead, for geometry that was mirrored
+ * @param extraLayouts   more vertex buffers, read at buffer bindings 1, 2 and so on: per-instance data, or a second
+ *                       stream of per-vertex data. Empty for a pipeline with one buffer
  */
 public record PipelineDesc(String vertexSource, String fragmentSource, VertexLayout vertexLayout,
-                           boolean depthTest, boolean cullBackFaces, boolean blend, boolean frontClockwise) {
+                           boolean depthTest, boolean cullBackFaces, boolean blend, boolean frontClockwise,
+                           List<VertexLayout> extraLayouts) {
     public PipelineDesc {
         Objects.requireNonNull(vertexSource);
         Objects.requireNonNull(fragmentSource);
         Objects.requireNonNull(vertexLayout);
+        extraLayouts = extraLayouts == null ? List.of() : List.copyOf(extraLayouts);
+    }
+
+    public PipelineDesc(String vertexSource, String fragmentSource, VertexLayout vertexLayout,
+                        boolean depthTest, boolean cullBackFaces, boolean blend, boolean frontClockwise) {
+        this(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, List.of());
     }
 
     public PipelineDesc(String vertexSource, String fragmentSource, VertexLayout vertexLayout,
                         boolean depthTest, boolean cullBackFaces, boolean blend) {
-        this(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, false);
+        this(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, false, List.of());
     }
 
     public static PipelineDesc of(String vertexSource, String fragmentSource, VertexLayout layout) {
@@ -31,18 +41,25 @@ public record PipelineDesc(String vertexSource, String fragmentSource, VertexLay
     }
 
     public PipelineDesc withDepthTest(boolean depthTest) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts);
     }
 
     public PipelineDesc withCullBackFaces(boolean cull) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cull, blend, frontClockwise);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cull, blend, frontClockwise, extraLayouts);
     }
 
     public PipelineDesc withBlend(boolean blend) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts);
     }
 
     public PipelineDesc withFrontClockwise(boolean frontClockwise) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts);
+    }
+
+    /**
+     * The same pipeline reading further vertex buffers at bindings 1, 2 and so on.
+     */
+    public PipelineDesc withExtraLayouts(VertexLayout... layouts) {
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, List.of(layouts));
     }
 }
