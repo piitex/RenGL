@@ -50,6 +50,28 @@ public final class Instances {
     /**
      * Replaces an instance's transform.
      */
+    /**
+     * Adds an instance from a column-major 4x4 matrix of 16 floats, the layout of {@link Mat4#toArray()}. Cheaper than
+     * building a {@link Mat4} when thousands of instances move every frame.
+     */
+    public int add(float[] columnMajor) {
+        checkMatrix(columnMajor);
+        ensure(count + 1);
+        System.arraycopy(columnMajor, 0, matrices, count * 16, 16);
+        Arrays.fill(tints, count * 4, count * 4 + 4, 1f);
+        return count++;
+    }
+
+    /**
+     * Replaces an instance's transform from 16 column-major floats, without allocating.
+     */
+    public Instances set(int index, float[] columnMajor) {
+        check(index);
+        checkMatrix(columnMajor);
+        System.arraycopy(columnMajor, 0, matrices, index * 16, 16);
+        return this;
+    }
+
     public Instances set(int index, Mat4 transform) {
         check(index);
         System.arraycopy(transform.toArray(), 0, matrices, index * 16, 16);
@@ -78,10 +100,27 @@ public final class Instances {
         return this;
     }
 
+    /**
+     * Sets an instance's tint without creating a {@link Color}.
+     */
+    public Instances setTint(int index, float r, float g, float b, float a) {
+        check(index);
+        tints[index * 4] = r;
+        tints[index * 4 + 1] = g;
+        tints[index * 4 + 2] = b;
+        tints[index * 4 + 3] = a;
+        tinted = true;
+        return this;
+    }
+
     public Instances clear() {
         count = 0;
         tinted = false;
         return this;
+    }
+
+    private static void checkMatrix(float[] m) {
+        if (m == null || m.length < 16) throw new IllegalArgumentException("A transform is 16 floats, column-major");
     }
 
     private void check(int index) {

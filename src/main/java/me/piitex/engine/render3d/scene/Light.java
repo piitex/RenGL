@@ -4,11 +4,11 @@ import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.ui.color.Color;
 
 /**
- * A light in a {@link Scene3D}: either a directional light, like the sun, or a point light that fades out with
- * distance. A scene uses its first {@link Scene3D#MAX_LIGHTS} lights.
+ * A light in a {@link Scene3D}: a directional light like the sun, a point light that fades out with distance, or a
+ * spot light, a point light that only shines inside a cone. A scene uses its first {@link Scene3D#MAX_LIGHTS} lights.
  */
 public final class Light {
-    public enum Type {DIRECTIONAL, POINT}
+    public enum Type {DIRECTIONAL, POINT, SPOT}
 
     private final Type type;
     private Vec3 vector;
@@ -16,6 +16,8 @@ public final class Light {
     private float intensity = 1f;
     private float range = 10f;
     private boolean castShadow;
+    private Vec3 direction = new Vec3(0, -1, 0);
+    private float innerAngle = 25f, outerAngle = 35f;
 
     private Light(Type type, Vec3 vector) {
         this.type = type;
@@ -36,12 +38,28 @@ public final class Light {
         return new Light(Type.POINT, position).setColor(color).setIntensity(intensity).setRange(range);
     }
 
+    /**
+     * A point light that shines only inside a cone.
+     *
+     * @param position   where the light is
+     * @param direction  the way the cone points
+     * @param range      the distance where the light has faded to nothing
+     * @param innerDegrees the half-angle inside which the light is at full strength
+     * @param outerDegrees the half-angle where it has faded to nothing, at most 85
+     */
+    public static Light spot(Vec3 position, Vec3 direction, Color color, float intensity, float range,
+                             float innerDegrees, float outerDegrees) {
+        Light light = new Light(Type.SPOT, position).setColor(color).setIntensity(intensity).setRange(range);
+        light.direction = direction.normalized();
+        return light.setCone(innerDegrees, outerDegrees);
+    }
+
     public Type getType() {
         return type;
     }
 
     /**
-     * The direction of a directional light, or the position of a point light.
+     * The direction of a directional light, or the position of a point or spot light.
      */
     public Vec3 getVector() {
         return vector;
@@ -49,6 +67,36 @@ public final class Light {
 
     public Light setVector(Vec3 vector) {
         this.vector = type == Type.DIRECTIONAL ? vector.normalized() : vector;
+        return this;
+    }
+
+    /**
+     * The way a spot light points.
+     */
+    public Vec3 getDirection() {
+        return direction;
+    }
+
+    public Light setDirection(Vec3 direction) {
+        this.direction = direction.normalized();
+        return this;
+    }
+
+    public float getInnerAngle() {
+        return innerAngle;
+    }
+
+    public float getOuterAngle() {
+        return outerAngle;
+    }
+
+    /**
+     * The spot light's cone, as half-angles in degrees: full strength inside {@code inner}, fading to nothing at
+     * {@code outer} (at most 85).
+     */
+    public Light setCone(float innerDegrees, float outerDegrees) {
+        this.outerAngle = Math.max(1f, Math.min(85f, outerDegrees));
+        this.innerAngle = Math.max(0f, Math.min(this.outerAngle - 0.5f, innerDegrees));
         return this;
     }
 
@@ -84,9 +132,9 @@ public final class Light {
     }
 
     /**
-     * Makes the things in the scene cast shadows from this light. Only a directional light can, and a scene draws the
-     * shadows of the first one that is switched on; see {@link Scene3D#setShadowDistance} and
-     * {@link Scene3D#setShadowMapSize} for the quality.
+     * Makes the things in the scene cast shadows from this light. Only a directional or spot light can, and a scene
+     * draws the shadows of the first one that is switched on; see {@link Scene3D#setShadowDistance} (directional
+     * lights) and {@link Scene3D#setShadowMapSize} for the quality.
      */
     public Light setCastShadow(boolean castShadow) {
         this.castShadow = castShadow;

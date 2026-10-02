@@ -24,6 +24,7 @@ public final class Material {
     private boolean unlit;
     private boolean doubleSided;
     private boolean blend;
+    private boolean additive;
     private float alphaCutoff;
     private boolean pbr;
     private float metallic = 0f;
@@ -141,6 +142,22 @@ public final class Material {
      */
     public Material setBlend(boolean blend) {
         this.blend = blend;
+        return this;
+    }
+
+    public boolean isAdditive() {
+        return additive;
+    }
+
+    /**
+     * Adds the surface's colour, times its alpha, to what is behind it instead of mixing: for light-like things such as
+     * flames, sparks and glows, which can't get darker than their background. Turns {@link #setBlend blending} on, and
+     * like blended surfaces these are drawn after the solid ones and cast no shadow. Fog fades them out instead of
+     * tinting them.
+     */
+    public Material setAdditive(boolean additive) {
+        this.additive = additive;
+        if (additive) this.blend = true;
         return this;
     }
 

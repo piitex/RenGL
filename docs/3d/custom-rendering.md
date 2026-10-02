@@ -98,6 +98,8 @@ methods return a changed copy:
 | `withDepthTest(boolean)` | Compare against and write to the depth buffer. Needs a target with depth |
 | `withCullBackFaces(boolean)` | Drop triangles that are clockwise on screen; counter-clockwise is the front |
 | `withBlend(boolean)` | Alpha-blend the fragment colour over the target |
+| `withAdditive(boolean)` | Add the fragment colour times its alpha to the target instead of mixing (fire, sparks, glows). Turns blending on |
+| `withDepthWrite(boolean)` | Write to the depth buffer (default `true`). Off still tests against it; blended geometry usually turns it off |
 | `withFrontClockwise(boolean)` | Treat clockwise triangles as the front instead (default `false`). For geometry that was mirrored by a negative scale |
 
 `VertexLayout.of(formats...)` describes one interleaved vertex buffer of 32-bit floats. `VertexFormat` is `FLOAT1` to

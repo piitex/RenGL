@@ -8,8 +8,9 @@ surface answers the light, not in what the light is.
 
 ## How lights add up
 
-A scene uses its first 8 lights. Each is either **directional** (the sun: parallel rays from one direction, no
-position) or a **point** light (a bulb: a position, fading to nothing at its range). The surface receives the **ambient**
+A scene uses its first 8 lights. Each is **directional** (the sun: parallel rays from one direction, no position), a
+**point** light (a bulb: a position, fading to nothing at its range) or a **spot** light (a point light that only shines
+inside a cone, like a torch or a hearth opening onto a room). The surface receives the **ambient**
 light from every side, plus each light's share by the angle between the surface and the light, and a highlight.
 
 - A light's `intensity` is "how bright a white surface facing it comes out": a white light of `1` lights a white surface
@@ -24,9 +25,22 @@ light from every side, plus each light's share by the angle between the surface 
   under only ambient light looks dark, and shows its colour in the highlights of the lights. Keep a light or two in a
   scene with metal.
 
+## Spot lights
+
+```java nocompile
+Light torch = Light.spot(new Vec3(0, 6, 0), new Vec3(0, -1, 0),        // position, the way the cone points
+        new Color(1f, 0.8f, 0.5f, 1f), 3f, 20f,                        // colour, intensity, range
+        15f, 30f);                                                     // inner and outer half-angle, in degrees
+scene.lights().add(torch);
+```
+
+Inside the **inner** angle the light is at full strength; it fades smoothly to nothing at the **outer** angle (at most
+85 degrees) and fades with distance to nothing at `range`, like a point light. `setDirection`, `setCone(inner, outer)`,
+`setVector` (the position), `setRange` and the rest can be changed every frame.
+
 ## Shadows
 
-One directional light can make the scene's shadows. Turn it on, and nodes cast and receive shadows by default:
+One directional or spot light can make the scene's shadows. Turn it on, and nodes cast and receive shadows by default:
 
 ```java nocompile
 Light sun = Light.directional(new Vec3(-0.5f, -1f, -0.35f), Color.WHITE, 1.1f).setCastShadow(true);
@@ -40,8 +54,8 @@ lamp.setCastShadow(false);          // a node (a Node3D) that throws no shadow
 
 | Setting | Default | Description |
 |---|---|---|
-| `Light.setCastShadow(boolean)` | `false` | The first directional light (among the first 8) that has this on casts the scene's shadows. Point lights can't |
-| `Scene3D.setShadowDistance(float)` | `60` | How far from the camera shadows are drawn, in scene units, and never past the camera's far plane. Shorter means sharper shadows near the camera |
+| `Light.setCastShadow(boolean)` | `false` | The first directional or spot light (among the first 8) that has this on casts the scene's shadows. Point lights can't |
+| `Scene3D.setShadowDistance(float)` | `60` | How far from the camera a directional light's shadows are drawn, in scene units, and never past the camera's far plane. Shorter means sharper shadows near the camera. A spot light's shadows cover its whole cone out to its range |
 | `Scene3D.setShadowMapSize(int)` | `2048` | The width and height of the shadow picture, `256` to `8192`. Each doubling quadruples the memory (about 32 MB at 2048) and the cost |
 | `Scene3D.setShadowBias(float)` | `1` | Scales the offset that stops a surface shadowing itself. Raise it if a lit surface shows stripes; lower it if shadows float away from what casts them |
 | `Node3D.setCastShadow(boolean)` | `true` | Whether the node's mesh throws a shadow |
@@ -58,8 +72,24 @@ How it works, so you know what to expect:
   (`setAlphaCutoff`) casts a shadow with its holes. A **blended** (see-through) material casts none.
 - A shadow can only fall on surfaces inside the part of the view it covers. The sun itself has no position, so a tall
   object far from the camera still shadows what is near it.
-- Shadows from the ambient light and from point lights don't exist; a point light's lit side shows no shadows.
+- A spot light's shadow picture is a view down its cone, so the cone's width is spread over the picture: a narrow cone
+  gives sharper shadows than a wide one, and a cone near 85 degrees is coarse. Only one light casts shadows.
+- Shadows from the ambient light and from point lights don't exist; a point light's lit side shows no shadows. To light a
+  room from a fire with shadows, a spot light pointing into the room does the job.
 - Shadows work in every viewport and on both OpenGL and Vulkan.
+
+## Fog
+
+```java nocompile
+scene.setFog(new Color(0.75f, 0.6f, 0.8f, 1f), 0.02f);          // colour, density
+scene.setFog(new Color(0.75f, 0.6f, 0.8f, 1f), 0.03f, 0.25f);   // thicker low down, like mist
+```
+
+Distant things fade into the fog colour: the strength is `1 - exp(-(distance * density)^2)`, so nothing close up and
+thick far away. A density of `0.02` hazes things 40 units away; `0` (the default) is no fog. The third argument is how
+fast the fog thins with height (0 is the same everywhere). Match the fog colour to the sky at the horizon so the world
+melts into it: fog is not applied to the [skybox](#skybox). Additive surfaces fade out in fog instead of turning the fog's
+colour.
 
 ## Skybox
 

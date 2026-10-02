@@ -85,6 +85,16 @@ class GpuSmokeTest {
                 (device, target, recorder) -> {
                     if (device.api() == api) featureChecks(featureScene, target, recorder);
                 });
+        Scene3D spotScene = buildSpotScene();
+        GpuHarness.Run spots = GpuHarness.run(api, VIEW, viewport -> viewport.setContent(new SceneContent(spotScene)),
+                (device, target, recorder) -> {
+                    if (device.api() == api) spotChecks(spotScene, target, recorder);
+                });
+        Scene3D effectsScene = buildEffectsScene();
+        GpuHarness.Run effects = GpuHarness.run(api, VIEW, viewport -> viewport.setContent(new SceneContent(effectsScene)),
+                (device, target, recorder) -> {
+                    if (device.api() == api) effectChecks(effectsScene, target, recorder);
+                });
         boolean usable = run.available() && run.api() == api;
         List<DynamicTest> tests = new ArrayList<>();
         tests.add(DynamicTest.dynamicTest(api + ": a device exists", () -> {
@@ -98,6 +108,14 @@ class GpuSmokeTest {
         }
         if (usable && features.available()) {
             features.results().forEach((name, failure) -> tests.add(DynamicTest.dynamicTest(api + ": " + name,
+                    () -> assertNull(failure, name + ": " + failure))));
+        }
+        if (usable && spots.available()) {
+            spots.results().forEach((name, failure) -> tests.add(DynamicTest.dynamicTest(api + ": " + name,
+                    () -> assertNull(failure, name + ": " + failure))));
+        }
+        if (usable && effects.available()) {
+            effects.results().forEach((name, failure) -> tests.add(DynamicTest.dynamicTest(api + ": " + name,
                     () -> assertNull(failure, name + ": " + failure))));
         }
         return tests;
@@ -193,6 +211,93 @@ class GpuSmokeTest {
                 MemoryUtil.memFree(px);
             }
         });
+    }
+
+    /**
+     * A spot light over a floor, with a box in its cone that casts a shadow.
+     */
+    private static Scene3D buildSpotScene() {
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        scene.lights().add(Light.spot(new Vec3(0, 6, 0), new Vec3(0, -1, 0), Color.WHITE, 3f, 20f, 15f, 30f).setCastShadow(true));
+        scene.setAmbient(Color.WHITE, 0.02f);
+        scene.setSkybox(Skybox.gradient(Color.BLACK, Color.BLACK, Color.BLACK));
+        scene.add(new Node3D("floor", Mesh.plane(40, 40), new Material(Color.WHITE).setRoughness(0.9f)));
+        Node3D box = new Node3D("box", Mesh.cube(1f), new Material(Color.WHITE).setRoughness(0.8f));
+        box.setPosition(-1f, 1f, 0f);
+        box.setScale(new Vec3(1f, 1f, 0.6f));
+        scene.add(box);
+        scene.camera().lookAt(new Vec3(3f, 7f, 8f), new Vec3(0, 0, 0)).setFovYDegrees(60);
+        return scene;
+    }
+
+    private void spotChecks(Scene3D scene, RenderTarget target, GpuHarness.Recorder r) {
+        r.guard("spot: the cone lights the floor and the box shadows it", () -> {
+            ByteBuffer px = target.readPixels();
+            try {
+                int[] inside = pixelAt(scene, target, px, 1f, 0f, 1.2f);
+                int[] outside = pixelAt(scene, target, px, 6f, 0f, 4f);
+                int[] lit = pixelAt(scene, target, px, 1.55f, 0f, 0f);
+                int[] shadowed = pixelAt(scene, target, px, -1.55f, 0f, 0f);
+                r.check("spot: the floor inside the cone is lit", luma(inside) > 60, java.util.Arrays.toString(inside));
+                r.check("spot: the floor outside the cone gets only the ambient light", luma(outside) < luma(inside) * 0.4, "outside " + java.util.Arrays.toString(outside) + " inside " + java.util.Arrays.toString(inside));
+                r.check("spot: the box shadows the floor", luma(shadowed) < luma(lit) * 0.5 && luma(lit) > 60,
+                        "shadowed " + java.util.Arrays.toString(shadowed) + " lit " + java.util.Arrays.toString(lit));
+            } finally {
+                MemoryUtil.memFree(px);
+            }
+        });
+    }
+
+    /**
+     * Fog on a near and a far cube, and an additive quad over a green sky.
+     */
+    private static Scene3D buildEffectsScene() {
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        scene.setSkybox(Skybox.gradient(new Color(0f, 0.4f, 0f, 1f), new Color(0f, 0.4f, 0f, 1f), new Color(0f, 0.4f, 0f, 1f)));
+        scene.setFog(new Color(0f, 0f, 1f, 1f), 0.03f);
+        Material white = new Material(Color.WHITE).setUnlit(true);
+        Node3D near = new Node3D("near", Mesh.cube(2f), white);
+        near.setPosition(-2.5f, 3f, 0f);
+        Node3D far = new Node3D("far", Mesh.cube(14f), white);
+        far.setPosition(5f, 3f, -60f);
+        Node3D glow = new Node3D("glow", Mesh.plane(2f, 2f), new Material(new Color(1f, 0f, 0f, 1f)).setUnlit(true).setAdditive(true).setDoubleSided(true));
+        glow.setPosition(2.5f, 3f, 0f);
+        glow.setRotation(Quat.fromAxisAngle(Vec3.X, (float) Math.PI / 2f)); // the plane lies flat; stand it up
+        scene.add(near).add(far).add(glow);
+        scene.camera().lookAt(new Vec3(0, 3f, 10f), new Vec3(0, 3f, 0)).setFovYDegrees(50);
+        return scene;
+    }
+
+    private void effectChecks(Scene3D scene, RenderTarget target, GpuHarness.Recorder r) {
+        r.guard("effects: fog and additive blending", () -> {
+            ByteBuffer px = target.readPixels();
+            try {
+                int[] near = pixelAt(scene, target, px, -2.5f, 3f, 1f);
+                int[] far = pixelAt(scene, target, px, 5f, 3f, -53f);
+                int[] glow = pixelAt(scene, target, px, 2.5f, 3f, 0f);
+                r.check("effects: a near surface is barely fogged", near[0] > 180 && near[1] > 180, java.util.Arrays.toString(near));
+                r.check("effects: a far surface is the fog colour", far[0] < 80 && far[1] < 80 && far[2] > 200, java.util.Arrays.toString(far));
+                r.check("effects: an additive surface adds to the sky instead of covering it",
+                        glow[0] > 180 && glow[1] > 70 && glow[1] < 140, java.util.Arrays.toString(glow));
+            } finally {
+                MemoryUtil.memFree(px);
+            }
+        });
+    }
+
+    private static int[] pixelAt(Scene3D scene, RenderTarget target, ByteBuffer px, float x, float y, float z) {
+        int w = target.width(), h = target.height();
+        Camera camera = scene.camera();
+        Vec3 ndc = camera.projection((float) w / h).mul(camera.view()).transformPoint(new Vec3(x, y, z));
+        int sx = Math.round((ndc.x() * 0.5f + 0.5f) * w), sy = Math.round((1 - (ndc.y() * 0.5f + 0.5f)) * h);
+        int i = (Math.max(0, Math.min(h - 1, sy)) * w + Math.max(0, Math.min(w - 1, sx))) * 4;
+        return new int[]{px.get(i) & 255, px.get(i + 1) & 255, px.get(i + 2) & 255};
+    }
+
+    private static int luma(int[] c) {
+        return c[0] + c[1] + c[2];
     }
 
     @FunctionalInterface

@@ -60,7 +60,11 @@ final class SceneShaders {
                 vec4 shadowB;
                 vec4 lightVec[8];
                 vec4 lightColor[8];
+                vec4 lightDir[8];
+                vec4 lightCone[8];
                 mat4 lightViewProj;
+                vec4 fog;
+                vec4 fogParams;
             };
             """;
 
@@ -121,15 +125,20 @@ final class SceneShaders {
                 return dot(c, vec3(1.0, 1.0 / 255.0, 1.0 / 65025.0));
             }
 
-            // 1 where the light reaches the point, 0 where something is in the way, with a soft edge.
+            // 1 where the light reaches the point, 0 where something is in the way, with a soft edge. A spot light's map
+            // is perspective and holds the distance along its axis scaled to 0..1; a directional light's holds depth.
             float shadow(vec3 worldPos, vec3 n, vec3 l) {
+                bool persp = shadowB.y > 0.5;
                 float ndl = clamp(dot(n, l), 0.0, 1.0);
-                vec3 p = worldPos + n * (shadowB.x * (1.0 - ndl * 0.5));
+                float scale = persp ? (lightViewProj * vec4(worldPos, 1.0)).w : 1.0;
+                vec3 p = worldPos + n * (shadowB.x * scale * (1.0 - ndl * 0.5));
                 vec4 lp = lightViewProj * vec4(p, 1.0);
+                if (persp && lp.w <= shadowB.z) return 1.0;
                 vec3 proj = lp.xyz / lp.w;
                 vec2 uv = vec2(proj.x * 0.5 + 0.5, shadowA.y > 0.5 ? proj.y * 0.5 + 0.5 : 0.5 - proj.y * 0.5);
-                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || proj.z > 1.0) return 1.0;
-                float bias = shadowA.w * (1.0 + (1.0 - ndl) * 2.0);
+                float depth = persp ? (lp.w - shadowB.z) / (shadowB.w - shadowB.z) : proj.z;
+                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || depth > 1.0) return 1.0;
+                float bias = shadowA.w * scale * (1.0 + (1.0 - ndl) * 2.0);
                 // A 4x4 block of comparisons weighted like a bilinear filter, so the edge moves smoothly instead of in steps.
                 vec2 size = vec2(1.0 / shadowA.z);
                 vec2 texel = uv * size - 0.5;
@@ -141,10 +150,28 @@ final class SceneShaders {
                     for (int y = -1; y <= 2; y++) {
                         float wy = y == -1 ? 1.0 - f.y : (y == 2 ? f.y : 1.0);
                         float stored = unpackDepth(textureLod(shadowMap, base + vec2(float(x), float(y)) * shadowA.z, 0.0).rgb);
-                        lit += wx * wy * ((proj.z - bias > stored) ? 0.0 : 1.0);
+                        lit += wx * wy * ((depth - bias > stored) ? 0.0 : 1.0);
                     }
                 }
                 return lit / 9.0;
+            }
+
+            // The direction to light i from a point, and how much of it arrives before the surface's angle and shadow.
+            float lightAt(int i, vec3 worldPos, out vec3 l) {
+                if (lightVec[i].w < 0.5) {
+                    l = normalize(lightVec[i].xyz);
+                    return 1.0;
+                }
+                vec3 d = lightVec[i].xyz - worldPos;
+                float dist = length(d);
+                l = d / max(dist, 0.0001);
+                float x = clamp(1.0 - (dist * dist) / (lightColor[i].a * lightColor[i].a), 0.0, 1.0);
+                float atten = x * x;
+                if (lightVec[i].w > 1.5) {
+                    float c = dot(-l, lightDir[i].xyz);
+                    atten *= clamp((c - lightDir[i].w) / max(lightCone[i].x - lightDir[i].w, 1e-4), 0.0, 1.0);
+                }
+                return atten;
             }
 
             float distributionGGX(float nh, float a2) {
@@ -203,16 +230,7 @@ final class SceneShaders {
                         for (int i = 0; i < 8; i++) {
                             if (i >= count) break;
                             vec3 l;
-                            float atten = 1.0;
-                            if (lightVec[i].w < 0.5) {
-                                l = normalize(lightVec[i].xyz);
-                            } else {
-                                vec3 d = lightVec[i].xyz - vWorldPos;
-                                float dist = length(d);
-                                l = d / max(dist, 0.0001);
-                                float x = clamp(1.0 - (dist * dist) / (lightColor[i].a * lightColor[i].a), 0.0, 1.0);
-                                atten = x * x;
-                            }
+                            float atten = lightAt(i, vWorldPos, l);
                             float nl = max(dot(n, l), 0.0);
                             if (nl <= 0.0) continue;
                             if (i == shadowLight && receives) atten *= shadow(vWorldPos, n, l);
@@ -231,16 +249,7 @@ final class SceneShaders {
                         for (int i = 0; i < 8; i++) {
                             if (i >= count) break;
                             vec3 l;
-                            float atten = 1.0;
-                            if (lightVec[i].w < 0.5) {
-                                l = normalize(lightVec[i].xyz);
-                            } else {
-                                vec3 d = lightVec[i].xyz - vWorldPos;
-                                float dist = length(d);
-                                l = d / max(dist, 0.0001);
-                                float x = clamp(1.0 - (dist * dist) / (lightColor[i].a * lightColor[i].a), 0.0, 1.0);
-                                atten = x * x;
-                            }
+                            float atten = lightAt(i, vWorldPos, l);
                             float ndl = max(dot(n, l), 0.0);
                             if (ndl <= 0.0) continue;
                             if (i == shadowLight && receives) atten *= shadow(vWorldPos, n, l);
@@ -251,6 +260,13 @@ final class SceneShaders {
                         }
                     }
                 }
+                if (fog.a > 0.0) {
+                    float dist = length(cameraPos.xyz - vWorldPos);
+                    float height = 0.5 * (cameraPos.y + vWorldPos.y);
+                    float k = dist * fog.a * exp(-fogParams.x * max(height, 0.0));
+                    float amount = 1.0 - exp(-k * k);
+                    lit = vExtra2.y > 0.5 ? lit * (1.0 - amount) : mix(lit, fog.rgb, amount);
+                }
                 outColor = vec4(pow(lit, vec3(1.0 / 2.2)), alpha);
             }
             """;
@@ -259,7 +275,7 @@ final class SceneShaders {
 
     static String shadowVertex(boolean skinned) {
         return "#version 450\n" + INPUTS + (skinned ? SKIN_INPUTS : "") + """
-                layout(set = 0, binding = 0) uniform ShadowFrame { mat4 lightViewProj; };
+                layout(set = 0, binding = 0) uniform ShadowFrame { mat4 lightViewProj; vec4 shadowMode; };
                 layout(location = 0) out vec2 vUv;
                 layout(location = 1) flat out vec4 vTint;
                 layout(location = 2) flat out vec4 vParams;
@@ -286,11 +302,14 @@ final class SceneShaders {
             layout(location = 0) in vec2 vUv;
             layout(location = 1) flat in vec4 vTint;
             layout(location = 2) flat in vec4 vParams;
+            layout(set = 0, binding = 0) uniform ShadowFrame { mat4 lightViewProj; vec4 shadowMode; };
             layout(set = 0, binding = 2) uniform sampler2D baseTexture;
             layout(location = 0) out vec4 outColor;
             void main() {
                 if (vParams.w > 0.0 && texture(baseTexture, vUv).a * vTint.a < vParams.w) discard;
                 float d = gl_FragCoord.z;
+                // A perspective (spot light) map stores the distance along the axis, scaled to 0..1, so the bias is even.
+                if (shadowMode.x > 0.5) d = clamp((1.0 / gl_FragCoord.w - shadowMode.y) / (shadowMode.z - shadowMode.y), 0.0, 1.0);
                 vec3 enc = fract(d * vec3(1.0, 255.0, 65025.0));
                 enc -= enc.yzz * vec3(1.0 / 255.0, 1.0 / 255.0, 0.0);
                 outColor = vec4(enc, 1.0);

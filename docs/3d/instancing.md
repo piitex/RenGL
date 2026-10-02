@@ -26,8 +26,9 @@ scene.add(trees);
 | `new Instances()` | An empty set |
 | `add(Vec3 position, Quat rotation, Vec3 scale)` / `add(Vec3)` / `add(Mat4)` | Adds an instance and returns its index |
 | `set(index, Mat4)` / `set(index, position, rotation, scale)` | Replaces an instance's transform |
+| `add(float[16])` / `set(index, float[16])` | The same from 16 column-major floats (the layout of `Mat4.toArray()`), which allocates nothing: for thousands of instances that move every frame |
 | `get(index)` | An instance's transform |
-| `setTint(index, Color)` | Multiplies the material's colour for this instance. White, the default, leaves it as it is |
+| `setTint(index, Color)` / `setTint(index, r, g, b, a)` | Multiplies the material's colour for this instance. White, the default, leaves it as it is. The alpha fades a blended or additive instance |
 | `size()` / `clear()` | How many there are; remove them all |
 | `Node3D.setInstances(Instances)` | Draws the node's mesh once per instance. `null` goes back to a single copy |
 

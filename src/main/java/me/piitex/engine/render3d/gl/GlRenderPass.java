@@ -60,7 +60,7 @@ final class GlRenderPass implements RenderPass {
         } else {
             glDisable(GL_DEPTH_TEST);
         }
-        glDepthMask(depth);
+        glDepthMask(depth && desc.depthWrite());
 
         if (desc.cullBackFaces()) {
             glEnable(GL_CULL_FACE);
@@ -73,7 +73,8 @@ final class GlRenderPass implements RenderPass {
         if (desc.blend()) {
             glEnable(GL_BLEND);
             // Colour mixes by alpha; the alpha channel itself accumulates toward 1, since the UI treats the picture as premultiplied.
-            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            if (desc.additive()) glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+            else glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         } else {
             glDisable(GL_BLEND);
         }
