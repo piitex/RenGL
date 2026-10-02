@@ -33,6 +33,10 @@ public final class Node3D {
     private Material material;
     private boolean visible = true;
     private boolean pickable = true;
+    private boolean castShadow = true;
+    private boolean receiveShadow = true;
+    private Instances instances;
+    private Skin skin;
 
     public Node3D(String name) {
         this.name = name;
@@ -120,6 +124,57 @@ public final class Node3D {
      */
     public Node3D setPickable(boolean pickable) {
         this.pickable = pickable;
+        return this;
+    }
+
+    public boolean isCastShadow() {
+        return castShadow;
+    }
+
+    /**
+     * Whether this node's mesh throws a shadow when the scene has a shadow-casting light (true by default).
+     */
+    public Node3D setCastShadow(boolean castShadow) {
+        this.castShadow = castShadow;
+        return this;
+    }
+
+    public boolean isReceiveShadow() {
+        return receiveShadow;
+    }
+
+    /**
+     * Whether shadows fall on this node's mesh (true by default). Turn it off for something that should stay evenly
+     * lit, such as a sky dome.
+     */
+    public Node3D setReceiveShadow(boolean receiveShadow) {
+        this.receiveShadow = receiveShadow;
+        return this;
+    }
+
+    public Instances getInstances() {
+        return instances;
+    }
+
+    /**
+     * Draws this node's mesh once for each instance, each with its own transform (relative to this node), in one draw
+     * call. {@code null}, the default, draws it once as usual. The children are not repeated.
+     */
+    public Node3D setInstances(Instances instances) {
+        this.instances = instances;
+        return this;
+    }
+
+    public Skin getSkin() {
+        return skin;
+    }
+
+    /**
+     * Makes this node's mesh follow the skin's joints. The mesh needs {@link Mesh#setSkinning skinning data}. While it
+     * is set, the node's own transform is ignored by drawing and the joints place the mesh.
+     */
+    public Node3D setSkin(Skin skin) {
+        this.skin = skin;
         return this;
     }
 
@@ -233,13 +288,33 @@ public final class Node3D {
      * with the original, so copying a loaded model costs no GPU memory.
      */
     public Node3D copy() {
+        Node3D c = copyTree();
+        remapSkins(this, this, c, c);
+        return c;
+    }
+
+    private Node3D copyTree() {
         Node3D c = new Node3D(name, mesh, material);
         c.position = position;
         c.rotation = rotation;
         c.scale = scale;
         c.visible = visible;
         c.pickable = pickable;
-        for (Node3D child : children) c.add(child.copy());
+        c.castShadow = castShadow;
+        c.receiveShadow = receiveShadow;
+        c.instances = instances == null ? null : instances.copy();
+        c.skin = skin;
+        for (Node3D child : children) c.add(child.copyTree());
         return c;
+    }
+
+    /**
+     * A copied skinned mesh follows the copied skeleton, not the original's.
+     */
+    private static void remapSkins(Node3D originalRoot, Node3D original, Node3D copy, Node3D copyRoot) {
+        if (original.skin != null) copy.skin = original.skin.remap(originalRoot, copyRoot);
+        for (int i = 0; i < original.children.size(); i++) {
+            remapSkins(originalRoot, original.children.get(i), copy.children.get(i), copyRoot);
+        }
     }
 }

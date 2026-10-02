@@ -57,6 +57,15 @@ public interface GpuDevice extends AutoCloseable {
      */
     GpuTexture createTexture(int width, int height, ByteBuffer rgba, boolean mipmaps);
 
+    /**
+     * A cube map from six square faces, for skies and reflections. Faces are RGBA8, top row first, each
+     * {@code size * size * 4} bytes, in the order +X, -X, +Y, -Y, +Z, -Z, laid out the way OpenGL and Vulkan expect
+     * (the common skybox image sets work as they are). Sample it with a {@code samplerCube} and a direction.
+     *
+     * @param mipmaps also make the smaller versions, which stops a distant or shrunk cube from shimmering
+     */
+    GpuTexture createCubeTexture(int size, ByteBuffer[] faces, boolean mipmaps);
+
     Pipeline createPipeline(PipelineDesc desc);
 
     /**
@@ -75,9 +84,26 @@ public interface GpuDevice extends AutoCloseable {
     RenderTarget createRenderTarget(int width, int height, boolean depth, int samples);
 
     /**
+     * A target with colour and optional depth, one sample per pixel, whose picture a later pass can read with
+     * {@link RenderTarget#texture()}: a shadow map is drawn into one. It can not be shown by a
+     * {@link Viewport3D}, because it does not have the layout the UI layer needs.
+     *
+     * @param linear filter the texture linearly when it is read, or take the nearest pixel (what a map of packed
+     *               values such as depth needs)
+     */
+    RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear);
+
+    /**
      * The most samples a render target can have on this GPU: at least 1, at most 8.
      */
     int maxSamples();
+
+    /**
+     * The highest anisotropic filtering level the textures use: 1 when the GPU has none. Mipmapped textures keep their
+     * detail at a slant (a floor stretching away from the camera) at the level of this setting, which is 8 or the GPU's
+     * limit if lower. The system property {@code rengl.3d.anisotropy} overrides it; 1 turns it off.
+     */
+    int maxAnisotropy();
 
     /**
      * Starts drawing into the target, clearing it to the colour (and the depth buffer to the far plane).

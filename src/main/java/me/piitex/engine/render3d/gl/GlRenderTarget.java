@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.gl;
 
+import me.piitex.engine.render3d.GpuTexture;
 import me.piitex.engine.render3d.RenderTarget;
 import org.lwjgl.system.MemoryUtil;
 
@@ -12,7 +13,8 @@ import static org.lwjgl.opengl.GL30C.*;
 
 public final class GlRenderTarget implements RenderTarget {
     private final int width, height, samples;
-    private final boolean depth;
+    private final boolean depth, sampled;
+    private GlTexture texture;
     /**
      * The framebuffer holding the finished picture: the texture. Skia wraps this one.
      */
@@ -26,17 +28,27 @@ public final class GlRenderTarget implements RenderTarget {
     private int depthBuffer, msaaColor;
 
     GlRenderTarget(int width, int height, boolean depth, int samples) {
+        this(width, height, depth, samples, false, true);
+    }
+
+    /**
+     * @param sampled the picture is read by later passes, so it needs no multisampling and the filter is the caller's
+     *                choice
+     */
+    GlRenderTarget(int width, int height, boolean depth, int samples, boolean sampled, boolean linear) {
         this.width = Math.max(1, width);
         this.height = Math.max(1, height);
         this.depth = depth;
-        this.samples = samples;
+        this.samples = sampled ? 1 : samples;
+        this.sampled = sampled;
+        samples = this.samples;
 
         int previous = glGetInteger(GL_FRAMEBUFFER_BINDING);
         colorTexture = glGenTextures();
         glBindTexture(GL_TEXTURE_2D, colorTexture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, this.width, this.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, linear ? GL_LINEAR : GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, 0);
@@ -97,6 +109,18 @@ public final class GlRenderTarget implements RenderTarget {
     @Override
     public int samples() {
         return samples;
+    }
+
+    @Override
+    public boolean isSampled() {
+        return sampled;
+    }
+
+    @Override
+    public GpuTexture texture() {
+        if (!sampled) return RenderTarget.super.texture();
+        if (texture == null) texture = new GlTexture(colorTexture, width, height);
+        return texture;
     }
 
     /**

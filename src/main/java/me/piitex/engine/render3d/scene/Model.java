@@ -34,9 +34,11 @@ import static org.lwjgl.assimp.Assimp.*;
  * orbit.frame(model.root().bounds());
  * </pre>
  * What carries over: geometry, normals (made when the file has none), texture coordinates, the base colour and its
- * texture, transparency, two-sided surfaces. Textures come from beside the file, or from inside it for .glb and
- * embedded images. What doesn't: skeletons, animations, normal, metallic-roughness and other maps, lights and cameras
- * from the file. The model's own units and up axis are kept (glTF is Y-up, which is what the scene uses).
+ * texture, transparency, two-sided surfaces; for glTF the metallic-roughness material with its normal,
+ * metallic-roughness, occlusion and emissive maps; skeletons (up to four bones per vertex, {@link Skin#MAX_JOINTS} per
+ * mesh) and animations ({@link #animations()}). Textures come from beside the file, or from inside it for .glb and
+ * embedded images. What doesn't: morph targets, lights and cameras from the file. The model's own units and up axis are
+ * kept (glTF is Y-up, which is what the scene uses).
  * <p>
  * Loading reads files and decodes images but never touches the GPU, so it can run on a background thread. The mesh and
  * textures are uploaded the first time the scene draws them.
@@ -47,11 +49,27 @@ public final class Model {
     private final Node3D root;
     private final List<Mesh> meshes;
     private final List<Material> materials;
+    private final List<AnimationClip> animations;
 
-    private Model(Node3D root, List<Mesh> meshes, List<Material> materials) {
+    private Model(Node3D root, List<Mesh> meshes, List<Material> materials, List<AnimationClip> animations) {
         this.root = root;
         this.meshes = meshes;
         this.materials = materials;
+        this.animations = animations;
+    }
+
+    /**
+     * The animations in the file, each moving nodes of {@link #root()} itself (not of a {@link Node3D#copy() copy}).
+     */
+    public List<AnimationClip> animations() {
+        return animations;
+    }
+
+    /**
+     * A player for this model's animations; register it with {@link Scene3D#animate} and call {@code play}.
+     */
+    public AnimationPlayer player() {
+        return new AnimationPlayer(animations);
     }
 
     public Node3D root() {
@@ -108,7 +126,7 @@ public final class Model {
     }
 
     private static final int IMPORT_FLAGS = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenSmoothNormals
-            | aiProcess_GenUVCoords | aiProcess_SortByPType | aiProcess_ImproveCacheLocality
+            | aiProcess_GenUVCoords | aiProcess_SortByPType | aiProcess_ImproveCacheLocality | aiProcess_LimitBoneWeights
             // Assimp hands out OpenGL-style texture coordinates for every format; undo that for top-first images.
             | aiProcess_FlipUVs;
 
@@ -134,6 +152,9 @@ public final class Model {
         final List<Material> materials = new ArrayList<>();
         Mesh[] meshByIndex;
         Material[] materialByIndex;
+        final Map<String, Node3D> nodesByName = new HashMap<>();
+        /** Every node that got a mesh, with the number of the Assimp mesh, to attach skins once all nodes exist. */
+        final List<Object[]> meshNodes = new ArrayList<>();
 
         Converter(AIScene scene, String name, Path directory, boolean linearColors) {
             this.scene = scene;
@@ -158,20 +179,117 @@ public final class Model {
                 meshByIndex[i] = convertMesh(AIMesh.create(meshPointers.get(i)));
                 if (meshByIndex[i] != null) meshes.add(meshByIndex[i]);
             }
-            if (scene.mNumAnimations() > 0) log.info("{} has {} animations; the 3D layer doesn't play them yet.", name, scene.mNumAnimations());
+            Node3D root = convertNode(scene.mRootNode());
+            attachSkins(root);
+            return new Model(root, meshes, materials, convertAnimations());
+        }
 
-            return new Model(convertNode(scene.mRootNode()), meshes, materials);
+        /**
+         * A skin per skinned mesh: its joints are the nodes named like the mesh's bones.
+         */
+        void attachSkins(Node3D root) {
+            Map<Integer, Skin> skins = new HashMap<>();
+            for (Object[] entry : meshNodes) {
+                Node3D node = (Node3D) entry[0];
+                int meshIndex = (Integer) entry[1];
+                if (meshByIndex[meshIndex] == null || !meshByIndex[meshIndex].isSkinned()) continue;
+                Skin skin = skins.computeIfAbsent(meshIndex, i -> {
+                    AIMesh source = AIMesh.create(scene.mMeshes().get(i));
+                    PointerBuffer bones = source.mBones();
+                    List<Node3D> joints = new ArrayList<>();
+                    List<Mat4> inverseBind = new ArrayList<>();
+                    for (int b = 0; b < source.mNumBones(); b++) {
+                        AIBone bone = AIBone.create(bones.get(b));
+                        String boneName = bone.mName().dataString();
+                        Node3D joint = nodesByName.get(boneName);
+                        if (joint == null) {
+                            log.warn("{} has a bone named {} but no node with that name; it will not move.", name, boneName);
+                            joint = root;
+                        }
+                        joints.add(joint);
+                        inverseBind.add(matrix(bone.mOffsetMatrix()));
+                    }
+                    return new Skin(joints, inverseBind);
+                });
+                node.setSkin(skin);
+            }
+        }
+
+        List<AnimationClip> convertAnimations() {
+            List<AnimationClip> clips = new ArrayList<>();
+            PointerBuffer animations = scene.mAnimations();
+            for (int a = 0; a < scene.mNumAnimations(); a++) {
+                AIAnimation source = AIAnimation.create(animations.get(a));
+                double ticks = source.mTicksPerSecond() > 0 ? source.mTicksPerSecond() : 25.0;
+                List<AnimationClip.Channel> channels = new ArrayList<>();
+                PointerBuffer nodeAnims = source.mChannels();
+                for (int c = 0; c < source.mNumChannels(); c++) {
+                    AINodeAnim anim = AINodeAnim.create(nodeAnims.get(c));
+                    String target = anim.mNodeName().dataString();
+                    Node3D node = nodesByName.get(target);
+                    if (node == null) continue;
+                    int positions = anim.mNumPositionKeys();
+                    if (positions > 0) {
+                        float[] times = new float[positions], values = new float[positions * 3];
+                        AIVectorKey.Buffer keys = anim.mPositionKeys();
+                        for (int k = 0; k < positions; k++) {
+                            times[k] = (float) (keys.get(k).mTime() / ticks);
+                            AIVector3D v = keys.get(k).mValue();
+                            values[k * 3] = v.x();
+                            values[k * 3 + 1] = v.y();
+                            values[k * 3 + 2] = v.z();
+                        }
+                        channels.add(new AnimationClip.Channel(node, AnimationClip.Path.TRANSLATION, times, values, AnimationClip.Interpolation.LINEAR));
+                    }
+                    int rotations = anim.mNumRotationKeys();
+                    if (rotations > 0) {
+                        float[] times = new float[rotations], values = new float[rotations * 4];
+                        AIQuatKey.Buffer keys = anim.mRotationKeys();
+                        for (int k = 0; k < rotations; k++) {
+                            times[k] = (float) (keys.get(k).mTime() / ticks);
+                            AIQuaternion q = keys.get(k).mValue();
+                            values[k * 4] = q.x();
+                            values[k * 4 + 1] = q.y();
+                            values[k * 4 + 2] = q.z();
+                            values[k * 4 + 3] = q.w();
+                        }
+                        channels.add(new AnimationClip.Channel(node, AnimationClip.Path.ROTATION, times, values, AnimationClip.Interpolation.LINEAR));
+                    }
+                    int scalings = anim.mNumScalingKeys();
+                    if (scalings > 0) {
+                        float[] times = new float[scalings], values = new float[scalings * 3];
+                        AIVectorKey.Buffer keys = anim.mScalingKeys();
+                        for (int k = 0; k < scalings; k++) {
+                            times[k] = (float) (keys.get(k).mTime() / ticks);
+                            AIVector3D v = keys.get(k).mValue();
+                            values[k * 3] = v.x();
+                            values[k * 3 + 1] = v.y();
+                            values[k * 3 + 2] = v.z();
+                        }
+                        channels.add(new AnimationClip.Channel(node, AnimationClip.Path.SCALE, times, values, AnimationClip.Interpolation.LINEAR));
+                    }
+                }
+                String clipName = source.mName().dataString();
+                clips.add(new AnimationClip(clipName.isEmpty() ? "animation" + a : clipName, (float) (source.mDuration() / ticks), channels));
+            }
+            return clips;
+        }
+
+        /**
+         * Assimp's matrices are row-major with the translation in the last column; Mat4 is column-major.
+         */
+        static Mat4 matrix(AIMatrix4x4 t) {
+            return new Mat4(new float[]{
+                    t.a1(), t.b1(), t.c1(), t.d1(),
+                    t.a2(), t.b2(), t.c2(), t.d2(),
+                    t.a3(), t.b3(), t.c3(), t.d3(),
+                    t.a4(), t.b4(), t.c4(), t.d4()});
         }
 
         Node3D convertNode(AINode source) {
             Node3D node = new Node3D(source.mName().dataString());
-            AIMatrix4x4 t = source.mTransformation();
-            // Assimp's matrices are row-major with the translation in the last column; Mat4 is column-major.
-            node.setLocalMatrix(new Mat4(new float[]{
-                    t.a1(), t.b1(), t.c1(), t.d1(),
-                    t.a2(), t.b2(), t.c2(), t.d2(),
-                    t.a3(), t.b3(), t.c3(), t.d3(),
-                    t.a4(), t.b4(), t.c4(), t.d4()}));
+            node.setLocalMatrix(matrix(source.mTransformation()));
+            nodesByName.putIfAbsent(node.getName(), node);
 
             int[] meshIndices = new int[source.mNumMeshes()];
             if (meshIndices.length > 0) source.mMeshes().get(meshIndices);
@@ -184,9 +302,12 @@ public final class Model {
                 Material material = materialByIndex.length > aiMesh.mMaterialIndex() ? materialByIndex[aiMesh.mMaterialIndex()] : null;
                 if (first) {
                     node.setMesh(mesh).setMaterial(material);
+                    meshNodes.add(new Object[]{node, meshIndex});
                     first = false;
                 } else {
-                    node.add(new Node3D(node.getName() + "#" + i, mesh, material));
+                    Node3D extra = new Node3D(node.getName() + "#" + i, mesh, material);
+                    node.add(extra);
+                    meshNodes.add(new Object[]{extra, meshIndex});
                 }
             }
 
@@ -236,7 +357,53 @@ public final class Model {
             }
             if (count == 0 || vertexCount == 0) return null;
             if (count < indices.length) indices = java.util.Arrays.copyOf(indices, count);
-            return new Mesh(positions, normalArray, uvs, indices);
+            Mesh mesh = new Mesh(positions, normalArray, uvs, indices);
+            if (source.mNumBones() > 0) applyBones(mesh, source, vertexCount);
+            return mesh;
+        }
+
+        /**
+         * Up to four bones per vertex; when more influence a vertex the weakest are dropped.
+         */
+        void applyBones(Mesh mesh, AIMesh source, int vertexCount) {
+            if (source.mNumBones() > Skin.MAX_JOINTS) {
+                log.warn("{} has a mesh with {} bones; the 3D layer's limit is {}, so it is drawn without skinning.", name, source.mNumBones(), Skin.MAX_JOINTS);
+                return;
+            }
+            int[] joints = new int[vertexCount * 4];
+            float[] weights = new float[vertexCount * 4];
+            PointerBuffer bones = source.mBones();
+            for (int b = 0; b < source.mNumBones(); b++) {
+                AIBone bone = AIBone.create(bones.get(b));
+                AIVertexWeight.Buffer list = bone.mWeights();
+                for (int w = 0; w < bone.mNumWeights(); w++) {
+                    int vertex = list.get(w).mVertexId();
+                    float weight = list.get(w).mWeight();
+                    int slot = -1, weakest = 0;
+                    for (int k = 0; k < 4; k++) {
+                        if (weights[vertex * 4 + k] == 0f) {
+                            slot = k;
+                            break;
+                        }
+                        if (weights[vertex * 4 + k] < weights[vertex * 4 + weakest]) weakest = k;
+                    }
+                    if (slot < 0) {
+                        if (weight <= weights[vertex * 4 + weakest]) continue;
+                        slot = weakest;
+                    }
+                    joints[vertex * 4 + slot] = b;
+                    weights[vertex * 4 + slot] = weight;
+                }
+            }
+            for (int v = 0; v < vertexCount; v++) {
+                float sum = weights[v * 4] + weights[v * 4 + 1] + weights[v * 4 + 2] + weights[v * 4 + 3];
+                if (sum > 0f) {
+                    for (int k = 0; k < 4; k++) weights[v * 4 + k] /= sum;
+                } else {
+                    weights[v * 4] = 1f; // unweighted vertices stay with the first bone
+                }
+            }
+            mesh.setSkinning(joints, weights);
         }
 
         Material convertMaterial(AIMaterial source) {
@@ -306,8 +473,44 @@ public final class Model {
                         }
                     }
                 }
+
+                if (linearColors) { // glTF: metallic-roughness with its maps; an absent factor is 1, as the spec says
+                    float[] metallic = {1f}, roughness = {1f};
+                    max[0] = 1;
+                    aiGetMaterialFloatArray(source, AI_MATKEY_METALLIC_FACTOR, 0, 0, metallic, max);
+                    max[0] = 1;
+                    aiGetMaterialFloatArray(source, AI_MATKEY_ROUGHNESS_FACTOR, 0, 0, roughness, max);
+                    material.setMetallic(metallic[0]).setRoughness(roughness[0]);
+                    TextureData normal = firstTexture(source, path, aiTextureType_NORMALS, aiTextureType_NORMAL_CAMERA);
+                    if (normal != null) material.setNormalTexture(normal);
+                    TextureData metalRough = firstTexture(source, path, aiTextureType_UNKNOWN, aiTextureType_METALNESS, aiTextureType_DIFFUSE_ROUGHNESS);
+                    if (metalRough != null) material.setMetallicRoughnessTexture(metalRough);
+                    TextureData occlusion = firstTexture(source, path, aiTextureType_LIGHTMAP, aiTextureType_AMBIENT_OCCLUSION);
+                    if (occlusion != null) material.setOcclusionTexture(occlusion);
+                    TextureData emissive = firstTexture(source, path, aiTextureType_EMISSIVE);
+                    float[] strength = {1f};
+                    max[0] = 1;
+                    aiGetMaterialFloatArray(source, AI_MATKEY_EMISSIVE_INTENSITY, 0, 0, strength, max);
+                    if (aiGetMaterialColor(source, AI_MATKEY_COLOR_EMISSIVE, 0, 0, color) == aiReturn_SUCCESS) {
+                        material.setEmissive(color.r() * strength[0], color.g() * strength[0], color.b() * strength[0]);
+                    }
+                    if (emissive != null) material.setEmissiveTexture(emissive);
+                }
             }
             return material;
+        }
+
+        /**
+         * The first texture found among the types, or null.
+         */
+        TextureData firstTexture(AIMaterial source, AIString path, int... types) {
+            for (int type : types) {
+                if (aiGetMaterialTexture(source, type, 0, path, (int[]) null, null, null, null, null, null) == aiReturn_SUCCESS) {
+                    TextureData texture = loadTexture(path.dataString());
+                    if (texture != null) return texture;
+                }
+            }
+            return null;
         }
 
         TextureData loadTexture(String reference) {

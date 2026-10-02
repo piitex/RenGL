@@ -74,6 +74,22 @@ public final class Mat4 {
     }
 
     /**
+     * An orthographic projection of the box in front of the camera, with the same depth range (0 at {@code near}, 1 at
+     * {@code far}) and Y direction as {@link #perspective}.
+     */
+    public static Mat4 orthographic(float left, float right, float bottom, float top, float near, float far) {
+        float[] r = new float[16];
+        r[0] = 2f / (right - left);
+        r[5] = 2f / (top - bottom);
+        r[10] = 1f / (near - far);
+        r[12] = -(right + left) / (right - left);
+        r[13] = -(top + bottom) / (top - bottom);
+        r[14] = near / (near - far);
+        r[15] = 1f;
+        return new Mat4(r);
+    }
+
+    /**
      * A view matrix for a camera at {@code eye} looking at {@code target}.
      */
     public static Mat4 lookAt(Vec3 eye, Vec3 target, Vec3 up) {

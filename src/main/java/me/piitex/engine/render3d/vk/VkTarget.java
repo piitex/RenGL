@@ -23,7 +23,9 @@ public final class VkTarget implements RenderTarget {
 
     private final VkGpuDevice device;
     private final int width, height, samples;
-    private final boolean depth;
+    private final boolean depth, sampled;
+    private final long sampler;
+    private VkTex texture;
     /**
      * The single-sample colour image: the finished picture. With multisampling it is what the pass resolves into.
      */
@@ -34,12 +36,20 @@ public final class VkTarget implements RenderTarget {
     final long framebuffer;
     private boolean closed;
 
-    VkTarget(VkGpuDevice device, int width, int height, boolean depth, int samples) {
+    /**
+     * @param sampled the colour is read by shaders in later passes: the pass leaves it in the layout they read and the
+     *                target is single-sample
+     * @param linear  with {@code sampled}, how the texture is filtered
+     */
+    VkTarget(VkGpuDevice device, int width, int height, boolean depth, int samples, boolean sampled, boolean linear) {
         this.device = device;
         this.width = Math.max(1, width);
         this.height = Math.max(1, height);
         this.depth = depth;
-        this.samples = samples;
+        this.samples = sampled ? 1 : samples;
+        this.sampled = sampled;
+        this.sampler = linear ? device.clampLinearSampler : device.clampNearestSampler;
+        samples = this.samples;
 
         color = device.createImage(this.width, this.height, VkGpuDevice.COLOR_FORMAT, COLOR_USAGE);
         colorView = device.createImageView(color.handle(), VkGpuDevice.COLOR_FORMAT, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -67,12 +77,16 @@ public final class VkTarget implements RenderTarget {
             if (depth) attachments.put(depthView);
             attachments.flip();
             VkFramebufferCreateInfo info = VkFramebufferCreateInfo.calloc(stack).sType$Default()
-                    .renderPass(device.renderPass(depth, samples)).pAttachments(attachments)
+                    .renderPass(device.renderPass(depth, samples, sampled)).pAttachments(attachments)
                     .width(this.width).height(this.height).layers(1);
             LongBuffer out = stack.mallocLong(1);
             VkGpuDevice.check(vkCreateFramebuffer(device.device, info, null, out), "create a framebuffer");
             framebuffer = out.get(0);
         }
+    }
+
+    boolean sampled() {
+        return sampled;
     }
 
     /**
@@ -128,6 +142,18 @@ public final class VkTarget implements RenderTarget {
     }
 
     @Override
+    public boolean isSampled() {
+        return sampled;
+    }
+
+    @Override
+    public me.piitex.engine.render3d.GpuTexture texture() {
+        if (!sampled) return RenderTarget.super.texture();
+        if (texture == null) texture = new VkTex(device, width, height, colorView, sampler);
+        return texture;
+    }
+
+    @Override
     public boolean isBottomLeftOrigin() {
         return false;
     }
@@ -139,8 +165,10 @@ public final class VkTarget implements RenderTarget {
                 VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
         try {
             device.immediate(cmd -> {
+                // The layout the pass left it in: attachment for a shown target, shader-read for a sampled one.
+                int resting = sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 device.barrier(cmd, color.handle(), VK_IMAGE_ASPECT_COLOR_BIT,
-                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        resting, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
                 try (MemoryStack stack = stackPush()) {
@@ -151,9 +179,10 @@ public final class VkTarget implements RenderTarget {
                 }
                 // Back to the layout the pass leaves it in, which is what Skia is told when it wraps the image.
                 device.barrier(cmd, color.handle(), VK_IMAGE_ASPECT_COLOR_BIT,
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                        VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, resting,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT, sampled ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_TRANSFER_READ_BIT, sampled ? VK_ACCESS_SHADER_READ_BIT
+                                : VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
             });
             vmaInvalidateAllocation(device.allocator, staging.allocation(), 0, VK_WHOLE_SIZE);
             ByteBuffer out = memAlloc((int) bytes);

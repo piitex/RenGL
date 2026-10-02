@@ -24,9 +24,12 @@ import java.util.Map;
  * view.setInputListener(new OrbitControls(scene.camera()));
  * container.addElement(view);
  * </pre>
- * and models come from {@link Model#load}. Everything is drawn with one forward renderer: Lambert and Blinn-Phong
- * lighting, mipmapped textures, alpha blending, depth testing and back-face culling, and the viewport anti-aliases the
- * edges. There are no shadows, skybox or animation yet. {@link #pick} finds what is under a point of the picture.
+ * and models come from {@link Model#load}. Everything is drawn with one forward renderer: classic (Lambert and
+ * Blinn-Phong) or physically based shading with normal, metallic-roughness, occlusion and emissive maps, up to
+ * {@link #MAX_LIGHTS} lights, {@link Light#setCastShadow shadows} from a directional light, a {@link Skybox},
+ * mipmapped and anisotropically filtered textures, {@link Instances instanced} drawing, {@link Skin skinned} meshes
+ * moved by {@link AnimationPlayer}s, alpha blending, depth testing and back-face culling; the viewport anti-aliases the
+ * edges. There is no image-based lighting or reflection. {@link #pick} finds what is under a point of the picture.
  * <p>
  * A new scene has a soft ambient light and one directional light, so the first thing you add is visible; clear
  * {@link #lights()} for different lighting.
@@ -59,6 +62,11 @@ public class Scene3D implements Viewport3D.Content {
     private Color ambient = new Color(0.45f, 0.45f, 0.5f, 1f);
     private float ambientIntensity = 1f;
     private UpdateHandler updateHandler;
+    private Skybox skybox;
+    private int shadowMapSize = 2048;
+    private float shadowDistance = 60f;
+    private float shadowBias = 1f;
+    private final List<AnimationPlayer> animators = new ArrayList<>();
 
     private final Map<GpuDevice, Shared> renderers = new IdentityHashMap<>();
 
@@ -128,14 +136,80 @@ public class Scene3D implements Viewport3D.Content {
         return this;
     }
 
+    public Skybox getSkybox() {
+        return skybox;
+    }
+
+    /**
+     * The sky drawn behind everything, in place of the plain {@link #setBackground background colour}; {@code null}
+     * (the default) draws just the colour.
+     */
+    public Scene3D setSkybox(Skybox skybox) {
+        this.skybox = skybox;
+        return this;
+    }
+
+    public int getShadowMapSize() {
+        return shadowMapSize;
+    }
+
+    /**
+     * The width and height in pixels of the shadow picture: more is sharper and costs more memory and time. 2048 by
+     * default; from 256 to 8192.
+     */
+    public Scene3D setShadowMapSize(int size) {
+        this.shadowMapSize = Math.max(256, Math.min(8192, size));
+        return this;
+    }
+
+    public float getShadowDistance() {
+        return shadowDistance;
+    }
+
+    /**
+     * How far from the camera shadows are drawn, in scene units (60 by default, and never beyond the camera's far
+     * plane). Shorter gives sharper shadows near the camera.
+     */
+    public Scene3D setShadowDistance(float distance) {
+        this.shadowDistance = Math.max(0.1f, distance);
+        return this;
+    }
+
+    public float getShadowBias() {
+        return shadowBias;
+    }
+
+    /**
+     * Scales the offset that stops a surface from shadowing itself (1 by default). Raise it if a lit surface shows
+     * stripes, lower it if shadows float away from what casts them.
+     */
+    public Scene3D setShadowBias(float bias) {
+        this.shadowBias = Math.max(0f, bias);
+        return this;
+    }
+
+    /**
+     * Registers a player, which then advances once per frame, before the update handler.
+     */
+    public Scene3D animate(AnimationPlayer player) {
+        if (!animators.contains(player)) animators.add(player);
+        return this;
+    }
+
+    public Scene3D stopAnimating(AnimationPlayer player) {
+        animators.remove(player);
+        return this;
+    }
+
     /**
      * The nearest thing the ray hits, or null. Only visible nodes with a mesh are tested, and a triangle that faces away
      * from the ray is skipped unless its material is double-sided, so a click goes through what you can't see. A node
      * is skipped when {@link Node3D#setPickable} is off.
      * <p>
-     * Call it from the render thread or while the scene isn't drawing, as with any change to the scene. The cost grows
-     * with the triangles of the meshes the ray passes through, so it suits a click or a hover, not thousands of rays
-     * per frame.
+     * Call it from the render thread or while the scene isn't drawing, as with any change to the scene. Each mesh keeps
+     * a hierarchy of boxes (built the first time it is picked), so a ray tests only the triangles near its path. A
+     * skinned mesh has no such hierarchy, because its shape changes with the pose: it is posed on the CPU and searched
+     * afresh, which is fine for a click and not for thousands of rays per frame.
      */
     public Hit pick(Ray ray) {
         List<Hit> hits = pickAll(ray);
@@ -190,7 +264,10 @@ public class Scene3D implements Viewport3D.Content {
         if (shared == null) throw new IllegalStateException("The scene was drawn before it was initialised for this device");
         // Several viewports can show the scene in one frame; only the first runs the update.
         long frame = device.frameNumber();
-        if (updateHandler != null && shared.updatedFrame != frame) updateHandler.update(this, delta);
+        if (shared.updatedFrame != frame) {
+            for (AnimationPlayer player : new ArrayList<>(animators)) player.update(delta);
+            if (updateHandler != null) updateHandler.update(this, delta);
+        }
         shared.updatedFrame = frame;
         shared.renderer.render(this, target);
     }

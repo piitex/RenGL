@@ -6,6 +6,9 @@ import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.scene.Camera;
 import me.piitex.engine.render3d.scene.Hit;
+import me.piitex.engine.render3d.scene.Instances;
+import me.piitex.engine.render3d.scene.Light;
+import me.piitex.engine.render3d.scene.Skybox;
 import me.piitex.engine.render3d.scene.Material;
 import me.piitex.engine.render3d.scene.Mesh;
 import me.piitex.engine.render3d.scene.Node3D;
@@ -77,6 +80,11 @@ class GpuSmokeTest {
                     deviceChecks(device, recorder);
                     sceneChecks(scene, target, recorder);
                 });
+        Scene3D featureScene = buildFeatureScene();
+        GpuHarness.Run features = GpuHarness.run(api, VIEW, viewport -> viewport.setContent(new SceneContent(featureScene)),
+                (device, target, recorder) -> {
+                    if (device.api() == api) featureChecks(featureScene, target, recorder);
+                });
         boolean usable = run.available() && run.api() == api;
         List<DynamicTest> tests = new ArrayList<>();
         tests.add(DynamicTest.dynamicTest(api + ": a device exists", () -> {
@@ -86,7 +94,11 @@ class GpuSmokeTest {
         }));
         if (usable) {
             run.results().forEach((name, failure) -> tests.add(DynamicTest.dynamicTest(api + ": " + name,
-                    () -> assertNull(failure, failure))));
+                    () -> assertNull(failure, name + ": " + failure))));
+        }
+        if (usable && features.available()) {
+            features.results().forEach((name, failure) -> tests.add(DynamicTest.dynamicTest(api + ": " + name,
+                    () -> assertNull(failure, name + ": " + failure))));
         }
         return tests;
     }
@@ -111,6 +123,81 @@ class GpuSmokeTest {
         scene.add(red).add(green).add(blue);
         scene.camera().lookAt(new Vec3(0, 1.2f, 6), new Vec3(0, 0, 0));
         return scene;
+    }
+
+    /**
+     * Shadows, a skybox, instancing, tints, PBR and emissive surfaces in one picture.
+     */
+    private static Scene3D buildFeatureScene() {
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        scene.lights().add(Light.directional(new Vec3(-0.3f, -1f, -0.2f), Color.WHITE, 1.2f).setCastShadow(true));
+        scene.setAmbient(Color.WHITE, 0.15f);
+        scene.setSkybox(Skybox.gradient(new Color(0.2f, 0.4f, 0.8f, 1f), new Color(0.2f, 0.4f, 0.8f, 1f), new Color(0.2f, 0.4f, 0.8f, 1f)));
+        scene.add(new Node3D("floor", Mesh.plane(40, 40), new Material(Color.WHITE).setRoughness(0.9f)));
+        Node3D pillar = new Node3D("pillar", Mesh.cube(1f), new Material(Color.WHITE).setRoughness(0.8f));
+        pillar.setPosition(0, 2f, 0);
+        pillar.setScale(new Vec3(1f, 4f, 1f));
+        scene.add(pillar);
+        Node3D crowd = new Node3D("crowd", Mesh.cube(1f), new Material(Color.WHITE).setUnlit(true));
+        Instances instances = new Instances();
+        Color[] tints = {new Color(1f, 0f, 0f, 1f), new Color(0f, 1f, 0f, 1f), new Color(0f, 0f, 1f, 1f)};
+        for (int i = 0; i < 3; i++) {
+            int index = instances.add(new Vec3(0.7f + i * 1.1f, 0.5f, 1.5f));
+            instances.setTint(index, tints[i]);
+        }
+        crowd.setInstances(instances);
+        scene.add(crowd);
+        Node3D lamp = new Node3D("lamp", Mesh.cube(1f), new Material(Color.BLACK).setEmissive(Color.WHITE, 3f));
+        lamp.setPosition(-3.2f, 0.5f, 2f);
+        scene.add(lamp);
+        Node3D ball = new Node3D("ball", Mesh.sphere(0.7f, 32, 16), new Material(new Color(1f, 0.1f, 0.1f, 1f)).setMetallic(0f).setRoughness(0.5f));
+        ball.setPosition(-1.5f, 0.7f, 3f);
+        scene.add(ball);
+        scene.camera().lookAt(new Vec3(0, 3f, 9f), new Vec3(0, 0.8f, 0)).setFovYDegrees(50);
+        return scene;
+    }
+
+    private void featureChecks(Scene3D scene, RenderTarget target, GpuHarness.Recorder r) {
+        r.guard("features: shadows, sky, instancing, PBR and emissive agree with the picture", () -> {
+            int w = target.width(), h = target.height();
+            ByteBuffer px = target.readPixels();
+            try {
+                Camera camera = scene.camera();
+                Mat4 viewProjection = camera.projection((float) w / h).mul(camera.view());
+                IntFunction3 at = (x, y, z) -> {
+                    Vec3 ndc = viewProjection.transformPoint(new Vec3(x, y, z));
+                    int sx = Math.round((ndc.x() * 0.5f + 0.5f) * w), sy = Math.round((1 - (ndc.y() * 0.5f + 0.5f)) * h);
+                    int i = (Math.max(0, Math.min(h - 1, sy)) * w + Math.max(0, Math.min(w - 1, sx))) * 4;
+                    return new int[]{px.get(i) & 255, px.get(i + 1) & 255, px.get(i + 2) & 255};
+                };
+                int[] shadowed = at.get(-0.9f, 0f, -0.6f), lit = at.get(-3.5f, 0f, -3f);
+                int shadowedLuma = shadowed[0] + shadowed[1] + shadowed[2], litLuma = lit[0] + lit[1] + lit[2];
+                r.check("features: the pillar's shadow darkens the floor", shadowedLuma < litLuma * 0.7,
+                        "shadowed " + java.util.Arrays.toString(shadowed) + " lit " + java.util.Arrays.toString(lit));
+
+                int[] sky = {px.get(2 * w * 4 + (w / 2) * 4) & 255, px.get(2 * w * 4 + (w / 2) * 4 + 1) & 255, px.get(2 * w * 4 + (w / 2) * 4 + 2) & 255};
+                r.check("features: the skybox fills the top of the picture", Math.abs(sky[0] - 51) < 6 && Math.abs(sky[1] - 102) < 6 && Math.abs(sky[2] - 204) < 6,
+                        java.util.Arrays.toString(sky));
+
+                for (int i = 0; i < 3; i++) {
+                    int[] c = at.get(0.7f + i * 1.1f, 0.5f, 1.5f);
+                    boolean dominant = c[i] > 200 && c[(i + 1) % 3] < 60 && c[(i + 2) % 3] < 60;
+                    r.check("features: instance " + i + " has its own tint", dominant, java.util.Arrays.toString(c));
+                }
+                int[] glow = at.get(-3.2f, 0.5f, 2f);
+                r.check("features: an emissive surface glows", glow[0] > 200 && glow[1] > 200 && glow[2] > 200, java.util.Arrays.toString(glow));
+                int[] ball = at.get(-1.5f, 0.7f, 3f);
+                r.check("features: a PBR sphere takes its colour", ball[0] > ball[1] * 2 && ball[0] > ball[2] * 2 && ball[0] > 40, java.util.Arrays.toString(ball));
+            } finally {
+                MemoryUtil.memFree(px);
+            }
+        });
+    }
+
+    @FunctionalInterface
+    private interface IntFunction3 {
+        int[] get(float x, float y, float z);
     }
 
     private static final class SceneContent implements Viewport3D.Content {
@@ -296,7 +383,9 @@ class GpuSmokeTest {
             plain.close();
             mipped.close();
         }
-        r.check("device: without mipmaps the distant checker is noisy", spread[0] > 40, "stddev=" + spread[0]);
+        // Anisotropic filtering averages along the slant even without mipmaps, so the plain texture is only noisy when it is off.
+        r.check("device: without mipmaps the distant checker is rougher", device.maxAnisotropy() == 1 ? spread[0] > 40 : spread[0] > spread[1],
+                "stddev=" + spread[0] + " (mipmapped " + spread[1] + ", anisotropy " + device.maxAnisotropy() + ")");
         r.check("device: with mipmaps the distant checker is smooth", spread[1] < 15, "stddev=" + spread[1]);
     }
 }

@@ -10,7 +10,18 @@ package me.piitex.engine.render3d;
 public interface RenderPass extends AutoCloseable {
     void bindPipeline(Pipeline pipeline);
 
-    void bindVertexBuffer(GpuBuffer buffer);
+    /**
+     * Binds the pipeline's main vertex buffer, buffer binding 0.
+     */
+    default void bindVertexBuffer(GpuBuffer buffer) {
+        bindVertexBuffer(0, buffer);
+    }
+
+    /**
+     * Binds a vertex buffer to a buffer binding: 0 is the pipeline's {@link PipelineDesc#vertexLayout()}, 1 and up are
+     * its {@link PipelineDesc#extraLayouts()}, in order.
+     */
+    void bindVertexBuffer(int binding, GpuBuffer buffer);
 
     /**
      * Indices are 32-bit unsigned integers.
@@ -21,9 +32,24 @@ public interface RenderPass extends AutoCloseable {
 
     void bindTexture(int binding, GpuTexture texture);
 
-    void draw(int vertexCount);
+    default void draw(int vertexCount) {
+        draw(vertexCount, 1, 0);
+    }
 
-    void drawIndexed(int indexCount);
+    /**
+     * Draws the vertices once per instance. A buffer whose layout is {@link VertexLayout.Rate#INSTANCE} supplies its
+     * element number {@code firstInstance + i} to instance {@code i}.
+     */
+    void draw(int vertexCount, int instanceCount, int firstInstance);
+
+    default void drawIndexed(int indexCount) {
+        drawIndexed(indexCount, 1, 0);
+    }
+
+    /**
+     * Draws the indexed mesh once per instance; see {@link #draw(int, int, int)}.
+     */
+    void drawIndexed(int indexCount, int instanceCount, int firstInstance);
 
     /**
      * Finishes the pass and submits it. The target is ready for the UI layer afterwards, and left in the layout the
