@@ -24,9 +24,12 @@ A `GpuDevice` is the layer's view of the GPU. You never create one: a viewport h
 | `createDynamicBuffer(BufferType, long size)` | A buffer you replace every frame with `update` |
 | `createTexture(width, height, ByteBuffer rgba)` | RGBA8, tightly packed, **top row first**. Sampled with linear filtering and repeat wrapping |
 | `createTexture(width, height, ByteBuffer rgba, boolean mipmaps)` | The same, and with `true` it also makes the smaller copies of the picture and filters between them (trilinear), so it doesn't shimmer when small on screen. A third more memory; `mipLevels()` tells how many there are |
+| `createCubeTexture(size, ByteBuffer[] faces, boolean mipmaps)` | A cube map from six square RGBA8 faces (+X, -X, +Y, -Y, +Z, -Z, top row first), for a `samplerCube`: a sky, a reflection |
+| `maxAnisotropy()` | The anisotropic filtering level mipmapped textures use, up to 8 (`1` when the GPU has none). The system property `rengl.3d.anisotropy` overrides it |
 | `createPipeline(PipelineDesc)` | Shaders plus fixed-function state |
 | `createRenderTarget(width, height, boolean depth)` | An offscreen colour image, with a depth buffer if asked. A viewport makes the one you draw into; make your own for multi-pass effects |
 | `createRenderTarget(width, height, boolean depth, int samples)` | The same with anti-aliasing: `2`, `4` or `8` samples per pixel (any other number rounds down to a power of two, and `maxSamples()` caps it). See [Anti-aliasing](#anti-aliasing) |
+| `createSampledTarget(width, height, boolean depth, boolean linear)` | A single-sample target whose picture a later pass can read as a texture with `RenderTarget.texture()`: a shadow map, a mirror, a minimap. `linear` chooses linear or nearest filtering (nearest for packed data such as depth). It can't be shown by a `Viewport3D`. See [Reading a target as a texture](#reading-a-target-as-a-texture) |
 | `maxSamples()` | The most samples a target can have on this GPU, from 1 to 8 |
 | `frameNumber()` | The window's frame being drawn, the same for every viewport that draws in it. Compare it with the last one you saw to do something once per frame, however many viewports show your content |
 | `beginPass(RenderTarget, r, g, b, a)` | Starts drawing into a target, clearing it to the colour and the depth to the far plane |
@@ -48,8 +51,11 @@ globals.update(data);                                                      // in
 
 `update` replaces the contents from the buffer's position to its limit (`flip()` the buffer first). It is only legal
 inside `Content.render`, because only there is a frame active, and the data must not be larger than the buffer.
-Dynamic buffers are kept per frame in flight, so **update every dynamic buffer every frame** you draw with it: a frame
-that skips an update would see the older contents of its slot.
+Dynamic buffers are kept per frame in flight. A frame that draws without updating one still sees the contents it was last
+given; update it whenever the data changes, and each frame if it changes every frame. A render that happens **twice in one
+frame** (two viewports showing your content) must not share one dynamic buffer between its two draws: the second update
+would overwrite what the first draw is about to read. Use a buffer per render call, and `device.frameNumber()` to know when
+a new frame has begun.
 
 Allocate your `ByteBuffer`s with `MemoryUtil.memAlloc(size).order(ByteOrder.nativeOrder())` and free them with
 `MemoryUtil.memFree`.
@@ -97,6 +103,44 @@ methods return a changed copy:
 `VertexLayout.of(formats...)` describes one interleaved vertex buffer of 32-bit floats. `VertexFormat` is `FLOAT1` to
 `FLOAT4`; the attribute's position in the list is its `layout(location = N)`, and `stride()` is computed.
 
+### Instancing
+
+A pipeline can read more than one vertex buffer. The main one is `PipelineDesc.vertexLayout()`, at buffer binding 0; more
+are added with `desc.withExtraLayouts(...)`, at bindings 1, 2 and so on. A layout made with `VertexLayout.Rate.INSTANCE`
+advances once per *instance* instead of once per vertex, which gives every copy of a mesh its own transform, colour or
+anything else, in one draw:
+
+```java nocompile
+VertexLayout mesh = VertexLayout.of(VertexFormat.FLOAT3, VertexFormat.FLOAT3);                       // locations 0, 1
+VertexLayout perInstance = VertexLayout.of(2, VertexLayout.Rate.INSTANCE, VertexFormat.FLOAT4, VertexFormat.FLOAT4); // from 2
+Pipeline pipe = device.createPipeline(PipelineDesc.of(vertexSource, fragmentSource, mesh).withExtraLayouts(perInstance));
+// ...
+pass.bindVertexBuffer(0, meshVertices);
+pass.bindVertexBuffer(1, instanceData);          // one element per instance
+pass.drawIndexed(indexCount, 1000, 0);           // 1000 instances, starting at element 0
+```
+
+The locations of all layouts must not overlap (the second argument of `VertexLayout.of` is the first location). A matrix
+is four `FLOAT4` attributes (`mat4(a, b, c, d)` in the shader). A shader can read at most 16 vertex attributes in
+total, the portable limit. [Instances](instancing.md) in a scene use exactly this.
+
+### Reading a target as a texture
+
+```java nocompile
+RenderTarget map = device.createSampledTarget(1024, 1024, true, false);   // colour + depth, nearest filtering
+try (RenderPass pass = device.beginPass(map, 1, 1, 1, 1)) {
+    // draw the scene from somewhere else into it
+}
+try (RenderPass pass = device.beginPass(target, 0, 0, 0, 1)) {
+    pass.bindTexture(1, map.texture());           // read it in this pass
+    // draw
+}
+```
+
+The target is single-sample colour (RGBA8) plus optional depth; to keep depth you read, pack it into the colour channels
+in the shader (the scene's shadow map does). Draw into it in one pass and read it in a later one, never both at once. Its
+texture belongs to the target and is freed with it.
+
 ## Drawing
 
 `Content.render` begins a pass on the target it is given, binds, draws and ends the pass. `RenderPass` is
@@ -105,10 +149,12 @@ methods return a changed copy:
 | `RenderPass` method | Description |
 |---|---|
 | `bindPipeline(Pipeline)` | Bind first |
-| `bindVertexBuffer(GpuBuffer)`, `bindIndexBuffer(GpuBuffer)` | One vertex buffer, and optionally 32-bit indices |
+| `bindVertexBuffer(GpuBuffer)`, `bindVertexBuffer(binding, GpuBuffer)` | The main vertex buffer (binding 0), or one of the [extra buffers](#instancing) |
+| `bindIndexBuffer(GpuBuffer)` | Optionally, 32-bit indices |
 | `bindUniformBuffer(binding, GpuBuffer)` | The uniform block at that `binding` |
 | `bindTexture(binding, GpuTexture)` | The sampler at that `binding` |
 | `draw(vertexCount)` / `drawIndexed(indexCount)` | Draw triangles |
+| `draw(vertexCount, instances, firstInstance)` / `drawIndexed(indexCount, instances, firstInstance)` | The same, repeated per instance. An instance-rate buffer supplies element `firstInstance + i` to instance `i` |
 | `end()` | Finishes the pass and submits it. The target is ready for the UI layer afterwards |
 
 ### Anti-aliasing
@@ -262,14 +308,13 @@ Run it with `-XstartOnFirstThread` on macOS. The same content works behind the w
 
 ## Limits
 
-- Triangles only, with 32-bit indices, one vertex buffer per draw and no instancing.
-- Buffers and textures are created with fixed settings: textures are RGBA8 with linear filtering and repeat wrapping,
-  with mipmaps only if you ask for them; there is no way to pick a sampler (no anisotropic filtering, no clamping) or a
-  texture format.
-- On Vulkan, descriptor pools allow about 4096 sets per frame slot, so around **a thousand draws per frame** is the
-  ceiling.
-- Uploads wait for the GPU, so creating large buffers or textures in the middle of a frame stalls it. Create them in
-  `init`.
+- Triangles only, with 32-bit indices, up to 16 vertex attributes, and no push constants.
+- Textures are RGBA8 with linear filtering and repeat wrapping (clamping for cube maps and sampled targets), mipmapped
+  and anisotropic only if you ask for mipmaps; there is no way to pick a sampler or a texture format.
+- On Vulkan, a frame that binds different resources very often keeps allocating descriptor sets; there is no hard
+  ceiling, but thousands of draws with different textures cost CPU. Draw instances in one call instead.
+- Buffers and textures made in the middle of a Vulkan frame are uploaded with that frame's commands and don't stall it;
+  on OpenGL the driver decides. Creating very large ones in `init` is still kinder to the first frame.
 - Both APIs are driven through one lowest-common-denominator interface, so there are no compute shaders, geometry
   shaders, or sampling a multisampled target in a shader (it is resolved first).
 

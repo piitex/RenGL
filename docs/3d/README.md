@@ -24,8 +24,11 @@ first time something draws 3D, and closed with the window.
 |---|---|
 | [Viewport3D](viewport-3d.md) | The element that shows 3D in a rectangle of the UI: its `Content`, input, resolution and lifetime |
 | [Background3D](background-3d.md) | 3D behind the whole window, with the UI over it: `window.setBackground(...)` |
-| [Scenes](scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material`, `Light`, `Camera`, `TextureData`, `OrbitControls` and the math types: a ready-made scene to put in a viewport |
+| [Scenes](scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material` (classic and PBR), `Light`, `Camera`, `TextureData`, `OrbitControls`, picking and the math types: a ready-made scene to put in a viewport |
+| [Lighting](lighting.md) | How lights add up, **shadows**, and the **skybox** |
 | [Models](models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files, and what carries over |
+| [Animation](animation.md) | Clips, `AnimationPlayer`, and skinned meshes that bend with a skeleton |
+| [Instancing](instancing.md) | Thousands of copies of one mesh in a single draw |
 | [Custom rendering](custom-rendering.md) | Drawing your own 3D with `GpuDevice`, pipelines and one GLSL shader that runs on both APIs |
 
 Status, known problems and plans are tracked in the [3D status document](../3d-status.md).
@@ -120,6 +123,11 @@ path of the demos has not been run on Windows or Linux yet.
 
 ## Limits at a glance
 
-The scene layer is a small forward renderer. It has **no shadows, skybox, normal or metal-rough maps, animation or
-instancing yet**, and about a thousand draws per frame is the ceiling on Vulkan. Edges are anti-aliased (4 samples by
-default), textures are mipmapped, and nodes can be [picked](scenes.md#picking) with a ray. The full list, with the reasons, is in [Known limitations](../reference/known-limitations.md#rendering-and-3d).
+The scene layer is a forward renderer with classic and physically based materials (normal, metallic-roughness, occlusion
+and emissive maps), shadows from one directional light, a skybox, instancing, skinned animation, mipmapped and
+anisotropically filtered textures, 4x anti-aliasing by default, and ray [picking](scenes.md#picking). It has **no
+image-based lighting or reflections, no point-light or soft variable-width shadows, no morph targets, no post-processing and
+no culling of what is off screen**. It was written and tested on one machine so far: macOS on Apple silicon, with Vulkan
+(MoltenVK) and, in a harness, OpenGL 3.3; Windows and Linux are untested. The full list, with the reasons, is in
+[Known limitations](../reference/known-limitations.md#rendering-and-3d). The code that checks it all is in `src/test`: run
+`./mvnw test`, which skips the GPU tests when the machine has no usable GPU.

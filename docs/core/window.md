@@ -32,7 +32,7 @@ WindowOptions options = new WindowOptions("My App")
 | `setShowCursor(boolean)` | `true` | **Yes.** `false` hides the OS cursor over the window (it still moves freely) |
 | `setMaxFPS(int)` | `60` | **Yes**, and can be changed while running. Only used while vsync is off. `0` or less means unlimited |
 | `setHandleFocus(boolean)` | `false` | **Yes.** Clears keyboard focus when the OS window loses focus |
-| `setRenderer(RenderAPI)` | `AUTO` | **Yes**, before the window opens. `AUTO` is Metal on macOS and OpenGL elsewhere (or the `rengl.backend` system property); `OPENGL`, `METAL` and `VULKAN` ask for that API and fall back to the default, with a warning, where it can't be had. `Window.getRenderer()` reports what was used. [3D](../3d/README.md) needs `OPENGL` or `VULKAN`. See [Rendering APIs](rendering-apis.md) |
+| `setRenderer(RenderAPI)` | `AUTO` | **Yes**, before the window opens. `AUTO` is Metal on macOS and OpenGL elsewhere (or the `rengl.backend` system property); `METAL` and `VULKAN` ask for that API and fall back to the default, with a warning, where it can't be had. **`OPENGL` on macOS is a fatal error** (`IllegalStateException`) that says to use `VULKAN`, because macOS windows have no OpenGL context. `Window.getRenderer()` reports what was used. [3D](../3d/README.md) needs `OPENGL` or `VULKAN`. See [Rendering APIs](rendering-apis.md) |
 | `setResizable(boolean)` | `true` | **Yes.** `false` locks the window size |
 | `setIcon(Image)` | `null` | **Yes.** An image from `ImageLoader.load(...)`. Wins over `setIconPath`. On macOS it sets the Dock icon. Can be changed at runtime with `Window.setIcon` |
 | `setIconPath(String)` | `null` | **Yes.** File path or classpath resource. Same platform behavior as `setIcon` |
