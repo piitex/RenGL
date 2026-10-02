@@ -32,6 +32,8 @@ public class LoadShip {
 | `meshes()` | The distinct meshes in the file; a mesh used by several nodes is listed once |
 | `materials()` | The materials, which you can edit (`setSpecular`, `setUnlit`, ...) before or after adding the model |
 | `bounds()` | The box around the whole model in its own space, or `null` for a model with no geometry |
+| `animations()` | The file's [animation clips](../3d/animation.md#playing-a-models-animations), which move the nodes of `root()` |
+| `player()` | An `AnimationPlayer` for those clips. Register it with `scene.animate(player)` and call `play` |
 
 The model's own units and up axis are kept. glTF is Y-up, which is what the scene uses; a file that is Z-up or in other
 units needs `root().setScale(...)` and `root().setRotation(...)` to fit.
@@ -40,12 +42,16 @@ units needs `root().setScale(...)` and `root().setRotation(...)` to fit.
 
 | Carries over | Does not |
 |---|---|
-| Geometry; normals (made smooth when the file has none); texture coordinates | Skeletons and animations (a file with animations logs that they are not played) |
-| The base colour and its texture | Normal, metallic-roughness and other maps |
-| Transparency; two-sided surfaces | Lights and cameras from the file |
+| Geometry; normals (made smooth when the file has none); texture coordinates | Morph targets (blend shapes) |
+| The base colour and its texture | Lights and cameras from the file |
+| For glTF: the **metallic-roughness** material with its **normal, metallic-roughness, occlusion and emissive** maps and factors; it loads as a [PBR material](scenes.md#material) | A material's texture transforms and UV sets other than the first |
+| **Skeletons**: up to four bones a vertex and 256 per mesh, as a [skin](animation.md#skins) | Cubic-spline animation keys (used as plain keys) |
+| **Animations**: translation, rotation and scale of nodes, as [clips](animation.md) | |
+| Transparency; two-sided surfaces; alpha cut-outs | |
 | Textures from beside the file, or embedded (`.glb` and embedded images) | |
 
-Colours in glTF files are linear; the loader converts them, so a model looks as its author intended.
+Colours in glTF files are linear; the loader converts them, so a model looks as its author intended. OBJ and other formats
+load with the classic material (`setSpecular`, `setShininess`) and their base colour map.
 
 ## Several copies
 
@@ -61,7 +67,7 @@ for (int i = 0; i < 20; i++) {
 }
 ```
 
-Each node is a draw, and there is no instancing yet, so a very large crowd of high-detail copies costs frames.
+Copies of one model that share meshes and materials are drawn together in one call per mesh. For a very large crowd of one mesh, [`Instances`](instancing.md) is lighter still. A copy of a skinned model follows its own copied skeleton, but only the original's `player()` animates the original: see [Animation](animation.md#playing-a-models-animations).
 
 ## Loading in the background
 

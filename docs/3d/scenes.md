@@ -11,13 +11,17 @@ materials, a camera, some lights, and one forward pass that shades them. `Scene3
 Scene3D ──┬── root Node3D ──┬── Node3D (mesh + material)
           │                 └── Node3D ── Node3D ...   children move with their parent
           ├── Camera
-          ├── lights (up to 8)
-          └── background colour, ambient light, update handler
+          ├── lights (up to 8), one of them can cast shadows
+          ├── skybox, background colour, ambient light
+          └── animation players, update handler
 ```
 
-Everything is drawn with Lambert diffuse plus a Blinn-Phong highlight, textures, alpha blending, depth testing and
-back-face culling. For models from files see [Models](models.md); for your own shaders see
-[Custom rendering](custom-rendering.md).
+Everything is drawn by one forward renderer: classic (Lambert and Blinn-Phong) or [physically based](#material)
+shading with normal, metallic-roughness, occlusion and emissive maps, [shadows](lighting.md#shadows) from a directional
+light, a [skybox](lighting.md#skybox), mipmapped and anisotropically filtered textures, alpha blending,
+[instanced](instancing.md) drawing, [skinned meshes and animation](animation.md), depth testing and back-face culling.
+There is no image-based lighting (reflections of the sky) yet. For models from files see [Models](models.md); for your
+own shaders see [Custom rendering](custom-rendering.md).
 
 ## Scene3D
 
@@ -40,6 +44,9 @@ Call `scene.lights().clear()` for different lighting.
 | `setBackground(Color)` / `getBackground()` | The colour the picture is cleared to. Default dark blue-grey |
 | `setAmbient(Color, float intensity)` | Light that reaches every surface from every side, so nothing is pitch black. Intensity `0` turns it off |
 | `getAmbient()` / `getAmbientIntensity()` | Read them back |
+| `setSkybox(Skybox)` / `getSkybox()` | The sky drawn behind everything, see [Skybox](lighting.md#skybox) |
+| `setShadowMapSize(int)`, `setShadowDistance(float)`, `setShadowBias(float)` | The quality of [shadows](lighting.md#shadows) |
+| `animate(AnimationPlayer)` / `stopAnimating(AnimationPlayer)` | Registers a player that advances once per frame, see [Animation](animation.md) |
 | `setUpdateHandler(UpdateHandler)` | Runs once per frame before the scene is drawn, see below |
 | `pick(x, y, width, height)` | The nearest [`Hit`](#picking) under a point of the picture, or `null` |
 | `pick(Ray)` / `pickAll(Ray)` | The nearest hit along a ray, or all of them nearest first. See [Picking](#picking) |
@@ -51,7 +58,7 @@ scene.setUpdateHandler((s, delta) -> cube.rotate(Vec3.UP, delta * 0.6f));
 ```
 
 The handler is where scene logic goes: it runs on the render thread right before the scene draws, **once per frame**,
-with `delta` in seconds.
+with `delta` in seconds, after the [animation players](animation.md) have advanced.
 Changing nodes, lights or the camera there is safe. The scene's data is plain Java, so it can be built on any thread,
 but change it *while it is drawn* only from the render thread.
 
@@ -82,6 +89,9 @@ arm.rotate(Vec3.UP, 0.5f);                      // the hand swings with it
 | `setMesh` / `getMesh`, `setMaterial` / `getMaterial` | The drawable part. A node with a mesh and no material is drawn with a plain default material |
 | `setVisible(boolean)` / `isVisible()` | A node that isn't visible hides itself and everything under it |
 | `setPickable(boolean)` / `isPickable()` | Whether [picking](#picking) can hit this node's own mesh. On by default; its children are tested either way |
+| `setCastShadow(boolean)` / `setReceiveShadow(boolean)` | Whether the mesh throws a [shadow](lighting.md#shadows) and whether shadows fall on it. Both on by default |
+| `setInstances(Instances)` / `getInstances()` | Draws the mesh once per [instance](instancing.md), in one call |
+| `setSkin(Skin)` / `getSkin()` | Makes the mesh follow the joints of a [skin](animation.md) |
 | `setPosition(Vec3)` / `setPosition(x, y, z)` | Position in the parent's space |
 | `setRotation(Quat)` | Rotation in the parent's space |
 | `rotate(Vec3 axis, float radians)` | Turns by that much on top of the current rotation |
@@ -129,13 +139,25 @@ are front faces, and texture coordinates start at the top-left of the image.
 
 ## Material
 
-How a surface looks: a colour, an optional texture, and how shiny it is. The final colour is the **texture times the
-colour**, so a white colour shows the texture as it is. Every setter returns the material, so calls chain.
+How a surface looks: a colour, an optional texture, and how it reacts to light. The final colour is the **texture times
+the colour**, so a white colour shows the texture as it is. Every setter returns the material, so calls chain.
+
+There are two ways to shade a surface:
+
+- **Classic** (the default) is a Lambert diffuse term plus a Blinn-Phong highlight, controlled by `setSpecular` and
+  `setShininess`. It is simple and cheap, and good for flat-coloured shapes.
+- **Physically based (PBR)** is the metallic-roughness model glTF uses: a surface has a *metallic* amount and a
+  *roughness*, and the maps below can vary them across it. It looks right under any light, and is what glTF models load
+  as. Setting any PBR property (`setMetallic`, `setRoughness`, a map, or an emissive colour) switches the material to
+  PBR; `setPbr(true)` switches to it with the defaults, `setPbr(false)` goes back.
 
 ```java nocompile
-Material blue = new Material(new Color(0.25f, 0.6f, 0.95f, 1f)).setSpecular(0.5f);
-Material floorMat = new Material(TextureData.checker(256, 14, new float[]{0.45f, 0.45f, 0.5f}, new float[]{0.22f, 0.23f, 0.28f}))
-        .setSpecular(0.05f);
+Material blue = new Material(new Color(0.25f, 0.6f, 0.95f, 1f)).setSpecular(0.5f);                // classic
+Material gold = new Material(new Color(1f, 0.78f, 0.34f, 1f)).setMetallic(1f).setRoughness(0.25f);   // PBR
+Material brick = new Material(TextureData.load(Path.of("brick_color.png")))
+        .setNormalTexture(TextureData.load(Path.of("brick_normal.png")))
+        .setRoughness(0.9f);
+Material lamp = new Material(Color.BLACK).setEmissive(Color.WHITE, 3f);                           // glows
 Material glass = new Material(new Color(0.6f, 0.8f, 1f, 0.35f)).setBlend(true).setDoubleSided(true);
 ```
 
@@ -143,15 +165,26 @@ Material glass = new Material(new Color(0.6f, 0.8f, 1f, 0.35f)).setBlend(true).s
 |---|---|---|
 | `new Material()` / `new Material(Color)` / `new Material(TextureData)` | white | The colour, or the texture to start from |
 | `setColor(Color)` / `setColor(r, g, b, a)` | white | Colours are written like the UI's, what you see on screen |
-| `setTexture(TextureData)` | none | See [TextureData](#texturedata) |
-| `setSpecular(float)` | `0.3` | Highlight strength, `0` matte to `1` |
-| `setShininess(float)` | `32` | Highlight tightness: a few for a broad glow, a few hundred for a pin-point shine |
+| `setTexture(TextureData)` | none | The base colour picture, see [TextureData](#texturedata) |
+| `setSpecular(float)` | `0.3` | Classic: highlight strength, `0` matte to `1` |
+| `setShininess(float)` | `32` | Classic: highlight tightness, a few for a broad glow, a few hundred for a pin-point shine |
 | `setUnlit(boolean)` | `false` | Skips lighting; the surface is drawn in its plain colour |
 | `setDoubleSided(boolean)` | `false` | Draws the back of triangles too, lit from the side that faces the camera. Off skips them |
-| `setBlend(boolean)` | `false` | Mixes the surface with what is behind it by its alpha. Blended nodes are drawn after the solid ones, farthest first, **ordered by their node's position**, so overlapping see-through surfaces can still look wrong |
-| `setAlphaCutoff(float)` | `0` | Pixels whose alpha (texture times colour) is below this are not drawn at all: a cut-out for leaves and fences that needs no sorting. `0` draws everything |
+| `setBlend(boolean)` | `false` | Mixes the surface with what is behind it by its alpha. Blended nodes are drawn after the solid ones, farthest first, **ordered by their node's position**, so overlapping see-through surfaces can still look wrong. Blended surfaces do not cast shadows |
+| `setAlphaCutoff(float)` | `0` | Pixels whose alpha (texture times colour) is below this are not drawn at all: a cut-out for leaves and fences that needs no sorting. `0` draws everything. Cut-outs cast shadows with their holes |
+| `setPbr(boolean)` | `false` | Physically based shading, see above |
+| `setMetallic(float)` | `0` | PBR: `0` for plastic, wood and stone, `1` for bare metal, which tints its reflections with the colour. Multiplied with the blue channel of the metallic-roughness map |
+| `setRoughness(float)` | `0.5` | PBR: `0` for a mirror-sharp highlight to `1` for fully matte. Multiplied with the green channel of the metallic-roughness map |
+| `setNormalTexture(TextureData)` | none | PBR: a tangent-space normal map, for bumps and dents on a flat surface. Needs the mesh's texture coordinates. Green is up (the glTF and OpenGL convention) |
+| `setNormalScale(float)` | `1` | How strongly the normal map bends the surface, `0` for flat |
+| `setMetallicRoughnessTexture(TextureData)` | none | PBR: roughness in green, metallic in blue (the glTF layout) |
+| `setOcclusionTexture(TextureData)` | none | PBR: baked shadowing in creases, in the red channel. It dims the ambient light |
+| `setEmissive(Color, strength)` / `setEmissive(r, g, b)` | black | PBR: light the surface gives off whatever the lights do. The `Color` form takes a screen colour; the `float` form is linear light, like glTF |
+| `setEmissiveTexture(TextureData)` | none | PBR: a picture of that glow, times the emissive colour |
 
-Materials can be shared by any number of nodes.
+Emissive surfaces are bright but do not light their surroundings. The normal, metallic-roughness and occlusion maps hold
+data, not colours, and are read as they are; the base colour and emissive pictures are sRGB colours. Materials can be
+shared by any number of nodes.
 
 ## TextureData
 
@@ -169,7 +202,9 @@ so it can be loaded on any thread and shared freely. Colours are sRGB, as in any
 
 Textures are sampled with linear filtering and repeat wrapping. The scene makes **mipmaps** for them when it uploads
 them (smaller copies of the picture that are blended between by distance), so a detailed texture stays smooth on a
-floor that runs off into the distance instead of shimmering. That costs a third more GPU memory per texture.
+floor that runs off into the distance instead of shimmering. That costs a third more GPU memory per texture. They are also
+**anisotropically filtered** where the GPU can (up to 8x), which keeps a floor seen at a slant sharp instead of blurring it;
+the system property `rengl.3d.anisotropy` changes the level, and `1` turns it off.
 
 ## Light
 
@@ -191,8 +226,9 @@ scene.lights().add(lamp);
 | `getType()` | `Light.Type.DIRECTIONAL` or `POINT` |
 | `setVector(Vec3)` / `getVector()` | The direction of a directional light, or the position of a point light. Move a point light every frame from the update handler |
 | `setColor(Color)`, `setIntensity(float)`, `setRange(float)` | Change it later |
+| `setCastShadow(boolean)` | A directional light can make the scene's [shadows](lighting.md#shadows) |
 
-There are no shadows yet.
+[Lighting](lighting.md) covers shadows, the skybox and how the lights add up.
 
 ## Camera
 
@@ -313,15 +349,19 @@ everything the ray crosses, one hit per node, nearest first, for picking through
 | `point()` | The hit position in scene space |
 | `normal()` | The unit normal of the triangle in scene space, on the side the ray came from. It is the flat face normal, not the smoothed one lighting uses |
 | `triangle()` | The triangle's index in the mesh, three entries of `Mesh.indices()` each |
+| `instance()` | Which of the node's [instances](instancing.md) was hit, or `-1` for a node that is not instanced |
 
 ### How it decides
 
 - Only **visible** nodes with a mesh and `isPickable()` are tested. A node under an invisible parent is skipped.
 - Picking matches what is drawn: a triangle facing away from the ray is skipped, like back-face culling, unless the
   node's material is [double-sided](#material). From inside a closed shape you hit nothing.
-- A mesh's box in scene space is tested first, then its triangles, so the cost grows with the triangles of the meshes
-  the ray passes through. A click or a hover is fine; thousands of rays per frame on a million-triangle model are not.
-  There is no spatial index yet.
+- A mesh's box in scene space is tested first, then its triangles through a hierarchy of boxes that the mesh builds the
+  first time it is picked, so a ray only tests the triangles near its path. Even a model with hundreds of thousands of
+  triangles answers a click at once. An [instanced](instancing.md) node is tested once per instance.
+- A [skinned](animation.md) mesh has no stored hierarchy, because its shape changes with every pose. It is posed on the
+  CPU and searched afresh, so it follows the animation exactly but costs a pass over its vertices per pick: fine for a
+  click, not for thousands of rays per frame.
 - It reads the mesh in memory, not the GPU, so it works on any thread while the scene isn't changing, and it hits
   exactly the triangles that are drawn, scaled, rotated and moved by their nodes (a non-uniform scale is fine).
 - Alpha is ignored: a see-through material is hit like a solid one. Give it `setPickable(false)` or use `pickAll` to
@@ -334,8 +374,8 @@ In `me.piitex.engine.render3d.math`. They are small immutable value classes; eve
 | Type | What it is |
 |---|---|
 | `Vec3` | A record `(x, y, z)` with `add`, `sub`, `mul(float)`, `negate`, `dot`, `cross`, `length`, `normalized`, `lerp`, and the constants `ZERO`, `ONE`, `UP`, `X`, `Z` |
-| `Quat` | A unit quaternion: `fromAxisAngle(axis, radians)`, `fromEuler(pitch, yaw, roll)`, `mul`, `rotate(Vec3)`, `normalized`, `toMatrix`, and `IDENTITY`. `a.mul(b)` applies `b` first, then `a` |
-| `Mat4` | A column-major 4x4: `identity`, `translation`, `scale`, `compose(position, rotation, scale)`, `perspective`, `lookAt`, `mul`, `inverse` (null when it can't be undone), `transformPoint`, `transformDirection`, `normalMatrix`, `decompose`, `toArray`, `put(ByteBuffer)` |
+| `Quat` | A unit quaternion: `fromAxisAngle(axis, radians)`, `fromEuler(pitch, yaw, roll)`, `mul`, `slerp(other, t)`, `rotate(Vec3)`, `normalized`, `toMatrix`, and `IDENTITY`. `a.mul(b)` applies `b` first, then `a` |
+| `Mat4` | A column-major 4x4: `identity`, `translation`, `scale`, `compose(position, rotation, scale)`, `perspective`, `orthographic`, `lookAt`, `mul`, `inverse` (null when it can't be undone), `transformPoint`, `transformDirection`, `normalMatrix`, `decompose`, `toArray`, `put(ByteBuffer)` |
 | `Bounds` | An axis-aligned box `(min, max)` with `center`, `radius`, `union`, and `transform(Mat4)` |
 | `Ray` | A record `(origin, direction)` with `at(distance)` and `distanceTo(Bounds)` (-1 for a miss). `Ray.of(origin, direction)` normalizes the direction, so distances are in scene units |
 
@@ -344,10 +384,15 @@ Projection matrices are Vulkan-style on both APIs (+Y up in clip space, depth `0
 
 ## Under the hood
 
-A scene makes one `SceneRenderer` per GPU device it is shown on, shared by that scene's viewports. It draws all opaque nodes, then the blended
-ones far to near, with one dynamic uniform buffer per drawn node. GPU meshes and textures are cached and freed after
-600 frames without being drawn. You never touch it directly; it is how the scene follows its `Content` lifecycle:
-`init` makes the renderer, `render` runs the update handler (once per frame) and draws, `dispose` frees it when the last viewport lets go.
+A scene makes one `SceneRenderer` per GPU device it is shown on, shared by that scene's viewports. Each frame it
+collects the visible nodes, sorts the solid ones by material and mesh, and writes one record per node (or per
+[instance](instancing.md)) into a single vertex buffer that the GPU reads once per instance: the transform, tint and
+material parameters. Nodes that share a mesh and a material become **one instanced draw**, so the cost is the mesh and the
+material's textures, not a descriptor set per node. A shadow-casting light adds a depth pass first; the skybox is drawn
+before the solid nodes, and the blended ones last, far to near. GPU meshes and textures are cached and freed after 600
+frames without being drawn. You never touch it directly; it is how the scene follows its `Content` lifecycle: `init`
+makes the renderer, `render` advances the animation players and runs the update handler (once per frame) and draws,
+`dispose` frees it when the last viewport lets go.
 
 ## Gotchas
 
@@ -357,5 +402,7 @@ ones far to near, with one dynamic uniform buffer per drawn node. GPU meshes and
   [`Scheduler.async`](../core/scheduler.md) and add it from the result callback. The first frame that draws it will pause
   while it uploads (see [Known limitations](../reference/known-limitations.md#rendering-and-3d)).
 - **Colours are not linear.** Pick them as you would for the UI. Lights multiply in linear light internally.
-- **A long loop of draws is the ceiling:** about a thousand nodes per frame on Vulkan, and there is no instancing yet.
-  Merge static geometry into one `Mesh` where you can.
+- **Many nodes are fine, many distinct materials cost more.** Nodes that share a mesh and a material draw together;
+  each change of material binds its textures again. Use [`Instances`](instancing.md) for thousands of copies.
+- **Skinned meshes ignore their node's transform.** The joints place them, as in glTF; move the skeleton's nodes instead.
+- **Lights past the eighth are ignored**, and only one directional light casts shadows.

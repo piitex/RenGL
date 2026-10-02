@@ -43,9 +43,10 @@ public final class Skybox {
     }
 
     /**
-     * Six square pictures of the same size, in the order +X (right), -X (left), +Y (up), -Y (down), +Z (towards a camera
-     * that looks along -Z, so behind it) and -Z (ahead of it). This is the order of the usual {@code right, left, top,
-     * bottom, front, back} file sets, laid out the way OpenGL and Vulkan cube maps are.
+     * Six square pictures of the same size, the faces of a cube around the camera, in the order +X (right), -X (left),
+     * +Y (up), -Y (down), +Z and -Z. A camera looking along -Z, the default, sees the -Z face ahead of it and the +Z face
+     * behind it. This is the order of the usual {@code right, left, top, bottom, front, back} skybox file sets, laid out
+     * the way OpenGL and Vulkan cube maps are.
      */
     public static Skybox cube(TextureData positiveX, TextureData negativeX, TextureData positiveY,
                               TextureData negativeY, TextureData positiveZ, TextureData negativeZ) {

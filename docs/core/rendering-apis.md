@@ -20,7 +20,7 @@ calls draw the same on all of them.
 | `RenderAPI` | What it is | Where |
 |---|---|---|
 | `AUTO` | The platform default (below), or the `rengl.backend` system property if it is set | Everywhere |
-| `OPENGL` | OpenGL 3.3 core (`SkikoRenderer`) | Windows and Linux. macOS windows have no OpenGL context |
+| `OPENGL` | OpenGL 3.3 core (`SkikoRenderer`) | Windows and Linux. macOS windows have no OpenGL context, so asking for OpenGL there is a [fatal error](#when-a-request-cant-be-met) |
 | `METAL` | A Metal layer on the window's view (`MetalSkikoRenderer`) | macOS |
 | `VULKAN` | Vulkan 1.1 (`VulkanSkikoRenderer`; `VulkanContext` owns the instance, GPU, swapchain and synchronization) | Anywhere with a Vulkan driver. On macOS it runs on MoltenVK, which LWJGL bundles |
 
@@ -44,12 +44,12 @@ Accepted values are `opengl`, `metal` and `vulkan`, in any case. An unknown valu
 
 ## When a request can't be met
 
-A request is never an error. The engine falls back to the platform default and logs a warning saying why:
+Most requests that can't be met fall back to the platform default with a logged warning saying why. The one exception is OpenGL on macOS, which is a **fatal error**: a game written for OpenGL would otherwise quietly run on another API, so the engine stops with a message telling you to use Vulkan.
 
 | Request | Fallback |
 |---|---|
 | `METAL` off macOS | OpenGL |
-| `OPENGL` on macOS | Metal |
+| `OPENGL` on macOS | **None: throws `IllegalStateException`** ("OpenGL is not available on macOS ... Use RenderAPI.VULKAN"). Use `VULKAN` (required for [3D](../3d/README.md)), or `AUTO` for Metal (2D only). This includes `-Drengl.backend=opengl` |
 | `VULKAN` and the Skiko on the classpath has no Vulkan support | The platform default |
 | `VULKAN` and the machine has no usable Vulkan GPU | The platform default |
 

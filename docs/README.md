@@ -70,8 +70,11 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | **[3D](3d/README.md)** (optional) | Showing 3D with OpenGL or Vulkan inside the UI |
 | [Viewport3D](3d/viewport-3d.md) | The element that shows 3D in a rectangle of the UI: `Content`, input, resolution, lifetime |
 | [Background3D](3d/background-3d.md) | 3D behind the whole window, with the UI drawn over it |
-| [Scenes](3d/scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material`, `Light`, `Camera`, `OrbitControls` and the math types |
+| [Scenes](3d/scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material` (classic and PBR), `Light`, `Camera`, `OrbitControls`, picking and the math types |
+| [Lighting](3d/lighting.md) | How lights add up, shadows, and the skybox |
 | [Models](3d/models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files |
+| [Animation](3d/animation.md) | Clips, `AnimationPlayer` and skinned meshes |
+| [Instancing](3d/instancing.md) | Thousands of copies of one mesh in a single draw |
 | [Custom rendering](3d/custom-rendering.md) | Your own 3D with `GpuDevice`, pipelines and one GLSL shader for both APIs |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |
 | [Sound](audio/sound.md) | Short effects held in memory, with random pitch and limits on how often they play |

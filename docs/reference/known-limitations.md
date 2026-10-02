@@ -162,38 +162,40 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   with a warning.
 - **The demos have never run on OpenGL** on a platform where the engine really uses it (Windows or Linux). The OpenGL
   path of the 3D layer was only tested through a macOS harness.
-- **macOS windows have no OpenGL context.** An `OPENGL` request on macOS falls back to Metal with a warning, so 3D on
-  macOS means asking for Vulkan.
+- **macOS windows have no OpenGL context.** An `OPENGL` request on macOS (also `-Drengl.backend=opengl`) is a fatal
+  error that tells you to use Vulkan, so 3D on macOS means asking for `VULKAN`.
 - **3D needs OpenGL or Vulkan.** A [`Viewport3D`](../3d/viewport-3d.md) or [`Background3D`](../3d/background-3d.md) on a
   Metal window, or in a [snapshot](../core/snapshots.md), logs one warning and draws nothing.
 
 **What the 3D renderer lacks**
 
-- **No shadows or skybox.**
-- **No anisotropic filtering.** Textures are mipmapped, which stops the shimmer, but a texture on a floor seen at a
-  grazing angle goes soft sooner than it would with it.
-- **No normal or metallic-roughness maps, skeletal or glTF animation or instancing.** Models with
-  animations load, and the animations are logged and ignored.
-- **Picking has no spatial index.** [`Scene3D.pick`](../3d/scenes.md#picking) tests every triangle of the meshes whose
-  box the ray crosses, which is fine for a click or a hover and slow for a huge mesh tested many times a frame.
+- **No image-based lighting or reflections.** The [skybox](../3d/lighting.md#skybox) is a picture, not a light, and a
+  fully metallic material is only lit by the scene's lights and shows no reflection of its surroundings.
+- **Shadows come from one directional light,** with a fixed-width soft edge. Point lights cast none, and a shadow only
+  covers the camera's view out to the [shadow distance](../3d/lighting.md#shadows).
+- **No morph targets.** A model's blend shapes are ignored. [Skinned](../3d/animation.md) meshes follow at most four
+  bones per vertex and 256 per mesh.
+- **No culling of what is off screen.** Everything visible in the tree is drawn, and every [instance](../3d/instancing.md).
+- **Skinned meshes are picked by posing them on the CPU,** which follows the animation but costs a pass over the vertices
+  per pick. Other meshes use a hierarchy of boxes built on first pick.
 - **Anti-aliasing is on by default and costs memory.** 4 samples hold about four times the colour and depth memory of
   a plain target; [`setSamples`](../3d/viewport-3d.md#anti-aliasing) lowers it.
-- **Two light kinds, up to 8:** directional and point. Lighting is Lambert plus Blinn-Phong.
+- **Two light kinds, up to 8:** directional and point. Materials are classic (Lambert plus Blinn-Phong) or physically based.
 - **Blended surfaces are sorted by their node's position,** so overlapping see-through objects can draw in the wrong order.
 
 **Performance and lifetime**
 
-- **About a thousand draws per frame is the ceiling on Vulkan,** and there is no instancing. 32-bit indices only, and no
-  push constants.
+- **32-bit indices only, up to 16 vertex attributes, and no push constants.** Many nodes are fine: nodes that share a mesh
+  and material draw in one call, and [`Instances`](../3d/instancing.md) draws thousands of copies in one.
 - **A viewport or background re-renders every frame by default,** even when nothing changed. A
   [`Background3D`](../3d/background-3d.md) renders a full-window picture plus a GPU copy each frame. For a scene that
   only changes on request, [`setContinuous(false)`](../3d/viewport-3d.md#drawing-only-when-needed) draws it only when
   asked.
-- **GPU uploads stall.** A mesh or texture uploads the first time it is drawn and waits for the GPU, so a big model
-  causes a visible hitch on its first frame.
-- **Dynamic buffers are per frame in flight.** A custom content must update each one every frame it draws.
-- **The first window's renderer is not released at exit,** so `Content.dispose` and the 3D device teardown do not run
-  there. Other windows' do run when they close.
+- **OpenGL uploads are the driver's business.** On Vulkan a mesh or texture made mid-frame is uploaded with that frame's
+  commands without stalling it; creating very large ones in `init` is still kinder to the first frame, and a big model
+  still takes time to decode and upload on its first frame.
+- **Dynamic buffers are per frame in flight.** A frame that does not update one draws what it was last given, but a
+  custom content that renders twice in a frame (two viewports) needs a buffer per render call.
 
 **`Background3D`**
 
