@@ -130,11 +130,18 @@ final class SceneShaders {
                 vec2 uv = vec2(proj.x * 0.5 + 0.5, shadowA.y > 0.5 ? proj.y * 0.5 + 0.5 : 0.5 - proj.y * 0.5);
                 if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || proj.z > 1.0) return 1.0;
                 float bias = shadowA.w * (1.0 + (1.0 - ndl) * 2.0);
+                // A 4x4 block of comparisons weighted like a bilinear filter, so the edge moves smoothly instead of in steps.
+                vec2 size = vec2(1.0 / shadowA.z);
+                vec2 texel = uv * size - 0.5;
+                vec2 base = (floor(texel) + 0.5) / size;
+                vec2 f = fract(texel);
                 float lit = 0.0;
-                for (int x = -1; x <= 1; x++) {
-                    for (int y = -1; y <= 1; y++) {
-                        float stored = unpackDepth(textureLod(shadowMap, uv + vec2(float(x), float(y)) * shadowA.z, 0.0).rgb);
-                        lit += (proj.z - bias > stored) ? 0.0 : 1.0;
+                for (int x = -1; x <= 2; x++) {
+                    float wx = x == -1 ? 1.0 - f.x : (x == 2 ? f.x : 1.0);
+                    for (int y = -1; y <= 2; y++) {
+                        float wy = y == -1 ? 1.0 - f.y : (y == 2 ? f.y : 1.0);
+                        float stored = unpackDepth(textureLod(shadowMap, base + vec2(float(x), float(y)) * shadowA.z, 0.0).rgb);
+                        lit += wx * wy * ((proj.z - bias > stored) ? 0.0 : 1.0);
                     }
                 }
                 return lit / 9.0;
