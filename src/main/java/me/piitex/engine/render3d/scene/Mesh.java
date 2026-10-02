@@ -3,6 +3,8 @@ package me.piitex.engine.render3d.scene;
 import me.piitex.engine.render3d.math.Bounds;
 import me.piitex.engine.render3d.math.Vec3;
 
+import java.util.List;
+
 /**
  * Triangle geometry held in ordinary memory: positions, normals and texture coordinates with 32-bit indices. A mesh
  * knows nothing about the GPU. The scene uploads it the first time it is drawn and keeps it there while it is in use,
@@ -19,9 +21,12 @@ public final class Mesh {
 
     private final float[] vertices;
     private final int[] indices;
-    private final Bounds bounds;
+    private volatile Bounds bounds;
+    private final Bounds baseBounds;
     private int[] skinJoints;
     private float[] skinWeights;
+    private List<MorphTarget> morphTargets = List.of();
+    private float[] morphDefaults = new float[0];
     private volatile Bvh bvh;
 
     /**
@@ -64,7 +69,8 @@ public final class Mesh {
             maxZ = Math.max(maxZ, vertices[o + 2]);
         }
         this.indices = indices.clone();
-        this.bounds = new Bounds(new Vec3(minX, minY, minZ), new Vec3(maxX, maxY, maxZ));
+        this.baseBounds = new Bounds(new Vec3(minX, minY, minZ), new Vec3(maxX, maxY, maxZ));
+        this.bounds = baseBounds;
     }
 
     /**
@@ -94,6 +100,115 @@ public final class Mesh {
 
     public boolean isSkinned() {
         return skinJoints != null;
+    }
+
+    /**
+     * A blend shape: how far every vertex moves (and, optionally, how its normal changes) when the shape is fully on.
+     * A node blends any mix of a mesh's shapes with {@link Node3D#setMorphWeights}.
+     *
+     * @param name      what the file calls it, such as {@code "smile"}, or empty
+     * @param positions x, y, z offset per vertex, in the mesh's space
+     * @param normals   x, y, z change of the normal per vertex, or null to leave the normals alone
+     */
+    public record MorphTarget(String name, float[] positions, float[] normals) {
+        public MorphTarget {
+            positions = positions.clone();
+            normals = normals == null ? null : normals.clone();
+            name = name == null ? "" : name;
+        }
+    }
+
+    /**
+     * Gives the mesh blend shapes ("morph targets"), which a node mixes with {@link Node3D#setMorphWeights}: each weight
+     * adds that many times its shape's offsets to the vertices. Faces, cloth and anything else a skeleton can't do well.
+     * Model files with morph targets set this up themselves, and {@link AnimationClip.Path#WEIGHTS} animates the
+     * weights. The vertices are blended on the CPU when the weights change, so keep the vertex count of a morphed mesh
+     * moderate (tens of thousands is fine). Morphing runs before skinning.
+     * <p>
+     * The mesh's {@link #bounds()} grows to hold the shapes at weight 1 so culling and picking don't cut a morphed mesh
+     * off.
+     *
+     * @param targets        one entry per shape, each as long as the vertex count times three
+     * @param defaultWeights the weights a node starts with, or null for all zero
+     */
+    public Mesh setMorphTargets(List<MorphTarget> targets, float[] defaultWeights) {
+        int count = vertexCount();
+        for (MorphTarget t : targets) {
+            if (t.positions().length != count * 3 || (t.normals() != null && t.normals().length != count * 3)) {
+                throw new IllegalArgumentException("A morph target needs x, y, z per vertex (" + count + " vertices)");
+            }
+        }
+        this.morphTargets = List.copyOf(targets);
+        this.morphDefaults = new float[targets.size()];
+        if (defaultWeights != null) System.arraycopy(defaultWeights, 0, morphDefaults, 0, Math.min(defaultWeights.length, morphDefaults.length));
+
+        // Grow the box by the most any shape can add on each axis, so it holds the mesh at any weights up to 1.
+        float[] grow = new float[3];
+        for (MorphTarget t : targets) {
+            float[] most = new float[3];
+            for (int i = 0; i < count; i++) {
+                for (int a = 0; a < 3; a++) most[a] = Math.max(most[a], Math.abs(t.positions()[i * 3 + a]));
+            }
+            for (int a = 0; a < 3; a++) grow[a] += most[a];
+        }
+        Vec3 g = new Vec3(grow[0], grow[1], grow[2]);
+        bounds = new Bounds(baseBounds.min().sub(g), baseBounds.max().add(g));
+        return this;
+    }
+
+    public boolean isMorphed() {
+        return !morphTargets.isEmpty();
+    }
+
+    public List<MorphTarget> morphTargets() {
+        return morphTargets;
+    }
+
+    /**
+     * The weights a node starts with, one per target. The array is the mesh's own.
+     */
+    float[] morphDefaults() {
+        return morphDefaults;
+    }
+
+    /**
+     * A new array of interleaved vertices ({@link #FLOATS_PER_VERTEX} floats each) with the blend shapes mixed in at the
+     * given weights; weights past the end count as 0. What the scene draws and picks for a morphed node.
+     */
+    public float[] morph(float[] weights) {
+        float[] out = vertices.clone();
+        boolean normalsChanged = false;
+        for (int t = 0; t < morphTargets.size() && t < weights.length; t++) {
+            float w = weights[t];
+            if (w == 0f) continue;
+            MorphTarget target = morphTargets.get(t);
+            float[] p = target.positions(), n = target.normals();
+            int count = vertexCount();
+            for (int i = 0; i < count; i++) {
+                int o = i * FLOATS_PER_VERTEX;
+                out[o] += w * p[i * 3];
+                out[o + 1] += w * p[i * 3 + 1];
+                out[o + 2] += w * p[i * 3 + 2];
+                if (n != null) {
+                    out[o + 3] += w * n[i * 3];
+                    out[o + 4] += w * n[i * 3 + 1];
+                    out[o + 5] += w * n[i * 3 + 2];
+                }
+            }
+            normalsChanged |= n != null;
+        }
+        if (normalsChanged) {
+            for (int i = 0; i < vertexCount(); i++) {
+                int o = i * FLOATS_PER_VERTEX;
+                float len = (float) Math.sqrt(out[o + 3] * out[o + 3] + out[o + 4] * out[o + 4] + out[o + 5] * out[o + 5]);
+                if (len > 1e-8f) {
+                    out[o + 3] /= len;
+                    out[o + 4] /= len;
+                    out[o + 5] /= len;
+                }
+            }
+        }
+        return out;
     }
 
     /**
@@ -140,7 +255,8 @@ public final class Mesh {
     }
 
     /**
-     * The box around the mesh in its own space.
+     * The box around the mesh in its own space, including everything its {@link #setMorphTargets morph targets} can
+     * move it to at weight 1.
      */
     public Bounds bounds() {
         return bounds;

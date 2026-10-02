@@ -125,8 +125,8 @@ path of the demos has not been run on Windows or Linux yet.
 
 The scene layer is a forward renderer with classic and physically based materials (normal, metallic-roughness, occlusion
 and emissive maps), shadows from one directional or spot light, a skybox that can light and be reflected, instancing,
-skinned animation, frustum culling, mipmapped and anisotropically filtered textures, 4x anti-aliasing by default, and ray
-[picking](scenes.md#picking). It has **no point-light or variable-width soft shadows, no morph targets and no
+skinned animation, morph targets (blend shapes), frustum culling, mipmapped and anisotropically filtered textures, 4x
+anti-aliasing by default, and ray [picking](scenes.md#picking). It has **no point-light or variable-width soft shadows and no
 post-processing**. It was written and tested on one machine so far: macOS on Apple silicon, with Vulkan
 (MoltenVK) and, in a harness, OpenGL 3.3; Windows and Linux are untested. The full list, with the reasons, is in
 [Known limitations](../reference/known-limitations.md#rendering-and-3d). The code that checks it all is in `src/test`: run

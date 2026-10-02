@@ -72,6 +72,21 @@ final class SceneRenderer {
         }
     }
 
+    /**
+     * A node's own copy of its mesh's vertices with its blend shapes mixed in, refilled when the weights change.
+     */
+    private static final class MorphedVertices {
+        final Mesh mesh;
+        final GpuBuffer buffer;
+        float[] weights;
+        long lastUsed;
+
+        MorphedVertices(Mesh mesh, GpuBuffer buffer) {
+            this.mesh = mesh;
+            this.buffer = buffer;
+        }
+    }
+
     private static final class GpuImage {
         final GpuTexture texture;
         long lastUsed;
@@ -118,6 +133,7 @@ final class SceneRenderer {
         boolean cast;
         boolean receive;
         boolean inView = true;
+        float[] morph; // blend-shape weights to draw with, or null
         int key;
     }
 
@@ -130,6 +146,7 @@ final class SceneRenderer {
         int key;
         boolean cast;
         boolean inView = true; // false: only drawn into the shadow map
+        GpuBuffer vertices; // a morphed node's own vertices, or null for the mesh's
         int first, count;
         int joints = -1; // index into the render call's joint buffers, for a skinned group
     }
@@ -147,6 +164,8 @@ final class SceneRenderer {
     private final Map<TextureData, GpuImage> images = new IdentityHashMap<>();
     private final Map<Skybox, GpuImage> skies = new IdentityHashMap<>();
     private final Map<Skybox, float[]> skyLight = new IdentityHashMap<>();
+    private final Map<Node3D, MorphedVertices> morphed = new IdentityHashMap<>();
+    private ByteBuffer morphScratch = MemoryUtil.memAlloc(1024).order(ByteOrder.nativeOrder());
     private final List<Resources> resourcePool = new ArrayList<>();
     private final GpuTexture whiteTexture, flatNormalTexture;
     private final GpuBuffer skyTriangle;
@@ -325,7 +344,7 @@ final class SceneRenderer {
             }
             lastMaterial[0] = material;
         }
-        pass.bindVertexBuffer(0, mesh.vertices);
+        pass.bindVertexBuffer(0, group.vertices != null ? group.vertices : mesh.vertices);
         pass.bindVertexBuffer(1, res.instances);
         if (mesh.skin != null && (key & KEY_SKINNED) != 0) pass.bindVertexBuffer(2, mesh.skin);
         pass.bindIndexBuffer(mesh.indices);
@@ -344,13 +363,16 @@ final class SceneRenderer {
             draw.mesh = mesh;
             draw.material = node.getMaterial() != null ? node.getMaterial() : DEFAULT_MATERIAL;
             draw.world = world;
-            Vec3 origin = world.transformPoint(Vec3.ZERO);
+            // Blended draws are sorted far to near by the middle of their mesh, which is not where the node's origin is
+            // for a model whose origin sits at its feet.
+            Vec3 origin = world.transformPoint(mesh.bounds().center());
             draw.distance = origin.sub(eye).length();
             // A mirrored node (negative scale) turns its triangles around, so what was the front is clockwise on screen.
             draw.mirrored = world.transformDirection(Vec3.X).cross(world.transformDirection(Vec3.UP))
                     .dot(world.transformDirection(Vec3.Z)) < 0f;
             draw.cast = node.isCastShadow() && !draw.material.isBlend();
             draw.receive = node.isReceiveShadow();
+            draw.morph = node.activeMorph();
             boolean skinned = node.getSkin() != null && mesh.isSkinned();
             if (node.getSkin() != null && !mesh.isSkinned()) {
                 log.warn("The node {} has a skin but its mesh has no skinning data; drawing it unskinned.", node.getName());
@@ -474,7 +496,8 @@ final class SceneRenderer {
             if (instances != null) count = instances.size();
             ensureScratch(cursor[0] + count);
 
-            boolean merge = last != null && !skinned && last.joints < 0 && last.mesh == draw.mesh && last.material == draw.material
+            boolean merge = last != null && !skinned && last.joints < 0 && last.vertices == null && draw.morph == null
+                    && last.mesh == draw.mesh && last.material == draw.material
                     && last.key == draw.key && last.cast == draw.cast && last.inView == draw.inView;
             if (!merge) {
                 last = new Group();
@@ -485,6 +508,7 @@ final class SceneRenderer {
                 last.inView = draw.inView;
                 last.first = cursor[0];
                 if (skinned) last.joints = writeJoints(res, draw.node.getSkin());
+                if (draw.morph != null) last.vertices = morphedBuffer(draw.node, draw.mesh, draw.morph);
                 groups.add(last);
             }
             writeRecords(draw, instances, skinned);
@@ -897,6 +921,38 @@ final class SceneRenderer {
         return image.texture;
     }
 
+    /**
+     * The node's vertices with its blend shapes mixed in at the weights, kept on the GPU until the weights change.
+     */
+    private GpuBuffer morphedBuffer(Node3D node, Mesh mesh, float[] weights) {
+        MorphedVertices m = morphed.get(node);
+        if (m != null && m.mesh != mesh) {
+            m.buffer.close();
+            morphed.remove(node);
+            m = null;
+        }
+        if (m == null) {
+            m = new MorphedVertices(mesh, device.createDynamicBuffer(BufferType.VERTEX, (long) mesh.vertices().length * 4));
+            morphed.put(node, m);
+        }
+        float[] used = java.util.Arrays.copyOf(weights, mesh.morphTargets().size());
+        if (m.weights == null || !java.util.Arrays.equals(m.weights, used)) {
+            float[] vertices = mesh.morph(used);
+            int bytes = vertices.length * 4;
+            if (morphScratch.capacity() < bytes) {
+                MemoryUtil.memFree(morphScratch);
+                morphScratch = MemoryUtil.memAlloc(bytes).order(ByteOrder.nativeOrder());
+            }
+            morphScratch.clear();
+            morphScratch.asFloatBuffer().put(vertices);
+            morphScratch.position(0).limit(bytes);
+            m.buffer.update(morphScratch);
+            m.weights = used;
+        }
+        m.lastUsed = frame;
+        return m.buffer;
+    }
+
     private float[] skyIrradiance(Skybox sky) {
         return skyLight.computeIfAbsent(sky, Environment::irradiance);
     }
@@ -937,6 +993,13 @@ final class SceneRenderer {
                 it.remove();
             }
         }
+        for (Iterator<MorphedVertices> it = morphed.values().iterator(); it.hasNext(); ) {
+            MorphedVertices m = it.next();
+            if (frame - m.lastUsed > KEEP_FRAMES) {
+                m.buffer.close();
+                it.remove();
+            }
+        }
         for (Map<?, GpuImage> map : List.of(images, skies)) {
             for (Iterator<GpuImage> it = map.values().iterator(); it.hasNext(); ) {
                 GpuImage image = it.next();
@@ -952,6 +1015,9 @@ final class SceneRenderer {
         for (GpuMesh mesh : meshes.values()) mesh.close();
         for (GpuImage image : images.values()) image.texture.close();
         for (GpuImage image : skies.values()) image.texture.close();
+        for (MorphedVertices m : morphed.values()) m.buffer.close();
+        morphed.clear();
+        MemoryUtil.memFree(morphScratch);
         for (Resources r : resourcePool) r.close();
         for (Pipeline pipeline : pipelines.values()) pipeline.close();
         for (Pipeline pipeline : skyPipelines.values()) pipeline.close();

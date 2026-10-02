@@ -427,6 +427,8 @@ public class InputProcessor {
         if (window.getInput().swallowsChars()) return; // the key that typed it was just bound in a controls menu
         if (window.getFocusedElement() instanceof Focusable focusable) {
             focusable.onCharTyped(event.buttonOrKey);
+        } else {
+            window.getInput().charTyped(event.buttonOrKey);
         }
     }
 }

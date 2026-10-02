@@ -62,6 +62,7 @@ public final class Input {
     private Consumer<Binding> bindingListener;
     private int pendingModifier = -1;
     private boolean swallowChars;
+    private final StringBuilder typed = new StringBuilder();
 
     public Input(Window window) {
         this.window = window;
@@ -168,6 +169,23 @@ public final class Input {
     }
 
     /**
+     * The text typed during this frame that no text field or other UI element took, already resolved against the
+     * keyboard layout, shift state and dead keys (so {@code "A"} for Shift+a, and accents and non-Latin text work).
+     * Empty when nothing was typed, which is almost always. Meant for a chat box or console you draw yourself; for the
+     * keys as controls use {@link #isKeyJustPressed} and bindings instead.
+     */
+    public String getTypedText() {
+        return typed.toString();
+    }
+
+    /**
+     * A typed character that reached the game.
+     */
+    void charTyped(int codepoint) {
+        typed.appendCodePoint(codepoint);
+    }
+
+    /**
      * How far the wheel turned since the last step or during this frame. Positive is up, away from the player. Notches
      * on a wheel are 1 each; a trackpad gives smaller amounts, more often.
      */
@@ -259,6 +277,7 @@ public final class Input {
     void beginFrame() {
         frame++;
         swallowChars = false;
+        typed.setLength(0);
         refreshContexts();
     }
 

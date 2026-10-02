@@ -48,13 +48,15 @@ A background has no place in the UI's hit testing, so `Background3D` is fed from
 | Press on empty space, or on a panel or image with **no click listener** | Yes: it starts a left-button drag |
 | Press on a button, slider, text field, or anything with `onMouseClick` | No: that element takes it |
 | Scroll the wheel over empty space | Yes: `scrolled`. Not over a scroll area, text area or anything else that scrolls |
-| Move the mouse | Yes: `pointerMoved` when not dragging (also while the mouse is over UI) |
+| Move the mouse | Yes: `pointerMoved` when not dragging (also while the mouse is over UI), and `pointerExited` when it leaves the window |
 | Press a key no text field, popup or modal took | Yes: `keyPressed` as press, repeat and release (releases always) |
+| Type text while no element has keyboard focus | Yes: `charTyped`, one call per character ([`Input.getTypedText()`](../input/game-input.md)) |
+| Switch to another application, or focus a text field | `focusChanged(false)`; the background is focused while the window is and no element holds the keyboard |
 
 The listener gets the same calls a viewport sends, with positions in points from the window's top-left corner:
 a left-button `dragStarted`, `dragged` (with the movement), `dragEnded` when the button comes up (followed by
-`clicked` if the mouse hardly moved, which is when to [pick](scenes.md#picking)), `scrolled`, `pointerMoved` and
-`keyPressed`.
+`clicked` if the mouse hardly moved, which is when to [pick](scenes.md#picking)), `scrolled`, `pointerMoved`,
+`pointerExited`, `keyPressed`, `charTyped` and `focusChanged`.
 
 The important consequence: **a full-window root container with a click listener, or a draggable container under the
 mouse, takes the press and the background never sees it.** Give the root container that covers the window no click
@@ -85,10 +87,10 @@ Run it with `-XstartOnFirstThread`, and `-Drengl.demo.api=VULKAN` or `OPENGL` to
 
 ## Gotchas
 
-- **Not a focus target.** A background gets no keyboard focus and no `charTyped`. The listener receives keys the UI
-  did not use, nothing more.
-- **There is no `pointerExited`.** `pointerMoved` also fires while the mouse is over UI, so don't treat it as "the
-  mouse is over the 3D".
+- **Focus is borrowed, not taken.** A click never gives the background the keyboard; it counts as focused while the
+  window has the OS focus and no UI element holds the keyboard, and receives the keys and text the UI did not use.
+- **`pointerExited` means the mouse left the window.** `pointerMoved` also fires while the mouse is over UI, so don't
+  treat either as "the mouse is over the 3D".
 - **It re-renders a full-window picture every frame,** an offscreen target plus a GPU copy. Lower
   `setResolutionScale`, `setEnabled(false)` while a full-screen menu covers it, or `setContinuous(false)` if the scene
   only changes when you say so.

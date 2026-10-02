@@ -30,10 +30,12 @@ import org.lwjgl.glfw.GLFW;
  *   mouse hardly moved in between;</li>
  *   <li>the wheel;</li>
  *   <li>the mouse moving ({@link Viewport3D.InputListener#pointerMoved}), which also fires while the mouse is over
- *   the UI and is never followed by {@code pointerExited};</li>
- *   <li>keys the UI didn't take, as press, repeat and release.</li>
+ *   the UI, and {@code pointerExited} when it leaves the window;</li>
+ *   <li>keys the UI didn't take, as press, repeat and release, and the text typed while no UI element has keyboard focus
+ *   ({@link Viewport3D.InputListener#charTyped});</li>
+ *   <li>{@code focusChanged}: the background counts as focused while the window has the OS focus and no UI element
+ *   holds the keyboard, so it follows the same rule as the keys and the typed text it receives.</li>
  * </ul>
- * There is no focus, and no typed characters, since the background is never the thing a click focuses.
  * <p>
  * Threading: everything here runs on the render thread, like the engine's other backgrounds.
  */
@@ -48,6 +50,7 @@ public class Background3D implements Background {
     private boolean dragging;
     private float pressX, pressY;
     private boolean pressMoved;
+    private boolean wasInside, hadFocus;
 
     /**
      * @param window the window it is a background of, whose {@link Window#getInput()} it reads. Set it with
@@ -161,6 +164,8 @@ public class Background3D implements Background {
         Viewport3D.InputListener listener = listener();
         if (listener == null) {
             dragging = false;
+            wasInside = false;
+            hadFocus = false;
             return;
         }
         Input in = window.getInput();
@@ -168,6 +173,12 @@ public class Background3D implements Background {
 
         boolean down = in.isMouseDown(GLFW.GLFW_MOUSE_BUTTON_LEFT);
         boolean fed = false;
+        boolean focused = window.isFocused() && window.getFocusedElement() == null;
+        if (focused != hadFocus) {
+            fed = true;
+            hadFocus = focused;
+            listener.focusChanged(focused);
+        }
         if (dragging && !down) {
             fed = true;
             dragging = false;
@@ -192,11 +203,25 @@ public class Background3D implements Background {
                 listener.pointerMoved(mouseX, mouseY);
             }
         }
+        boolean inside = in.isMouseInWindow();
+        if (wasInside && !inside && !dragging) {
+            fed = true;
+            listener.pointerExited();
+        }
+        wasInside = inside;
 
         float scrollX = in.getScrollX(), scrollY = in.getScrollY();
         if (scrollX != 0f || scrollY != 0f) {
             fed = true;
             listener.scrolled(scrollX, scrollY, mouseX, mouseY);
+        }
+
+        String typed = in.getTypedText();
+        for (int i = 0; i < typed.length(); ) {
+            int codepoint = typed.codePointAt(i);
+            i += Character.charCount(codepoint);
+            fed = true;
+            listener.charTyped(codepoint);
         }
 
         int mods = in.getModifiers();

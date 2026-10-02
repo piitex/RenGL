@@ -152,6 +152,7 @@ next input and at the start of the next frame.
 | `getMouseDeltaX()`, `getMouseDeltaY()` | How far the mouse moved in this frame or step. Coming back into the window isn't a movement |
 | `getScrollX()`, `getScrollY()` | How far the wheel turned in this frame or step. Up and right are positive |
 | `isMouseInWindow()` | Whether the mouse is over the window |
+| `getTypedText()` | The text typed in this frame that no text field or other focused element took, resolved against the keyboard layout (Shift, dead keys, accents, other scripts). Usually empty. For a chat line or console you draw yourself |
 | `isAnyJustPressed()` | Whether any key or mouse button was pressed, for "press any key" |
 | `getModifiers()` | The modifier keys held, as `GLFW_MOD_*` bits |
 
@@ -185,6 +186,7 @@ The interface gets input first, as it always has, and the game only sees what it
 | Key pres or repeat | A text field or other [focused element](input-and-focus.md#keyboard-focus) has the keyboard, or a popup or modal is open. A scene's `onKey` that consumes the key keeps it from every context, but not from the raw state |
 | Mouse press | It lands on an element that listens for clicks (a button, a checkbox, anything with `onMouseClick`), gives focus to a text field, opens a context menu or starts dragging a panel; or a popup or modal is open |
 | Wheel | It scrolls something, such as a scroll area or text area; or a popup or modal is open |
+| Typed text | No element has [keyboard focus](input-and-focus.md#keyboard-focus), so there is nothing to type into: `Input.getTypedText()` |
 | Releases | Always reach it, so nothing is left held down |
 
 A click on an element that ignores clicks, such as a label, an image or a plain panel, counts as game input, so the

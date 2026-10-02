@@ -176,16 +176,19 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 - **Shadows come from one directional or spot light,** with a soft edge of the same width everywhere
   ([`setShadowSoftness`](../3d/lighting.md#shadows) scales it). Point lights cast none, and a directional shadow only
   covers the camera's view out to the [shadow distance](../3d/lighting.md#shadows).
-- **No morph targets.** A model's blend shapes are ignored. [Skinned](../3d/animation.md) meshes follow at most four
-  bones per vertex and 256 per mesh.
+- **Morph targets are blended on the CPU,** so a mesh with very many vertices whose weights change every frame costs
+  frame time ([details](../3d/animation.md#morph-targets)). [Skinned](../3d/animation.md) meshes follow at most four bones
+  per vertex and 256 per mesh, and glTF cubic-spline animation arrives as plain keys, because Assimp drops the tangents.
 - **Frustum culling is per node,** by a sphere: an [instanced](../3d/instancing.md) node is kept or dropped as a whole,
   and a skinned mesh is never culled. There is no occlusion culling, so things hidden behind other things are still drawn.
-- **Skinned meshes are picked by posing them on the CPU,** which follows the animation but costs a pass over the vertices
-  per pick. Other meshes use a hierarchy of boxes built on first pick.
+- **Skinned and morphed meshes are picked by posing them on the CPU,** which follows the animation but costs a pass over
+  the vertices per pick. Other meshes use a hierarchy of boxes built on first pick.
 - **Anti-aliasing is on by default and costs memory.** 4 samples hold about four times the colour and depth memory of
   a plain target; [`setSamples`](../3d/viewport-3d.md#anti-aliasing) lowers it.
 - **Three light kinds, up to 8:** directional, point and spot. Materials are classic (Lambert plus Blinn-Phong) or physically based.
-- **Blended surfaces are sorted by their node's position,** so overlapping see-through objects can draw in the wrong order.
+- **Blended surfaces are sorted per node, by the centre of its mesh,** so overlapping see-through objects can still draw
+  in the wrong order where they interpenetrate or one is much bigger than the other. Split a large see-through surface into
+  pieces if that shows.
 
 **Performance and lifetime**
 
@@ -205,7 +208,8 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 - **It sees game input only.** A container with a click listener, or a draggable or scrollable element under the
   mouse, takes the event first and the 3D never sees it.
-- **`pointerMoved` also fires over the UI, and there is no `pointerExited`,** focus or typed text.
+- **`pointerMoved` also fires over the UI,** and `pointerExited` means the mouse left the window. Focus is borrowed:
+  the background is focused while the window is and no UI element holds the keyboard.
 - **Using it as an `Element` background** (3D behind one panel) is untested.
 
 ## Not implemented yet

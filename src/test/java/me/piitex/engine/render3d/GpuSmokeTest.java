@@ -11,6 +11,7 @@ import me.piitex.engine.render3d.scene.Light;
 import me.piitex.engine.render3d.scene.Skybox;
 import me.piitex.engine.render3d.scene.Material;
 import me.piitex.engine.render3d.scene.Mesh;
+import me.piitex.engine.render3d.scene.Model;
 import me.piitex.engine.render3d.scene.Node3D;
 import me.piitex.engine.render3d.scene.Scene3D;
 import me.piitex.engine.render3d.scene.TextureData;
@@ -105,6 +106,11 @@ class GpuSmokeTest {
                 (device, target, recorder) -> {
                     if (device.api() == api) softnessChecks(shadowScene, device, target, recorder);
                 });
+        Scene3D morphScene = buildMorphScene();
+        GpuHarness.Run morphRun = GpuHarness.run(api, VIEW, viewport -> viewport.setContent(new SceneContent(morphScene)),
+                (device, target, recorder) -> {
+                    if (device.api() == api) morphChecks(morphScene, device, target, recorder);
+                });
         Scene3D cubeEnv = buildEnvScene(cubeSky());
         GpuHarness.Run cubeRun = GpuHarness.run(api, VIEW, viewport -> viewport.setContent(new SceneContent(cubeEnv)),
                 (device, target, recorder) -> {
@@ -139,7 +145,7 @@ class GpuSmokeTest {
             spots.results().forEach((name, failure) -> tests.add(DynamicTest.dynamicTest(api + ": " + name,
                     () -> assertNull(failure, name + ": " + failure))));
         }
-        for (GpuHarness.Run extra : List.of(effects, culling, softness, cubeRun, panoRun, gradientRun)) {
+        for (GpuHarness.Run extra : List.of(effects, culling, softness, morphRun, cubeRun, panoRun, gradientRun)) {
             if (usable && extra.available()) {
                 extra.results().forEach((name, failure) -> tests.add(DynamicTest.dynamicTest(api + ": " + name,
                         () -> assertNull(failure, name + ": " + failure))));
@@ -419,6 +425,57 @@ class GpuSmokeTest {
             }
             r.check("softness: the edge at 4 is wider than at 1", widths[1] > widths[0] * 2 && widths[1] > widths[0] + 0.1,
                     "edge width in scene units " + widths[0] + " at 1, " + widths[1] + " at 4");
+        });
+    }
+
+    /**
+     * A plane with a blend shape that slides it 3 to the right, and a loaded glTF quad with shapes that lift it and move it right.
+     */
+    private static Scene3D buildMorphScene() {
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        Mesh plane = Mesh.plane(2, 2);
+        float[] slide = new float[4 * 3];
+        for (int v = 0; v < 4; v++) slide[v * 3] = 3f;
+        plane.setMorphTargets(List.of(new Mesh.MorphTarget("slide", slide, null)), null);
+        scene.add(new Node3D("plane", plane, new Material(Color.RED).setUnlit(true)));
+        try {
+            Model model = Model.load(java.nio.file.Path.of("src/test/resources/models/morph.gltf"));
+            Node3D face = model.root().find("face");
+            face.setMaterial(new Material(Color.GREEN).setUnlit(true).setDoubleSided(true));
+            model.root().setPosition(0, 0, -4f);
+            scene.add(model.root());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+        scene.camera().lookAt(new Vec3(0, 10f, 6f), new Vec3(0, 0, -2f)).setFovYDegrees(50);
+        return scene;
+    }
+
+    private void morphChecks(Scene3D scene, GpuDevice device, RenderTarget target, GpuHarness.Recorder r) {
+        r.guard("morph: the picture follows the blend-shape weights", () -> {
+            Node3D plane = scene.root().find("plane");
+            Node3D face = scene.root().find("face");
+            int[][] seen = new int[4][];
+            for (int pass = 0; pass < 2; pass++) {
+                plane.setMorphWeights(pass);
+                face.setMorphWeights(0f, pass);
+                scene.render(device, target, 0f);
+                ByteBuffer px = target.readPixels();
+                try {
+                    seen[pass * 2] = pixelAt(scene, target, px, 0f, 0f, 0f);
+                    seen[pass * 2 + 1] = pixelAt(scene, target, px, 3f, 0f, 0f);
+                    int[] model = pixelAt(scene, target, px, 1.5f, 0f, -5f);
+                    boolean green = model[1] > 200 && model[0] < 60;
+                    r.check("morph: the loaded quad covers x = 1.5 only after its shape moved it right", green == (pass == 1), "pass " + pass + " " + java.util.Arrays.toString(model));
+                } finally {
+                    MemoryUtil.memFree(px);
+                }
+            }
+            r.check("morph: at weight 0 the plane is where it was modelled", seen[0][0] > 200 && seen[0][1] < 60 && !(seen[1][0] > 200 && seen[1][1] < 60),
+                    "centre " + java.util.Arrays.toString(seen[0]) + " right " + java.util.Arrays.toString(seen[1]));
+            r.check("morph: at weight 1 it has slid 3 to the right", seen[3][0] > 200 && seen[3][1] < 60 && !(seen[2][0] > 200 && seen[2][1] < 60),
+                    "centre " + java.util.Arrays.toString(seen[2]) + " right " + java.util.Arrays.toString(seen[3]));
         });
     }
 
