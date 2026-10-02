@@ -95,6 +95,8 @@ arm.rotate(Vec3.UP, 0.5f);                      // the hand swings with it
 | `setCastShadow(boolean)` / `setReceiveShadow(boolean)` | Whether the mesh throws a [shadow](lighting.md#shadows) and whether shadows fall on it. Both on by default |
 | `setInstances(Instances)` / `getInstances()` | Draws the mesh once per [instance](instancing.md), in one call |
 | `setSkin(Skin)` / `getSkin()` | Makes the mesh follow the joints of a [skin](animation.md) |
+| `setMorphWeights(float...)` / `setMorphWeight(i, w)` / `getMorphWeights()` | Mixes the mesh's [blend shapes](animation.md#morph-targets) |
+| `setFrustumCulled(boolean)` | Whether the node is skipped when outside the view (on by default), see [Frustum culling](#frustum-culling) |
 | `setPosition(Vec3)` / `setPosition(x, y, z)` | Position in the parent's space |
 | `setRotation(Quat)` | Rotation in the parent's space |
 | `rotate(Vec3 axis, float radians)` | Turns by that much on top of the current rotation |
@@ -112,7 +114,8 @@ Nodes are not thread-safe. Change them from the render thread, or while the scen
 
 Triangle geometry held in ordinary memory: positions, normals and texture coordinates with 32-bit indices. A mesh knows
 nothing about the GPU. The scene uploads it the first time it draws it and keeps it there while it is in use, so one mesh
-can be shared by any number of nodes, viewports and windows, and can be built on any thread. A mesh is immutable.
+can be shared by any number of nodes, viewports and windows, and can be built on any thread. A mesh's geometry is
+immutable; what moves it is a node's transform, a skin or morph weights.
 
 ```java nocompile
 Mesh cube = Mesh.cube(1.2f);              // size; flat faces, the whole texture on each
@@ -135,6 +138,10 @@ Mesh quad = new Mesh(
         new float[]{0, 1,  1, 1,  1, 0,  0, 0},                  // u, v per vertex, or null
         new int[]{0, 1, 2,  0, 2, 3});                           // three indices per triangle
 ```
+
+A mesh can also carry [morph targets](animation.md#morph-targets) (`setMorphTargets`) and [skinning](animation.md#skins)
+(`setSkinning`). Set skinning before the mesh is first drawn, as the scene reads it once when it uploads the mesh; morph
+targets can be added at any time.
 
 The constructor checks its arrays and throws `IllegalArgumentException` for a mismatch or an index out of range.
 `bounds()`, `vertexCount()` and `indexCount()` read the result. Triangles that are counter-clockwise seen from outside

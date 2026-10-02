@@ -36,8 +36,9 @@ import static org.lwjgl.assimp.Assimp.*;
  * What carries over: geometry, normals (made when the file has none), texture coordinates, the base colour and its
  * texture, transparency, two-sided surfaces; for glTF the metallic-roughness material with its normal,
  * metallic-roughness, occlusion and emissive maps; skeletons (up to four bones per vertex, {@link Skin#MAX_JOINTS} per
- * mesh) and animations ({@link #animations()}). Textures come from beside the file, or from inside it for .glb and
- * embedded images. What doesn't: morph targets, lights and cameras from the file. The model's own units and up axis are
+ * mesh), morph targets ({@link Mesh#setMorphTargets}) and animations ({@link #animations()}, including those of
+ * morph weights). Textures come from beside the file, or from inside it for .glb and
+ * embedded images. What doesn't: lights and cameras from the file. The model's own units and up axis are
  * kept (glTF is Y-up, which is what the scene uses).
  * <p>
  * Loading reads files and decodes images but never touches the GPU, so it can run on a background thread. The mesh and
@@ -269,6 +270,27 @@ public final class Model {
                         channels.add(new AnimationClip.Channel(node, AnimationClip.Path.SCALE, times, values, AnimationClip.Interpolation.LINEAR));
                     }
                 }
+                PointerBuffer morphAnims = source.mMorphMeshChannels();
+                for (int c = 0; c < source.mNumMorphMeshChannels(); c++) {
+                    AIMeshMorphAnim anim = AIMeshMorphAnim.create(morphAnims.get(c));
+                    Node3D node = nodesByName.get(anim.mName().dataString());
+                    if (node == null || anim.mNumKeys() == 0) continue;
+                    int keys = anim.mNumKeys();
+                    AIMeshMorphKey.Buffer morphKeys = anim.mKeys();
+                    int targets = 0;
+                    for (int k = 0; k < keys; k++) {
+                        AIMeshMorphKey key = morphKeys.get(k);
+                        for (int j = 0; j < key.mNumValuesAndWeights(); j++) targets = Math.max(targets, key.mValues().get(j) + 1);
+                    }
+                    if (targets == 0) continue;
+                    float[] times = new float[keys], values = new float[keys * targets];
+                    for (int k = 0; k < keys; k++) {
+                        AIMeshMorphKey key = morphKeys.get(k);
+                        times[k] = (float) (key.mTime() / ticks);
+                        for (int j = 0; j < key.mNumValuesAndWeights(); j++) values[k * targets + key.mValues().get(j)] = (float) key.mWeights().get(j);
+                    }
+                    channels.add(new AnimationClip.Channel(node, AnimationClip.Path.WEIGHTS, times, values, AnimationClip.Interpolation.LINEAR));
+                }
                 String clipName = source.mName().dataString();
                 clips.add(new AnimationClip(clipName.isEmpty() ? "animation" + a : clipName, (float) (source.mDuration() / ticks), channels));
             }
@@ -308,6 +330,19 @@ public final class Model {
                     Node3D extra = new Node3D(node.getName() + "#" + i, mesh, material);
                     node.add(extra);
                     meshNodes.add(new Object[]{extra, meshIndex});
+                }
+            }
+            // The parts of one mesh (a glTF mesh with a primitive per material) blend together, and an animation of the
+            // weights targets this node, so every part follows this node's weights.
+            float[] defaults = null;
+            for (int meshIndex : meshIndices) {
+                Mesh m = meshByIndex[meshIndex];
+                if (m != null && m.isMorphed() && defaults == null) defaults = m.morphDefaults();
+            }
+            if (defaults != null) {
+                node.setMorphWeights(defaults);
+                for (Node3D part : node.getChildren()) {
+                    if (part.getMesh() != null && part.getName().startsWith(node.getName() + "#")) part.shareMorphWeights(node);
                 }
             }
 
@@ -359,7 +394,47 @@ public final class Model {
             if (count < indices.length) indices = java.util.Arrays.copyOf(indices, count);
             Mesh mesh = new Mesh(positions, normalArray, uvs, indices);
             if (source.mNumBones() > 0) applyBones(mesh, source, vertexCount);
+            if (source.mNumAnimMeshes() > 0) applyMorphTargets(mesh, source, positions, normalArray);
             return mesh;
+        }
+
+        /**
+         * Assimp gives each blend shape as a whole copy of the mesh, so the offsets are the difference from the base.
+         */
+        void applyMorphTargets(Mesh mesh, AIMesh source, float[] positions, float[] normals) {
+            int vertexCount = positions.length / 3;
+            List<Mesh.MorphTarget> targets = new ArrayList<>();
+            float[] defaults = new float[source.mNumAnimMeshes()];
+            PointerBuffer shapes = source.mAnimMeshes();
+            for (int k = 0; k < source.mNumAnimMeshes(); k++) {
+                AIAnimMesh shape = AIAnimMesh.create(shapes.get(k));
+                if (shape.mNumVertices() != vertexCount || shape.mVertices() == null) {
+                    log.warn("{} has a morph target with {} vertices on a mesh of {}; morph targets are skipped for this mesh.", name, shape.mNumVertices(), vertexCount);
+                    return;
+                }
+                float[] offsets = new float[vertexCount * 3];
+                AIVector3D.Buffer p = shape.mVertices();
+                for (int i = 0; i < vertexCount; i++) {
+                    AIVector3D v = p.get(i);
+                    offsets[i * 3] = v.x() - positions[i * 3];
+                    offsets[i * 3 + 1] = v.y() - positions[i * 3 + 1];
+                    offsets[i * 3 + 2] = v.z() - positions[i * 3 + 2];
+                }
+                float[] normalOffsets = null;
+                if (shape.mNormals() != null && normals != null) {
+                    normalOffsets = new float[vertexCount * 3];
+                    AIVector3D.Buffer n = shape.mNormals();
+                    for (int i = 0; i < vertexCount; i++) {
+                        AIVector3D v = n.get(i);
+                        normalOffsets[i * 3] = v.x() - normals[i * 3];
+                        normalOffsets[i * 3 + 1] = v.y() - normals[i * 3 + 1];
+                        normalOffsets[i * 3 + 2] = v.z() - normals[i * 3 + 2];
+                    }
+                }
+                targets.add(new Mesh.MorphTarget(shape.mName().dataString(), offsets, normalOffsets));
+                defaults[k] = shape.mWeight();
+            }
+            mesh.setMorphTargets(targets, defaults);
         }
 
         /**

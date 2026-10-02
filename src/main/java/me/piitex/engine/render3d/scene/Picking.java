@@ -10,7 +10,8 @@ import java.util.List;
  * Ray against node meshes. The ray is first tested against each mesh's box in scene space, then against its triangles
  * in the mesh's own space, where the mesh's vertices are, using a hierarchy of boxes built once per mesh so that only the
  * triangles near the ray are tested. An instanced node is tested once per instance and reports its nearest. A skinned
- * mesh is posed on the CPU first, since its vertices only have a place in the scene once its joints have moved them.
+ * mesh is posed on the CPU first, since its vertices only have a place in the scene once its joints have moved them, and
+ * so is a mesh with blend shapes mixed in.
  */
 final class Picking {
     private Picking() {
@@ -24,29 +25,33 @@ final class Picking {
             Material material = node.getMaterial();
             boolean frontOnly = material == null || !material.isDoubleSided();
             Hit hit = null;
+            float[] morph = node.activeMorph();
+            // A morphed mesh has its own shape, so it gets a hierarchy built just for this pick.
+            Bvh own = morph == null || (node.getSkin() != null && mesh.isSkinned()) ? null
+                    : new Bvh(mesh.morph(morph), mesh.indices(), Mesh.FLOATS_PER_VERTEX);
             if (node.getSkin() != null && mesh.isSkinned()) {
-                hit = castSkinned(node, mesh, frontOnly, ray, maxDistance);
+                hit = castSkinned(node, mesh, morph, frontOnly, ray, maxDistance);
             } else if (node.getInstances() != null) {
                 Instances instances = node.getInstances();
                 float limit = maxDistance;
                 float[] data = instances.matrixData();
                 for (int i = 0; i < instances.size(); i++) {
                     Mat4 instanceWorld = world.mul(new Mat4(java.util.Arrays.copyOfRange(data, i * 16, i * 16 + 16)));
-                    Hit h = castMesh(node, mesh, frontOnly, instanceWorld, ray, limit, i);
+                    Hit h = castMesh(node, mesh, own, frontOnly, instanceWorld, ray, limit, i);
                     if (h != null) {
                         hit = h;
                         limit = h.distance();
                     }
                 }
             } else {
-                hit = castMesh(node, mesh, frontOnly, world, ray, maxDistance, -1);
+                hit = castMesh(node, mesh, own, frontOnly, world, ray, maxDistance, -1);
             }
             if (hit != null) out.add(hit);
         }
         for (Node3D child : node.getChildren()) cast(child, world, ray, maxDistance, out);
     }
 
-    private static Hit castMesh(Node3D node, Mesh mesh, boolean frontOnly, Mat4 world, Ray ray, float maxDistance, int instance) {
+    private static Hit castMesh(Node3D node, Mesh mesh, Bvh own, boolean frontOnly, Mat4 world, Ray ray, float maxDistance, int instance) {
         float broad = ray.distanceTo(mesh.bounds().transform(world));
         if (broad < 0f || broad > maxDistance) return null;
         Mat4 inverse = world.inverse();
@@ -58,7 +63,7 @@ final class Picking {
         Vec3 d = inverse.transformDirection(ray.direction());
         Bvh.Result result = new Bvh.Result();
         result.distance = maxDistance;
-        mesh.bvh().nearest(o.x(), o.y(), o.z(), d.x(), d.y(), d.z(), frontOnly, result);
+        (own != null ? own : mesh.bvh()).nearest(o.x(), o.y(), o.z(), d.x(), d.y(), d.z(), frontOnly, result);
         if (result.triangle < 0) return null;
         return hit(node, world, ray, result, instance);
     }
@@ -73,12 +78,12 @@ final class Picking {
      * Poses the mesh in the scene with the skin's current joints and searches it with a hierarchy built just for this
      * pick: nothing is stored, because the shape changes with every pose.
      */
-    private static Hit castSkinned(Node3D node, Mesh mesh, boolean frontOnly, Ray ray, float maxDistance) {
+    private static Hit castSkinned(Node3D node, Mesh mesh, float[] morph, boolean frontOnly, Ray ray, float maxDistance) {
         Skin skin = node.getSkin();
         float[][] joints = new float[skin.joints().size()][];
         for (int i = 0; i < joints.length; i++) joints[i] = skin.jointMatrix(i).toArray();
 
-        float[] v = mesh.vertices();
+        float[] v = morph != null ? mesh.morph(morph) : mesh.vertices(); // blend shapes first, then the joints
         int stride = Mesh.FLOATS_PER_VERTEX;
         int count = mesh.vertexCount();
         int[] jointIds = mesh.skinJoints();

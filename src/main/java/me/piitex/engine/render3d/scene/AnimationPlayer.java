@@ -193,9 +193,18 @@ public final class AnimationPlayer {
                 f = Math.min(1f, (t - times[i]) / (times[j] - times[i]));
             }
             float[] v = channel.values();
-            int w = channel.path().width;
+            int w = channel.path() == AnimationClip.Path.WEIGHTS ? v.length / times.length : channel.path().width;
             Node3D node = channel.target();
             switch (channel.path()) {
+                case WEIGHTS -> {
+                    float[] current = node.getMorphWeights();
+                    float[] result = new float[Math.max(w, current.length)];
+                    for (int k = 0; k < result.length; k++) {
+                        float value = k < w ? v[i * w + k] + (v[j * w + k] - v[i * w + k]) * f : 0f;
+                        result[k] = weight >= 1f || k >= current.length ? value : current[k] + (value - current[k]) * weight;
+                    }
+                    node.setMorphWeights(result);
+                }
                 case TRANSLATION -> {
                     Vec3 a = new Vec3(v[i * w], v[i * w + 1], v[i * w + 2]);
                     Vec3 b = new Vec3(v[j * w], v[j * w + 1], v[j * w + 2]);

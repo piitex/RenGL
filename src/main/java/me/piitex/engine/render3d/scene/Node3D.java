@@ -38,6 +38,14 @@ public final class Node3D {
     private boolean frustumCulled = true;
     private Instances instances;
     private Skin skin;
+    private MorphState morph;
+
+    /**
+     * The blend-shape weights of a node, held apart so that the nodes of one multi-part mesh can share them.
+     */
+    private static final class MorphState {
+        float[] weights = new float[0];
+    }
 
     public Node3D(String name) {
         this.name = name;
@@ -138,6 +146,66 @@ public final class Node3D {
     public Node3D setCastShadow(boolean castShadow) {
         this.castShadow = castShadow;
         return this;
+    }
+
+    /**
+     * How much of each of the mesh's {@link Mesh#setMorphTargets blend shapes} is mixed in: 0 is none, 1 is the shape
+     * fully on. A copy; one entry per target (the mesh's own defaults until set).
+     */
+    public float[] getMorphWeights() {
+        Mesh m = mesh;
+        if (morph != null) return morph.weights.clone();
+        return m == null ? new float[0] : m.morphDefaults().clone();
+    }
+
+    /**
+     * Sets the blend-shape weights. Weights for shapes the mesh doesn't have are ignored and missing ones are 0. The
+     * animation of a model file does this each frame through {@link AnimationClip.Path#WEIGHTS}.
+     */
+    public Node3D setMorphWeights(float... weights) {
+        ensureMorph().weights = weights.clone();
+        return this;
+    }
+
+    /**
+     * Sets one weight, leaving the others as they are.
+     */
+    public Node3D setMorphWeight(int target, float weight) {
+        if (target < 0) throw new IndexOutOfBoundsException("Morph target " + target);
+        MorphState state = ensureMorph();
+        if (target >= state.weights.length) state.weights = java.util.Arrays.copyOf(state.weights, target + 1);
+        state.weights[target] = weight;
+        return this;
+    }
+
+    /**
+     * Makes this node use the other node's blend-shape weights, so that the several parts of one mesh (a model with a
+     * material per part) morph together. Changing either changes both.
+     */
+    public Node3D shareMorphWeights(Node3D other) {
+        this.morph = other.ensureMorph();
+        return this;
+    }
+
+    private MorphState ensureMorph() {
+        if (morph == null) {
+            morph = new MorphState();
+            if (mesh != null) morph.weights = mesh.morphDefaults().clone();
+        }
+        return morph;
+    }
+
+    /**
+     * The weights to draw with, or null when the mesh has no blend shapes or all the weights are 0.
+     */
+    float[] activeMorph() {
+        Mesh m = mesh;
+        if (m == null || !m.isMorphed()) return null;
+        float[] w = morph != null ? morph.weights : m.morphDefaults();
+        for (int i = 0; i < w.length && i < m.morphTargets().size(); i++) {
+            if (w[i] != 0f) return w;
+        }
+        return null;
     }
 
     public boolean isFrustumCulled() {
@@ -303,12 +371,12 @@ public final class Node3D {
      * with the original, so copying a loaded model costs no GPU memory.
      */
     public Node3D copy() {
-        Node3D c = copyTree();
+        Node3D c = copyTree(new java.util.IdentityHashMap<>());
         remapSkins(this, this, c, c);
         return c;
     }
 
-    private Node3D copyTree() {
+    private Node3D copyTree(java.util.Map<MorphState, MorphState> morphs) {
         Node3D c = new Node3D(name, mesh, material);
         c.position = position;
         c.rotation = rotation;
@@ -320,7 +388,15 @@ public final class Node3D {
         c.frustumCulled = frustumCulled;
         c.instances = instances == null ? null : instances.copy();
         c.skin = skin;
-        for (Node3D child : children) c.add(child.copyTree());
+        if (morph != null) {
+            // Parts that shared their weights still share them, in the copy.
+            c.morph = morphs.computeIfAbsent(morph, m -> {
+                MorphState copy = new MorphState();
+                copy.weights = m.weights.clone();
+                return copy;
+            });
+        }
+        for (Node3D child : children) c.add(child.copyTree(morphs));
         return c;
     }
 

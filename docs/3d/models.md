@@ -42,11 +42,12 @@ units needs `root().setScale(...)` and `root().setRotation(...)` to fit.
 
 | Carries over | Does not |
 |---|---|
-| Geometry; normals (made smooth when the file has none); texture coordinates | Morph targets (blend shapes) |
-| The base colour and its texture | Lights and cameras from the file |
-| For glTF: the **metallic-roughness** material with its **normal, metallic-roughness, occlusion and emissive** maps and factors; it loads as a [PBR material](scenes.md#material) | A material's texture transforms and UV sets other than the first |
-| **Skeletons**: up to four bones a vertex and 256 per mesh, as a [skin](animation.md#skins) | Cubic-spline animation keys (used as plain keys) |
-| **Animations**: translation, rotation and scale of nodes, as [clips](animation.md) | |
+| Geometry; normals (made smooth when the file has none); texture coordinates | Lights and cameras from the file |
+| The base colour and its texture | A material's texture transforms and UV sets other than the first |
+| For glTF: the **metallic-roughness** material with its **normal, metallic-roughness, occlusion and emissive** maps and factors; it loads as a [PBR material](scenes.md#material) | Cubic-spline animation keys (Assimp hands over only the values, so they are used as plain keys) |
+| **Skeletons**: up to four bones a vertex and 256 per mesh, as a [skin](animation.md#skins) | |
+| **Morph targets** (blend shapes), with their default weights, as [morph targets](animation.md#morph-targets) | |
+| **Animations**: translation, rotation, scale and morph weights of nodes, as [clips](animation.md) | |
 | Transparency; two-sided surfaces; alpha cut-outs | |
 | Textures from beside the file, or embedded (`.glb` and embedded images) | |
 

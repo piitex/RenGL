@@ -2,8 +2,9 @@
 
 [Documentation](../README.md) › [3D](README.md)
 
-Two things make a model move: **animation clips**, which change the position, rotation and scale of nodes over time, and
-**skins**, which bend a mesh to follow a skeleton of nodes. glTF files bring both; you can also make your own.
+Three things make a model move: **animation clips**, which change the position, rotation, scale and blend-shape weights
+of nodes over time, **skins**, which bend a mesh to follow a skeleton of nodes, and **morph targets**, which blend a
+mesh between shapes (a smile, a blink). glTF files bring all three; you can also make your own.
 
 ## Playing a model's animations
 
@@ -77,6 +78,41 @@ elbow.setRotation(Quat.fromAxisAngle(new Vec3(0, 0, 1), 0.8f));            // th
 - Skinned meshes cast [shadows](lighting.md#shadows) in their pose, and are [picked](scenes.md#picking) in their pose.
 - `Node3D.copy()` of a skinned model makes a copy that follows its own copied skeleton.
 
+## Morph targets
+
+A mesh can carry blend shapes: for each shape, how far every vertex moves when it is fully on. A node mixes them with
+**weights**, one per shape, usually 0 to 1:
+
+```java nocompile
+Model face = Model.load(Path.of("assets/face.glb"));
+Node3D head = face.root().find("head");
+head.setMorphWeights(0f, 0.8f, 0f);   // shape 1 at 80%
+head.setMorphWeight(2, 0.5f);         // just shape 2
+float[] now = head.getMorphWeights();
+```
+
+A glTF file's targets load by themselves (`mesh.morphTargets()` lists them with the names the file gives), and the file's
+animations that move the weights play like any other clip. The weights belong to the **node**, so two nodes with the same
+mesh can show different expressions, and a model with a mesh in several parts (one per material) blends all of them
+together. To make your own:
+
+```java nocompile
+Mesh plane = Mesh.plane(2, 2);
+float[] lift = new float[4 * 3];                     // x, y, z per vertex, as many vertices as the mesh
+for (int v = 0; v < 4; v++) lift[v * 3 + 1] = 1f;    // every vertex up by 1
+plane.setMorphTargets(List.of(new Mesh.MorphTarget("lift", lift, null)), null);   // offsets, optional normal changes
+node.setMorphWeight(0, 0.5f);                        // half way up
+```
+
+- The blending happens on the CPU, and the node gets its own copy of the mesh's vertices on the GPU, refilled only when
+  its weights change. That is cheap for the usual character head (tens of thousands of vertices); hundreds of thousands of
+  vertices that change every frame will show up in the frame time. A mesh whose weights are all zero costs nothing extra.
+- Morphing runs before [skinning](#skins), so a face can smile while the head turns.
+- A target may also change the normals; when it doesn't, the normals stay as authored.
+- The mesh's `bounds()` grow to hold the shapes at full weight, which keeps [culling](scenes.md#frustum-culling) and
+  [picking](scenes.md#picking) from clipping a morphed mesh. Picking uses the blended shape.
+- `Node3D.copy()` gives the copy its own weights, and keeps parts that shared them sharing.
+
 ## Your own clips
 
 ```java nocompile
@@ -93,14 +129,16 @@ player.play("spin");
 | Part | Description |
 |---|---|
 | `AnimationClip(name, duration, channels)` | A named movement of some length |
-| `AnimationClip.Channel(target, path, times, values, interpolation)` | One property of one node: `TRANSLATION` (3 numbers a key), `ROTATION` (4, a unit quaternion) or `SCALE` (3) |
+| `AnimationClip.Channel(target, path, times, values, interpolation)` | One property of one node: `TRANSLATION` (3 numbers a key), `ROTATION` (4, a unit quaternion), `SCALE` (3) or `WEIGHTS` (the node's [morph weights](#morph-targets): one number per shape, the same count at every key) |
 | `Interpolation.LINEAR` | Blends between keys (rotations by `slerp`, the short way round) |
 | `Interpolation.STEP` | Holds each key until the next |
 
 ## Limits
 
-- Clips from files are sampled **linearly**; cubic-spline keys from glTF are used as plain keys.
-- **Morph targets** (blend shapes) are not supported; a file's morph targets are ignored.
+- Clips from files are sampled **linearly**: Assimp keeps only the values of a glTF cubic-spline track and drops its
+  tangents, so those keys are used as plain keys. (Clips you build yourself are linear or step too.)
+- **Morph targets** are blended on the CPU, with no limit on how many shapes a mesh has but a cost per vertex for every
+  shape with a non-zero weight.
 - An animation changes the **local transforms** of the nodes it targets; a node animated by a clip and moved by your code
   in the same frame takes whichever came last.
 - Skinning is done on the GPU for drawing and shadows, and on the CPU for [picking](scenes.md#picking).

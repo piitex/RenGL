@@ -27,7 +27,12 @@ public final class AnimationClip {
         /**
          * Three values per key: x, y, z.
          */
-        SCALE(3);
+        SCALE(3),
+        /**
+         * The blend-shape weights of a node ({@link Node3D#setMorphWeights}): one value per morph target at every key,
+         * however many the mesh has.
+         */
+        WEIGHTS(-1);
 
         final int width;
 
@@ -56,7 +61,11 @@ public final class AnimationClip {
     public record Channel(Node3D target, Path path, float[] times, float[] values, Interpolation interpolation) {
         public Channel {
             if (times.length == 0) throw new IllegalArgumentException("A channel needs at least one key");
-            if (values.length != times.length * path.width) {
+            if (path == Path.WEIGHTS) {
+                if (values.length == 0 || values.length % times.length != 0) {
+                    throw new IllegalArgumentException("WEIGHTS needs the same number of values at every key (" + times.length + " keys, " + values.length + " values)");
+                }
+            } else if (values.length != times.length * path.width) {
                 throw new IllegalArgumentException(path + " needs " + path.width + " values per key, " + times.length + " keys");
             }
             times = times.clone();
