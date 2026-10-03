@@ -18,6 +18,15 @@ final class SceneShaders {
      */
     static final int INSTANCE_FLOATS = 44;
 
+    /**
+     * The shadow views one frame can hold: up to {@link Scene3D#MAX_SHADOW_LIGHTS} lights of six (a point light's sides).
+     */
+    static final int MAX_SHADOW_VIEWS = Scene3D.MAX_SHADOW_LIGHTS * 6;
+    /**
+     * Bytes of one shadow view in the frame block: a matrix, the tile's place in the atlas, and the offsets.
+     */
+    static final int SHADOW_VIEW_BYTES = 96;
+
     static final int FLAG_NORMAL_MAP = 1;
     static final int FLAG_RECEIVE_SHADOW = 2;
 
@@ -52,18 +61,26 @@ final class SceneShaders {
             """;
 
     static final String FRAME_BLOCK = """
+            struct ShadowView {
+                mat4 viewProj;
+                vec4 rect;
+                vec4 params;
+            };
             layout(set = 0, binding = 0) uniform Frame {
                 mat4 viewProj;
                 vec4 cameraPos;
+                vec4 cameraFwd;
                 vec4 ambient;
                 vec4 params;
-                vec4 shadowA;
-                vec4 shadowB;
+                vec4 shadowGlobal;
                 vec4 lightVec[8];
                 vec4 lightColor[8];
                 vec4 lightDir[8];
                 vec4 lightCone[8];
-                mat4 lightViewProj;
+                vec4 lightShadow[8];
+                vec4 lightSplits[8];
+                ShadowView views[""" + MAX_SHADOW_VIEWS + """
+            ];
                 vec4 fog;
                 vec4 fogParams;
                 vec4 envParams;
@@ -180,37 +197,104 @@ final class SceneShaders {
                 return dot(c, vec3(1.0, 1.0 / 255.0, 1.0 / 65025.0));
             }
 
-            // 1 where the light reaches the point, 0 where something is in the way, with a soft edge. A spot light's map
-            // is perspective and holds the distance along its axis scaled to 0..1; a directional light's holds depth.
-            float shadow(vec3 worldPos, vec3 n, vec3 l) {
-                bool persp = shadowB.y > 0.5;
-                float ndl = clamp(dot(n, l), 0.0, 1.0);
-                float scale = persp ? (lightViewProj * vec4(worldPos, 1.0)).w : 1.0;
-                vec3 p = worldPos + n * (shadowB.x * scale * (1.0 - ndl * 0.5));
-                vec4 lp = lightViewProj * vec4(p, 1.0);
-                if (persp && lp.w <= shadowB.z) return 1.0;
-                vec3 proj = lp.xyz / lp.w;
-                vec2 uv = vec2(proj.x * 0.5 + 0.5, shadowA.y > 0.5 ? proj.y * 0.5 + 0.5 : 0.5 - proj.y * 0.5);
-                float depth = persp ? (lp.w - shadowB.z) / (shadowB.w - shadowB.z) : proj.z;
-                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || depth > 1.0) return 1.0;
-                float bias = shadowA.w * scale * (1.0 + (1.0 - ndl) * 2.0);
-                // A 4x4 block of comparisons weighted like a bilinear filter, so the edge moves smoothly instead of in steps.
-                vec2 size = vec2(1.0 / shadowA.z);
-                vec2 texel = uv * size - 0.5;
-                vec2 base = (floor(texel) + 0.5) / size;
-                vec2 f = fract(texel);
+            // The part of the shadow atlas the current lookup may read, in texture coordinates, so a soft edge never
+            // reaches into a neighbouring tile.
+            vec2 tileMin;
+            vec2 tileMax;
+
+            // 1 if a point at the given depth is lit as seen through the atlas at tap, 0 if something is in front of it.
+            float shadowLit(vec2 tap, float depth) {
+                tap = clamp(tap, tileMin + 0.5 * shadowGlobal.xy, tileMax - 0.5 * shadowGlobal.xy);
+                float stored = unpackDepth(textureLod(shadowMap, tap, 0.0).rgb);
+                return depth > stored ? 0.0 : 1.0;
+            }
+
+            // The edge of a shadow worked out from the map: 0 is one lookup, 1 a 4x4 block weighted like a bilinear
+            // filter so the edge moves smoothly instead of in steps, 2 a wider 6x6 block. The pattern is stretched about
+            // the point by the light's softness, 1 for the plain filter.
+            float filterShadow(int id, vec2 uv, float depth, vec2 texel, float softness) {
+                if (id == 0) return shadowLit(uv, depth);
+                vec2 size = 1.0 / texel;
+                vec2 t = uv * size - 0.5;
+                vec2 base = (floor(t) + 0.5) / size;
+                vec2 f = fract(t);
+                int r = id == 2 ? 2 : 1;
                 float lit = 0.0;
-                for (int x = -1; x <= 2; x++) {
-                    float wx = x == -1 ? 1.0 - f.x : (x == 2 ? f.x : 1.0);
-                    for (int y = -1; y <= 2; y++) {
-                        float wy = y == -1 ? 1.0 - f.y : (y == 2 ? f.y : 1.0);
-                        // The pattern is stretched about the point by the scene's softness, 1 for the plain filter.
-                        vec2 tap = uv + ((base - uv) + vec2(float(x), float(y)) * shadowA.z) * fogParams.y;
-                        float stored = unpackDepth(textureLod(shadowMap, tap, 0.0).rgb);
-                        lit += wx * wy * ((depth - bias > stored) ? 0.0 : 1.0);
+                float total = 0.0;
+                for (int x = -r; x <= r + 1; x++) {
+                    float wx = x == -r ? 1.0 - f.x : (x == r + 1 ? f.x : 1.0);
+                    for (int y = -r; y <= r + 1; y++) {
+                        float wy = y == -r ? 1.0 - f.y : (y == r + 1 ? f.y : 1.0);
+                        vec2 tap = uv + ((base - uv) + vec2(float(x), float(y)) * texel) * softness;
+                        lit += wx * wy * shadowLit(tap, depth);
+                        total += wx * wy;
                     }
                 }
-                return lit / 9.0;
+                return lit / total;
+            }
+
+            // 1 where light i reaches the point, 0 where something is in the way, with a soft edge. Picks the light's view:
+            // a directional light's cascade by how far the point is from the camera, a point light's side by the direction
+            // from the light. A spot or point light's map is perspective and holds the distance along the view axis scaled
+            // to 0..1; a directional light's holds depth.
+            float shadowFor(int i, vec3 worldPos, vec3 n, vec3 l) {
+                vec4 info = lightShadow[i];
+                int first = int(info.x + 0.5);
+                int count = int(info.y + 0.5);
+                int kind = int(lightVec[i].w + 0.5);
+                int view = first;
+                if (kind == 0) {
+                    if (count > 1) {
+                        float depthAlong = dot(worldPos - cameraPos.xyz, cameraFwd.xyz);
+                        view = -1;
+                        for (int k = 0; k < 4; k++) {
+                            if (k >= count) break;
+                            if (depthAlong <= lightSplits[i][k]) {
+                                view = first + k;
+                                break;
+                            }
+                        }
+                        if (view < 0) return 1.0;
+                    }
+                } else if (kind == 1) {
+                    vec3 d = worldPos - lightVec[i].xyz;
+                    vec3 a = abs(d);
+                    int face = (a.x >= a.y && a.x >= a.z) ? (d.x > 0.0 ? 0 : 1) : (a.y >= a.z ? (d.y > 0.0 ? 2 : 3) : (d.z > 0.0 ? 4 : 5));
+                    view = first + face;
+                }
+                ShadowView sv = views[view];
+                bool persp = kind != 0;
+                float ndl = clamp(dot(n, l), 0.0, 1.0);
+                float scale = persp ? (sv.viewProj * vec4(worldPos, 1.0)).w : 1.0;
+                vec3 p = worldPos + n * (sv.params.x * scale * (1.0 - ndl * 0.5));
+                vec4 lp = sv.viewProj * vec4(p, 1.0);
+                if (persp && lp.w <= sv.params.z) return 1.0;
+                vec3 proj = lp.xyz / lp.w;
+                // Where the point lands in its tile, from the tile's top-left corner.
+                vec2 inTile = vec2(proj.x * 0.5 + 0.5, 0.5 - proj.y * 0.5);
+                float depth = persp ? (lp.w - sv.params.z) / (sv.params.w - sv.params.z) : proj.z;
+                if (inTile.x < 0.0 || inTile.x > 1.0 || inTile.y < 0.0 || inTile.y > 1.0 || depth > 1.0) return 1.0;
+                float bias = sv.params.y * scale * (1.0 + (1.0 - ndl) * 2.0);
+                // Atlas coordinates run from the top; an OpenGL texture's rows run from the bottom.
+                vec2 uv = sv.rect.xy + inTile * sv.rect.zw;
+                tileMin = sv.rect.xy;
+                tileMax = sv.rect.xy + sv.rect.zw;
+                if (shadowGlobal.z > 0.5) {
+                    uv.y = 1.0 - uv.y;
+                    float t = tileMin.y;
+                    tileMin.y = 1.0 - tileMax.y;
+                    tileMax.y = 1.0 - t;
+                }
+                return filterShadow(int(info.z + 0.5), uv, depth - bias, shadowGlobal.xy, info.w);
+            }
+
+            // How much of a light's strength is left at a distance from it: 0 is a smooth window to nothing at the
+            // range, 1 a straight line to nothing at the range, 2 no fading.
+            float falloff(int id, float dist, float range) {
+                if (id == 1) return clamp(1.0 - dist / range, 0.0, 1.0);
+                if (id == 2) return 1.0;
+                float x = clamp(1.0 - (dist * dist) / (range * range), 0.0, 1.0);
+                return x * x;
             }
 
             // The direction to light i from a point, and how much of it arrives before the surface's angle and shadow.
@@ -222,8 +306,7 @@ final class SceneShaders {
                 vec3 d = lightVec[i].xyz - worldPos;
                 float dist = length(d);
                 l = d / max(dist, 0.0001);
-                float x = clamp(1.0 - (dist * dist) / (lightColor[i].a * lightColor[i].a), 0.0, 1.0);
-                float atten = x * x;
+                float atten = falloff(int(lightCone[i].y + 0.5), dist, lightColor[i].a);
                 if (lightVec[i].w > 1.5) {
                     float c = dot(-l, lightDir[i].xyz);
                     atten *= clamp((c - lightDir[i].w) / max(lightCone[i].x - lightDir[i].w, 1e-4), 0.0, 1.0);
@@ -269,7 +352,6 @@ final class SceneShaders {
                     }
                     vec3 v = normalize(cameraPos.xyz - vWorldPos);
                     int count = int(params.x);
-                    int shadowLight = int(shadowA.x);
                     bool receives = (flags & 2) != 0;
 
                     if (mode == 1) {
@@ -297,7 +379,7 @@ final class SceneShaders {
                             float atten = lightAt(i, vWorldPos, l);
                             float nl = max(dot(n, l), 0.0);
                             if (nl <= 0.0) continue;
-                            if (i == shadowLight && receives) atten *= shadow(vWorldPos, n, l);
+                            if (receives && lightShadow[i].y > 0.5) atten *= shadowFor(i, vWorldPos, n, l);
                             vec3 h = normalize(l + v);
                             float nh = max(dot(n, h), 0.0);
                             float vh = max(dot(v, h), 0.0);
@@ -320,7 +402,7 @@ final class SceneShaders {
                             float atten = lightAt(i, vWorldPos, l);
                             float ndl = max(dot(n, l), 0.0);
                             if (ndl <= 0.0) continue;
-                            if (i == shadowLight && receives) atten *= shadow(vWorldPos, n, l);
+                            if (receives && lightShadow[i].y > 0.5) atten *= shadowFor(i, vWorldPos, n, l);
                             vec3 radiance = lightColor[i].rgb * atten;
                             lit += albedo * radiance * ndl;
                             vec3 h = normalize(l + v);
