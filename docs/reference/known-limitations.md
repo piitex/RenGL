@@ -173,9 +173,10 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   from nine spherical-harmonic terms and blurs reflections with the sky's mipmaps instead of filtering a real
   environment map, and the sky pictures are 8-bit, so there is no bright sun in them and a sharp reflection of a small
   bright thing is out of reach. Off by default; a sky is a plain picture until you turn it on.
-- **Shadows come from one directional or spot light,** with a soft edge of the same width everywhere
-  ([`setShadowSoftness`](../3d/lighting.md#shadows) scales it). Point lights cast none, and a directional shadow only
-  covers the camera's view out to the [shadow distance](../3d/lighting.md#shadows).
+- **At most 4 lights cast shadows at once,** with a soft edge of the same width everywhere
+  ([`setShadowSoftness`](../3d/lighting.md#shadows) scales it), and a directional shadow only covers the camera's view
+  out to the [shadow distance](../3d/lighting.md#shadows). A point light costs six shadow pictures, and when the lights'
+  pictures don't fit the [shadow atlas](../3d/lighting.md#which-lights-get-shadows) the biggest are drawn smaller.
 - **Morph targets are blended on the CPU,** so a mesh with very many vertices whose weights change every frame costs
   frame time ([details](../3d/animation.md#morph-targets)). [Skinned](../3d/animation.md) meshes follow at most four bones
   per vertex and 256 per mesh, and glTF cubic-spline animation arrives as plain keys, because Assimp drops the tangents.

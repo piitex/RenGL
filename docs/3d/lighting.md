@@ -39,47 +39,143 @@ Inside the **inner** angle the light is at full strength; it fades smoothly to n
 
 ## Shadows
 
-One directional or spot light can make the scene's shadows. Turn it on, and nodes cast and receive shadows by default:
+Any light can cast shadows: the sun, a spot light or a point light, and several at once. Give a light a quality preset
+and nodes cast and receive shadows by default:
 
 ```java nocompile
-Light sun = Light.directional(new Vec3(-0.5f, -1f, -0.35f), Color.WHITE, 1.1f).setCastShadow(true);
+Light sun  = Light.directional(new Vec3(-0.5f, -1f, -0.35f), Color.WHITE, 1.1f)
+        .setShadows(Shadows.of(ShadowQuality.HIGH).cascades(3).distance(80f));   // sharp near, far-reaching
+Light fire = Light.point(new Vec3(2, 1, 0), new Color(1f, 0.6f, 0.3f, 1f), 3f, 12f)
+        .setShadows(ShadowQuality.MEDIUM);                                       // a bulb that shadows all round
+Light lamp = Light.spot(new Vec3(0, 5, 0), new Vec3(0, -1, 0), Color.WHITE, 3f, 20f, 20f, 35f)
+        .setShadows(Shadows.of(ShadowQuality.LOW).bias(1.5f).softness(2f));      // a preset with changes
 scene.lights().clear();
 scene.lights().add(sun);
+scene.lights().add(fire);
+scene.lights().add(lamp);
 
-scene.setShadowDistance(40f);       // shadows are drawn this far from the camera
-scene.setShadowMapSize(2048);       // sharpness
-lamp.setCastShadow(false);          // a node (a Node3D) that throws no shadow
+lampNode.setCastShadow(false);      // a node (a Node3D) that throws no shadow
 ```
+
+`light.setCastShadow(true)` still works and means "use the scene's settings" (see below). A light without `setShadows`
+or `setCastShadow(true)` casts none.
+
+### Presets
+
+| `ShadowQuality` | Picture size | Edge | Use it for |
+|---|---|---|---|
+| `LOW` | 512 | 3x3 blur | small or distant lights |
+| `MEDIUM` | 1024 | 3x3 blur | most lights, and point lights |
+| `HIGH` | 2048 | 3x3 blur | a sun or a main spot light |
+| `ULTRA` | 4096 | 5x5 blur | one hero light; a single picture is 64 MB |
+
+`Shadows.of(preset)` starts from a preset, and these overrides change one thing each (every method returns a changed copy):
+
+| `Shadows` method | Default | Description |
+|---|---|---|
+| `size(int)` | the preset's | Width and height of one shadow picture in pixels, `256` to `8192` |
+| `bias(float)` | the scene's (`1`) | Scales the offset that stops a surface shadowing itself. Raise it if a lit surface shows stripes; lower it if shadows float away from what casts them |
+| `softness(float)` | the scene's (`1`) | How wide the soft edge is, as a multiple of the default: `0.25` to `4`. Above about `2` the filter pattern starts to show unless the picture is large |
+| `distance(float)` | the scene's (`60`) | Directional lights: how far from the camera the shadows reach, in scene units, and never past the camera's far plane |
+| `cascades(int)` | `1` | Directional lights: split the view into `1` to `4` pictures, see [Cascades](#cascades) |
+| `filter(ShadowFilter)` | the preset's | How the edge is worked out, see [Custom filters and falloffs](#custom-filters-and-falloffs) |
+
+A value you don't set comes from the scene, so these still work as the defaults for every light:
+`Scene3D.setShadowMapSize(int)` (`2048`, what a light with `setCastShadow(true)` gets; point lights get `1024`),
+`setShadowDistance(float)`, `setShadowBias(float)` and `setShadowSoftness(float)`. The nodes have their own switches:
 
 | Setting | Default | Description |
 |---|---|---|
-| `Light.setCastShadow(boolean)` | `false` | The first directional or spot light (among the first 8) that has this on casts the scene's shadows. Point lights can't |
-| `Scene3D.setShadowDistance(float)` | `60` | How far from the camera a directional light's shadows are drawn, in scene units, and never past the camera's far plane. Shorter means sharper shadows near the camera. A spot light's shadows cover its whole cone out to its range |
-| `Scene3D.setShadowMapSize(int)` | `2048` | The width and height of the shadow picture, `256` to `8192`. Each doubling quadruples the memory (about 32 MB at 2048) and the cost |
-| `Scene3D.setShadowBias(float)` | `1` | Scales the offset that stops a surface shadowing itself. Raise it if a lit surface shows stripes; lower it if shadows float away from what casts them |
-| `Scene3D.setShadowSoftness(float)` | `1` | How wide the soft edge is, as a multiple of the default: `0.25` to `4`. Above about `2` the filter pattern starts to show unless the shadow map is large |
 | `Node3D.setCastShadow(boolean)` | `true` | Whether the node's mesh throws a shadow |
 | `Node3D.setReceiveShadow(boolean)` | `true` | Whether shadows fall on it. Turn it off for something that should stay evenly lit |
 
-How it works, so you know what to expect:
+### Which lights get shadows
 
-- Each frame the scene first draws the world's depth as the light sees it into a shadow picture, then the main picture
-  looks each surface up in it. The picture covers the part of the camera's view between the near plane and the shadow
-  distance, and its position snaps to the picture's own pixels, so shadows don't crawl as the camera moves.
-- Edges are softened over a few pixels of the shadow picture. A bigger `setShadowMapSize` or a shorter distance makes
-  them crisper, and `setShadowSoftness` widens or narrows the edge. The width is the same everywhere: a shadow does not
-  get softer the farther it falls from what casts it (no variable-width soft shadows).
+At most **4 lights** cast shadows at a time (`Scene3D.MAX_SHADOW_LIGHTS`). Directional lights come first, then the point
+and spot lights nearest the camera. A point or spot light whose reach is wholly outside the camera's view is skipped for
+that frame. A fifth light with shadows on casts none until one of the others drops out, and the scene logs a warning once.
+
+All shadow pictures live in one shared **atlas** texture, and a light gets a tile of it per view: a directional light one
+tile per cascade, a spot light one, and a point light six (one per side of a cube around it). The atlas is only as large
+as the lights need, up to `Scene3D.setShadowAtlasSize(int)` (`4096`, range `1024` to `8192`). If the tiles don't fit in
+that, the biggest are drawn at half size until they do, and the scene logs a warning once. `Scene3D.getStats()` reports
+`shadowViews()` and the atlas's width and height, so you can see what your lights cost.
+
+### Cascades
+
+A sun lights the whole view, but one shadow picture spread over 80 units is blurry up close. Split the view into
+cascades and each part gets its own picture: a near one that is small and sharp, and farther ones that reach out.
+
+```java nocompile
+sun.setShadows(Shadows.of(ShadowQuality.MEDIUM).cascades(3).distance(80f));
+```
+
+- The split is between even and logarithmic (near cascades are small), and each cascade's picture snaps to its own pixels, so
+  shadows don't crawl as the camera moves.
+- Each cascade draws the shadow casters again, so 3 cascades cost about 3 times the shadow drawing. Casters that don't touch
+  a cascade's area are skipped.
+- Past `distance` there are no shadows. One cascade is the same as the single picture earlier versions drew.
+
+### How it works, so you know what to expect
+
+- Each frame the scene first draws the world's depth as each light sees it into its tiles, then the main picture looks each
+  surface up in them.
+- Edges are softened over a few pixels of the tile. A bigger picture, a shorter distance or more cascades makes them
+  crisper, and `softness` widens or narrows the edge. The width is the same everywhere: a shadow does not get softer the
+  farther it falls from what casts it (no variable-width soft shadows).
 - A node outside the camera's view still casts its shadow into it: [frustum culling](scenes.md#frustum-culling) only
   skips drawing it.
 - [Skinned](animation.md) and [instanced](instancing.md) meshes cast shadows in their current pose. A cut-out material
   (`setAlphaCutoff`) casts a shadow with its holes. A **blended** (see-through) material casts none.
-- A shadow can only fall on surfaces inside the part of the view it covers. The sun itself has no position, so a tall
-  object far from the camera still shadows what is near it.
-- A spot light's shadow picture is a view down its cone, so the cone's width is spread over the picture: a narrow cone
-  gives sharper shadows than a wide one, and a cone near 85 degrees is coarse. Only one light casts shadows.
-- Shadows from the ambient light and from point lights don't exist; a point light's lit side shows no shadows. To light a
-  room from a fire with shadows, a spot light pointing into the room does the job.
+- A directional light's shadow can only fall on surfaces inside the part of the view it covers. The sun itself has no
+  position, so a tall object far from the camera still shadows what is near it.
+- A spot light's picture is a view down its cone, so the cone's width is spread over the picture: a narrow cone gives
+  sharper shadows than a wide one, and a cone near 85 degrees is coarse.
+- A point light's six pictures each cover a little more than a quarter-turn square, so there is no gap between sides. Its
+  shadows reach as far as its `range`. They cost six tiles, so give a point light `MEDIUM` or `LOW` unless it is the star
+  of the scene.
+- Ambient light and light from the sky cast no shadows.
 - Shadows work in every viewport and on both OpenGL and Vulkan.
+
+### Custom filters and falloffs
+
+Two pieces of the lighting are swappable: how a shadow's edge is filtered, and how a light fades with distance. Each is a
+small GLSL function **body** you write; the scene's shader is built to hold exactly the ones its lights use, so an unused
+one costs nothing, and the first frame that uses a new one compiles a program (a short stall).
+
+```java nocompile
+// A shadow edge from five lookups in a cross. In scope: uv, depth, texel, softness, and shadowLit(tap, depth).
+ShadowFilter cross = ShadowFilter.custom("cross", """
+        float s = shadowLit(uv, depth);
+        s += shadowLit(uv + vec2(texel.x, 0.0) * softness, depth);
+        s += shadowLit(uv - vec2(texel.x, 0.0) * softness, depth);
+        s += shadowLit(uv + vec2(0.0, texel.y) * softness, depth);
+        s += shadowLit(uv - vec2(0.0, texel.y) * softness, depth);
+        return s * 0.2;
+        """);
+lamp.setShadows(Shadows.of(ShadowQuality.MEDIUM).filter(cross));
+
+// A smooth fade; in scope: dist (distance from the light) and range.
+LightFalloff smooth = LightFalloff.custom("smooth", "float t = clamp(1.0 - dist / range, 0.0, 1.0); return t * t * (3.0 - 2.0 * t);");
+torch.setFalloff(smooth);
+torch.setFalloff(LightFalloff.LINEAR);      // or a built-in one
+```
+
+| Built-in | What it does |
+|---|---|
+| `ShadowFilter.HARD` | One lookup per pixel: crisp, blocky edges, the cheapest |
+| `ShadowFilter.PCF` | A bilinear-weighted 3x3 blur: the default |
+| `ShadowFilter.SOFT` | A wider 5x5 blur |
+| `LightFalloff.WINDOWED_INVERSE_SQUARE` | Fades smoothly to nothing at the range: the default |
+| `LightFalloff.LINEAR` | A straight line from full strength to nothing at the range |
+| `LightFalloff.NONE` | Never fades and ignores the range; for a light very far away |
+
+- A filter's function returns how much light reaches the point, from `0` (shadow) to `1` (lit). Look the map up with
+  `shadowLit(tap, depth)` only: it keeps the lookup inside the light's own tile so an edge never reads a neighbour's.
+- The name is letters and digits and only labels the piece. Two custom pieces with the same GLSL are one.
+- A body that doesn't compile is reported once in the log, and the lights that use it fall back to the built-in filter
+  or falloff, so a typo costs you the look and not the frame.
+- A directional light doesn't fade, so a falloff on it does nothing.
 
 ## Fog
 
@@ -148,6 +244,9 @@ scene.setAmbient(Color.WHITE, 0f);  // no longer used where the sky lights the s
 
 - **The sky doesn't light the scene** unless you call [`setEnvironmentLighting`](#light-from-the-sky). Otherwise set the
   ambient light and the lights to match it.
-- **Only the first 8 lights count,** and the shadow-casting one must be among them, or it is ignored.
-- **Shadow memory adds up:** the shadow picture is one per scene and device, shared by its viewports, but a size of 4096 or more
-  is hundreds of megabytes of GPU memory on top of the picture itself. 2048 is sharp enough for most scenes.
+- **Only the first 8 lights count,** and a light that casts shadows must be among them, or it is ignored.
+- **Only 4 lights cast shadows at once:** the directional ones, then the nearest to the camera. Check
+  `scene.getStats().shadowViews()` if a shadow is missing.
+- **Shadow memory adds up:** the shadow atlas is one per scene and device, shared by its viewports, and a 4096 square is
+  64 MB of GPU memory. A point light is six tiles and each cascade one, so `ULTRA` on several lights fills it at once and
+  the biggest tiles are halved. `HIGH` is sharp enough for most scenes.

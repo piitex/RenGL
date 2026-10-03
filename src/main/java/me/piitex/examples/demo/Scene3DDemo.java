@@ -9,12 +9,15 @@ import me.piitex.engine.render3d.Viewport3D;
 import me.piitex.engine.render3d.math.Bounds;
 import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.scene.Light;
+import me.piitex.engine.render3d.scene.LightFalloff;
 import me.piitex.engine.render3d.scene.Material;
 import me.piitex.engine.render3d.scene.Mesh;
 import me.piitex.engine.render3d.scene.Model;
 import me.piitex.engine.render3d.scene.Node3D;
 import me.piitex.engine.render3d.scene.OrbitControls;
 import me.piitex.engine.render3d.scene.Scene3D;
+import me.piitex.engine.render3d.scene.ShadowQuality;
+import me.piitex.engine.render3d.scene.Shadows;
 import me.piitex.engine.render3d.scene.TextureData;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.containers.Container;
@@ -101,6 +104,11 @@ public class Scene3DDemo {
         root.addElement(status);
         showcase.onModelChanged = status::setText;
 
+        TextOverlay shadowStats = new TextOverlay("", 13f, new Color(1f, 1f, 1f, 0.8f));
+        shadowStats.setPosition(24, 622);
+        root.addElement(shadowStats);
+        showcase.onShadowStats = shadowStats::setText;
+
         float y = 66;
         y = slider(root, "Sun", y, 0, 2, 1, value -> showcase.sun().setIntensity((float) (double) value));
         y = slider(root, "Ambient", y, 0, 1, 0.12, value -> showcase.scene.setAmbient(Color.WHITE, (float) (double) value));
@@ -108,6 +116,10 @@ public class Scene3DDemo {
         y = checkBox(root, "Spin the model", y, true, on -> showcase.spin = on);
         y = checkBox(root, "Orbiting point light", y, true, on -> showcase.orbitingLight = on);
         y = checkBox(root, "Glass sphere", y, true, on -> showcase.glass.setVisible(on));
+        y = checkBox(root, "Sun shadows (2 cascades)", y, true, on -> showcase.sun().setShadows(on ? Showcase.SUN_SHADOWS : null));
+        y = checkBox(root, "Point light shadows", y, true, on -> showcase.orbiting.setShadows(on ? Showcase.LIGHT_SHADOWS : null));
+        y = checkBox(root, "Linear light falloff", y, false,
+                on -> showcase.orbiting.setFalloff(on ? LightFalloff.LINEAR : LightFalloff.WINDOWED_INVERSE_SQUARE));
 
         ButtonOverlay reset = new ButtonOverlay("Reset camera", 126, 32);
         reset.setPosition(24, y + 6);
@@ -179,18 +191,26 @@ public class Scene3DDemo {
         final OrbitControls orbit = new OrbitControls(scene.camera());
         final Node3D holder = new Node3D("showcase"); // whatever model is on display is its only child
         final Node3D cube, glass, marker;
-        final Light orbiting = Light.point(new Vec3(2, 1.6f, 0), new Color(1f, 0.6f, 0.2f, 1f), 1.4f, 7f);
+        // A sun with two cascades keeps shadows sharp near the camera and still reaches the edge of the floor; the orbiting bulb
+        // shadows in every direction, from six pictures of the shared shadow atlas.
+        static final Shadows SUN_SHADOWS = Shadows.of(ShadowQuality.HIGH).cascades(2).distance(30f);
+        static final Shadows LIGHT_SHADOWS = Shadows.of(ShadowQuality.MEDIUM);
+        final Light orbiting = Light.point(new Vec3(2, 1.6f, 0), new Color(1f, 0.6f, 0.2f, 1f), 1.4f, 7f).setShadows(LIGHT_SHADOWS);
         final AtomicReference<Model> pending = new AtomicReference<>();
         volatile boolean spin = true;
         volatile boolean orbitingLight = true;
         java.util.function.Consumer<String> onModelChanged = text -> {
         };
+        java.util.function.Consumer<String> onShadowStats = text -> {
+        };
+        private String shownStats = "";
         private volatile String pendingName = "";
         private float time;
 
         Showcase() throws IOException {
             scene.setBackground(new Color(0.13f, 0.15f, 0.21f, 1f));
             scene.setAmbient(Color.WHITE, 0.12f);
+            sun().setShadows(SUN_SHADOWS);
             scene.lights().add(orbiting);
 
             scene.add(new Node3D("floor", Mesh.plane(12, 12), new Material(
@@ -212,6 +232,7 @@ public class Scene3DDemo {
             scene.add(glass);
 
             marker = new Node3D("marker", Mesh.cube(0.18f), new Material(new Color(1f, 0.7f, 0.3f, 1f)).setUnlit(true));
+            marker.setCastShadow(false); // it sits at the bulb, and would shade everything the bulb lights
             scene.add(marker);
 
             scene.add(holder);
@@ -265,6 +286,14 @@ public class Scene3DDemo {
             }
             marker.setVisible(orbitingLight);
             marker.setPosition(orbiting.getVector());
+
+            Scene3D.Stats stats = scene.getStats(); // what the last frame drew
+            String text = "Shadow pictures: " + stats.shadowViews() + " in a "
+                    + stats.shadowAtlasWidth() + " x " + stats.shadowAtlasHeight() + " atlas";
+            if (!text.equals(shownStats)) {
+                shownStats = text;
+                onShadowStats.accept(text);
+            }
         }
 
         /**

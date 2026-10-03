@@ -11,14 +11,14 @@ materials, a camera, some lights, and one forward pass that shades them. `Scene3
 Scene3D ──┬── root Node3D ──┬── Node3D (mesh + material)
           │                 └── Node3D ── Node3D ...   children move with their parent
           ├── Camera
-          ├── lights (up to 8), one of them can cast shadows
+          ├── lights (up to 8), up to 4 of them can cast shadows
           ├── skybox, background colour, ambient light
           └── animation players, update handler
 ```
 
 Everything is drawn by one forward renderer: classic (Lambert and Blinn-Phong) or [physically based](#material)
-shading with normal, metallic-roughness, occlusion and emissive maps, [shadows](lighting.md#shadows) from a directional
-or spot light, a [skybox](lighting.md#skybox) that can [light the scene and be reflected](lighting.md#light-from-the-sky),
+shading with normal, metallic-roughness, occlusion and emissive maps, [shadows](lighting.md#shadows) from directional, spot
+and point lights (several at once, with cascades for the sun), a [skybox](lighting.md#skybox) that can [light the scene and be reflected](lighting.md#light-from-the-sky),
 mipmapped and anisotropically filtered textures, alpha blending, [instanced](instancing.md) drawing, [skinned meshes and
 animation](animation.md), depth testing, back-face culling and [frustum culling](#frustum-culling). For models from
 files see [Models](models.md); for your own shaders see [Custom rendering](custom-rendering.md).
@@ -46,9 +46,10 @@ Call `scene.lights().clear()` for different lighting.
 | `getAmbient()` / `getAmbientIntensity()` | Read them back |
 | `setSkybox(Skybox)` / `getSkybox()` | The sky drawn behind everything, see [Skybox](lighting.md#skybox) |
 | `setFog(Color, float density)` / `setFog(Color, density, heightFalloff)` | Fades distant things into a colour, see [Fog](lighting.md#fog). Off by default |
-| `setShadowMapSize(int)`, `setShadowDistance(float)`, `setShadowBias(float)`, `setShadowSoftness(float)` | The quality of [shadows](lighting.md#shadows) |
+| `setShadowMapSize(int)`, `setShadowDistance(float)`, `setShadowBias(float)`, `setShadowSoftness(float)` | The default quality of [shadows](lighting.md#shadows), for lights that don't set their own with `Light.setShadows` |
+| `setShadowAtlasSize(int)` | The largest width and height of the picture all shadows share (`4096`), see [Which lights get shadows](lighting.md#which-lights-get-shadows) |
 | `setEnvironmentLighting(float)` / `getEnvironmentLighting()` | Light and reflections from the skybox, `0` (off, the default) or more, see [Light from the sky](lighting.md#light-from-the-sky) |
-| `getStats()` | A `Scene3D.Stats(nodes, culled, instances, drawCalls)` for the last time the scene was drawn, see [Frustum culling](#frustum-culling) |
+| `getStats()` | A `Scene3D.Stats(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight)` for the last time the scene was drawn, see [Frustum culling](#frustum-culling) and [Which lights get shadows](lighting.md#which-lights-get-shadows) |
 | `animate(AnimationPlayer)` / `stopAnimating(AnimationPlayer)` | Registers a player that advances once per frame, see [Animation](animation.md) |
 | `setUpdateHandler(UpdateHandler)` | Runs once per frame before the scene is drawn, see below |
 | `pick(x, y, width, height)` | The nearest [`Hit`](#picking) under a point of the picture, or `null` |
@@ -239,7 +240,9 @@ scene.lights().add(lamp);
 | `setVector(Vec3)` / `getVector()` | The direction of a directional light, or the position of a point or spot light. Move a light every frame from the update handler |
 | `setDirection(Vec3)`, `setCone(inner, outer)` | Where a spot light points and how wide it is |
 | `setColor(Color)`, `setIntensity(float)`, `setRange(float)` | Change it later |
-| `setCastShadow(boolean)` | A directional or spot light can make the scene's [shadows](lighting.md#shadows) |
+| `setShadows(Shadows)` / `setShadows(ShadowQuality)` | Any light can cast [shadows](lighting.md#shadows): pick a preset (`LOW` to `ULTRA`) and override the size, bias, softness, distance, cascades or filter |
+| `setCastShadow(boolean)` | `true` is the same as `setShadows(Shadows.SCENE)`: shadows with the scene's settings (`false` turns them off) |
+| `setFalloff(LightFalloff)` | How a point or spot light fades with distance: `WINDOWED_INVERSE_SQUARE` (default), `LINEAR`, `NONE` or a [custom GLSL one](lighting.md#custom-filters-and-falloffs) |
 
 [Lighting](lighting.md) covers shadows, the skybox and how the lights add up.
 
@@ -401,7 +404,7 @@ A scene makes one `SceneRenderer` per GPU device it is shown on, shared by that 
 collects the visible nodes, sorts the solid ones by material and mesh, and writes one record per node (or per
 [instance](instancing.md)) into a single vertex buffer that the GPU reads once per instance: the transform, tint and
 material parameters. Nodes that share a mesh and a material become **one instanced draw**, so the cost is the mesh and the
-material's textures, not a descriptor set per node. A shadow-casting light adds a depth pass first; the skybox is drawn
+material's textures, not a descriptor set per node. Shadow-casting lights add a depth pass first (one picture per cascade, spot light or side of a point light, all into one shared atlas); the skybox is drawn
 before the solid nodes, and the blended ones last, far to near. GPU meshes and textures are cached and freed after 600
 frames without being drawn. You never touch it directly; it is how the scene follows its `Content` lifecycle: `init`
 makes the renderer, `render` advances the animation players and runs the update handler (once per frame) and draws,
@@ -432,4 +435,4 @@ view volume, so a node just outside may still be drawn, and one inside is never 
 - **Many nodes are fine, many distinct materials cost more.** Nodes that share a mesh and a material draw together;
   each change of material binds its textures again. Use [`Instances`](instancing.md) for thousands of copies.
 - **Skinned meshes ignore their node's transform.** The joints place them, as in glTF; move the skeleton's nodes instead.
-- **Lights past the eighth are ignored**, and only one directional light casts shadows.
+- **Lights past the eighth are ignored**, and at most 4 lights cast shadows at a time: directional ones first, then the nearest to the camera.
