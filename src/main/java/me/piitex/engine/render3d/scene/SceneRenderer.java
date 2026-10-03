@@ -37,7 +37,7 @@ import static me.piitex.engine.render3d.scene.SceneShaders.*;
 final class SceneRenderer {
     private static final Logger log = LogManager.getLogger("Engine");
 
-    private static final int FRAME_BLOCK_SIZE = 64 + 16 * 5 + 16 * Scene3D.MAX_LIGHTS * 4 + 64 + 32 + 16 * 13;
+    private static final int FRAME_BLOCK_SIZE = 64 + 16 * 4 + 16 + 16 * Scene3D.MAX_LIGHTS * 6 + SHADOW_VIEW_BYTES * MAX_SHADOW_VIEWS + 32 + 16 * 13;
     private static final int SHADOW_BLOCK_SIZE = 64 + 16;
     private static final int INSTANCE_BYTES = INSTANCE_FLOATS * 4;
     private static final int JOINT_BLOCK_SIZE = Skin.MAX_JOINTS * 64;
@@ -100,20 +100,20 @@ final class SceneRenderer {
      * The buffers one render call fills.
      */
     private static final class Resources {
-        final GpuBuffer frame, shadowFrame, sky;
+        final GpuBuffer frame, sky;
+        final List<GpuBuffer> shadowViews = new ArrayList<>();
         GpuBuffer instances;
         long instanceCapacity;
         final List<GpuBuffer> joints = new ArrayList<>();
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
-            shadowFrame = device.createDynamicBuffer(BufferType.UNIFORM, SHADOW_BLOCK_SIZE);
             sky = device.createDynamicBuffer(BufferType.UNIFORM, SKY_BLOCK_SIZE);
         }
 
         void close() {
             frame.close();
-            shadowFrame.close();
+            for (GpuBuffer b : shadowViews) b.close();
             sky.close();
             if (instances != null) instances.close();
             for (GpuBuffer b : joints) b.close();
@@ -133,6 +133,8 @@ final class SceneRenderer {
         boolean cast;
         boolean receive;
         boolean inView = true;
+        float[] sphere; // world sphere {x, y, z, radius} around a shadow caster
+        boolean unbounded; // a caster whose shape the sphere can't promise (skinned, morphed, or not culled): always drawn
         float[] morph; // blend-shape weights to draw with, or null
         int key;
     }
@@ -145,6 +147,8 @@ final class SceneRenderer {
         Material material;
         int key;
         boolean cast;
+        float[] sphere; // as for Draw, for the casters in the group
+        boolean unbounded;
         boolean inView = true; // false: only drawn into the shadow map
         GpuBuffer vertices; // a morphed node's own vertices, or null for the mesh's
         int first, count;
@@ -171,15 +175,16 @@ final class SceneRenderer {
     private final GpuBuffer skyTriangle;
     private ByteBuffer instanceScratch = MemoryUtil.memAlloc(INSTANCE_BYTES * 256).order(ByteOrder.nativeOrder());
     private final ByteBuffer scratch = MemoryUtil.memAlloc(Math.max(FRAME_BLOCK_SIZE, JOINT_BLOCK_SIZE)).order(ByteOrder.nativeOrder());
-    private RenderTarget shadowTarget;
-    private int shadowTargetSize;
+    private final ShadowAtlas atlas;
+    private long atlasUsed;
     private long frame;
     private long lastDeviceFrame = -1;
     private int resourcesUsed;
-    private boolean warnedLights;
+    private boolean warnedLights, warnedShadowLights, warnedShadowShrink, warnedFilter;
 
     SceneRenderer(GpuDevice device) {
         this.device = device;
+        atlas = new ShadowAtlas(device);
         whiteTexture = pixel(255, 255, 255, 255);
         flatNormalTexture = pixel(128, 128, 255, 255);
         ByteBuffer triangle = MemoryUtil.memAlloc(6 * 4).order(ByteOrder.nativeOrder());
@@ -259,38 +264,25 @@ final class SceneRenderer {
         List<Group> blendedGroups = build(blended, res, cursor);
         uploadInstances(res, cursor[0]);
 
-        Light shadowLight = shadowCaster(scene);
-        boolean shadows = shadowLight != null && opaqueGroups.stream().anyMatch(g -> g.cast);
-        float[] shadowParams = new float[8];
-        Mat4 lightViewProj = Mat4.identity();
-        if (shadows) {
-            lightViewProj = shadowLight.getType() == Light.Type.SPOT
-                    ? spotShadowMatrices(scene, shadowLight, shadowParams)
-                    : shadowMatrices(scene, camera, aspect, opaque, shadowLight, shadowParams);
-            scratch.clear();
-            lightViewProj.put(scratch);
-            scratch.putFloat(shadowParams[4]).putFloat(shadowParams[5]).putFloat(shadowParams[6]).putFloat(0f);
-            scratch.flip();
-            res.shadowFrame.update(scratch);
-            shadowPass(scene, opaqueGroups, res);
-        }
+        ShadowFrame shadowFrame = planShadows(scene, camera, aspect, planes, opaque);
+        if (!shadowFrame.plans().isEmpty()) shadowPass(res, opaqueGroups, shadowFrame);
         Skybox sky = scene.getSkybox();
         int env = environmentKind(scene, sky);
-        writeFrameBlock(res.frame, scene, camera, viewProj, shadows ? shadowLight : null, lightViewProj, shadowParams, env);
+        writeFrameBlock(res.frame, scene, camera, viewProj, shadowFrame, env);
         if (sky != null) writeSky(res.sky, camera, aspect, sky);
 
         Color bg = scene.getBackground();
         int drawCalls = 0, drawnRecords = 0;
         try (RenderPass pass = device.beginPass(target, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
-            pass.bindTexture(7, shadows ? shadowTarget.texture() : whiteTexture);
+            pass.bindTexture(7, shadowFrame.plans().isEmpty() ? whiteTexture : atlas.texture());
             if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
             int[] state = {-1, 0};
             Material[] lastMaterial = {null};
             for (List<Group> list : List.of(opaqueGroups, blendedGroups)) {
                 for (Group group : list) {
                     if (!group.inView) continue;
-                    drawGroup(pass, res, group, state, lastMaterial, false, env);
+                    drawGroup(pass, res, group, state, lastMaterial, false, env, null);
                     drawCalls++;
                     drawnRecords += group.count;
                 }
@@ -323,12 +315,12 @@ final class SceneRenderer {
     /**
      * @param state        [0] the pipeline key in use, -1 for none
      */
-    private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int env) {
+    private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int env, GpuBuffer shadowView) {
         int key = shadowPass ? (group.key & KEY_SKINNED) | KEY_SHADOW : group.key | (env << KEY_ENV_SHIFT);
         GpuMesh mesh = gpuMesh(group.mesh);
         if (key != state[0]) {
             pass.bindPipeline(pipeline(key));
-            pass.bindUniformBuffer(0, shadowPass ? res.shadowFrame : res.frame);
+            pass.bindUniformBuffer(0, shadowPass ? shadowView : res.frame);
             state[0] = key;
             lastMaterial[0] = null;
         }
@@ -379,6 +371,10 @@ final class SceneRenderer {
             }
             draw.key = (draw.material.isDoubleSided() ? 0 : KEY_CULL) | (draw.material.isBlend() ? KEY_BLEND : 0) | (draw.material.isAdditive() ? KEY_ADDITIVE : 0)
                     | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0);
+            if (draw.cast) {
+                draw.sphere = worldSphere(world, mesh, skinned ? null : node.getInstances());
+                draw.unbounded = skinned || draw.morph != null || !node.isFrustumCulled();
+            }
             if (node.getInstances() != null && node.getInstances().size() == 0 && !skinned) {
                 // nothing to draw
             } else if (skinned || !node.isFrustumCulled() || inFrustum(planes, world, mesh, node.getInstances())) {
@@ -399,7 +395,7 @@ final class SceneRenderer {
     /**
      * The six planes of the view volume, each as (a, b, c, d) with a unit normal pointing inside, for {@code ax + by + cz + d >= 0}.
      */
-    private static float[] frustumPlanes(Mat4 viewProj) {
+    static float[] frustumPlanes(Mat4 viewProj) {
         float[] m = viewProj.toArray();
         // Each plane is the w row times 0 or 1 plus a signed row of x, y or z: left w + x, right w - x, bottom w + y,
         // top w - y, near z (depth runs 0 to 1) and far w - z.
@@ -423,6 +419,14 @@ final class SceneRenderer {
      * node that is only just outside can still be drawn, one that is inside never is skipped.
      */
     private static boolean inFrustum(float[] planes, Mat4 world, Mesh mesh, Instances instances) {
+        float[] sphere = worldSphere(world, mesh, instances);
+        return ShadowPlanner.intersects(planes, sphere[0], sphere[1], sphere[2], sphere[3]);
+    }
+
+    /**
+     * A sphere {@code {x, y, z, radius}} in world space around the mesh, or around every instance of it.
+     */
+    private static float[] worldSphere(Mat4 world, Mesh mesh, Instances instances) {
         Bounds bounds = mesh.bounds();
         Vec3 c = bounds.center();
         float radius = bounds.radius();
@@ -467,10 +471,7 @@ final class SceneRenderer {
         float y = w[1] * lx + w[5] * ly + w[9] * lz + w[13];
         float z = w[2] * lx + w[6] * ly + w[10] * lz + w[14];
         float r = lr * maxColumn(w, 0);
-        for (int p = 0; p < 6; p++) {
-            if (planes[p * 4] * x + planes[p * 4 + 1] * y + planes[p * 4 + 2] * z + planes[p * 4 + 3] < -r) return false;
-        }
-        return true;
+        return new float[]{x, y, z, r};
     }
 
     /**
@@ -506,16 +507,35 @@ final class SceneRenderer {
                 last.key = draw.key;
                 last.cast = draw.cast;
                 last.inView = draw.inView;
+                last.sphere = draw.sphere;
+                last.unbounded = draw.unbounded;
                 last.first = cursor[0];
                 if (skinned) last.joints = writeJoints(res, draw.node.getSkin());
                 if (draw.morph != null) last.vertices = morphedBuffer(draw.node, draw.mesh, draw.morph);
                 groups.add(last);
+            }
+            if (merge && draw.cast) {
+                last.sphere = union(last.sphere, draw.sphere);
+                last.unbounded |= draw.unbounded;
             }
             writeRecords(draw, instances, skinned);
             last.count += count;
             cursor[0] += count;
         }
         return groups;
+    }
+
+    /**
+     * The smallest sphere around two spheres {@code {x, y, z, radius}}.
+     */
+    private static float[] union(float[] a, float[] b) {
+        float dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+        float d = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d + b[3] <= a[3]) return a;
+        if (d + a[3] <= b[3]) return b;
+        float r = (d + a[3] + b[3]) * 0.5f;
+        float t = (r - a[3]) / d;
+        return new float[]{a[0] + dx * t, a[1] + dy * t, a[2] + dz * t, r};
     }
 
     private void ensureScratch(int records) {
@@ -642,139 +662,120 @@ final class SceneRenderer {
 
     // ---- shadows -----------------------------------------------------------------------------------------------
 
-    private static Light shadowCaster(Scene3D scene) {
-        List<Light> lights = scene.lights();
-        for (int i = 0; i < Math.min(lights.size(), Scene3D.MAX_LIGHTS); i++) {
-            Light light = lights.get(i);
-            if (light.isCastShadow() && light.getType() != Light.Type.POINT) return light;
+    /**
+     * What the main pass needs to read this frame's shadows: the lights' plans (views with their tiles) and the atlas.
+     */
+    private record ShadowFrame(List<ShadowPlanner.LightPlan> plans, int atlasWidth, int atlasHeight, boolean bottomLeft) {
+        static final ShadowFrame NONE = new ShadowFrame(List.of(), 0, 0, false);
+
+        int viewCount() {
+            int n = 0;
+            for (ShadowPlanner.LightPlan plan : plans) n += plan.views().size();
+            return n;
         }
-        return null;
     }
 
     /**
-     * The orthographic matrix that looks down the light over a sphere around the part of the view frustum that gets
-     * shadows, as seen from the light. The sphere does not change when the camera turns, and its centre moves in whole
-     * texels, so the shadows don't shimmer as the camera moves.
-     *
-     * @param params receives {@code {normalOffset, depthBias, texelUv, bottomLeft}} for the shader
+     * Picks the lights that get shadows, gives each a tile size that fits the atlas, builds their views and lays the tiles out.
      */
-    private Mat4 shadowMatrices(Scene3D scene, Camera camera, float aspect, List<Draw> draws, Light light, float[] params) {
-        int size = scene.getShadowMapSize();
-        if (shadowTarget == null || shadowTargetSize != size) {
-            if (shadowTarget != null) shadowTarget.close();
-            shadowTarget = device.createSampledTarget(size, size, true, false);
-            shadowTargetSize = size;
+    private ShadowFrame planShadows(Scene3D scene, Camera camera, float aspect, float[] cameraPlanes, List<Draw> opaque) {
+        List<float[]> casters = new ArrayList<>();
+        for (Draw d : opaque) if (d.cast) casters.add(d.sphere);
+        if (casters.isEmpty()) return ShadowFrame.NONE;
+        boolean[] truncated = {false};
+        List<ShadowPlanner.Candidate> candidates = ShadowPlanner.select(scene, camera.getPosition(), cameraPlanes, truncated);
+        if (truncated[0] && !warnedShadowLights) {
+            warnedShadowLights = true;
+            log.warn("A Scene3D draws the shadows of at most {} lights; the others, farthest from the camera first, cast none.", Scene3D.MAX_SHADOW_LIGHTS);
         }
-        Vec3 dir = light.getVector().normalized();
-        Vec3 eye = camera.getPosition();
-        Vec3 f = camera.getTarget().sub(eye).normalized();
-        Vec3 r = f.cross(camera.getUp()).normalized();
-        Vec3 u = r.cross(f);
-        float near = camera.getNear();
-        float far = Math.min(camera.getFar(), Math.max(near + 0.01f, scene.getShadowDistance()));
-        float tanY = (float) Math.tan(Math.toRadians(camera.getFovYDegrees()) * 0.5);
-        float tanX = tanY * aspect;
+        if (candidates.isEmpty()) return ShadowFrame.NONE;
 
-        Vec3[] corners = new Vec3[8];
-        Vec3 centre = Vec3.ZERO;
-        for (int i = 0; i < 8; i++) {
-            float d = (i & 1) == 0 ? near : far;
-            float sx = (i & 2) == 0 ? -1 : 1, sy = (i & 4) == 0 ? -1 : 1;
-            corners[i] = eye.add(f.mul(d)).add(r.mul(sx * tanX * d)).add(u.mul(sy * tanY * d));
-            centre = centre.add(corners[i]);
+        int[] requested = new int[candidates.size()], counts = new int[candidates.size()];
+        for (int i = 0; i < requested.length; i++) {
+            ShadowPlanner.Candidate c = candidates.get(i);
+            requested[i] = c.size();
+            counts[i] = ShadowPlanner.viewCount(c.light(), c.shadows());
         }
-        centre = centre.mul(1f / 8f);
-        float radius = 0f;
-        for (Vec3 c : corners) radius = Math.max(radius, c.sub(centre).length());
-        radius = Math.max(radius, 0.5f);
+        ShadowAtlas.Fit fit = ShadowAtlas.fit(requested, counts, scene.getShadowAtlasSize());
+        if (!java.util.Arrays.equals(fit.lightSizes(), requested) && !warnedShadowShrink) {
+            warnedShadowShrink = true;
+            log.warn("The shadows of {} lights don't fit a {} pixel atlas at the sizes asked for; the biggest are drawn smaller. "
+                    + "Lower their quality or raise Scene3D.setShadowAtlasSize.", candidates.size(), scene.getShadowAtlasSize());
+        }
+        RenderTarget target = atlas.target(fit.layout());
+        atlasUsed = frame;
 
-        // The light's own axes, to snap the centre to the shadow map's texel grid.
-        Vec3 ref = Math.abs(dir.y()) > 0.99f ? Vec3.X : Vec3.UP;
-        Vec3 lr = dir.cross(ref).normalized();
-        Vec3 lu = lr.cross(dir);
-        float texel = 2f * radius / size;
-        float sx = (float) Math.floor(centre.dot(lr) / texel) * texel;
-        float sy = (float) Math.floor(centre.dot(lu) / texel) * texel;
-        centre = lr.mul(sx).add(lu.mul(sy)).add(dir.mul(centre.dot(dir)));
+        List<ShadowPlanner.LightPlan> plans = new ArrayList<>();
+        int tile = 0;
+        for (int i = 0; i < candidates.size(); i++) {
+            ShadowPlanner.LightPlan plan = ShadowPlanner.plan(scene, camera, aspect, candidates.get(i), fit.lightSizes()[i], casters);
+            for (ShadowPlanner.View view : plan.views()) view.rect = fit.layout().rects().get(tile++);
+            plans.add(plan);
+        }
+        return new ShadowFrame(plans, target.width(), target.height(), target.isBottomLeftOrigin());
+    }
 
-        // How far toward the light things can be and still need to cast into the picture.
-        float back = radius;
-        for (Draw d : draws) {
-            if (!d.cast) continue;
-            Bounds bounds = d.mesh.bounds().transform(d.world);
-            Vec3 lo = bounds.min(), hi = bounds.max();
-            for (int i = 0; i < 8; i++) {
-                Vec3 p = new Vec3((i & 1) == 0 ? lo.x() : hi.x(), (i & 2) == 0 ? lo.y() : hi.y(), (i & 4) == 0 ? lo.z() : hi.z());
-                back = Math.max(back, centre.sub(p).dot(dir));
+    /**
+     * Draws the casters into every view's tile of the atlas, leaving out those that can't show in that view.
+     */
+    private void shadowPass(Resources res, List<Group> groups, ShadowFrame shadows) {
+        int views = shadows.viewCount();
+        while (res.shadowViews.size() < views) res.shadowViews.add(device.createDynamicBuffer(BufferType.UNIFORM, SHADOW_BLOCK_SIZE));
+        int v = 0;
+        for (ShadowPlanner.LightPlan plan : shadows.plans()) {
+            for (ShadowPlanner.View view : plan.views()) {
+                scratch.clear();
+                view.viewProj.put(scratch);
+                scratch.putFloat(view.perspective ? 1f : 0f).putFloat(view.near).putFloat(view.far).putFloat(0f);
+                scratch.flip();
+                res.shadowViews.get(v++).update(scratch);
             }
         }
-        back = Math.min(back, 2000f) + 1f;
-        Vec3 lightEye = centre.sub(dir.mul(back));
-        Mat4 view = Mat4.lookAt(lightEye, centre, ref);
-        Mat4 proj = Mat4.orthographic(-radius, radius, -radius, radius, 0f, back + radius);
-
-        params[0] = texel * 1.5f * scene.getShadowBias();
-        params[1] = (texel * 2.5f * scene.getShadowBias()) / (back + radius);
-        params[2] = 1f / size;
-        params[3] = shadowTarget.isBottomLeftOrigin() ? 1f : 0f;
-        return proj.mul(view);
-    }
-
-    /**
-     * The perspective matrix of a spot light's cone. The map stores the distance along the axis, so the offsets grow
-     * with the distance from the light, as the texels do.
-     *
-     * @param params as for {@link #shadowMatrices}, plus {@code {perspective, near, far}} at 4 to 6
-     */
-    private Mat4 spotShadowMatrices(Scene3D scene, Light light, float[] params) {
-        int size = scene.getShadowMapSize();
-        if (shadowTarget == null || shadowTargetSize != size) {
-            if (shadowTarget != null) shadowTarget.close();
-            shadowTarget = device.createSampledTarget(size, size, true, false);
-            shadowTargetSize = size;
-        }
-        Vec3 position = light.getVector();
-        Vec3 dir = light.getDirection();
-        Vec3 ref = Math.abs(dir.y()) > 0.99f ? Vec3.X : Vec3.UP;
-        float far = light.getRange();
-        float near = Math.max(0.05f, far * 0.005f);
-        float half = (float) Math.toRadians(light.getOuterAngle());
-        Mat4 view = Mat4.lookAt(position, position.add(dir), ref);
-        Mat4 proj = Mat4.perspective(Math.min(half * 2f + 0.05f, 3.0f), 1f, near, far);
-        // The width of one texel at distance 1 along the axis.
-        float texel = 2f * (float) Math.tan(Math.min(half + 0.025f, 1.5f)) / size;
-        params[0] = texel * 1.5f * scene.getShadowBias();
-        params[1] = texel * 2.5f * scene.getShadowBias() / (far - near);
-        params[2] = 1f / size;
-        params[3] = shadowTarget.isBottomLeftOrigin() ? 1f : 0f;
-        params[4] = 1f;
-        params[5] = near;
-        params[6] = far;
-        return proj.mul(view);
-    }
-
-    private void shadowPass(Scene3D scene, List<Group> groups, Resources res) {
-        try (RenderPass pass = device.beginPass(shadowTarget, 1f, 1f, 1f, 1f)) {
-            int[] state = {-1, 0};
-            Material[] lastMaterial = {null};
-            for (Group group : groups) {
-                if (group.cast) drawGroup(pass, res, group, state, lastMaterial, true, ENV_NONE);
+        try (RenderPass pass = device.beginPass(atlas.current(), 1f, 1f, 1f, 1f)) {
+            v = 0;
+            for (ShadowPlanner.LightPlan plan : shadows.plans()) {
+                for (ShadowPlanner.View view : plan.views()) {
+                    ShadowAtlas.Rect r = view.rect;
+                    pass.setViewport(r.x(), r.y(), r.size(), r.size());
+                    GpuBuffer buffer = res.shadowViews.get(v++);
+                    int[] state = {-1, 0};
+                    Material[] lastMaterial = {null};
+                    for (Group group : groups) {
+                        if (!group.cast) continue;
+                        if (!group.unbounded && !ShadowPlanner.intersects(view.planes, group.sphere[0], group.sphere[1], group.sphere[2], group.sphere[3])) continue;
+                        drawGroup(pass, res, group, state, lastMaterial, true, ENV_NONE, buffer);
+                    }
+                }
             }
         }
     }
 
     // ---- uniform blocks ----------------------------------------------------------------------------------------
 
+    private static int falloffId(LightFalloff falloff) {
+        return falloff instanceof BuiltinLightFalloff b ? b.id() : 0;
+    }
+
+    private int filterId(ShadowFilter filter) {
+        if (filter instanceof BuiltinShadowFilter b) return b.id();
+        if (!warnedFilter) {
+            warnedFilter = true;
+            log.warn("Custom shadow filters are not supported yet; using PCF.");
+        }
+        return ShadowFilter.PCF instanceof BuiltinShadowFilter p ? p.id() : 1;
+    }
+
     private static float linear(float srgb) {
         return (float) Math.pow(Math.max(0f, srgb), 2.2);
     }
 
-    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, Camera camera, Mat4 viewProj, Light shadowLight,
-                                 Mat4 lightViewProj, float[] shadow, int env) {
+    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env) {
         scratch.clear();
         viewProj.put(scratch);
         Vec3 eye = camera.getPosition();
+        Vec3 forward = camera.getTarget().sub(eye).normalized();
         scratch.putFloat(eye.x()).putFloat(eye.y()).putFloat(eye.z()).putFloat(1f);
+        scratch.putFloat(forward.x()).putFloat(forward.y()).putFloat(forward.z()).putFloat(0f);
         Color ambient = scene.getAmbient();
         float ai = scene.getAmbientIntensity();
         scratch.putFloat(linear(ambient.getR()) * ai).putFloat(linear(ambient.getG()) * ai).putFloat(linear(ambient.getB()) * ai).putFloat(1f);
@@ -786,9 +787,9 @@ final class SceneRenderer {
         }
         int count = Math.min(lights.size(), Scene3D.MAX_LIGHTS);
         scratch.putFloat(count).putFloat(0f).putFloat(0f).putFloat(0f);
-        int shadowIndex = shadowLight == null ? -1 : lights.indexOf(shadowLight);
-        scratch.putFloat(shadowIndex).putFloat(shadow[3]).putFloat(shadow[2]).putFloat(shadow[1]);
-        scratch.putFloat(shadow[0]).putFloat(shadow[4]).putFloat(shadow[5]).putFloat(shadow[6]);
+        // The atlas's texel size, and whether its rows run from the bottom (OpenGL).
+        scratch.putFloat(shadows.atlasWidth() == 0 ? 0f : 1f / shadows.atlasWidth()).putFloat(shadows.atlasHeight() == 0 ? 0f : 1f / shadows.atlasHeight())
+                .putFloat(shadows.bottomLeft() ? 1f : 0f).putFloat(0f);
         for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) {
             if (i < count) {
                 Light light = lights.get(i);
@@ -817,15 +818,51 @@ final class SceneRenderer {
                 scratch.putFloat(0f).putFloat(-1f).putFloat(0f).putFloat(-1f);
             }
         }
-        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) { // the cosine of the inner angle
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) { // the cosine of the inner angle, and the falloff
             float inner = i < count && lights.get(i).getType() == Light.Type.SPOT
                     ? (float) Math.cos(Math.toRadians(lights.get(i).getInnerAngle())) : 1f;
-            scratch.putFloat(inner).putFloat(0f).putFloat(0f).putFloat(0f);
+            scratch.putFloat(inner).putFloat(i < count ? falloffId(lights.get(i).getFalloff()) : 0f).putFloat(0f).putFloat(0f);
         }
-        lightViewProj.put(scratch);
+        // Per light: the first of its shadow views, how many it has (0 for none), its filter and its softness; then the cascade splits.
+        int[] first = new int[Scene3D.MAX_LIGHTS];
+        ShadowPlanner.LightPlan[] planOf = new ShadowPlanner.LightPlan[Scene3D.MAX_LIGHTS];
+        int view = 0;
+        for (ShadowPlanner.LightPlan plan : shadows.plans()) {
+            if (plan.index() < Scene3D.MAX_LIGHTS) {
+                planOf[plan.index()] = plan;
+                first[plan.index()] = view;
+            }
+            view += plan.views().size();
+        }
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) {
+            ShadowPlanner.LightPlan plan = planOf[i];
+            if (plan == null) {
+                scratch.putFloat(-1f).putFloat(0f).putFloat(0f).putFloat(1f);
+            } else {
+                scratch.putFloat(first[i]).putFloat(plan.views().size()).putFloat(filterId(plan.shadows().resolveFilter()))
+                        .putFloat(plan.shadows().resolveSoftness(scene));
+            }
+        }
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) {
+            float[] splits = planOf[i] == null ? new float[4] : planOf[i].splits();
+            scratch.putFloat(splits[0]).putFloat(splits[1]).putFloat(splits[2]).putFloat(splits[3]);
+        }
+        for (ShadowPlanner.LightPlan plan : shadows.plans()) {
+            for (ShadowPlanner.View v : plan.views()) {
+                v.viewProj.put(scratch);
+                ShadowAtlas.Rect r = v.rect;
+                // The tile as a share of the atlas, from its top-left corner.
+                scratch.putFloat((float) r.x() / shadows.atlasWidth()).putFloat((float) r.y() / shadows.atlasHeight())
+                        .putFloat((float) r.size() / shadows.atlasWidth()).putFloat((float) r.size() / shadows.atlasHeight());
+                scratch.putFloat(v.normalOffset).putFloat(v.depthBias).putFloat(v.near).putFloat(v.far);
+            }
+        }
+        for (int i = shadows.viewCount(); i < MAX_SHADOW_VIEWS; i++) {
+            for (int k = 0; k < SHADOW_VIEW_BYTES / 4; k++) scratch.putFloat(0f);
+        }
         Color fog = scene.getFogColor();
         scratch.putFloat(linear(fog.getR())).putFloat(linear(fog.getG())).putFloat(linear(fog.getB())).putFloat(scene.getFogDensity());
-        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(scene.getShadowSoftness()).putFloat(0f).putFloat(0f);
+        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(0f).putFloat(0f).putFloat(0f);
         Skybox sky = scene.getSkybox();
         if (env == ENV_NONE) {
             for (int i = 0; i < 13; i++) scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(0f);
@@ -986,6 +1023,7 @@ final class SceneRenderer {
      * Frees what the scene hasn't drawn for a while, so a model that was swapped out gives its memory back.
      */
     private void sweep() {
+        if (frame - atlasUsed > KEEP_FRAMES) atlas.close();
         for (Iterator<GpuMesh> it = meshes.values().iterator(); it.hasNext(); ) {
             GpuMesh mesh = it.next();
             if (frame - mesh.lastUsed > KEEP_FRAMES) {
@@ -1021,7 +1059,7 @@ final class SceneRenderer {
         for (Resources r : resourcePool) r.close();
         for (Pipeline pipeline : pipelines.values()) pipeline.close();
         for (Pipeline pipeline : skyPipelines.values()) pipeline.close();
-        if (shadowTarget != null) shadowTarget.close();
+        atlas.close();
         skyTriangle.close();
         whiteTexture.close();
         flatNormalTexture.close();

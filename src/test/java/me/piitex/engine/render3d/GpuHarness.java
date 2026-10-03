@@ -58,12 +58,18 @@ final class GpuHarness {
     }
 
     static Run run(RenderAPI api, int viewportSize, Consumer<Viewport3D> setup, Checks checks) {
+        if (api == RenderAPI.OPENGL && System.getProperty("os.name", "").toLowerCase().contains("mac")) {
+            return runHeadlessGl(viewportSize, setup, checks); // the engine would log a fatal error for an OpenGL window here
+        }
         try {
             if (RenderAPI.resolve(api) != api) {
-                return new Run(false, api + " does not exist on this platform", null, null, Map.of());
+                return api == RenderAPI.OPENGL ? runHeadlessGl(viewportSize, setup, checks)
+                        : new Run(false, api + " does not exist on this platform", null, null, Map.of());
             }
         } catch (IllegalStateException e) {
-            return new Run(false, api + " does not exist on this platform", null, null, Map.of());
+            // macOS: the engine refuses OpenGL windows, but a bare GLFW context still gives the 3D layer a GL device to test.
+            return api == RenderAPI.OPENGL ? runHeadlessGl(viewportSize, setup, checks)
+                    : new Run(false, api + " does not exist on this platform", null, null, Map.of());
         }
         Recorder recorder = new Recorder();
         String[] info = new String[2];
@@ -146,5 +152,66 @@ final class GpuHarness {
             return new Run(false, "the window never drew a 3D frame (no display, or no " + api + " device)", null, null, Map.of());
         }
         return new Run(true, null, info[0], actual[0], recorder.results);
+    }
+
+    /**
+     * The same checks on an OpenGL 3.3 device made from a hidden GLFW window, without the engine. The engine's own OpenGL
+     * path doesn't exist on macOS, but the 3D layer's GL backend does, and this is how it gets tested there. The content is
+     * drawn six times into a target of the viewport's size, then the checks run, as in a real window.
+     */
+    private static Run runHeadlessGl(int viewportSize, Consumer<Viewport3D> setup, Checks checks) {
+        Viewport3D viewport = new Viewport3D(viewportSize, viewportSize);
+        setup.accept(viewport);
+        Viewport3D.Content content = viewport.getContent();
+        if (content == null) return new Run(false, "no content", null, null, Map.of());
+        if (!org.lwjgl.glfw.GLFW.glfwInit()) return new Run(false, "GLFW could not start", null, null, Map.of());
+        long window = 0;
+        try {
+            org.lwjgl.glfw.GLFW.glfwDefaultWindowHints();
+            org.lwjgl.glfw.GLFW.glfwWindowHint(org.lwjgl.glfw.GLFW.GLFW_VISIBLE, org.lwjgl.glfw.GLFW.GLFW_FALSE);
+            org.lwjgl.glfw.GLFW.glfwWindowHint(org.lwjgl.glfw.GLFW.GLFW_CONTEXT_VERSION_MAJOR, 3);
+            org.lwjgl.glfw.GLFW.glfwWindowHint(org.lwjgl.glfw.GLFW.GLFW_CONTEXT_VERSION_MINOR, 3);
+            org.lwjgl.glfw.GLFW.glfwWindowHint(org.lwjgl.glfw.GLFW.GLFW_OPENGL_PROFILE, org.lwjgl.glfw.GLFW.GLFW_OPENGL_CORE_PROFILE);
+            org.lwjgl.glfw.GLFW.glfwWindowHint(org.lwjgl.glfw.GLFW.GLFW_OPENGL_FORWARD_COMPAT, org.lwjgl.glfw.GLFW.GLFW_TRUE);
+            window = org.lwjgl.glfw.GLFW.glfwCreateWindow(viewportSize, viewportSize, "RenGL GL test", 0, 0);
+            if (window == 0) return new Run(false, "no OpenGL 3.3 context", null, null, Map.of());
+            org.lwjgl.glfw.GLFW.glfwMakeContextCurrent(window);
+            org.lwjgl.opengl.GL.createCapabilities();
+
+            long[] frame = {0};
+            org.lwjgl.opengl.GL.createCapabilities();
+            var device = new me.piitex.engine.render3d.gl.GlDevice(() -> frame[0]);
+            Recorder recorder = new Recorder();
+            int samples = Math.min(Integer.highestOneBit(viewport.getSamples()), device.maxSamples());
+            RenderTarget target = device.createRenderTarget(viewportSize, viewportSize, true, samples);
+            try {
+                content.init(device);
+                content.resize(device, viewportSize, viewportSize);
+                for (int i = 0; i < 6; i++) {
+                    frame[0]++;
+                    device.beginFrame();
+                    try {
+                        content.render(device, target, 1f / 60f);
+                    } finally {
+                        device.endFrame();
+                    }
+                }
+                try {
+                    checks.run(device, target, recorder);
+                } catch (Throwable t) {
+                    recorder.results.put("checks ran to the end", t.toString());
+                }
+            } finally {
+                content.dispose(device);
+                target.close();
+                device.close();
+            }
+            return new Run(true, null, device.name(), RenderAPI.OPENGL, recorder.results);
+        } catch (Throwable t) {
+            return new Run(false, "OpenGL could not run: " + t, null, null, Map.of());
+        } finally {
+            if (window != 0) org.lwjgl.glfw.GLFW.glfwDestroyWindow(window);
+            org.lwjgl.glfw.GLFW.glfwTerminate();
+        }
     }
 }

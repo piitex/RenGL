@@ -70,6 +70,7 @@ public class Scene3D implements Viewport3D.Content {
     private UpdateHandler updateHandler;
     private Skybox skybox;
     private int shadowMapSize = 2048;
+    private int shadowAtlasSize = 4096;
     private float shadowDistance = 60f;
     private float shadowBias = 1f;
     private float shadowSoftness = 1f;
@@ -166,11 +167,26 @@ public class Scene3D implements Viewport3D.Content {
     }
 
     /**
-     * The width and height in pixels of the shadow picture: more is sharper and costs more memory and time. 2048 by
-     * default; from 256 to 8192.
+     * The width and height in pixels of a shadow picture for each light that doesn't set its own size (see
+     * {@link Shadows}): more is sharper and costs more memory and time. 2048 by default; from 256 to 8192. A point light
+     * without a size of its own uses 1024 whatever this says.
      */
     public Scene3D setShadowMapSize(int size) {
         this.shadowMapSize = Math.max(256, Math.min(8192, size));
+        return this;
+    }
+
+    public int getShadowAtlasSize() {
+        return shadowAtlasSize;
+    }
+
+    /**
+     * The largest width and height in pixels of the picture all shadows share (4096 by default; 1024 to 8192). The
+     * lights' shadow pictures are packed into it; if they don't fit, the biggest are drawn smaller until they do. A single
+     * picture bigger than this still gets the room it needs.
+     */
+    public Scene3D setShadowAtlasSize(int size) {
+        this.shadowAtlasSize = Math.max(1024, Math.min(8192, size));
         return this;
     }
 
