@@ -65,6 +65,22 @@ class ShadowGpuTest {
             return (data.get(i) & 255) + (data.get(i + 1) & 255) + (data.get(i + 2) & 255);
         }
 
+        /**
+         * Writes the picture as a PNG, to look at it.
+         */
+        void writePng(java.nio.file.Path path) throws java.io.IOException {
+            int w = target.width(), h = target.height();
+            var image = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int i = (y * w + x) * 4;
+                    image.setRGB(x, y, ((data.get(i) & 255) << 16) | ((data.get(i + 1) & 255) << 8) | (data.get(i + 2) & 255));
+                }
+            }
+            java.nio.file.Files.createDirectories(path.getParent());
+            javax.imageio.ImageIO.write(image, "png", path.toFile());
+        }
+
         void free() {
             MemoryUtil.memFree(data);
         }
@@ -110,7 +126,8 @@ class ShadowGpuTest {
 
     private static List<Scenario> scenarios() {
         return List.of(
-                new Scenario("two lights cast shadows", ShadowGpuTest::twoCasters, ShadowGpuTest::twoCastersCheck));
+                new Scenario("two lights cast shadows", ShadowGpuTest::twoCasters, ShadowGpuTest::twoCastersCheck),
+                new Scenario("a point light casts shadows all round", ShadowGpuTest::pointRoom, ShadowGpuTest::pointRoomCheck));
     }
 
     private List<DynamicTest> tests(RenderAPI api) {
@@ -122,6 +139,14 @@ class ShadowGpuTest {
                         if (device.api() != api) return;
                         Pixels pixels = new Pixels(scene, target);
                         try {
+                            String dump = System.getProperty("rengl.test.dump"); // a folder to write each scenario's picture into
+                            if (dump != null) {
+                                try {
+                                    pixels.writePng(java.nio.file.Path.of(dump, scenario.name().replace(' ', '-') + "-" + api.name().toLowerCase() + ".png"));
+                                } catch (java.io.IOException e) {
+                                    throw new java.io.UncheckedIOException(e);
+                                }
+                            }
                             scenario.check().run(scene, target, recorder, pixels);
                         } finally {
                             pixels.free();
@@ -188,6 +213,46 @@ class ShadowGpuTest {
             r.check("two lights: the floor between is evenly lit", Math.abs(betweenA - betweenB) < Math.max(12, betweenA * 0.1),
                     betweenA + " vs " + betweenB);
         });
+    }
+
+    // ---- a point light ---------------------------------------------------------------------------------------------
+
+    /**
+     * A bulb 4 up over a floor, with a low pillar east, west, south and north of it, one on the diagonal and a block right
+     * under it, so that shadows land on four of the cube's sides, across a seam between two, and on its underside.
+     */
+    private static Scene3D pointRoom() {
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        scene.lights().add(Light.point(new Vec3(0, 4, 0), Color.WHITE, 4f, 25f).setShadows(ShadowQuality.MEDIUM));
+        scene.setAmbient(Color.WHITE, 0.03f);
+        scene.setSkybox(Skybox.gradient(Color.BLACK, Color.BLACK, Color.BLACK));
+        scene.add(floor(40f));
+        scene.add(pillar("east", 4f, 0f, 1.5f)).add(pillar("west", -4f, 0f, 1.5f)).add(pillar("south", 0f, 4f, 1.5f)).add(pillar("north", 0f, -4f, 1.5f))
+                .add(pillar("diagonal", 3f, 3f, 1.5f)); // its shadow runs along the seam between two sides of the cube
+        Node3D block = new Node3D("block", Mesh.cube(1.4f), new Material(Color.WHITE).setRoughness(0.9f));
+        block.setPosition(0f, 1f, 0f);
+        scene.add(block);
+        scene.camera().lookAt(new Vec3(0, 20f, 3f), new Vec3(0, 0, 0)).setFovYDegrees(70);
+        return scene;
+    }
+
+    private static void pointRoomCheck(Scene3D scene, RenderTarget target, GpuHarness.Recorder r, Pixels px) {
+        Object[][] spots = {
+                {"east", 5.5f, 0f, 0f, 5.5f, 0f, 2.5f},
+                {"west", -5.5f, 0f, 0f, -5.5f, 0f, 2.5f},
+                {"south", 0f, 0f, 5.5f, 2.5f, 0f, 5.5f},
+                {"north", 0f, 0f, -5.5f, 2.5f, 0f, -5.5f},
+                {"underneath", 0f, 0f, 1.0f, 3f, 0f, 1.0f},
+                {"diagonally (across the seam between two faces)", 4.1f, 0f, 4.1f, 5.8f, 0f, 2.0f}};
+        for (Object[] spot : spots) {
+            String name = "point light: the floor " + spot[0] + " of the bulb is shadowed";
+            r.guard(name, () -> {
+                int shadowed = px.luma((float) spot[1], (float) spot[2], (float) spot[3]);
+                int lit = px.luma((float) spot[4], (float) spot[5], (float) spot[6]);
+                r.check(name, shadowed < lit * 0.5 && lit > 600, "shadowed " + shadowed + " lit " + lit);
+            });
+        }
     }
 
     static String describe(int[] c) {
