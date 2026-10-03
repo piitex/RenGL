@@ -54,6 +54,17 @@ final class VkPass implements RenderPass {
     }
 
     @Override
+    public void setViewport(int x, int y, int width, int height) {
+        try (MemoryStack stack = stackPush()) {
+            vkCmdSetViewport(cmd, 0, VkViewport.calloc(1, stack)
+                    .x(x).y(y + height).width(width).height(-height)
+                    .minDepth(0f).maxDepth(1f));
+            vkCmdSetScissor(cmd, 0, VkRect2D.calloc(1, stack)
+                    .offset(o -> o.x(x).y(y)).extent(e -> e.width(width).height(height)));
+        }
+    }
+
+    @Override
     public void bindPipeline(Pipeline pipeline) {
         this.pipeline = (VkPipe) pipeline;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,

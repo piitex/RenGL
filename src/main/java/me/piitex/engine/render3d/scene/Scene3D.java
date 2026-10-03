@@ -46,6 +46,11 @@ public class Scene3D implements Viewport3D.Content {
     public static final int MAX_LIGHTS = 8;
 
     /**
+     * The most lights whose shadows are drawn in one frame: the ones nearest the camera among the first {@link #MAX_LIGHTS}.
+     */
+    public static final int MAX_SHADOW_LIGHTS = 4;
+
+    /**
      * Runs once per frame before the scene is drawn.
      */
     @FunctionalInterface

@@ -15,7 +15,8 @@ public final class Light {
     private Color color = Color.WHITE;
     private float intensity = 1f;
     private float range = 10f;
-    private boolean castShadow;
+    private Shadows shadows;
+    private LightFalloff falloff = LightFalloff.WINDOWED_INVERSE_SQUARE;
     private Vec3 direction = new Vec3(0, -1, 0);
     private float innerAngle = 25f, outerAngle = 35f;
 
@@ -128,16 +129,55 @@ public final class Light {
     }
 
     public boolean isCastShadow() {
-        return castShadow;
+        return shadows != null;
     }
 
     /**
-     * Makes the things in the scene cast shadows from this light. Only a directional or spot light can, and a scene
-     * draws the shadows of the first one that is switched on; see {@link Scene3D#setShadowDistance} (directional
-     * lights) and {@link Scene3D#setShadowMapSize} for the quality.
+     * Makes the things in the scene cast shadows from this light, with everything taken from the scene
+     * ({@link Scene3D#setShadowDistance}, {@link Scene3D#setShadowMapSize} and the other scene-wide shadow settings), or
+     * stops it. Same as {@link #setShadows(Shadows) setShadows(Shadows.SCENE)} or {@code setShadows((Shadows) null)}. Any
+     * kind of light can cast shadows; a scene draws those of up to {@link Scene3D#MAX_SHADOW_LIGHTS} lights.
      */
     public Light setCastShadow(boolean castShadow) {
-        this.castShadow = castShadow;
+        if (castShadow) {
+            if (shadows == null) shadows = Shadows.SCENE;
+        } else {
+            shadows = null;
+        }
+        return this;
+    }
+
+    /**
+     * The light's shadow settings, or null while it casts none.
+     */
+    public Shadows getShadows() {
+        return shadows;
+    }
+
+    /**
+     * Makes this light cast shadows as described, or none for null.
+     */
+    public Light setShadows(Shadows shadows) {
+        this.shadows = shadows;
+        return this;
+    }
+
+    /**
+     * Makes this light cast shadows at a ready-made quality.
+     */
+    public Light setShadows(ShadowQuality quality) {
+        return setShadows(Shadows.of(quality));
+    }
+
+    public LightFalloff getFalloff() {
+        return falloff;
+    }
+
+    /**
+     * How the light fades with distance ({@link LightFalloff#WINDOWED_INVERSE_SQUARE} by default). Directional lights don't fade.
+     */
+    public Light setFalloff(LightFalloff falloff) {
+        this.falloff = falloff == null ? LightFalloff.WINDOWED_INVERSE_SQUARE : falloff;
         return this;
     }
 }

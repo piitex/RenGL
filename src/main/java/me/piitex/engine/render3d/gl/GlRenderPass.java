@@ -48,6 +48,15 @@ final class GlRenderPass implements RenderPass {
     }
 
     @Override
+    public void setViewport(int x, int y, int width, int height) {
+        // GL counts rows from the bottom of the framebuffer; the contract counts from the top.
+        int glY = target.height() - y - height;
+        glViewport(x, glY, width, height);
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(x, glY, width, height);
+    }
+
+    @Override
     public void bindPipeline(Pipeline pipeline) {
         this.pipeline = (GlPipeline) pipeline;
         PipelineDesc desc = this.pipeline.desc;

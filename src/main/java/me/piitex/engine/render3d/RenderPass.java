@@ -11,6 +11,14 @@ public interface RenderPass extends AutoCloseable {
     void bindPipeline(Pipeline pipeline);
 
     /**
+     * Limits the draws that follow to a rectangle of the target: the clip-space picture is fitted into it and nothing is
+     * drawn outside it. Used to draw several pictures into one target, like the tiles of a shadow atlas. The rectangle is
+     * in pixels measured from the top-left of the picture on both backends; a pass starts with the whole target.
+     * The target's clear happens when the pass begins and always covers all of it.
+     */
+    void setViewport(int x, int y, int width, int height);
+
+    /**
      * Binds the pipeline's main vertex buffer, buffer binding 0.
      */
     default void bindVertexBuffer(GpuBuffer buffer) {
