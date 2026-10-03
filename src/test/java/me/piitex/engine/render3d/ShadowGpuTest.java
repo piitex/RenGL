@@ -127,7 +127,9 @@ class ShadowGpuTest {
     private static List<Scenario> scenarios() {
         return List.of(
                 new Scenario("two lights cast shadows", ShadowGpuTest::twoCasters, ShadowGpuTest::twoCastersCheck),
-                new Scenario("a point light casts shadows all round", ShadowGpuTest::pointRoom, ShadowGpuTest::pointRoomCheck));
+                new Scenario("a point light casts shadows all round", ShadowGpuTest::pointRoom, ShadowGpuTest::pointRoomCheck),
+                new Scenario("three cascades", () -> cascadeScene(3), ShadowGpuTest::cascadeCheck),
+                new Scenario("one cascade", () -> cascadeScene(1), ShadowGpuTest::cascadeCheck));
     }
 
     private List<DynamicTest> tests(RenderAPI api) {
@@ -253,6 +255,67 @@ class ShadowGpuTest {
                 r.check(name, shadowed < lit * 0.5 && lit > 600, "shadowed " + shadowed + " lit " + lit);
             });
         }
+    }
+
+    // ---- cascades --------------------------------------------------------------------------------------------------
+
+    /**
+     * Widths, in scene units, of the soft edge of the nearest pillar's shadow, by backend and cascade count, so that the one
+     * cascade scenario can be compared with the three cascade one that ran before it.
+     */
+    private static final java.util.Map<String, Float> EDGE_WIDTH = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * A sun over a long floor with a 2 tall pillar near the camera, one in the middle distance and one far away, each
+     * throwing its shadow to the right. Shadows reach 80 units, as one cascade or three of 1024 pixels.
+     */
+    private static Scene3D cascadeScene(int cascades) {
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        scene.lights().add(Light.directional(new Vec3(1, -1, 0), Color.WHITE, 1.2f)
+                .setShadows(Shadows.of(ShadowQuality.MEDIUM).cascades(cascades).distance(80f)));
+        scene.setAmbient(Color.WHITE, 0.1f);
+        scene.setSkybox(Skybox.gradient(Color.BLACK, Color.BLACK, Color.BLACK));
+        scene.add(new Node3D("floor", Mesh.plane(300f, 300f), new Material(Color.WHITE).setRoughness(0.9f)));
+        // The far pillar is wide along z: the camera sees the floor there at a grazing angle, so a narrow shadow is a pixel or two.
+        Node3D far = pillar("far", -3f, -30f, 2f);
+        far.setScale(new Vec3(1f, 2f, 8f));
+        scene.add(pillar("near", -3f, 2f, 2f)).add(pillar("middle", -3f, -8f, 2f)).add(far);
+        scene.camera().lookAt(new Vec3(0, 4f, 8f), new Vec3(0, 0, 0)).setFovYDegrees(60);
+        return scene;
+    }
+
+    private static void cascadeCheck(Scene3D scene, RenderTarget target, GpuHarness.Recorder r, Pixels px) {
+        int cascades = scene.lights().get(0).getShadows().cascades();
+        String label = "cascades (" + cascades + ")";
+        for (float z : new float[]{2f, -8f, -30f}) {
+            String name = label + ": the pillar at z = " + (int) z + " shadows the floor";
+            r.guard(name, () -> {
+                int shadowed = px.luma(-1.5f, 0f, z), lit = px.luma(1.5f, 0f, z);
+                r.check(name, shadowed < lit * 0.6 && lit > 100, "shadowed " + shadowed + " lit " + lit);
+            });
+        }
+        String name = label + ": the nearest shadow's edge";
+        r.guard(name, () -> {
+            // Walk across the shadow's near edge (z = 2.5) in small steps and measure how wide the grey is.
+            int dark = px.luma(-1.5f, 0f, 2.0f), light = px.luma(-1.5f, 0f, 3.2f);
+            int low = dark + (light - dark) / 6, high = light - (light - dark) / 6;
+            int grey = 0;
+            float step = 0.01f;
+            for (float dz = -0.5f; dz <= 0.5f; dz += step) {
+                int l = px.luma(-1.5f, 0f, 2.5f + dz);
+                if (l > low && l < high) grey++;
+            }
+            float width = grey * step;
+            String key = (target.isBottomLeftOrigin() ? "gl" : "vk");
+            EDGE_WIDTH.put(key + cascades, width);
+            r.check(name + " is soft but not smeared", light - dark > 100 && width < 0.6f, "edge " + width + " units wide, dark " + dark + " light " + light);
+            Float three = EDGE_WIDTH.get(key + 3);
+            if (cascades == 1 && three != null) {
+                r.check(label + ": the nearest edge is sharper with three cascades than with one", three < width * 0.75f,
+                        "three cascades " + three + ", one " + width);
+            }
+        });
     }
 
     static String describe(int[] c) {
