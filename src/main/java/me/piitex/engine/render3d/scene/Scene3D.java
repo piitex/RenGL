@@ -75,7 +75,7 @@ public class Scene3D implements Viewport3D.Content {
     private float shadowBias = 1f;
     private float shadowSoftness = 1f;
     private float environmentLighting;
-    private Stats stats = new Stats(0, 0, 0, 0);
+    private Stats stats = new Stats(0, 0, 0, 0, 0, 0, 0);
     private Color fogColor = Color.WHITE;
     private float fogDensity;
     private float fogHeightFalloff;
@@ -243,8 +243,11 @@ public class Scene3D implements Viewport3D.Content {
      * @param culled    nodes left out because they were wholly outside the camera's view and cast no visible shadow
      * @param instances records drawn: a plain node is one, an instanced node one per instance
      * @param drawCalls GPU draw calls in the main pass
+     * @param shadowViews shadow maps drawn this frame: a cascade, a spot light or one side of a point light each count one
+     * @param shadowAtlasWidth width in pixels of the shadow atlas they were drawn into, 0 when nothing cast a shadow
+     * @param shadowAtlasHeight height in pixels of the shadow atlas
      */
-    public record Stats(int nodes, int culled, int instances, int drawCalls) {
+    public record Stats(int nodes, int culled, int instances, int drawCalls, int shadowViews, int shadowAtlasWidth, int shadowAtlasHeight) {
     }
 
     public Stats getStats() {
