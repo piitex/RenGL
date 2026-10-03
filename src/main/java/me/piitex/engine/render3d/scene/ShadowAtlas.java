@@ -84,7 +84,7 @@ final class ShadowAtlas {
         for (int w = nextPow2(largest); w <= widest; w *= 2) {
             Layout layout = pack(sizes, w, limit);
             if (layout == null) continue;
-            int h = nextPow2(layout.height());
+            int h = roundUp(layout.height());
             long area = (long) w * h;
             int side = Math.max(w, h);
             if (area < bestArea || area == bestArea && side < bestSide) {
@@ -119,6 +119,13 @@ final class ShadowAtlas {
         }
     }
 
+    /**
+     * The height a layout's target is made, a multiple of 256 so a layout that grows a little doesn't make a new target each time.
+     */
+    static int roundUp(int height) {
+        return (height + 255) / 256 * 256;
+    }
+
     static int nextPow2(int v) {
         return v <= 1 ? 1 : Integer.highestOneBit(v - 1) << 1;
     }
@@ -127,7 +134,7 @@ final class ShadowAtlas {
      * The texture to draw into and then read from, big enough for the layout; reused until a bigger one is needed.
      */
     RenderTarget target(Layout layout) {
-        int w = nextPow2(layout.width()), h = nextPow2(layout.height());
+        int w = layout.width(), h = roundUp(layout.height());
         if (target == null || target.width() < w || target.height() < h) {
             int nw = Math.max(w, target == null ? 0 : target.width());
             int nh = Math.max(h, target == null ? 0 : target.height());
