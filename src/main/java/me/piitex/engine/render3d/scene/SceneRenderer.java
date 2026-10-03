@@ -50,6 +50,16 @@ final class SceneRenderer {
     private static final Material DEFAULT_MATERIAL = new Material();
 
     private static final int KEY_CULL = 1, KEY_BLEND = 2, KEY_MIRRORED = 4, KEY_SKINNED = 8, KEY_SHADOW = 16, KEY_ADDITIVE = 32, KEY_ENV_SHIFT = 6;
+    /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits. */
+    private static final int KEY_VARIANT_SHIFT = 8;
+
+    /**
+     * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
+     * plus its place here. Sorted, so the same set always makes the same program whatever order the lights are in.
+     */
+    private record Variant(List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs) {
+        static final Variant NONE = new Variant(List.of(), List.of());
+    }
 
     private static final class GpuMesh {
         final GpuBuffer vertices;
@@ -163,6 +173,8 @@ final class SceneRenderer {
             VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4);
     private final VertexLayout skinLayout = VertexLayout.of(14, VertexLayout.Rate.VERTEX, VertexFormat.FLOAT4, VertexFormat.FLOAT4);
     private final Map<Integer, Pipeline> pipelines = new HashMap<>();
+    private final List<Variant> variants = new ArrayList<>(List.of(Variant.NONE));
+    private final java.util.Set<Integer> brokenVariants = new java.util.HashSet<>();
     private final Map<Skybox.Kind, Pipeline> skyPipelines = new HashMap<>();
     private final Map<Mesh, GpuMesh> meshes = new HashMap<>();
     private final Map<TextureData, GpuImage> images = new IdentityHashMap<>();
@@ -180,7 +192,7 @@ final class SceneRenderer {
     private long frame;
     private long lastDeviceFrame = -1;
     private int resourcesUsed;
-    private boolean warnedLights, warnedShadowLights, warnedShadowShrink, warnedFilter;
+    private boolean warnedLights, warnedShadowLights, warnedShadowShrink;
 
     SceneRenderer(GpuDevice device) {
         this.device = device;
@@ -216,7 +228,8 @@ final class SceneRenderer {
             boolean blend = (key & KEY_BLEND) != 0;
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
-            desc = new PipelineDesc(vertex(skinned), fragment((key >> KEY_ENV_SHIFT) & 3), meshLayout, true, (key & KEY_CULL) != 0, blend,
+            desc = new PipelineDesc(vertex(skinned), fragment((key >> KEY_ENV_SHIFT) & 3, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
+                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs()), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, skinned ? List.of(instanceLayout, skinLayout) : List.of(instanceLayout),
                     (key & KEY_ADDITIVE) != 0, !blend);
         }
@@ -268,7 +281,9 @@ final class SceneRenderer {
         if (!shadowFrame.plans().isEmpty()) shadowPass(res, opaqueGroups, shadowFrame);
         Skybox sky = scene.getSkybox();
         int env = environmentKind(scene, sky);
-        writeFrameBlock(res.frame, scene, camera, viewProj, shadowFrame, env);
+        int variant = variantFor(scene, shadowFrame, env);
+        writeFrameBlock(res.frame, scene, camera, viewProj, shadowFrame, env, variants.get(variant));
+        int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT);
         if (sky != null) writeSky(res.sky, camera, aspect, sky);
 
         Color bg = scene.getBackground();
@@ -282,13 +297,14 @@ final class SceneRenderer {
             for (List<Group> list : List.of(opaqueGroups, blendedGroups)) {
                 for (Group group : list) {
                     if (!group.inView) continue;
-                    drawGroup(pass, res, group, state, lastMaterial, false, env, null);
+                    drawGroup(pass, res, group, state, lastMaterial, false, fragmentBits, null);
                     drawCalls++;
                     drawnRecords += group.count;
                 }
             }
         }
-        scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls));
+        scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
+                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight()));
         if (frame % SWEEP_EVERY == 0) sweep();
     }
 
@@ -315,8 +331,8 @@ final class SceneRenderer {
     /**
      * @param state        [0] the pipeline key in use, -1 for none
      */
-    private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int env, GpuBuffer shadowView) {
-        int key = shadowPass ? (group.key & KEY_SKINNED) | KEY_SHADOW : group.key | (env << KEY_ENV_SHIFT);
+    private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int fragmentBits, GpuBuffer shadowView) {
+        int key = shadowPass ? (group.key & KEY_SKINNED) | KEY_SHADOW : group.key | fragmentBits;
         GpuMesh mesh = gpuMesh(group.mesh);
         if (key != state[0]) {
             pass.bindPipeline(pipeline(key));
@@ -743,7 +759,7 @@ final class SceneRenderer {
                     for (Group group : groups) {
                         if (!group.cast) continue;
                         if (!group.unbounded && !ShadowPlanner.intersects(view.planes, group.sphere[0], group.sphere[1], group.sphere[2], group.sphere[3])) continue;
-                        drawGroup(pass, res, group, state, lastMaterial, true, ENV_NONE, buffer);
+                        drawGroup(pass, res, group, state, lastMaterial, true, 0, buffer);
                     }
                 }
             }
@@ -752,24 +768,63 @@ final class SceneRenderer {
 
     // ---- uniform blocks ----------------------------------------------------------------------------------------
 
-    private static int falloffId(LightFalloff falloff) {
-        return falloff instanceof BuiltinLightFalloff b ? b.id() : 0;
+    /**
+     * The custom pieces this frame's lights use, as the index of the shader variant that holds them. A set that doesn't
+     * compile is reported once and its lights fall back to the built-in filter and falloff.
+     */
+    private int variantFor(Scene3D scene, ShadowFrame shadows, int env) {
+        java.util.TreeSet<CustomShadowFilter> filters = new java.util.TreeSet<>(Comparator.comparing(CustomShadowFilter::name).thenComparing(CustomShadowFilter::glsl));
+        java.util.TreeSet<CustomLightFalloff> falloffs = new java.util.TreeSet<>(Comparator.comparing(CustomLightFalloff::name).thenComparing(CustomLightFalloff::glsl));
+        for (ShadowPlanner.LightPlan plan : shadows.plans()) {
+            if (plan.shadows().resolveFilter() instanceof CustomShadowFilter f) filters.add(f);
+        }
+        List<Light> lights = scene.lights();
+        for (int i = 0; i < Math.min(lights.size(), Scene3D.MAX_LIGHTS); i++) {
+            if (lights.get(i).getType() != Light.Type.DIRECTIONAL && lights.get(i).getFalloff() instanceof CustomLightFalloff f) falloffs.add(f);
+        }
+        if (filters.isEmpty() && falloffs.isEmpty()) return 0;
+        Variant wanted = new Variant(List.copyOf(filters), List.copyOf(falloffs));
+        int index = variants.indexOf(wanted);
+        if (index < 0) {
+            index = variants.size();
+            variants.add(wanted);
+        }
+        if (brokenVariants.contains(index)) return 0;
+        try {
+            pipeline((env << KEY_ENV_SHIFT) | (index << KEY_VARIANT_SHIFT)); // compiles now, so a mistake shows up here
+        } catch (RuntimeException e) {
+            brokenVariants.add(index);
+            log.error("A custom shadow filter or light falloff does not compile ({}); lights using one fall back to the built-in filter and falloff.",
+                    describe(wanted), e);
+            return 0;
+        }
+        return index;
     }
 
-    private int filterId(ShadowFilter filter) {
+    private static String describe(Variant variant) {
+        List<String> names = new ArrayList<>();
+        for (CustomShadowFilter f : variant.filters()) names.add("filter " + f.name());
+        for (CustomLightFalloff f : variant.falloffs()) names.add("falloff " + f.name());
+        return String.join(", ", names);
+    }
+
+    private static int falloffId(LightFalloff falloff, Variant variant) {
+        if (falloff instanceof BuiltinLightFalloff b) return b.id();
+        int i = falloff instanceof CustomLightFalloff c ? variant.falloffs().indexOf(c) : -1;
+        return i < 0 ? 0 : 3 + i;
+    }
+
+    private static int filterId(ShadowFilter filter, Variant variant) {
         if (filter instanceof BuiltinShadowFilter b) return b.id();
-        if (!warnedFilter) {
-            warnedFilter = true;
-            log.warn("Custom shadow filters are not supported yet; using PCF.");
-        }
-        return ShadowFilter.PCF instanceof BuiltinShadowFilter p ? p.id() : 1;
+        int i = filter instanceof CustomShadowFilter c ? variant.filters().indexOf(c) : -1;
+        return i < 0 ? ((BuiltinShadowFilter) ShadowFilter.PCF).id() : 3 + i;
     }
 
     private static float linear(float srgb) {
         return (float) Math.pow(Math.max(0f, srgb), 2.2);
     }
 
-    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env) {
+    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant) {
         scratch.clear();
         viewProj.put(scratch);
         Vec3 eye = camera.getPosition();
@@ -821,7 +876,7 @@ final class SceneRenderer {
         for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) { // the cosine of the inner angle, and the falloff
             float inner = i < count && lights.get(i).getType() == Light.Type.SPOT
                     ? (float) Math.cos(Math.toRadians(lights.get(i).getInnerAngle())) : 1f;
-            scratch.putFloat(inner).putFloat(i < count ? falloffId(lights.get(i).getFalloff()) : 0f).putFloat(0f).putFloat(0f);
+            scratch.putFloat(inner).putFloat(i < count ? falloffId(lights.get(i).getFalloff(), variant) : 0f).putFloat(0f).putFloat(0f);
         }
         // Per light: the first of its shadow views, how many it has (0 for none), its filter and its softness; then the cascade splits.
         int[] first = new int[Scene3D.MAX_LIGHTS];
@@ -839,7 +894,7 @@ final class SceneRenderer {
             if (plan == null) {
                 scratch.putFloat(-1f).putFloat(0f).putFloat(0f).putFloat(1f);
             } else {
-                scratch.putFloat(first[i]).putFloat(plan.views().size()).putFloat(filterId(plan.shadows().resolveFilter()))
+                scratch.putFloat(first[i]).putFloat(plan.views().size()).putFloat(filterId(plan.shadows().resolveFilter(), variant))
                         .putFloat(plan.shadows().resolveSoftness(scene));
             }
         }

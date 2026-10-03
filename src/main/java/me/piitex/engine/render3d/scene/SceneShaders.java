@@ -1,5 +1,7 @@
 package me.piitex.engine.render3d.scene;
 
+import java.util.List;
+
 /**
  * The scene renderer's GLSL. One vertex and one fragment shader cover every material: classic or physically based
  * shading and unlit surfaces are chosen per draw from the instance data, so there is one program per kind of geometry
@@ -132,7 +134,31 @@ final class SceneShaders {
      * equirectangular skybox, each its own program.
      */
     static String fragment(int env) {
-        return "#version 450\n#define ENV_KIND " + env + "\n" + FRAGMENT_BODY;
+        return fragment(env, List.of(), List.of());
+    }
+
+    /**
+     * The scene's fragment shader holding the given custom shadow filters and light falloffs, which take ids 3 and up in
+     * the order given (0 to 2 are the built-in ones). A body that doesn't compile fails the program, so the caller checks.
+     */
+    static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs) {
+        StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
+        for (int i = 0; i < filters.size(); i++) {
+            filterFunctions.append("float customFilter").append(i).append("(vec2 uv, float depth, vec2 texel, float softness) {\n")
+                    .append(filters.get(i).glsl()).append("\n}\n");
+            filterCases.append("if (id == ").append(3 + i).append(") return customFilter").append(i).append("(uv, depth, texel, softness);\n");
+        }
+        StringBuilder falloffFunctions = new StringBuilder(), falloffCases = new StringBuilder();
+        for (int i = 0; i < falloffs.size(); i++) {
+            falloffFunctions.append("float customFalloff").append(i).append("(float dist, float range) {\n")
+                    .append(falloffs.get(i).glsl()).append("\n}\n");
+            falloffCases.append("if (id == ").append(3 + i).append(") return customFalloff").append(i).append("(dist, range);\n");
+        }
+        return "#version 450\n#define ENV_KIND " + env + "\n" + FRAGMENT_BODY
+                .replace("//@FILTER_FUNCTIONS", filterFunctions)
+                .replace("//@FILTER_CASES", filterCases)
+                .replace("//@FALLOFF_FUNCTIONS", falloffFunctions)
+                .replace("//@FALLOFF_CASES", falloffCases);
     }
 
     private static final String FRAGMENT_BODY = """
@@ -209,10 +235,13 @@ final class SceneShaders {
                 return depth > stored ? 0.0 : 1.0;
             }
 
+            //@FILTER_FUNCTIONS
+
             // The edge of a shadow worked out from the map: 0 is one lookup, 1 a 4x4 block weighted like a bilinear
             // filter so the edge moves smoothly instead of in steps, 2 a wider 6x6 block. The pattern is stretched about
             // the point by the light's softness, 1 for the plain filter.
             float filterShadow(int id, vec2 uv, float depth, vec2 texel, float softness) {
+                //@FILTER_CASES
                 if (id == 0) return shadowLit(uv, depth);
                 vec2 size = 1.0 / texel;
                 vec2 t = uv * size - 0.5;
@@ -288,9 +317,12 @@ final class SceneShaders {
                 return filterShadow(int(info.z + 0.5), uv, depth - bias, shadowGlobal.xy, info.w);
             }
 
+            //@FALLOFF_FUNCTIONS
+
             // How much of a light's strength is left at a distance from it: 0 is a smooth window to nothing at the
             // range, 1 a straight line to nothing at the range, 2 no fading.
             float falloff(int id, float dist, float range) {
+                //@FALLOFF_CASES
                 if (id == 1) return clamp(1.0 - dist / range, 0.0, 1.0);
                 if (id == 2) return 1.0;
                 float x = clamp(1.0 - (dist * dist) / (range * range), 0.0, 1.0);
