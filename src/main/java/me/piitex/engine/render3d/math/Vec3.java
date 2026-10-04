@@ -22,6 +22,13 @@ public record Vec3(float x, float y, float z) {
         return new Vec3(x * s, y * s, z * s);
     }
 
+    /**
+     * Component-wise product, for scaling each axis on its own.
+     */
+    public Vec3 mul(Vec3 o) {
+        return new Vec3(x * o.x, y * o.y, z * o.z);
+    }
+
     public Vec3 negate() {
         return new Vec3(-x, -y, -z);
     }
@@ -36,6 +43,14 @@ public record Vec3(float x, float y, float z) {
 
     public float length() {
         return (float) Math.sqrt(x * x + y * y + z * z);
+    }
+
+    public float lengthSquared() {
+        return x * x + y * y + z * z;
+    }
+
+    public float distance(Vec3 o) {
+        return sub(o).length();
     }
 
     /**

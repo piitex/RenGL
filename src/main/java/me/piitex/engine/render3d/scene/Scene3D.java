@@ -6,6 +6,7 @@ import me.piitex.engine.render3d.Viewport3D;
 import me.piitex.engine.render3d.math.Mat4;
 import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
+import me.piitex.engine.render3d.physics.PhysicsWorld;
 import me.piitex.engine.ui.color.Color;
 
 import java.util.ArrayList;
@@ -68,6 +69,7 @@ public class Scene3D implements Viewport3D.Content {
     private Color ambient = new Color(0.45f, 0.45f, 0.5f, 1f);
     private float ambientIntensity = 1f;
     private UpdateHandler updateHandler;
+    private PhysicsWorld physics;
     private Skybox skybox;
     private int shadowMapSize = 2048;
     private int shadowAtlasSize = 4096;
@@ -359,6 +361,19 @@ public class Scene3D implements Viewport3D.Content {
         return hits;
     }
 
+    public PhysicsWorld getPhysics() {
+        return physics;
+    }
+
+    /**
+     * A physics world to run once per frame, after the animations (so an animated node can push bodies) and before the
+     * update handler (so it sees where the bodies ended up). Null, the default, runs none.
+     */
+    public Scene3D setPhysics(PhysicsWorld physics) {
+        this.physics = physics;
+        return this;
+    }
+
     public Scene3D setUpdateHandler(UpdateHandler updateHandler) {
         this.updateHandler = updateHandler;
         return this;
@@ -382,6 +397,7 @@ public class Scene3D implements Viewport3D.Content {
         long frame = device.frameNumber();
         if (shared.updatedFrame != frame) {
             for (AnimationPlayer player : new ArrayList<>(animators)) player.update(delta);
+            if (physics != null) physics.update(delta);
             if (updateHandler != null) updateHandler.update(this, delta);
         }
         shared.updatedFrame = frame;

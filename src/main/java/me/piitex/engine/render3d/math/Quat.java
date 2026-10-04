@@ -60,6 +60,13 @@ public record Quat(float x, float y, float z, float w) {
         return new Quat(a * x + b * ox, a * y + b * oy, a * z + b * oz, a * w + b * ow).normalized();
     }
 
+    /**
+     * The opposite rotation. For a unit quaternion this is also its inverse.
+     */
+    public Quat conjugate() {
+        return new Quat(-x, -y, -z, w);
+    }
+
     public Quat normalized() {
         float length = (float) Math.sqrt(x * x + y * y + z * z + w * w);
         return length < 1e-12f ? IDENTITY : new Quat(x / length, y / length, z / length, w / length);
