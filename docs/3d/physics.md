@@ -80,7 +80,8 @@ public class FirstPhysics {
 ```
 
 `me.piitex.examples.demo.PhysicsDemo` is a fuller version: a pyramid and a tower of crates, a ramp, balls, and a panel
-that counts the bodies that are awake.
+that counts the bodies that are awake. `me.piitex.examples.demo.DominoDemo` is a quick one: a chain of dominoes along a
+curve, a button or a click to push one over, and slow motion.
 
 ## Units and conventions
 
