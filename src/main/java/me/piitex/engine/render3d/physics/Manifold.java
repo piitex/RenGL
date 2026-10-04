@@ -21,19 +21,35 @@ final class Manifold {
         normal = Vec3.UP;
     }
 
+    boolean full() {
+        return count == CAPACITY;
+    }
+
+    /**
+     * Adds a point. When full, the new point takes the place of the shallowest if it is deeper, so a hull with many
+     * corners near the ground keeps the ones that matter.
+     */
     void add(Vec3 point, float depth) {
         if (count < CAPACITY) {
             points[count] = point;
             depths[count] = depth;
             count++;
+            return;
+        }
+        int shallowest = 0;
+        for (int i = 1; i < CAPACITY; i++) if (depths[i] < depths[shallowest]) shallowest = i;
+        if (depth > depths[shallowest]) {
+            points[shallowest] = point;
+            depths[shallowest] = depth;
         }
     }
 
     /**
      * Keeps at most four points that hold the shapes steady. Points closer than a millimetre are one point (clipping
-     * equal faces gives doubles at the corners). Then, by position alone so the choice doesn't flicker as depths
-     * wobble: the point farthest from the middle, the one farthest from that, and the one making the widest triangle
-     * with them on each side of the line through the first two.
+     * equal faces gives doubles at the corners). Then: the deepest point, so the shapes never sink in where nothing
+     * holds them (a round hull touches at one corner among many just above the ground), with ties of depth going to
+     * the point farthest from the middle so the choice doesn't flicker; the point farthest from that; and the one
+     * making the widest triangle with them on each side of the line through the first two.
      */
     void reduce() {
         int kept = 0;
@@ -54,7 +70,7 @@ final class Manifold {
         Vec3 middle = Vec3.ZERO;
         for (int i = 0; i < count; i++) middle = middle.add(points[i]);
         middle = middle.mul(1f / count);
-        int first = farthest(middle, -1);
+        int first = deepest(middle);
         int second = farthest(points[first], first);
         Vec3 line = points[second].sub(points[first]);
         int third = -1, fourth = -1;
@@ -85,6 +101,21 @@ final class Manifold {
             depths[i] = keptDepths[i];
         }
         count = n;
+    }
+
+    private int deepest(Vec3 middle) {
+        float most = Float.NEGATIVE_INFINITY;
+        for (int i = 0; i < count; i++) most = Math.max(most, depths[i]);
+        int best = -1;
+        float distance = -1f;
+        for (int i = 0; i < count; i++) {
+            float d = points[i].sub(middle).lengthSquared();
+            if (depths[i] >= most - 1e-4f && d > distance) {
+                distance = d;
+                best = i;
+            }
+        }
+        return best;
     }
 
     private int farthest(Vec3 from, int skip) {

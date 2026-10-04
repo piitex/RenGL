@@ -12,9 +12,13 @@ final class Raycast {
     }
 
     /**
-     * The distance and normal of the hit, or null for a miss or a hit beyond {@code maxDistance}.
+     * The distance and normal of the hit, and the triangle for a mesh (-1 otherwise); null for a miss or a hit beyond
+     * {@code maxDistance}.
      */
-    record Result(float distance, Vec3 normal) {
+    record Result(float distance, Vec3 normal, int triangle) {
+        Result(float distance, Vec3 normal) {
+            this(distance, normal, -1);
+        }
     }
 
     static Result cast(Shape shape, Pose pose, Ray ray, float maxDistance) {
@@ -24,9 +28,49 @@ final class Raycast {
             case BoxShape b -> box(o, d, b.halfExtents());
             case CapsuleShape c -> capsule(o, d, c.radius(), c.halfHeight());
             case PlaneShape p -> plane(o, d, p.normal());
+            case ConvexHullShape h -> hull(o, d, h.polytope());
+            case MeshShape m -> mesh(o, d, m, maxDistance);
         };
         if (local == null || local.distance > maxDistance) return null;
-        return new Result(local.distance, pose.rotate(local.normal));
+        return new Result(local.distance, pose.rotate(local.normal), local.triangle);
+    }
+
+    /**
+     * Clips the ray by each face's plane: it enters through the last face it crosses going in.
+     */
+    private static Result hull(Vec3 o, Vec3 d, Polytope hull) {
+        float near = Float.NEGATIVE_INFINITY, far = Float.POSITIVE_INFINITY;
+        int entry = -1;
+        boolean inside = true;
+        for (int f = 0; f < hull.normals.length; f++) {
+            Vec3 n = hull.normals[f];
+            float height = n.dot(o) - hull.offsets[f], speed = n.dot(d);
+            if (height > 0f) inside = false;
+            if (Math.abs(speed) < 1e-20f) {
+                if (height > 0f) return null;
+                continue;
+            }
+            float t = -height / speed;
+            if (speed < 0f) {
+                if (t > near) {
+                    near = t;
+                    entry = f;
+                }
+            } else {
+                far = Math.min(far, t);
+            }
+            if (near > far) return null;
+        }
+        if (inside || entry < 0 || near < 0f) return null;
+        return new Result(near, hull.normals[entry]);
+    }
+
+    private static Result mesh(Vec3 o, Vec3 d, MeshShape mesh, float maxDistance) {
+        float[] hit = new float[2];
+        if (!mesh.tree().nearest(o.x(), o.y(), o.z(), d.x(), d.y(), d.z(), maxDistance, hit)) return null;
+        int triangle = (int) hit[0];
+        Vec3 n = mesh.triangleNormal(triangle);
+        return new Result(hit[1], n.dot(d) > 0f ? n.negate() : n, triangle);
     }
 
     private static Result sphere(Vec3 o, Vec3 d, Vec3 center, float radius) {
