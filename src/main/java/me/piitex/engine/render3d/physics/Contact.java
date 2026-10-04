@@ -12,6 +12,7 @@ import java.util.List;
 public final class Contact {
     private final RigidBody bodyA, bodyB;
     private final int shapeA, shapeB;
+    private final int triangle;
     Vec3 normal = Vec3.UP;
     final Point[] points = new Point[Manifold.MAX_POINTS];
     int count;
@@ -40,11 +41,12 @@ public final class Contact {
     private final float[] oldNormal = new float[Manifold.MAX_POINTS];
     private final Vec3[] oldTangent = new Vec3[Manifold.MAX_POINTS];
 
-    Contact(RigidBody bodyA, int shapeA, RigidBody bodyB, int shapeB) {
+    Contact(RigidBody bodyA, int shapeA, RigidBody bodyB, int shapeB, int triangle) {
         this.bodyA = bodyA;
         this.shapeA = shapeA;
         this.bodyB = bodyB;
         this.shapeB = shapeB;
+        this.triangle = triangle;
         for (int i = 0; i < points.length; i++) points[i] = new Point();
     }
 
@@ -111,6 +113,14 @@ public final class Contact {
 
     public BodyShape getShapeB() {
         return bodyB.getShapes().get(shapeB);
+    }
+
+    /**
+     * Which triangle of a {@link MeshShape} this contact is with, or -1 when neither shape is a mesh. A body resting
+     * on a mesh has a contact for each triangle it touches.
+     */
+    public int getTriangle() {
+        return triangle;
     }
 
     /**

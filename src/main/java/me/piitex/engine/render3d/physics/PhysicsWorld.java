@@ -44,7 +44,10 @@ public final class PhysicsWorld {
      */
     static final float CONTACT_MARGIN = 0.02f;
 
-    private record PairKey(RigidBody a, int shapeA, RigidBody b, int shapeB) {
+    /**
+     * Which two shapes a contact is between, and the triangle when one is a mesh (-1 otherwise).
+     */
+    private record PairKey(RigidBody a, int shapeA, RigidBody b, int shapeB, int triangle) {
     }
 
     private record BodyPair(RigidBody a, RigidBody b) {
@@ -84,7 +87,7 @@ public final class PhysicsWorld {
     public PhysicsWorld add(RigidBody body) {
         if (body.getWorld() == this) return this;
         if (body.getWorld() != null) throw new IllegalStateException(body + " is already in another world");
-        if (body.isDynamic() && body.hasPlane()) throw new IllegalStateException("A body with a plane can't be dynamic");
+        if (body.isDynamic() && body.hasSurface()) throw new IllegalStateException("A body with a plane or mesh can't be dynamic");
         body.id = nextId++;
         bodies.add(body);
         broadphase.add(body);
@@ -120,7 +123,8 @@ public final class PhysicsWorld {
 
     /**
      * The shapes touching or about to touch, as found at the start of the last step. Each pair of shapes has one
-     * contact; a body made of several shapes can have several with the same neighbour.
+     * contact; a body made of several shapes can have several with the same neighbour, and so can a body on a mesh,
+     * one for each way the triangles under it face.
      */
     public List<Contact> getContacts() {
         return Collections.unmodifiableList(contacts);
@@ -190,7 +194,7 @@ public final class PhysicsWorld {
         RaycastHit best = null;
         for (int i = 0; i < body.shapeCount(); i++) {
             Raycast.Result hit = Raycast.cast(body.collisionShape(i), body.shapePose(i), ray, best == null ? maxDistance : best.distance());
-            if (hit != null) best = new RaycastHit(body, body.getShapes().get(i), ray.at(hit.distance()), hit.normal(), hit.distance());
+            if (hit != null) best = new RaycastHit(body, body.getShapes().get(i), ray.at(hit.distance()), hit.normal(), hit.distance(), hit.triangle());
         }
         return best;
     }
@@ -200,6 +204,7 @@ public final class PhysicsWorld {
      * were added. Only bodies whose collision layer shares a bit with {@code mask} count.
      */
     public List<RigidBody> overlap(Shape shape, Vec3 position, Quat rotation, int mask) {
+        if (shape instanceof MeshShape || shape instanceof PlaneShape) throw new IllegalArgumentException("Overlap queries take a solid shape, not " + shape);
         Pose pose = new Pose(position, rotation == null ? Quat.IDENTITY : rotation.normalized());
         RigidBody probe = new RigidBody(BodyType.STATIC).addShape(shape);
         probe.setPosition(position).setRotation(pose.rotation());
@@ -208,7 +213,18 @@ public final class PhysicsWorld {
         for (RigidBody body : bodies) {
             if (!queryable(body, mask) || !Broadphase.overlap(probe.collisionBounds(), body.collisionBounds())) continue;
             for (int i = 0; i < body.shapeCount(); i++) {
-                if (Narrowphase.collide(shape, pose, body.collisionShape(i), body.shapePose(i), 0f, manifold) && manifold.depths[0] >= 0f) {
+                if (!Broadphase.overlap(probe.collisionBounds(), body.shapeBounds(i))) continue;
+                if (body.collisionShape(i) instanceof MeshShape mesh) {
+                    boolean[] touching = new boolean[1];
+                    MeshCollision.collide(mesh, body.shapePose(i), shape, pose, 0f, true, (_, m) -> {
+                        for (int k = 0; k < m.count; k++) touching[0] |= m.depths[k] >= 0f;
+                        return !touching[0];
+                    });
+                    if (touching[0]) {
+                        found.add(body);
+                        break;
+                    }
+                } else if (Narrowphase.collide(shape, pose, body.collisionShape(i), body.shapePose(i), 0f, manifold) && manifold.depths[0] >= 0f) {
                     found.add(body);
                     break;
                 }
@@ -481,10 +497,25 @@ public final class PhysicsWorld {
             for (int i = 0; i < a.shapeCount(); i++) {
                 for (int j = 0; j < b.shapeCount(); j++) {
                     if (!Broadphase.overlap(a.shapeBounds(i), b.shapeBounds(j))) continue;
-                    if (!Narrowphase.collide(a.collisionShape(i), a.shapePose(i), b.collisionShape(j), b.shapePose(j), margin, manifold)) continue;
-                    PairKey key = new PairKey(a, i, b, j);
+                    Shape sa = a.collisionShape(i), sb = b.collisionShape(j);
+                    if (sa instanceof MeshShape || sb instanceof MeshShape) {
+                        // One contact per triangle touched, each remembered on its own.
+                        int si = i, sj = j;
+                        collideMesh(a, i, b, j, margin, (triangle, m) -> {
+                            PairKey key = new PairKey(a, si, b, sj, triangle);
+                            Contact contact = previous.get(key);
+                            if (contact == null) contact = new Contact(a, si, b, sj, triangle);
+                            contact.update(m);
+                            found.put(key, contact);
+                            list.add(contact);
+                            return true;
+                        });
+                        continue;
+                    }
+                    if (!Narrowphase.collide(sa, a.shapePose(i), sb, b.shapePose(j), margin, manifold)) continue;
+                    PairKey key = new PairKey(a, i, b, j, -1);
                     Contact contact = previous.get(key);
-                    if (contact == null) contact = new Contact(a, i, b, j);
+                    if (contact == null) contact = new Contact(a, i, b, j, -1);
                     contact.update(manifold);
                     found.put(key, contact);
                     list.add(contact);
@@ -496,7 +527,18 @@ public final class PhysicsWorld {
     }
 
     private static PairKey keyOf(Contact c) {
-        return new PairKey(c.getBodyA(), c.shapeIndexA(), c.getBodyB(), c.shapeIndexB());
+        return new PairKey(c.getBodyA(), c.shapeIndexA(), c.getBodyB(), c.shapeIndexB(), c.getTriangle());
+    }
+
+    /**
+     * Shape {@code i} of {@code a} against shape {@code j} of {@code b}, one of them a mesh.
+     */
+    private static void collideMesh(RigidBody a, int i, RigidBody b, int j, float margin, MeshCollision.TriangleContact visit) {
+        if (a.collisionShape(i) instanceof MeshShape mesh) {
+            MeshCollision.collide(mesh, a.shapePose(i), b.collisionShape(j), b.shapePose(j), margin, true, visit);
+        } else {
+            MeshCollision.collide((MeshShape) b.collisionShape(j), b.shapePose(j), a.collisionShape(i), a.shapePose(i), margin, false, visit);
+        }
     }
 
     /**

@@ -14,9 +14,11 @@ final class Narrowphase {
     }
 
     /**
-     * Fills {@code out} with the contact between {@code a} and {@code b}; true when there is one.
+     * Fills {@code out} with the contact between {@code a} and {@code b}; true when there is one. A mesh can touch in
+     * many places at once, so it goes through {@link MeshCollision} instead.
      */
     static boolean collide(Shape a, Pose pa, Shape b, Pose pb, float margin, Manifold out) {
+        if (a instanceof MeshShape || b instanceof MeshShape) throw new IllegalArgumentException("Mesh contacts go through MeshCollision");
         out.reset();
         if (rank(a) > rank(b)) {
             if (collide(b, pb, a, pa, margin, out)) {
@@ -34,13 +36,16 @@ final class Narrowphase {
                         sphereSphere(s.radius(), pa.position(), t.radius(), q, margin, out);
                     }
                     case BoxShape t -> sphereBox(s.radius(), pa.position(), t.halfExtents(), pb, margin, out);
+                    case ConvexHullShape t -> PolytopeCollision.rounded(pa.position(), pa.position(), s.radius(), t.polytope().placed(pb), margin, out, null);
                     case PlaneShape t -> spherePlane(s.radius(), pa.position(), t, pb, margin, out);
+                    case MeshShape _ -> throw new IllegalStateException();
                 }
             }
             case CapsuleShape s -> {
                 switch (b) {
                     case CapsuleShape t -> capsuleCapsule(s, pa, t, pb, margin, out);
                     case BoxShape t -> capsuleBox(s, pa, t.halfExtents(), pb, margin, out);
+                    case ConvexHullShape t -> PolytopeCollision.rounded(capsuleEnd(s, pa, -1), capsuleEnd(s, pa, 1), s.radius(), t.polytope().placed(pb), margin, out, null);
                     case PlaneShape t -> capsulePlane(s, pa, t, pb, margin, out);
                     default -> throw new IllegalStateException();
                 }
@@ -48,13 +53,22 @@ final class Narrowphase {
             case BoxShape s -> {
                 switch (b) {
                     case BoxShape t -> boxBox(s.halfExtents(), pa, t.halfExtents(), pb, margin, out);
+                    case ConvexHullShape t -> PolytopeCollision.polytopes(Polytope.box(s.halfExtents()).placed(pa), t.polytope().placed(pb), margin, out, null);
                     case PlaneShape t -> boxPlane(s.halfExtents(), pa, t, pb, margin, out);
+                    default -> throw new IllegalStateException();
+                }
+            }
+            case ConvexHullShape s -> {
+                switch (b) {
+                    case ConvexHullShape t -> PolytopeCollision.polytopes(s.polytope().placed(pa), t.polytope().placed(pb), margin, out, null);
+                    case PlaneShape t -> PolytopeCollision.plane(s.polytope().placed(pa), pb.rotate(t.normal()), pb.position(), margin, out);
                     default -> throw new IllegalStateException();
                 }
             }
             case PlaneShape _ -> {
                 // Two endless planes either cross everywhere or never; neither is a useful contact.
             }
+            case MeshShape _ -> throw new IllegalStateException();
         }
         out.reduce();
         return out.count > 0;
@@ -65,7 +79,9 @@ final class Narrowphase {
             case SphereShape _ -> 0;
             case CapsuleShape _ -> 1;
             case BoxShape _ -> 2;
-            case PlaneShape _ -> 3;
+            case ConvexHullShape _ -> 3;
+            case PlaneShape _ -> 4;
+            case MeshShape _ -> 5;
         };
     }
 

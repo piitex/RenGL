@@ -20,7 +20,8 @@ import java.util.List;
  * </pre>
  * The body takes its starting place from the node's world transform when it is added, and after each world update it
  * writes its place back into the node. Moving or turning the node yourself teleports the body there, keeping its
- * velocity. The node's scale stretches the shapes (read when the body is added, or by {@link #syncFromNode()}).
+ * velocity. The node's scale stretches the shapes (read when the body is made and when it is added, or by
+ * {@link #syncFromNode()}).
  * <p>
  * The body's position is its node's origin, in world space and metres. It spins around its centre of mass, which is
  * the middle of its shapes weighted by their volume unless set with {@link #setCenterOfMass}. Velocities are in metres
@@ -93,7 +94,13 @@ public final class RigidBody {
     public RigidBody(Node3D node, BodyType type) {
         this.node = node;
         this.type = type == null ? BodyType.DYNAMIC : type;
+        // Read the scale now as well as when added, so setDensity before adding sees the shapes at their real size.
+        if (node != null) scale = absolute(node.worldMatrix().decompose().scale());
         updateMassProperties();
+    }
+
+    private static Vec3 absolute(Vec3 v) {
+        return new Vec3(Math.abs(v.x()), Math.abs(v.y()), Math.abs(v.z()));
     }
 
     /**
@@ -130,7 +137,7 @@ public final class RigidBody {
      */
     public RigidBody setType(BodyType type) {
         type = type == null ? BodyType.DYNAMIC : type;
-        if (type == BodyType.DYNAMIC && hasPlane()) throw new IllegalStateException("A body with a plane can't be dynamic");
+        if (type == BodyType.DYNAMIC && hasSurface()) throw new IllegalStateException("A body with a plane or mesh can't be dynamic");
         this.type = type;
         if (this.type == BodyType.STATIC) {
             setVelocity(Vec3.ZERO);
@@ -258,6 +265,9 @@ public final class RigidBody {
     public RigidBody addShape(BodyShape shape) {
         if (shape.shape() instanceof PlaneShape && type == BodyType.DYNAMIC) {
             throw new IllegalStateException("A plane has no volume to move; put it on a static or kinematic body");
+        }
+        if (shape.shape() instanceof MeshShape && type == BodyType.DYNAMIC) {
+            throw new IllegalStateException("A mesh has no inside to move; put it on a static or kinematic body, or use a ConvexHullShape");
         }
         shapes.add(shape);
         updateMassProperties();
@@ -393,7 +403,7 @@ public final class RigidBody {
     public RigidBody syncFromNode() {
         if (node == null) return this;
         Mat4.Trs trs = node.worldMatrix().decompose();
-        scale = new Vec3(Math.abs(trs.scale().x()), Math.abs(trs.scale().y()), Math.abs(trs.scale().z()));
+        scale = absolute(trs.scale());
         setOrientation(trs.rotation());
         updateMassProperties();
         setCenter(trs.position().add(getRotation().rotate(localCenter)));
@@ -697,8 +707,11 @@ public final class RigidBody {
         world = null;
     }
 
-    boolean hasPlane() {
-        for (BodyShape shape : shapes) if (shape.shape() instanceof PlaneShape) return true;
+    /**
+     * Whether a shape has no volume (a plane or a mesh), so the body can't be dynamic.
+     */
+    boolean hasSurface() {
+        for (BodyShape shape : shapes) if (shape.shape() instanceof PlaneShape || shape.shape() instanceof MeshShape) return true;
         return false;
     }
 
@@ -734,7 +747,7 @@ public final class RigidBody {
         bounds = min == null ? new Bounds(body.position(), body.position()) : new Bounds(min, max);
     }
 
-    private static Bounds worldBounds(Shape shape, Pose pose, float margin) {
+    static Bounds worldBounds(Shape shape, Pose pose, float margin) {
         Vec3 grow = new Vec3(margin, margin, margin);
         return switch (shape) {
             case SphereShape s -> {
@@ -756,6 +769,32 @@ public final class RigidBody {
                         Math.abs(m.yx()) * h.x() + Math.abs(m.yy()) * h.y() + Math.abs(m.yz()) * h.z(),
                         Math.abs(m.zx()) * h.x() + Math.abs(m.zy()) * h.y() + Math.abs(m.zz()) * h.z()).add(grow);
                 yield new Bounds(pose.position().sub(extent), pose.position().add(extent));
+            }
+            case ConvexHullShape h -> {
+                float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, minZ = Float.MAX_VALUE;
+                float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
+                for (Vec3 corner : h.polytope().vertices) {
+                    Vec3 p = pose.toWorld(corner);
+                    minX = Math.min(minX, p.x());
+                    minY = Math.min(minY, p.y());
+                    minZ = Math.min(minZ, p.z());
+                    maxX = Math.max(maxX, p.x());
+                    maxY = Math.max(maxY, p.y());
+                    maxZ = Math.max(maxZ, p.z());
+                }
+                yield new Bounds(new Vec3(minX, minY, minZ).sub(grow), new Vec3(maxX, maxY, maxZ).add(grow));
+            }
+            case MeshShape m -> {
+                // The mesh's own box, turned: looser than the triangles, but found without visiting them.
+                Bounds local = m.bounds();
+                Vec3 h = local.max().sub(local.min()).mul(0.5f);
+                Vec3 middle = pose.toWorld(local.min().add(h));
+                Mat3 r = pose.basis();
+                Vec3 extent = new Vec3(
+                        Math.abs(r.xx()) * h.x() + Math.abs(r.xy()) * h.y() + Math.abs(r.xz()) * h.z(),
+                        Math.abs(r.yx()) * h.x() + Math.abs(r.yy()) * h.y() + Math.abs(r.yz()) * h.z(),
+                        Math.abs(r.zx()) * h.x() + Math.abs(r.zy()) * h.y() + Math.abs(r.zz()) * h.z()).add(grow);
+                yield new Bounds(middle.sub(extent), middle.add(extent));
             }
             case PlaneShape p -> p.bounds();
         };
@@ -950,6 +989,13 @@ public final class RigidBody {
                 m.zx() * az * ax, m.zy() * az * ay, m.zz() * az * az);
     }
 
+    /**
+     * Where a placed shape's centre of mass is in the body's space.
+     */
+    private static Vec3 shapeCenter(BodyShape s) {
+        return s.offset().add(s.rotation().rotate(s.shape().centerOfMass()));
+    }
+
     private void updateMassProperties() {
         Vec3 origin = getPosition();
         List<BodyShape> scaled = new ArrayList<>(shapes.size());
@@ -960,7 +1006,7 @@ public final class RigidBody {
             scaled.add(s);
             float v = s.shape().volume();
             volume += v;
-            weighted = weighted.add(s.offset().mul(v));
+            weighted = weighted.add(shapeCenter(s).mul(v));
         }
         scaledShapes = List.copyOf(scaled);
 
@@ -974,8 +1020,9 @@ public final class RigidBody {
             inertia = Mat3.ZERO;
             for (BodyShape s : scaled) {
                 float m = mass * s.shape().volume() / volume;
-                Mat3 own = Mat3.diagonal(s.shape().unitInertia().mul(m)).rotated(Mat3.rotation(s.rotation()));
-                inertia = inertia.add(own).add(Mat3.pointMass(m, s.offset().sub(center)));
+                Mat3 unit = s.shape() instanceof ConvexHullShape hull ? hull.unitInertiaTensor() : Mat3.diagonal(s.shape().unitInertia());
+                Mat3 own = unit.mul(m).rotated(Mat3.rotation(s.rotation()));
+                inertia = inertia.add(own).add(Mat3.pointMass(m, shapeCenter(s).sub(center)));
             }
         }
         localCenter = center;

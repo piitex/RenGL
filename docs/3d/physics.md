@@ -3,8 +3,9 @@
 [Documentation](../README.md) › [3D](README.md)
 
 Rigid bodies for 3D scenes, in `me.piitex.engine.render3d.physics`: gravity, velocity, mass and inertia, forces and
-impulses, collisions with friction and bounce, stacking, sleeping, raycasts and trigger zones. It is plain Java with no
-native library, and like the rest of the 3D layer it costs nothing until you use it.
+impulses, collisions with friction and bounce, stacking, sleeping, raycasts and trigger zones, with loaded meshes as
+ground and convex hulls for objects of any shape. It is plain Java with no native library, and like the rest of the 3D
+layer it costs nothing until you use it.
 
 A **`PhysicsWorld`** holds **`RigidBody`** objects. Each body moves a [`Node3D`](scenes.md#node3d): the world works out
 where the body goes and writes the position and rotation into the node, so the scene draws it there.
@@ -81,7 +82,8 @@ public class FirstPhysics {
 
 `me.piitex.examples.demo.PhysicsDemo` is a fuller version: a pyramid and a tower of crates, a ramp, balls, and a panel
 that counts the bodies that are awake. `me.piitex.examples.demo.DominoDemo` is a quick one: a chain of dominoes along a
-curve, a button or a click to push one over, and slow motion.
+curve, a button or a click to push one over, and slow motion. `me.piitex.examples.demo.TerrainDemo` drops rocks (convex
+hulls) and crates on a hilly terrain (a triangle mesh).
 
 ## Units and conventions
 
@@ -151,6 +153,8 @@ changing a node's scale, call `body.syncFromNode()` to rescale the shapes.
 | `new BoxShape(halfX, halfY, halfZ)` / `BoxShape.ofSize(w, h, d)` | A box, by half extents or by full size |
 | `new CapsuleShape(radius, halfHeight)` / `CapsuleShape.ofHeight(radius, height)` | A cylinder with rounded ends, standing along Y: the usual character shape. `halfHeight` is half the straight part |
 | `new PlaneShape(normal)` / `new PlaneShape()` | An endless floor through the body, facing `normal` (up by default). Static and kinematic bodies only |
+| `ConvexHullShape.of(points)` / `.of(mesh)` / `.of(node)` | The smallest convex solid around some points, as if shrink-wrapped: rocks, bevelled crates, car bodies. See [below](#meshes-and-hulls) |
+| `MeshShape.of(mesh)` / `.of(node)` / `new MeshShape(positions, indices)` | A surface of triangles: levels, terrain, caves. Static and kinematic bodies only. See [below](#meshes-and-hulls) |
 
 A body can have several shapes, each moved and turned from the body's origin, which makes one solid object:
 
@@ -162,6 +166,39 @@ RigidBody table = new RigidBody(tableNode)
         .addShape(new BoxShape(0.05f, 0.35f, 0.05f), new Vec3(-0.9f, 0.35f, 0.4f))
         .addShape(new BoxShape(0.05f, 0.35f, 0.05f), new Vec3(0.9f, 0.35f, 0.4f));
 ```
+
+### Meshes and hulls
+
+A **`MeshShape`** makes a loaded level or terrain the ground. `MeshShape.of(node)` takes the triangles of the node's mesh
+and of every mesh under it, in the node's own space, so a body on that node lines up with what is drawn:
+
+```java nocompile
+Model level = Model.load(Path.of("assets/level.glb"));
+Node3D root = level.root();
+scene.add(root);
+world.add(new RigidBody(root, BodyType.STATIC).addShape(MeshShape.of(root)));
+```
+
+A mesh has no inside, so it can only be on a static or kinematic body. Things touch its triangles from either side.
+The triangles are kept in a tree, so a large level costs little more per contact than a small one. Corners at the same
+place are joined, which tells the mesh where triangles meet: the edge between two triangles that lie flat or fold
+inward is a seam, and nothing catches on it, so a box slides across a floor of many triangles as across one face.
+Hidden nodes count too, so a level can carry a simple invisible collision mesh beside the detailed one it draws; that
+is also quicker.
+
+A **`ConvexHullShape`** is the shape for a moving object that isn't a box, ball or capsule. Dents and holes are filled
+in (a mug's hull has no hole for coffee), and points inside are dropped, so only the corners remain:
+
+```java nocompile
+Node3D rock = rockModel.root().copy();
+scene.add(rock);
+world.add(new RigidBody(rock).addShape(ConvexHullShape.of(rock)).setDensity(2500f));
+```
+
+Like a mesh, a hull stays where its points are rather than being centred on the body, and its mass is spread through
+its volume; `centerOfMass()` says where its middle is. Every corner costs a little in each contact test, so a hull of a
+few dozen corners is quicker than one of hundreds: build it from a low-detail version of the model when there is one.
+For an object with dents that matter (a chair, an L-shaped beam), give the body several hulls or boxes.
 
 ### Mass and inertia
 
@@ -258,7 +295,7 @@ for (RigidBody body : world.overlapSphere(center, 5f)) { ... }
 
 | Method | Description |
 |---|---|
-| `raycast(Ray, maxDistance)` / `raycast(Ray, maxDistance, mask)` | The nearest hit, or null: the `RaycastHit` has the body, the shape, the point, the surface normal and the distance |
+| `raycast(Ray, maxDistance)` / `raycast(Ray, maxDistance, mask)` | The nearest hit, or null: the `RaycastHit` has the body, the shape, the point, the surface normal, the distance and, for a mesh, which triangle |
 | `raycastAll(Ray, maxDistance, mask)` | Every body hit, nearest first |
 | `overlapSphere(center, radius)` / `overlapBox(center, halfExtents, rotation)` / `overlap(shape, position, rotation, mask)` | The bodies a shape overlaps |
 | `setQueriesHitTriggers(boolean)` | Whether queries see triggers (off by default) |
@@ -272,7 +309,8 @@ hundred bodies and a few rays a frame.
 
 `world.getContacts()` lists the pairs of shapes touching, or about to: each `Contact` has its two bodies and shapes, the
 normal from body A to body B, up to four `ContactPoint`s (position, depth, impulse) and `getImpulse()`, how hard the
-bodies pushed on each other in the last step.
+bodies pushed on each other in the last step. Against a mesh, the triangles facing the same way make one contact, and
+`getTriangle()` names one of them; a body on a bumpy mesh can have a contact for each slope it rests on.
 
 A `ContactListener` hears changes. Give one to the world for every body, or to a body (`setContactListener`) for its own:
 
@@ -308,7 +346,8 @@ zone of water. A static trigger is a fixed zone; a kinematic one can move.
 
 Each step: the step handler runs; the **broadphase** finds bodies whose boxes overlap (sweep and prune along the axis
 the bodies spread most along); the **narrowphase** tests each pair of shapes exactly (separating axes and face clipping
-for boxes, closest points for spheres and capsules), giving up to four contact points; gravity and forces change the
+for boxes and hulls, closest points for spheres and capsules, found by GJK against hulls and triangles; a mesh's tree
+gives the triangles near each shape), giving up to four contact points; gravity and forces change the
 velocities; the **solver** makes ten passes over the contacts, applying impulses so bodies don't move into each other
 and friction resists sliding; bounces are added; overlaps are pushed apart without adding speed; and the velocities
 move the bodies. Contacts remember last step's impulses, which is what lets stacks settle.
@@ -318,7 +357,9 @@ bodies at the surface and keeps a fast ball from passing through a thin wall, wi
 
 ## Limits
 
-- No mesh or convex hull shapes yet: levels need boxes, capsules, spheres and planes for now.
+- Meshes can't move freely: a dynamic body needs hulls (or boxes, spheres and capsules) instead.
+- A mesh joins its corners only where they are at exactly the same place; a level whose pieces merely nearly meet keeps
+  real edges along the gaps, which a sliding box can catch on.
 - No joints (hinges, ropes, ragdolls) and no character controller yet.
 - No continuous collision against spinning bodies: speculative contacts cover fast straight-line motion, not a long
   thin stick spinning very fast.
