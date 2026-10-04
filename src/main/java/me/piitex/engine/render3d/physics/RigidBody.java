@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.physics;
 
+import me.piitex.engine.render3d.math.Bounds;
 import me.piitex.engine.render3d.math.Mat4;
 import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Vec3;
@@ -35,6 +36,7 @@ public final class RigidBody {
     private final Node3D node;
     private BodyType type;
     private PhysicsWorld world;
+    int id;
 
     private final List<BodyShape> shapes = new ArrayList<>();
     private List<BodyShape> scaledShapes = List.of();
@@ -62,6 +64,12 @@ public final class RigidBody {
     private float angularDamping = 0.05f;
     private float gravityScale = 1f;
     private Object userData;
+    private int collisionLayer = 1;
+    private int collisionMask = -1;
+
+    private Pose[] shapePoses = new Pose[0];
+    private Bounds[] shapeBounds = new Bounds[0];
+    private Bounds bounds = new Bounds(Vec3.ZERO, Vec3.ZERO);
 
     private Vec3 previousPosition = Vec3.ZERO;
     private Quat previousRotation = Quat.IDENTITY;
@@ -110,7 +118,9 @@ public final class RigidBody {
      * Changes how the body moves. A body that stops being dynamic keeps its velocity only if it becomes kinematic.
      */
     public RigidBody setType(BodyType type) {
-        this.type = type == null ? BodyType.DYNAMIC : type;
+        type = type == null ? BodyType.DYNAMIC : type;
+        if (type == BodyType.DYNAMIC && hasPlane()) throw new IllegalStateException("A body with a plane can't be dynamic");
+        this.type = type;
         if (this.type == BodyType.STATIC) {
             setVelocity(Vec3.ZERO);
             setAngularVelocity(Vec3.ZERO);
@@ -153,6 +163,9 @@ public final class RigidBody {
     }
 
     public RigidBody addShape(BodyShape shape) {
+        if (shape.shape() instanceof PlaneShape && type == BodyType.DYNAMIC) {
+            throw new IllegalStateException("A plane has no volume to move; put it on a static or kinematic body");
+        }
         shapes.add(shape);
         updateMassProperties();
         return this;
@@ -496,6 +509,39 @@ public final class RigidBody {
         return (switch (axis) { case 0 -> ax; case 1 -> ay; case 2 -> az; default -> throw new IllegalArgumentException("Axis " + axis); }) == 0f;
     }
 
+    public int getCollisionLayer() {
+        return collisionLayer;
+    }
+
+    /**
+     * The groups this body belongs to, as bits (1 by default). Two bodies collide only when each one's layer shares a
+     * bit with the other's mask.
+     */
+    public RigidBody setCollisionLayer(int layer) {
+        collisionLayer = layer;
+        return this;
+    }
+
+    public int getCollisionMask() {
+        return collisionMask;
+    }
+
+    /**
+     * The groups this body collides with, as bits (all of them by default). For players that pass through each other:
+     * put them on layer 2 and leave bit 2 out of their mask.
+     */
+    public RigidBody setCollisionMask(int mask) {
+        collisionMask = mask;
+        return this;
+    }
+
+    /**
+     * The box around the body's shapes in world space, as of the last step.
+     */
+    public Bounds getBounds() {
+        return bounds;
+    }
+
     public Object getUserData() {
         return userData;
     }
@@ -523,6 +569,82 @@ public final class RigidBody {
 
     void detach() {
         world = null;
+    }
+
+    boolean hasPlane() {
+        for (BodyShape shape : shapes) if (shape.shape() instanceof PlaneShape) return true;
+        return false;
+    }
+
+    /**
+     * Places each shape in the world and boxes it, grown by {@code margin}.
+     */
+    void updateCollisionShapes(float margin) {
+        int n = scaledShapes.size();
+        if (shapePoses.length != n) {
+            shapePoses = new Pose[n];
+            shapeBounds = new Bounds[n];
+        }
+        Quat rotation = getRotation();
+        Pose body = new Pose(getPosition(), rotation);
+        Vec3 min = null, max = null;
+        for (int i = 0; i < n; i++) {
+            BodyShape shape = scaledShapes.get(i);
+            Pose pose = new Pose(body.toWorld(shape.offset()), rotation.mul(shape.rotation()));
+            Bounds box = worldBounds(shape.shape(), pose, margin);
+            shapePoses[i] = pose;
+            shapeBounds[i] = box;
+            min = min == null ? box.min() : new Vec3(Math.min(min.x(), box.min().x()), Math.min(min.y(), box.min().y()), Math.min(min.z(), box.min().z()));
+            max = max == null ? box.max() : new Vec3(Math.max(max.x(), box.max().x()), Math.max(max.y(), box.max().y()), Math.max(max.z(), box.max().z()));
+        }
+        bounds = min == null ? new Bounds(body.position(), body.position()) : new Bounds(min, max);
+    }
+
+    private static Bounds worldBounds(Shape shape, Pose pose, float margin) {
+        Vec3 grow = new Vec3(margin, margin, margin);
+        return switch (shape) {
+            case SphereShape s -> {
+                Vec3 r = grow.add(new Vec3(s.radius(), s.radius(), s.radius()));
+                yield new Bounds(pose.position().sub(r), pose.position().add(r));
+            }
+            case CapsuleShape c -> {
+                Vec3 up = pose.axis(1).mul(c.halfHeight());
+                Vec3 a = pose.position().add(up), b = pose.position().sub(up);
+                Vec3 r = grow.add(new Vec3(c.radius(), c.radius(), c.radius()));
+                yield new Bounds(new Vec3(Math.min(a.x(), b.x()), Math.min(a.y(), b.y()), Math.min(a.z(), b.z())).sub(r),
+                        new Vec3(Math.max(a.x(), b.x()), Math.max(a.y(), b.y()), Math.max(a.z(), b.z())).add(r));
+            }
+            case BoxShape b -> {
+                Vec3 h = b.halfExtents();
+                Mat3 m = pose.basis();
+                Vec3 extent = new Vec3(
+                        Math.abs(m.xx()) * h.x() + Math.abs(m.xy()) * h.y() + Math.abs(m.xz()) * h.z(),
+                        Math.abs(m.yx()) * h.x() + Math.abs(m.yy()) * h.y() + Math.abs(m.yz()) * h.z(),
+                        Math.abs(m.zx()) * h.x() + Math.abs(m.zy()) * h.y() + Math.abs(m.zz()) * h.z()).add(grow);
+                yield new Bounds(pose.position().sub(extent), pose.position().add(extent));
+            }
+            case PlaneShape p -> p.bounds();
+        };
+    }
+
+    Bounds collisionBounds() {
+        return bounds;
+    }
+
+    Pose shapePose(int index) {
+        return shapePoses[index];
+    }
+
+    Bounds shapeBounds(int index) {
+        return shapeBounds[index];
+    }
+
+    Shape collisionShape(int index) {
+        return scaledShapes.get(index).shape();
+    }
+
+    int shapeCount() {
+        return shapePoses.length;
     }
 
     /**
@@ -678,7 +800,7 @@ public final class RigidBody {
         Mat3 inertia;
         if (inertiaOverride != null) {
             inertia = Mat3.diagonal(inertiaOverride);
-        } else if (scaled.isEmpty()) {
+        } else if (volume <= 0f) {
             inertia = Mat3.diagonal(new SphereShape(0.5f).unitInertia().mul(mass));
         } else {
             inertia = Mat3.ZERO;

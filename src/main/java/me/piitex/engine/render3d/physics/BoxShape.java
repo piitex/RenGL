@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.physics;
 
+import me.piitex.engine.render3d.math.Bounds;
 import me.piitex.engine.render3d.math.Vec3;
 
 /**
@@ -32,6 +33,11 @@ public record BoxShape(Vec3 halfExtents) implements Shape {
     public Vec3 unitInertia() {
         float xx = halfExtents.x() * halfExtents.x(), yy = halfExtents.y() * halfExtents.y(), zz = halfExtents.z() * halfExtents.z();
         return new Vec3((yy + zz) / 3f, (xx + zz) / 3f, (xx + yy) / 3f);
+    }
+
+    @Override
+    public Bounds bounds() {
+        return new Bounds(halfExtents.negate(), halfExtents);
     }
 
     @Override

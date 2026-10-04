@@ -4,7 +4,9 @@ import me.piitex.engine.render3d.math.Vec3;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Moves {@link RigidBody rigid bodies}: gravity, forces, spin and inertia. Give it to a scene and it runs once per
@@ -33,7 +35,21 @@ public final class PhysicsWorld {
         void step(PhysicsWorld world, float dt);
     }
 
+    /**
+     * How close shapes have to come before they get a contact, in metres. Tracking them a little before they touch lets
+     * the solver stop a falling body at the surface instead of after it sinks in.
+     */
+    static final float CONTACT_MARGIN = 0.02f;
+
+    private record PairKey(RigidBody a, int shapeA, RigidBody b, int shapeB) {
+    }
+
     private final List<RigidBody> bodies = new ArrayList<>();
+    private final Broadphase broadphase = new Broadphase();
+    private final Manifold manifold = new Manifold();
+    private Map<PairKey, Contact> contactMap = new HashMap<>();
+    private List<Contact> contacts = new ArrayList<>();
+    private int nextId;
     private Vec3 gravity = new Vec3(0f, -9.81f, 0f);
     private float fixedStep = 1f / 60f;
     private int maxSteps = 8;
@@ -49,19 +65,34 @@ public final class PhysicsWorld {
     public PhysicsWorld add(RigidBody body) {
         if (body.getWorld() == this) return this;
         if (body.getWorld() != null) throw new IllegalStateException(body + " is already in another world");
+        if (body.isDynamic() && body.hasPlane()) throw new IllegalStateException("A body with a plane can't be dynamic");
+        body.id = nextId++;
         bodies.add(body);
+        broadphase.add(body);
         body.attach(this);
+        body.updateCollisionShapes(CONTACT_MARGIN);
         return this;
     }
 
     public boolean remove(RigidBody body) {
         if (!bodies.remove(body)) return false;
+        broadphase.remove(body);
+        contacts.removeIf(c -> c.getBodyA() == body || c.getBodyB() == body);
+        contactMap.values().removeIf(c -> c.getBodyA() == body || c.getBodyB() == body);
         body.detach();
         return true;
     }
 
     public List<RigidBody> bodies() {
         return Collections.unmodifiableList(bodies);
+    }
+
+    /**
+     * The shapes touching or about to touch, as found at the start of the last step. Each pair of shapes has one
+     * contact; a body made of several shapes can have several with the same neighbour.
+     */
+    public List<Contact> getContacts() {
+        return Collections.unmodifiableList(contacts);
     }
 
     public Vec3 getGravity() {
@@ -173,6 +204,7 @@ public final class PhysicsWorld {
         RigidBody[] active = bodies.toArray(RigidBody[]::new);
         for (RigidBody body : active) body.savePrevious();
         if (stepHandler != null) stepHandler.step(this, dt);
+        collide();
         for (RigidBody body : active) {
             if (body.getWorld() == this) body.integrateVelocity(dt, gravity);
         }
@@ -182,6 +214,34 @@ public final class PhysicsWorld {
         }
         time += dt;
         stepCount++;
+    }
+
+    /**
+     * Finds every contact: the broadphase pairs up bodies whose boxes overlap, then each pair of their shapes whose
+     * boxes overlap gets an exact test. A contact found last step is kept and updated, so it can remember what the
+     * solver learned about it.
+     */
+    private void collide() {
+        for (RigidBody body : bodies) body.updateCollisionShapes(CONTACT_MARGIN);
+        Map<PairKey, Contact> previous = contactMap;
+        Map<PairKey, Contact> found = new HashMap<>();
+        List<Contact> list = new ArrayList<>();
+        broadphase.findPairs((a, b) -> {
+            for (int i = 0; i < a.shapeCount(); i++) {
+                for (int j = 0; j < b.shapeCount(); j++) {
+                    if (!Broadphase.overlap(a.shapeBounds(i), b.shapeBounds(j))) continue;
+                    if (!Narrowphase.collide(a.collisionShape(i), a.shapePose(i), b.collisionShape(j), b.shapePose(j), CONTACT_MARGIN, manifold)) continue;
+                    PairKey key = new PairKey(a, i, b, j);
+                    Contact contact = previous.get(key);
+                    if (contact == null) contact = new Contact(a, i, b, j);
+                    contact.update(manifold);
+                    found.put(key, contact);
+                    list.add(contact);
+                }
+            }
+        });
+        contactMap = found;
+        contacts = list;
     }
 
     private void followMovedNodes() {

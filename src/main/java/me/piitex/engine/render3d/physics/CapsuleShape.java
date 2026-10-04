@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.physics;
 
+import me.piitex.engine.render3d.math.Bounds;
 import me.piitex.engine.render3d.math.Vec3;
 
 /**
@@ -35,6 +36,11 @@ public record CapsuleShape(float radius, float halfHeight) implements Shape {
         double across = mc * (r * r / 4 + h * h / 3) + me * (0.4 * r * r + h * h + 0.75 * h * r);
         double along = mc * r * r / 2 + me * 0.4 * r * r;
         return new Vec3((float) across, (float) along, (float) across);
+    }
+
+    @Override
+    public Bounds bounds() {
+        return new Bounds(new Vec3(-radius, -halfHeight - radius, -radius), new Vec3(radius, halfHeight + radius, radius));
     }
 
     @Override

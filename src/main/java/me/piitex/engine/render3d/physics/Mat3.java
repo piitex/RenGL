@@ -52,6 +52,24 @@ record Mat3(float xx, float xy, float xz, float yx, float yy, float yz, float zx
         return new Vec3(xx * v.x() + xy * v.y() + xz * v.z(), yx * v.x() + yy * v.y() + yz * v.z(), zx * v.x() + zy * v.y() + zz * v.z());
     }
 
+    /**
+     * {@code this^T * v}: for a rotation, the vector taken back into the turned frame.
+     */
+    Vec3 mulTransposed(Vec3 v) {
+        return new Vec3(xx * v.x() + yx * v.y() + zx * v.z(), xy * v.x() + yy * v.y() + zy * v.z(), xz * v.x() + yz * v.y() + zz * v.z());
+    }
+
+    /**
+     * Column {@code i}: for a rotation, where the frame's X, Y or Z axis points.
+     */
+    Vec3 column(int i) {
+        return switch (i) {
+            case 0 -> new Vec3(xx, yx, zx);
+            case 1 -> new Vec3(xy, yy, zy);
+            default -> new Vec3(xz, yz, zz);
+        };
+    }
+
     Mat3 transpose() {
         return new Mat3(xx, yx, zx, xy, yy, zy, xz, yz, zz);
     }
