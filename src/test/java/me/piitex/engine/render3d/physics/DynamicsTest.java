@@ -44,7 +44,7 @@ class DynamicsTest {
     void massDoesNotChangeTheFall() {
         PhysicsWorld world = new PhysicsWorld();
         RigidBody light = ball(0.5f, 0.1f), heavy = ball(0.5f, 500f);
-        world.add(light).add(heavy);
+        world.add(light).add(heavy.setPosition(5, 0, 0));
         run(world, 1f);
         assertEquals(light.getPosition().y(), heavy.getPosition().y(), 1e-5f);
     }

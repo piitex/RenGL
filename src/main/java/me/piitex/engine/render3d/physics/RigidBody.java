@@ -57,12 +57,21 @@ public final class RigidBody {
     float wx, wy, wz;
     private float fx, fy, fz;
     private float tx, ty, tz;
-    private float lx = 1f, ly = 1f, lz = 1f;
-    private float ax = 1f, ay = 1f, az = 1f;
+    // Pseudo velocities: the solver's push out of overlaps, used for one position update and then dropped.
+    float pvx, pvy, pvz, pwx, pwy, pwz;
+    // 1 for a free axis, 0 for a locked one.
+    float lx = 1f, ly = 1f, lz = 1f;
+    float ax = 1f, ay = 1f, az = 1f;
 
     private float linearDamping;
     private float angularDamping = 0.05f;
     private float gravityScale = 1f;
+    private PhysicsMaterial material = PhysicsMaterial.DEFAULT;
+    private boolean sleeping;
+    private boolean canSleep = true;
+    float sleepTime;
+    int islandIndex;
+    float speculative;
     private Object userData;
     private int collisionLayer = 1;
     private int collisionMask = -1;
@@ -127,11 +136,93 @@ public final class RigidBody {
         }
         clearForces();
         updateMassProperties();
+        wakeUp();
         return this;
     }
 
     public boolean isDynamic() {
         return type == BodyType.DYNAMIC;
+    }
+
+    boolean isAwakeDynamic() {
+        return type == BodyType.DYNAMIC && !sleeping;
+    }
+
+    /**
+     * Whether the body takes part in collisions this step: an awake dynamic body, or a kinematic one on the move.
+     */
+    boolean isActive() {
+        return isAwakeDynamic() || (type == BodyType.KINEMATIC && isMoving());
+    }
+
+    boolean isMoving() {
+        return vx != 0f || vy != 0f || vz != 0f || wx != 0f || wy != 0f || wz != 0f;
+    }
+
+    // ---- Sleep ----------------------------------------------------------------------------------------------------
+
+    /**
+     * Whether the body is resting and skipped by the simulation until something touches, pushes or moves it. A body
+     * falls asleep after half a second of barely moving, together with everything it rests on or against.
+     */
+    public boolean isSleeping() {
+        return sleeping;
+    }
+
+    /**
+     * Wakes the body so it moves again. Pushing, moving or changing it does this for you.
+     */
+    public RigidBody wakeUp() {
+        sleeping = false;
+        sleepTime = 0f;
+        return this;
+    }
+
+    /**
+     * Puts the body to sleep now, stopping it. It wakes when touched, pushed or moved.
+     */
+    public RigidBody sleep() {
+        if (type != BodyType.DYNAMIC) return this;
+        sleeping = true;
+        vx = vy = vz = wx = wy = wz = 0f;
+        clearForces();
+        return this;
+    }
+
+    public boolean isSleepingAllowed() {
+        return canSleep;
+    }
+
+    /**
+     * Whether the body may fall asleep (on by default). Turn it off for something the player controls, so it reacts
+     * at once to code that sets its position or velocity directly.
+     */
+    public RigidBody setSleepingAllowed(boolean allowed) {
+        canSleep = allowed;
+        if (!allowed) wakeUp();
+        return this;
+    }
+
+    // ---- Material -------------------------------------------------------------------------------------------------
+
+    public PhysicsMaterial getMaterial() {
+        return material;
+    }
+
+    /**
+     * Friction and bounce, {@link PhysicsMaterial#DEFAULT} unless set.
+     */
+    public RigidBody setMaterial(PhysicsMaterial material) {
+        this.material = material == null ? PhysicsMaterial.DEFAULT : material;
+        return this;
+    }
+
+    public RigidBody setFriction(float friction) {
+        return setMaterial(material.withFriction(friction));
+    }
+
+    public RigidBody setRestitution(float restitution) {
+        return setMaterial(material.withRestitution(restitution));
     }
 
     // ---- Shapes and mass ------------------------------------------------------------------------------------------
@@ -168,6 +259,7 @@ public final class RigidBody {
         }
         shapes.add(shape);
         updateMassProperties();
+        wakeUp();
         return this;
     }
 
@@ -318,6 +410,7 @@ public final class RigidBody {
 
     public RigidBody setVelocity(Vec3 velocity) {
         if (type == BodyType.STATIC) return this;
+        wakeUp();
         vx = velocity.x() * lx;
         vy = velocity.y() * ly;
         vz = velocity.z() * lz;
@@ -338,6 +431,7 @@ public final class RigidBody {
 
     public RigidBody setAngularVelocity(Vec3 velocity) {
         if (type == BodyType.STATIC) return this;
+        wakeUp();
         wx = velocity.x() * ax;
         wy = velocity.y() * ay;
         wz = velocity.z() * az;
@@ -368,6 +462,7 @@ public final class RigidBody {
      */
     public RigidBody applyForce(Vec3 force) {
         if (type != BodyType.DYNAMIC) return this;
+        wakeUp();
         fx += force.x();
         fy += force.y();
         fz += force.z();
@@ -387,6 +482,7 @@ public final class RigidBody {
      */
     public RigidBody applyTorque(Vec3 torque) {
         if (type != BodyType.DYNAMIC) return this;
+        wakeUp();
         tx += torque.x();
         ty += torque.y();
         tz += torque.z();
@@ -399,6 +495,7 @@ public final class RigidBody {
      */
     public RigidBody applyImpulse(Vec3 impulse) {
         if (type != BodyType.DYNAMIC) return this;
+        wakeUp();
         vx += impulse.x() * invMass * lx;
         vy += impulse.y() * invMass * ly;
         vz += impulse.z() * invMass * lz;
@@ -418,6 +515,7 @@ public final class RigidBody {
      */
     public RigidBody applyTorqueImpulse(Vec3 impulse) {
         if (type != BodyType.DYNAMIC) return this;
+        wakeUp();
         Vec3 dw = invInertiaWorld.mul(impulse);
         wx += dw.x();
         wy += dw.y();
@@ -579,6 +677,14 @@ public final class RigidBody {
     /**
      * Places each shape in the world and boxes it, grown by {@code margin}.
      */
+    void updateCollisionShapes(float margin, float dt, Vec3 gravity) {
+        // Grow by how far the body could move this step, so contacts are found before it gets there.
+        float speed = (float) Math.sqrt(vx * vx + vy * vy + vz * vz);
+        if (type == BodyType.DYNAMIC && !sleeping) speed += gravity.length() * Math.abs(gravityScale) * dt;
+        speculative = Math.min(margin + speed * dt, 4f);
+        updateCollisionShapes(speculative);
+    }
+
     void updateCollisionShapes(float margin) {
         int n = scaledShapes.size();
         if (shapePoses.length != n) {
@@ -651,7 +757,7 @@ public final class RigidBody {
      * Gravity and the gathered forces change the velocity; damping then slows it.
      */
     void integrateVelocity(float dt, Vec3 gravity) {
-        if (type != BodyType.DYNAMIC) return;
+        if (type != BodyType.DYNAMIC || sleeping) return;
         vx += (fx * invMass + gravity.x() * gravityScale) * dt * lx;
         vy += (fy * invMass + gravity.y() * gravityScale) * dt * ly;
         vz += (fz * invMass + gravity.z() * gravityScale) * dt * lz;
@@ -677,7 +783,7 @@ public final class RigidBody {
      * The velocity moves the centre of mass and the spin turns the body.
      */
     void integratePosition(float dt) {
-        if (type == BodyType.STATIC) return;
+        if (type == BodyType.STATIC || sleeping) return;
         float speed = (float) Math.sqrt(wx * wx + wy * wy + wz * wz);
         if (speed * dt > MAX_TURN_PER_STEP) { // past a quarter turn per step the rotation update falls apart
             float s = MAX_TURN_PER_STEP / (speed * dt);
@@ -685,15 +791,16 @@ public final class RigidBody {
             wy *= s;
             wz *= s;
         }
-        cx += vx * dt;
-        cy += vy * dt;
-        cz += vz * dt;
+        cx += (vx + pvx) * dt;
+        cy += (vy + pvy) * dt;
+        cz += (vz + pvz) * dt;
         // dq/dt = 0.5 * (w, 0) * q
-        float h = 0.5f * dt;
-        float nx = qx + h * (wx * qw + wy * qz - wz * qy);
-        float ny = qy + h * (wy * qw + wz * qx - wx * qz);
-        float nz = qz + h * (wz * qw + wx * qy - wy * qx);
-        float nw = qw - h * (wx * qx + wy * qy + wz * qz);
+        float h = 0.5f * dt, tx = wx + pwx, ty = wy + pwy, tz = wz + pwz;
+        float nx = qx + h * (tx * qw + ty * qz - tz * qy);
+        float ny = qy + h * (ty * qw + tz * qx - tx * qz);
+        float nz = qz + h * (tz * qw + tx * qy - ty * qx);
+        float nw = qw - h * (tx * qx + ty * qy + tz * qz);
+        pvx = pvy = pvz = pwx = pwy = pwz = 0f;
         setOrientation(new Quat(nx, ny, nz, nw).normalized());
     }
 
@@ -743,6 +850,35 @@ public final class RigidBody {
         writtenRotation = node.getRotation();
     }
 
+    /**
+     * Applies impulse (px, py, pz) at offset (rx, ry, rz) from the centre of mass, to the velocities or the pseudo
+     * velocities.
+     */
+    void addVelocity(float px, float py, float pz, float rx, float ry, float rz, boolean pseudo) {
+        if (invMass == 0f) return;
+        float dvx = px * invMass * lx, dvy = py * invMass * ly, dvz = pz * invMass * lz;
+        float tx = ry * pz - rz * py, ty = rz * px - rx * pz, tz = rx * py - ry * px;
+        Mat3 i = invInertiaWorld;
+        float dwx = i.xx() * tx + i.xy() * ty + i.xz() * tz;
+        float dwy = i.yx() * tx + i.yy() * ty + i.yz() * tz;
+        float dwz = i.zx() * tx + i.zy() * ty + i.zz() * tz;
+        if (pseudo) {
+            pvx += dvx;
+            pvy += dvy;
+            pvz += dvz;
+            pwx += dwx;
+            pwy += dwy;
+            pwz += dwz;
+        } else {
+            vx += dvx;
+            vy += dvy;
+            vz += dvz;
+            wx += dwx;
+            wy += dwy;
+            wz += dwz;
+        }
+    }
+
     Mat3 inverseInertiaWorld() {
         return invInertiaWorld;
     }
@@ -765,6 +901,7 @@ public final class RigidBody {
      * After a jump, nothing to smooth from: the node goes straight to the new place.
      */
     private void teleported() {
+        wakeUp();
         savePrevious();
         if (world != null) writeNode(1f);
     }
