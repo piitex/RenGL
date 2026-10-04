@@ -73,6 +73,8 @@ public final class RigidBody {
     int islandIndex;
     float speculative;
     private Object userData;
+    private boolean trigger;
+    private ContactListener contactListener;
     private int collisionLayer = 1;
     private int collisionMask = -1;
 
@@ -607,6 +609,32 @@ public final class RigidBody {
         return (switch (axis) { case 0 -> ax; case 1 -> ay; case 2 -> az; default -> throw new IllegalArgumentException("Axis " + axis); }) == 0f;
     }
 
+    public boolean isTrigger() {
+        return trigger;
+    }
+
+    /**
+     * Makes the body a trigger: other bodies pass through it, and it reports who enters and leaves to the contact
+     * listeners. Use a static trigger for a zone (a finish line, a pickup, water), or a kinematic one that moves.
+     */
+    public RigidBody setTrigger(boolean trigger) {
+        this.trigger = trigger;
+        wakeUp();
+        return this;
+    }
+
+    public ContactListener getContactListener() {
+        return contactListener;
+    }
+
+    /**
+     * Hears this body's own contacts and trigger events, alongside the world's listeners.
+     */
+    public RigidBody setContactListener(ContactListener listener) {
+        contactListener = listener;
+        return this;
+    }
+
     public int getCollisionLayer() {
         return collisionLayer;
     }
@@ -903,7 +931,10 @@ public final class RigidBody {
     private void teleported() {
         wakeUp();
         savePrevious();
-        if (world != null) writeNode(1f);
+        if (world != null) {
+            writeNode(1f);
+            updateCollisionShapes(PhysicsWorld.CONTACT_MARGIN);
+        }
     }
 
     private void updateWorldInertia() {
@@ -953,5 +984,6 @@ public final class RigidBody {
         invMass = type == BodyType.DYNAMIC ? 1f / mass : 0f;
         setCenter(origin.add(getRotation().rotate(localCenter)));
         updateWorldInertia();
+        if (world != null) updateCollisionShapes(PhysicsWorld.CONTACT_MARGIN);
     }
 }
