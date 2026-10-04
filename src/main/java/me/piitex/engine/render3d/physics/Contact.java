@@ -144,6 +144,13 @@ public final class Contact {
     }
 
     /**
+     * Whether either body is a trigger, so the contact is only reported, never pushed apart.
+     */
+    public boolean isTrigger() {
+        return bodyA.isTrigger() || bodyB.isTrigger();
+    }
+
+    /**
      * The deepest overlap, in metres.
      */
     public float getDepth() {

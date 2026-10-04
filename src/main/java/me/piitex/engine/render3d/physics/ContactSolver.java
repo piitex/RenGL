@@ -33,7 +33,7 @@ final class ContactSolver {
     }
 
     static boolean active(Contact contact) {
-        return contact.getBodyA().isAwakeDynamic() || contact.getBodyB().isAwakeDynamic();
+        return !contact.isTrigger() && (contact.getBodyA().isAwakeDynamic() || contact.getBodyB().isAwakeDynamic());
     }
 
     /**

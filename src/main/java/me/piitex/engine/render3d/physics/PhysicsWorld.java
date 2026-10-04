@@ -1,10 +1,13 @@
 package me.piitex.engine.render3d.physics;
 
+import me.piitex.engine.render3d.math.Quat;
+import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,6 +46,13 @@ public final class PhysicsWorld {
 
     private record PairKey(RigidBody a, int shapeA, RigidBody b, int shapeB) {
     }
+
+    private record BodyPair(RigidBody a, RigidBody b) {
+    }
+
+    private final List<ContactListener> listeners = new ArrayList<>();
+    private Map<BodyPair, Contact> touching = new LinkedHashMap<>();
+    private boolean queriesHitTriggers;
 
     private final List<RigidBody> bodies = new ArrayList<>();
     private final Broadphase broadphase = new Broadphase();
@@ -84,7 +94,11 @@ public final class PhysicsWorld {
     }
 
     public boolean remove(RigidBody body) {
-        if (!bodies.remove(body)) return false;
+        if (!bodies.contains(body)) return false;
+        // Its contacts end now, so a listener counting what touches what stays balanced.
+        List<BodyPair> ended = new ArrayList<>();
+        for (BodyPair pair : touching.keySet()) if (pair.a() == body || pair.b() == body) ended.add(pair);
+        bodies.remove(body);
         broadphase.remove(body);
         for (Contact c : contacts) { // whatever rested on it has to fall
             RigidBody other = c.getOther(body);
@@ -93,6 +107,10 @@ public final class PhysicsWorld {
         contacts.removeIf(c -> c.getBodyA() == body || c.getBodyB() == body);
         contactMap.values().removeIf(c -> c.getBodyA() == body || c.getBodyB() == body);
         body.detach();
+        for (BodyPair pair : ended) {
+            boolean trigger = touching.remove(pair).isTrigger();
+            fireEnd(pair, trigger);
+        }
         return true;
     }
 
@@ -106,6 +124,115 @@ public final class PhysicsWorld {
      */
     public List<Contact> getContacts() {
         return Collections.unmodifiableList(contacts);
+    }
+
+    public PhysicsWorld addContactListener(ContactListener listener) {
+        if (!listeners.contains(listener)) listeners.add(listener);
+        return this;
+    }
+
+    public PhysicsWorld removeContactListener(ContactListener listener) {
+        listeners.remove(listener);
+        return this;
+    }
+
+    // ---- Queries --------------------------------------------------------------------------------------------------
+
+    public boolean isQueriesHitTriggers() {
+        return queriesHitTriggers;
+    }
+
+    /**
+     * Whether raycasts and overlap queries find triggers (off by default, so a ray passes through trigger zones).
+     */
+    public PhysicsWorld setQueriesHitTriggers(boolean hit) {
+        queriesHitTriggers = hit;
+        return this;
+    }
+
+    /**
+     * The nearest body the ray hits within {@code maxDistance}, or null. A ray from the camera through the mouse
+     * ({@code scene.camera().screenRay(...)}) finds what was clicked; a ray down from a character finds the ground.
+     */
+    public RaycastHit raycast(Ray ray, float maxDistance) {
+        return raycast(ray, maxDistance, -1);
+    }
+
+    /**
+     * As {@link #raycast(Ray, float)}, counting only bodies whose collision layer shares a bit with {@code mask}.
+     */
+    public RaycastHit raycast(Ray ray, float maxDistance, int mask) {
+        RaycastHit best = null;
+        for (RigidBody body : bodies) {
+            RaycastHit hit = raycastBody(body, ray, best == null ? maxDistance : best.distance(), mask);
+            if (hit != null) best = hit;
+        }
+        return best;
+    }
+
+    /**
+     * Every body the ray hits within {@code maxDistance}, one hit per body (its nearest), nearest first.
+     */
+    public List<RaycastHit> raycastAll(Ray ray, float maxDistance, int mask) {
+        List<RaycastHit> hits = new ArrayList<>();
+        for (RigidBody body : bodies) {
+            RaycastHit hit = raycastBody(body, ray, maxDistance, mask);
+            if (hit != null) hits.add(hit);
+        }
+        hits.sort((a, b) -> Float.compare(a.distance(), b.distance()));
+        return hits;
+    }
+
+    private RaycastHit raycastBody(RigidBody body, Ray ray, float maxDistance, int mask) {
+        if (!queryable(body, mask)) return null;
+        float toBox = ray.distanceTo(body.collisionBounds());
+        if (toBox < 0f || toBox > maxDistance) return null;
+        RaycastHit best = null;
+        for (int i = 0; i < body.shapeCount(); i++) {
+            Raycast.Result hit = Raycast.cast(body.collisionShape(i), body.shapePose(i), ray, best == null ? maxDistance : best.distance());
+            if (hit != null) best = new RaycastHit(body, body.getShapes().get(i), ray.at(hit.distance()), hit.normal(), hit.distance());
+        }
+        return best;
+    }
+
+    /**
+     * The bodies overlapping {@code shape} placed at {@code position} and turned by {@code rotation}, in the order they
+     * were added. Only bodies whose collision layer shares a bit with {@code mask} count.
+     */
+    public List<RigidBody> overlap(Shape shape, Vec3 position, Quat rotation, int mask) {
+        Pose pose = new Pose(position, rotation == null ? Quat.IDENTITY : rotation.normalized());
+        RigidBody probe = new RigidBody(BodyType.STATIC).addShape(shape);
+        probe.setPosition(position).setRotation(pose.rotation());
+        probe.updateCollisionShapes(0f);
+        List<RigidBody> found = new ArrayList<>();
+        for (RigidBody body : bodies) {
+            if (!queryable(body, mask) || !Broadphase.overlap(probe.collisionBounds(), body.collisionBounds())) continue;
+            for (int i = 0; i < body.shapeCount(); i++) {
+                if (Narrowphase.collide(shape, pose, body.collisionShape(i), body.shapePose(i), 0f, manifold) && manifold.depths[0] >= 0f) {
+                    found.add(body);
+                    break;
+                }
+            }
+        }
+        return found;
+    }
+
+    /**
+     * The bodies within {@code radius} of {@code center}: who an explosion reaches, what is near the player.
+     */
+    public List<RigidBody> overlapSphere(Vec3 center, float radius) {
+        return overlap(new SphereShape(radius), center, Quat.IDENTITY, -1);
+    }
+
+    /**
+     * The bodies overlapping a box, given by its centre, half extents and rotation.
+     */
+    public List<RigidBody> overlapBox(Vec3 center, Vec3 halfExtents, Quat rotation) {
+        return overlap(new BoxShape(halfExtents), center, rotation, -1);
+    }
+
+    private boolean queryable(RigidBody body, int mask) {
+        return (body.getCollisionLayer() & mask) != 0 && (queriesHitTriggers || !body.isTrigger());
     }
 
     public Vec3 getGravity() {
@@ -271,8 +398,65 @@ public final class PhysicsWorld {
             if (body.getWorld() == this) body.integratePosition(dt);
             body.clearForces();
         }
+        for (RigidBody body : bodies) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries
         time += dt;
         stepCount++;
+        fireEvents();
+    }
+
+    /**
+     * Compares which pairs of bodies touch now with the last step and tells the listeners what changed.
+     */
+    private void fireEvents() {
+        Map<BodyPair, Contact> now = new LinkedHashMap<>();
+        for (Contact c : contacts) {
+            if (c.isTouching()) now.putIfAbsent(new BodyPair(c.getBodyA(), c.getBodyB()), c);
+        }
+        Map<BodyPair, Contact> before = touching;
+        touching = now;
+        if (listeners.isEmpty() && !anyBodyListens(now, before)) return;
+        for (Map.Entry<BodyPair, Contact> entry : before.entrySet()) {
+            if (!now.containsKey(entry.getKey())) fireEnd(entry.getKey(), entry.getValue().isTrigger());
+        }
+        for (Map.Entry<BodyPair, Contact> entry : now.entrySet()) {
+            Contact c = entry.getValue();
+            boolean began = !before.containsKey(entry.getKey());
+            if (c.isTrigger()) {
+                if (!began) continue;
+                RigidBody trigger = c.getBodyA().isTrigger() ? c.getBodyA() : c.getBodyB();
+                RigidBody other = c.getOther(trigger);
+                for (ContactListener listener : listenersFor(c.getBodyA(), c.getBodyB())) listener.triggerEnter(trigger, other);
+            } else {
+                for (ContactListener listener : listenersFor(c.getBodyA(), c.getBodyB())) {
+                    if (began) listener.contactBegin(c);
+                    else listener.contactStay(c);
+                }
+            }
+        }
+    }
+
+    private void fireEnd(BodyPair pair, boolean trigger) {
+        for (ContactListener listener : listenersFor(pair.a(), pair.b())) {
+            if (trigger) {
+                RigidBody t = pair.a().isTrigger() ? pair.a() : pair.b();
+                listener.triggerExit(t, t == pair.a() ? pair.b() : pair.a());
+            } else {
+                listener.contactEnd(pair.a(), pair.b());
+            }
+        }
+    }
+
+    private List<ContactListener> listenersFor(RigidBody a, RigidBody b) {
+        List<ContactListener> list = new ArrayList<>(listeners);
+        if (a.getContactListener() != null) list.add(a.getContactListener());
+        if (b.getContactListener() != null && b.getContactListener() != a.getContactListener()) list.add(b.getContactListener());
+        return list;
+    }
+
+    private static boolean anyBodyListens(Map<BodyPair, Contact> now, Map<BodyPair, Contact> before) {
+        for (BodyPair pair : now.keySet()) if (pair.a().getContactListener() != null || pair.b().getContactListener() != null) return true;
+        for (BodyPair pair : before.keySet()) if (pair.a().getContactListener() != null || pair.b().getContactListener() != null) return true;
+        return false;
     }
 
     /**
@@ -335,7 +519,7 @@ public final class PhysicsWorld {
         }
         for (Contact c : contacts) {
             RigidBody a = c.getBodyA(), b = c.getBodyB();
-            if (a.isDynamic() && b.isDynamic()) union(a.islandIndex, b.islandIndex);
+            if (!c.isTrigger() && a.isDynamic() && b.isDynamic()) union(a.islandIndex, b.islandIndex);
         }
         // An island stays awake if any body in it is: still moving, not allowed to sleep, or pushed by a moving kinematic body.
         boolean[] awake = new boolean[n];
@@ -344,6 +528,7 @@ public final class PhysicsWorld {
             if (body.isAwakeDynamic() && body.sleepTime < TIME_TO_SLEEP) awake[find(i)] = true;
         }
         for (Contact c : contacts) {
+            if (c.isTrigger()) continue;
             RigidBody a = c.getBodyA(), b = c.getBodyB();
             if (a.isDynamic() && b.getType() == BodyType.KINEMATIC && b.isMoving()) awake[find(a.islandIndex)] = true;
             if (b.isDynamic() && a.getType() == BodyType.KINEMATIC && a.isMoving()) awake[find(b.islandIndex)] = true;
