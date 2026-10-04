@@ -1,7 +1,7 @@
 # Vulkan and the optional 3D layer: status
 
 A working document, not API documentation. It records what has been built for the Vulkan backend and the 3D layer,
-what is known to be wrong or missing, and what comes next. Last updated 2026-10-01. The API itself is documented in
+what is known to be wrong or missing, and what comes next. Last updated 2026-10-04. The API itself is documented in
 [3D](3d/README.md) and [Rendering APIs](core/rendering-apis.md).
 
 ## Goals and decisions
@@ -33,6 +33,8 @@ what is known to be wrong or missing, and what comes next. Last updated 2026-10-
 | 11 | Frustum culling, light and reflections from the skybox (spherical harmonics plus the sky's mips), shadow softness, `Scene3D.getStats()`, blended sorting by mesh centre | Done | see `git log` |
 | 12 | Morph targets (blend shapes): CPU blending, glTF import and weight animation, picking and copying; `Background3D` gets `pointerExited`, focus and typed text (`Input.getTypedText()`) | Done | see `git log` |
 | 13 | Modular lighting and shadows: per-light `Shadows` presets and overrides, up to 4 shadow casters in one shared atlas, point-light (six-side) shadows, cascades for directional lights, pluggable `ShadowFilter` and `LightFalloff` (built-in or GLSL snippets), shadow stats; OpenGL tests run headless on macOS | Done | `df35159` to `5ac219e` |
+| 14 | Physics, stages 1 to 4 of 7: rigid bodies (gravity, forces, inertia, fixed step with interpolation), collision detection (sphere, box, capsule, plane, compound bodies, sweep and prune), a sequential-impulse solver (friction, restitution, warm starting, split impulses, speculative contacts, island sleeping), raycasts, overlap queries, contact and trigger events; `PhysicsDemo` | Done | `5f85aea` to `f623bc7` and the docs commit |
+| 14b | Physics stages 5 to 7: mesh and convex hull colliders, joints and a character controller, scene-file and editor support, a collider debug view | Not started | |
 
 Step 3 was skipped on purpose at first ("I don't need a background mode right this second"), then built afterwards.
 
@@ -94,6 +96,16 @@ implement it. Metal and the CPU snapshot renderer do not, so a `Viewport3D` ther
 - `Model.load` reads glTF, GLB, OBJ, FBX and Collada through LWJGL Assimp. It is CPU only, so it is safe on a background thread. glTF materials load as PBR with their maps; bones become a `Skin` and `Mesh.setSkinning` data (4 bones a vertex, 256 a mesh); animations become `AnimationClip`s (`Model.animations()`, `Model.player()`).
 - `SceneRenderer` (one per device): a forward renderer. Each frame it collects the visible nodes, sorts the opaque ones by pipeline, material and mesh, and writes one 176-byte record per node or instance into an instance-rate vertex buffer (model matrix, normal matrix, tint, material parameters, flags); adjacent draws with the same mesh and material merge into one instanced call. One shader pair covers classic Blinn-Phong, PBR (GGX, Smith, Schlick) and unlit, chosen per record, with normal mapping from an exact tangent solve. PBR ambient is a diffuse plus a rough specular term, or, with `setEnvironmentLighting`, the sky's: nine SH coefficients (computed once on the CPU by `Environment`) for diffuse and the sky's own mipmaps for reflections, with the split-sum BRDF fitted analytically; that is a fragment-shader variant per sky kind (gradient, cube, equirect) through `#define ENV_KIND`, bound at texture binding 8. Nodes wholly outside the view are culled by a sphere test against the six frustum planes (an instanced node by one sphere around all its copies) unless they cast shadows, in which case they only draw into the shadow map. A morphed node has its own dynamic vertex buffer, refilled on the CPU when its weights change. Shadow-casting lights add one depth pass first into a shared atlas (`ShadowAtlas`, one sampled RGBA8 target with packed depth, shelf-packed square tiles, shrunk to fit `setShadowAtlasSize`). `ShadowPlanner` (plain maths) picks up to 4 lights (directional first, then nearest) and makes their views: per directional cascade an orthographic fit around a bounding sphere of the camera's frustum slice (practical split, snapped to texels), one perspective view for a spot light, six faces of about 92 degrees for a point light (the shader picks the face by the major axis). Each view draws into its tile through `RenderPass.setViewport` with its own pooled uniform buffer, and casters are sphere-culled per view. The lookup applies a normal offset and a slope-scaled bias and filters with a built-in or custom `ShadowFilter`; the scene fragment shader is generated from the set of custom filter and falloff snippets in use, one program per set (the pipeline key carries the set's index). The skybox draws as a full-screen triangle. Per-render-call resource sets (frame block, instance buffer, joint buffers) stop a scene shown in two viewports from overwriting its own data within a frame. Mesh and texture caches are evicted after 600 undrawn frames.
 
+### Physics (`render3d.physics`)
+
+- Own pure-Java engine, documented in [Physics](3d/physics.md). `Scene3D.setPhysics(world)` runs `PhysicsWorld.update(delta)` once per frame after the animators and before the update handler; a scene without one pays nothing.
+- `RigidBody` keeps its state as floats (centre of mass, orientation, velocities) for the solver and exposes `Vec3`/`Quat`. Inertia is a full 3x3 tensor in the body's frame built from the shapes (parallel axis for offsets and turned shapes), turned into world space each step; locked axes zero rows of it. Integration is semi-implicit Euler with quaternion spin; gyroscopic terms are left out.
+- A body follows its `Node3D`: it reads the node's world transform when added (scale bakes into the shapes), writes position and rotation back through the parent's inverse, and teleports when the node is moved by other code (detected by comparing with what it last wrote).
+- Fixed step (1/60 s) with an accumulator, a cap of 8 steps per update, and interpolation between the last two steps.
+- Broadphase: sweep and prune with insertion sort on the axis of most spread. Narrowphase: per-pair tests (box-box SAT with face clipping and edge contacts, capsule-box by golden-section search on the convex signed distance plus a face clip for lying capsules, SAT fallback for deep overlaps), manifolds of up to 4 points chosen by position, near-duplicates merged.
+- Solver: sequential impulses with warm starting (points matched in body A's space, friction carried as a world vector), circular Coulomb friction, restitution after the velocity passes (with a pseudo-velocity fix so a speculative bounce happens at the surface), split-impulse position correction (slop 2 mm, 20 % a step), speculative contacts sized by speed, and passes that alternate direction. Island sleeping by union-find over contacts; sleeping bodies keep their contacts so a hit wakes the whole stack.
+- Queries scan every body's box (no tree yet). Events are per body pair, after each step.
+
 ### `Background3D` (whole-window 3D)
 
 - A `Background` (the existing window-background hook), so `Window` and the engine loop did not change:
@@ -106,6 +118,8 @@ implement it. Metal and the CPU snapshot renderer do not, so a `Viewport3D` ther
 - Demo: `me.piitex.examples.demo.Background3DDemo`.
 
 ### Demo
+
+`me.piitex.examples.demo.PhysicsDemo`: crates in a pyramid and a tower, a ramp, click to shoot a ball, a raycast showing what is under the mouse, and check boxes for pause, an icy floor, bouncy balls and low gravity.
 
 `me.piitex.examples.demo.Scene3DDemo`: a main viewport (floor, textured cube, specular sphere, glass sphere, loaded model, orbiting point light),
 a second small viewport with its own scene, sliders and check boxes for the lights, spin and glass, and a file dialog to load a model.
@@ -130,6 +144,7 @@ Run it with `-XstartOnFirstThread` on macOS. `-Drengl.demo.api=VULKAN|OPENGL` ov
 | Visual checks of the new features | On Vulkan (validation layer on: 0 errors) and on GL 3.3 through the harness: PBR spheres from dielectric to metal, soft shadows landing in the same place on both APIs (the shadow lookup flips Y by `isBottomLeftOrigin`), emissive, 120 tinted instances, the three skybox kinds (sampled pixels are identical on both APIs), a normal-mapped dome lit from the upper right on both (this caught a tangent-frame bug that depended on the screen's Y direction), and a skinned bar bent 60 degrees by its animation with its shadow following the pose. The skinned and animated model is checked by pixels in the unit tests only through CPU picking; the GPU bend was checked by eye |
 | Culling, softness, sky lighting, morph | Vulkan with the validation layer on (0 messages) and GL 3.3 through the harness, 39 checks each: the stats of a scene with two things in view and four out (including an instanced field and a caster above the view whose shadow still lands in it); turning the camera brings the culled cube back; the shadow edge's width at softness 4 against 1; a rough white sphere under a cube, a panorama and a gradient sky takes red from above, green from the +X face and blue from the -X face, and a polished metal sphere reflects the matching faces and the gradient's ends (this fixed the cube face orientation against the GL and Vulkan convention); a plane that a morph target slides 3 to the right and a loaded glTF quad whose shapes lift and move it, checked by pixels. A picture of five metal and five dielectric spheres from smooth to rough under a gradient sky, with the sky lighting off and on, looked right: sharp reflections of the sky and horizon line when smooth, an average when rough |
 | Spot light, fog, additive | Vulkan and GL 3.3 through the harness: the spot cone, its soft edge and the box's shadow look the same on both; an additive red quad turns the green sky orange and a fogged blue cube magenta, a far cube fades to the fog colour. Checked by pixels in the smoke test on Vulkan, by eye on GL |
+| Physics | 80 CPU tests (`DynamicsTest`, `CollisionTest`, `SolverTest`, `QueryEventTest`): free fall and projectile range against the formulas, torque and impulse against the inertia of balls, boxes and turned boxes, capsule and compound inertia, damping, energy kept by free spin, locks, fixed steps and interpolation, node sync through a turned and scaled parent; every shape pair's normal, depth and points, normals flipping when the shapes swap (200 random poses), the broadphase against brute force over 150 bodies; resting without jitter, bounce height (within 6 % of e² h at 240 Hz, 5 % at 60 Hz), friction stopping distance (within 2 % of v²/2µg), a box held on a 20° slope and sliding on a slick one, a ball rolling at 5/7 g sin θ, a 10-box stack and a 5-row pyramid settling and sleeping, 15 boxes with 20 iterations, energy never growing in a pile of 30, momentum kept, an elastic head-on swap, a platform carrying a box, a 60 m/s ball not passing a 5 cm floor; rays and overlaps against each shape, masks, triggers, the order of events, removing bodies from a listener. `PhysicsDemo` and the docs sample were started on Vulkan, and a frame of the demo scene after shooting the tower was rendered headless and checked by eye. Nobody has played the demo with a real mouse yet |
 | Code samples in the docs | The complete samples in [3D](3d/README.md), [Models](3d/models.md) and [Custom rendering](3d/custom-rendering.md) were compiled against the engine. The first-scene and spinning-triangle samples were run on Vulkan and dumped as frames. The snippets in [Lighting](3d/lighting.md), [Instancing](3d/instancing.md) and [Animation](3d/animation.md) were compiled against the engine but not run |
 
 Useful switches: `-Drengl.vulkan.validation=true` (with `-Dorg.lwjgl.vulkan.libname=/usr/local/lib/libvulkan.1.dylib` on macOS),
@@ -158,6 +173,13 @@ Sky lighting is an approximation (SH9 diffuse, mip-blurred reflections, 8-bit sk
 animation (Assimp drops the tangents, so the keys play as plain keys), no texture transforms or second UV sets. Meshes are limited to 256 bones. Morph targets are
 blended on the CPU.
 
+### Physics limits
+
+1. Tall stacks: 10 velocity iterations hold ten boxes, 20 hold fifteen; twenty need more, or substeps. A block solver or substepping (as in Box2D v3) would do better.
+2. Queries scan every body; a tree over the bodies is needed for many rays against many bodies.
+3. No mesh or hull colliders, joints, character controller, continuous collision for spinning bodies, or multithreading yet (stages 5 and 6).
+4. Restitution: a speculative bounce is moved to the surface by the position pass, which is exact for one point and an approximation for a face landing at an angle.
+
 ### `Background3D` specifics
 
 1. Not run on OpenGL: the engine's GL path is unreachable on macOS (asking for it is now a fatal error), so only the shared `Viewport3D` code was GL-tested, through the harness.
@@ -176,6 +198,7 @@ blended on the CPU.
 In suggested order:
 
 1. **Platforms:** build Skiko with Vulkan for Windows and Linux, run the demos and `./mvnw test` there (the GPU tests exercise OpenGL where it is real), and move off the snapshot version when an official release has it. This is the one piece that needs the other machines.
-2. **Use it:** run `Scene3DDemo` and `Background3DDemo` with a real mouse and keyboard; nothing has driven the click, hover or drag paths of the demos by hand.
-3. **Later ideas:** HDR sky images for a real sun and sharper reflections, per-instance culling, post-processing (bloom, tone mapping), texture transforms.
-4. **Your own list of other engine issues and changes**, which has not been sent yet.
+2. **Use it:** run `Scene3DDemo`, `Background3DDemo` and `PhysicsDemo` with a real mouse and keyboard; nothing has driven the click, hover or drag paths of the demos by hand.
+3. **Physics stages 5 to 7:** static triangle-mesh colliders (reusing the picking BVH) and convex hulls (GJK/EPA); distance, ball, hinge and fixed joints and a kinematic character controller; physics properties in `Scene3DFile` for the editor, a collider debug view, and a query tree.
+4. **Later ideas:** HDR sky images for a real sun and sharper reflections, per-instance culling, post-processing (bloom, tone mapping), texture transforms.
+5. **Your own list of other engine issues and changes**, which has not been sent yet.
