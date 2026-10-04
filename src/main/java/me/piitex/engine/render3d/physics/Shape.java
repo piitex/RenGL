@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.physics;
 
+import me.piitex.engine.render3d.math.Bounds;
 import me.piitex.engine.render3d.math.Vec3;
 
 /**
@@ -7,7 +8,7 @@ import me.piitex.engine.render3d.math.Vec3;
  * several, each moved and turned by a {@link BodyShape}. Shapes are given in the node's local units: a body made for a
  * node scaled by 2 has shapes twice as big, so a shape that fits the mesh keeps fitting it.
  */
-public sealed interface Shape permits SphereShape, BoxShape, CapsuleShape {
+public sealed interface Shape permits SphereShape, BoxShape, CapsuleShape, PlaneShape {
 
     /**
      * The volume in cubic metres, which shares out a body's mass between its shapes.
@@ -19,6 +20,11 @@ public sealed interface Shape permits SphereShape, BoxShape, CapsuleShape {
      * evenly through it. They scale with the mass.
      */
     Vec3 unitInertia();
+
+    /**
+     * The box around the shape in its own space.
+     */
+    Bounds bounds();
 
     /**
      * The shape with each axis stretched by {@code scale}. Round shapes stay round, so they take the largest stretch

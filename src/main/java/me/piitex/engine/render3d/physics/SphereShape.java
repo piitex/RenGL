@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.physics;
 
+import me.piitex.engine.render3d.math.Bounds;
 import me.piitex.engine.render3d.math.Vec3;
 
 /**
@@ -19,6 +20,11 @@ public record SphereShape(float radius) implements Shape {
     public Vec3 unitInertia() {
         float i = 0.4f * radius * radius;
         return new Vec3(i, i, i);
+    }
+
+    @Override
+    public Bounds bounds() {
+        return new Bounds(new Vec3(-radius, -radius, -radius), new Vec3(radius, radius, radius));
     }
 
     @Override
