@@ -3,6 +3,7 @@ package me.piitex.examples.demo;
 import me.piitex.engine.Engine;
 import me.piitex.engine.Window;
 import me.piitex.engine.WindowOptions;
+import me.piitex.engine.video.VideoPlayer;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.overlays.ProgressBarOverlay;
@@ -25,6 +26,12 @@ public class VideoDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
         if (args.length == 0) {
             System.err.println("Usage: VideoDemo <video file>   (AVI with Motion JPEG or uncompressed video, PCM audio)");
+            return;
+        }
+        try {
+            VideoPlayer.open(new File(args[0])).close();
+        } catch (UnsupportedOperationException e) {
+            System.err.println(e.getMessage());
             return;
         }
         Window window = new Window(new WindowOptions("Video demo").setDimensions(W, H));
