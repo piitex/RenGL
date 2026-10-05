@@ -46,6 +46,30 @@ public final class Skin {
     }
 
     /**
+     * The same skin on another skeleton: each joint is replaced by the node with the same name under {@code skeletonRoot}
+     * ({@link Node3D#find}), and the inverse bind matrices stay as they are. Use it to bind a part loaded from its own file,
+     * which comes with its own copy of the skeleton, to a body's joints; {@link Node3D#bindSkeleton} does this for a
+     * whole part. Both skeletons must have been modelled in the same pose, as a character and its hair are.
+     *
+     * @throws IllegalArgumentException if a joint has no namesake under {@code skeletonRoot}; the message lists them
+     */
+    public Skin rebind(Node3D skeletonRoot) {
+        return rebind(skeletonRoot.nodesByName());
+    }
+
+    Skin rebind(java.util.Map<String, Node3D> bones) {
+        List<Node3D> mapped = new java.util.ArrayList<>(joints.size());
+        List<String> missing = new java.util.ArrayList<>();
+        for (Node3D joint : joints) {
+            Node3D replacement = joint.getName() == null ? null : bones.get(joint.getName());
+            if (replacement == null) missing.add(String.valueOf(joint.getName()));
+            mapped.add(replacement);
+        }
+        if (!missing.isEmpty()) throw new IllegalArgumentException("The skeleton has no bones named " + missing);
+        return new Skin(mapped, List.of(inverseBind));
+    }
+
+    /**
      * A copy that follows other nodes: the same joints looked up by name under {@code newRoot}, which is how
      * {@link Node3D#copy()} keeps a copied character moving with its own skeleton.
      */

@@ -342,6 +342,41 @@ public final class Node3D {
     }
 
     /**
+     * Every node in this node and its descendants by name, one lookup instead of a {@link #find} walk per name. Where
+     * names repeat, the node {@code find} would return wins.
+     */
+    java.util.Map<String, Node3D> nodesByName() {
+        java.util.Map<String, Node3D> byName = new java.util.HashMap<>();
+        traverse(n -> {
+            if (n.name != null) byName.putIfAbsent(n.name, n);
+        });
+        return byName;
+    }
+
+    /**
+     * Makes every skinned mesh in this node and its descendants follow the skeleton under {@code skeletonRoot} instead of
+     * the one it was loaded with, matching joints by bone name ({@link Skin#rebind}). Hair, clothes and other parts
+     * loaded from their own files carry their own copy of the skeleton; this ties them to the body's.
+     * <pre>
+     * Model hair = Model.load(Path.of("assets/hair_long.glb"));
+     * hair.root().bindSkeleton(body.root().find("Armature"));
+     * scene.add(hair.root());
+     * </pre>
+     * Pass the skeleton's own root (such as the armature node) rather than a node that also contains this part: when
+     * the part's own copy of the skeleton is under {@code skeletonRoot}, the names match it first.
+     *
+     * @throws IllegalArgumentException if a joint of a skin has no node with its name under {@code skeletonRoot}
+     */
+    public Node3D bindSkeleton(Node3D skeletonRoot) {
+        java.util.Map<String, Node3D> bones = skeletonRoot.nodesByName();
+        java.util.Map<Skin, Skin> done = new java.util.IdentityHashMap<>();
+        traverse(n -> {
+            if (n.skin != null) n.skin = done.computeIfAbsent(n.skin, s -> s.rebind(bones));
+        });
+        return this;
+    }
+
+    /**
      * Visits this node and everything under it.
      */
     public void traverse(Consumer<Node3D> visitor) {

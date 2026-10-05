@@ -37,7 +37,8 @@ animation only advances when the viewport draws.
 | `update(float delta)` | Advances it yourself. A player registered with `scene.animate` is advanced for you |
 
 A player moves the nodes of **the model it came from**, so use `model.root()` itself. A [`copy()`](scenes.md#node3d) of a
-model is a separate set of nodes: to animate copies, load the model again, or build clips for the copy's nodes.
+model is a separate set of nodes: to animate copies, or any other character with the same skeleton, make a player for each
+with [`retarget`](#sharing-a-skeleton-and-animations).
 
 ## Skins
 
@@ -77,6 +78,57 @@ elbow.setRotation(Quat.fromAxisAngle(new Vec3(0, 0, 1), 0.8f));            // th
   engine does.
 - Skinned meshes cast [shadows](lighting.md#shadows) in their pose, and are [picked](scenes.md#picking) in their pose.
 - `Node3D.copy()` of a skinned model makes a copy that follows its own copied skeleton.
+
+## Sharing a skeleton and animations
+
+Parts loaded from their own files (hair, clothes) bring their own copy of the skeleton, and a clip points straight at the
+nodes of the skeleton it came from. Three tools tie them together by **bone name**.
+
+```java nocompile
+// 1. Bind a part to the body's skeleton
+Model hair = Model.load(Path.of("assets/hair_long.glb"));
+hair.root().bindSkeleton(body.root().find("Armature"));   // every skinned mesh in it now follows the body's bones
+scene.add(hair.root());
+
+// 2. Drive more than one character from one animation library
+AnimationPlayer library = body.player();
+for (Node3D npc : crowd) {                                // crowd: copies made with body.root().copy()
+    AnimationPlayer player = library.retarget(npc.find("Armature"));
+    scene.animate(player);
+    player.play("Walk");
+}
+
+// 3. Keep proportion sliders through every animation
+BoneOffsets proportions = new BoneOffsets(body.root().find("Armature"));   // right after loading
+player.setBoneOffsets(proportions);
+proportions.scale("head", 1.15f);
+proportions.position("shin_l", new Vec3(0, 0.05f, 0));
+```
+
+| Method | Description |
+|---|---|
+| `Node3D.bindSkeleton(Node3D skeletonRoot)` | Rebinds every skin in the node and its descendants to the same-named bones under `skeletonRoot`. Parts that shared a skin keep sharing one |
+| `Skin.rebind(Node3D skeletonRoot)` | The same for one skin: a new `Skin` with the joints swapped and the inverse bind matrices kept. Throws `IllegalArgumentException` naming the bones the skeleton lacks |
+| `AnimationClip.retarget(Node3D skeletonRoot)` | A clip whose channels move the same-named nodes under `skeletonRoot` |
+| `AnimationPlayer.retarget(Node3D skeletonRoot)` | A new player with every clip retargeted. Speed and loop are not copied |
+| `AnimationPlayer.setBoneOffsets(BoneOffsets)` | Applies the offsets after every pose; `null` removes them |
+| `BoneOffsets.scale(bone, Vec3 / float)` | Multiplies the bone's scale after the animation, so the bones under it scale too |
+| `BoneOffsets.position(bone, Vec3)` | Adds to the bone's position, relative to its parent: moving a bone away from its parent lengthens the limb |
+| `BoneOffsets.clear(bone)` / `clear()` / `getScale(bone)` / `getPosition(bone)` | Remove and read offsets |
+| `BoneOffsets.apply()` | Poses the adjusted bones at rest plus the offsets, for a skeleton no clip moves |
+
+- **Names must match.** The hair and the body have to be modelled on the same skeleton in the same pose. A bone name that
+  appears twice resolves to the first one found, as with `find`, so pass the armature node and not a node that also holds
+  the part's own copy of the skeleton.
+- A **retargeted clip leaves out channels** for nodes the other skeleton lacks (a prop, a bone it doesn't have), and throws
+  only when none match. The keyframes are **shared**, not copied, so a hundred players cost a hundred small channel lists,
+  not a hundred copies of the animation.
+- **Offsets are applied on top of the pose**, which is reset to the skeleton's rest position and scale first, so they don't
+  compound frame after frame and a bone the clip doesn't animate keeps its rest value. `BoneOffsets` notes the rest values
+  when it is made, so make it before anything moves the skeleton. Moving a slider while the animation is paused shows at
+  once. Rotation isn't touched, and a bone with offsets shouldn't also be moved by your own code, since the next pose
+  overwrites it.
+- Each player has its own `BoneOffsets`, so crowd members can have different proportions.
 
 ## Morph targets
 

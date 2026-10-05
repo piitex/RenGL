@@ -27,6 +27,7 @@ public final class AnimationPlayer {
     private float speed = 1f;
     private boolean loop = true;
     private boolean playing;
+    private BoneOffsets boneOffsets;
 
     public AnimationPlayer(List<AnimationClip> clips) {
         this.clips = List.copyOf(clips);
@@ -34,6 +35,49 @@ public final class AnimationPlayer {
 
     public List<AnimationClip> clips() {
         return clips;
+    }
+
+    /**
+     * A new player, not playing, for the same animations moving another character: every clip retargeted to the nodes of
+     * {@code skeletonRoot} that have the same names ({@link AnimationClip#retarget}). This is how one animation library
+     * drives a crowd of copies:
+     * <pre>
+     * AnimationPlayer library = model.player();
+     * for (Node3D npc : crowd) {
+     *     AnimationPlayer player = library.retarget(npc.find("Armature"));
+     *     scene.animate(player);
+     *     player.play("Walk");
+     * }
+     * </pre>
+     * Settings such as speed and loop are not copied. The key data is shared between the players, so a crowd costs little
+     * memory.
+     */
+    public AnimationPlayer retarget(Node3D skeletonRoot) {
+        java.util.Map<String, Node3D> nodes = skeletonRoot.nodesByName();
+        return new AnimationPlayer(clips.stream().map(clip -> clip.retarget(nodes)).toList());
+    }
+
+    public BoneOffsets getBoneOffsets() {
+        return boneOffsets;
+    }
+
+    /**
+     * Applies per-bone scale and position adjustments after each pose, so they hold through every clip instead of being
+     * overwritten by the animation's own scale and position tracks. Changing the offsets repose the character at once, even
+     * while paused. {@code null} removes them. With no clip playing, the adjusted bones show their rest values plus the
+     * offsets.
+     */
+    public AnimationPlayer setBoneOffsets(BoneOffsets offsets) {
+        if (boneOffsets != null) boneOffsets.onChange(null);
+        boneOffsets = offsets;
+        if (offsets != null) offsets.onChange(this::refresh);
+        refresh();
+        return this;
+    }
+
+    private void refresh() {
+        if (current != null) apply();
+        else if (boneOffsets != null) boneOffsets.apply();
     }
 
     /**
@@ -169,8 +213,10 @@ public final class AnimationPlayer {
 
     private void apply() {
         float blend = previous == null ? 1f : Math.min(1f, fade / fadeLength);
+        if (boneOffsets != null) boneOffsets.reset();
         if (previous != null) sample(previous, wrap(previous, previousTime), 1f);
         sample(current, time, blend);
+        if (boneOffsets != null) boneOffsets.applyOffsets();
     }
 
     private float wrap(AnimationClip clip, float t) {
