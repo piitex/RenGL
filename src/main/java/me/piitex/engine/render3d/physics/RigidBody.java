@@ -87,6 +87,8 @@ public final class RigidBody {
     private Quat previousRotation = Quat.IDENTITY;
     private Vec3 writtenPosition;
     private Quat writtenRotation;
+    final List<Joint> joints = new ArrayList<>(0);
+    CharacterController character; // the character this body is, if it is one
 
     /**
      * A body that moves {@code node}, which may be null for an invisible body.
@@ -944,6 +946,49 @@ public final class RigidBody {
             wy += dwy;
             wz += dwz;
         }
+    }
+
+    /**
+     * Applies a linear impulse (px, py, pz) through the centre of mass and an angular impulse (tx, ty, tz), to the
+     * velocities: how a joint pushes, since its turning part isn't always a push at a point.
+     */
+    void addImpulse(float px, float py, float pz, float tx, float ty, float tz) {
+        if (invMass == 0f) return;
+        vx += px * invMass * lx;
+        vy += py * invMass * ly;
+        vz += pz * invMass * lz;
+        Mat3 i = invInertiaWorld;
+        wx += i.xx() * tx + i.xy() * ty + i.xz() * tz;
+        wy += i.yx() * tx + i.yy() * ty + i.yz() * tz;
+        wz += i.zx() * tx + i.zy() * ty + i.zz() * tz;
+    }
+
+    /**
+     * As {@link #addImpulse}, but moving and turning the body at once instead of changing its velocity: a joint's
+     * position fix after the step.
+     */
+    void nudge(float px, float py, float pz, float tx, float ty, float tz) {
+        if (invMass == 0f) return;
+        cx += px * invMass * lx;
+        cy += py * invMass * ly;
+        cz += pz * invMass * lz;
+        Mat3 i = invInertiaWorld;
+        float dx = i.xx() * tx + i.xy() * ty + i.xz() * tz;
+        float dy = i.yx() * tx + i.yy() * ty + i.yz() * tz;
+        float dz = i.zx() * tx + i.zy() * ty + i.zz() * tz;
+        if (dx == 0f && dy == 0f && dz == 0f) return;
+        float nx = qx + 0.5f * (dx * qw + dy * qz - dz * qy);
+        float ny = qy + 0.5f * (dy * qw + dz * qx - dx * qz);
+        float nz = qz + 0.5f * (dz * qw + dx * qy - dy * qx);
+        float nw = qw - 0.5f * (dx * qx + dy * qy + dz * qz);
+        setOrientation(new Quat(nx, ny, nz, nw).normalized());
+    }
+
+    /**
+     * {@code 1 / mass} times the lock along each world axis: 0 along a locked axis.
+     */
+    Vec3 inverseMassAxes() {
+        return new Vec3(invMass * lx, invMass * ly, invMass * lz);
     }
 
     Mat3 inverseInertiaWorld() {

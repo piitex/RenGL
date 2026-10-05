@@ -60,11 +60,16 @@ final class Broadphase {
 
     /**
      * Whether two bodies need testing: one must be dynamic, one must be moving (sleeping bodies keep the contacts they
-     * fell asleep with), and their layers and masks must agree.
+     * fell asleep with), and their layers and masks must agree. A kinematic body and a trigger are always tested, so
+     * a character or a moving platform sets off trigger zones, and stays in one while it stands still.
      */
     static boolean mayCollide(RigidBody a, RigidBody b) {
-        if (!a.isDynamic() && !b.isDynamic()) return false;
-        if (!a.isActive() && !b.isActive()) return false;
+        boolean kinematicInTrigger = a.isTrigger() != b.isTrigger()
+                && (a.getType() == BodyType.KINEMATIC && !b.isDynamic() || b.getType() == BodyType.KINEMATIC && !a.isDynamic());
+        if (!kinematicInTrigger) {
+            if (!a.isDynamic() && !b.isDynamic()) return false;
+            if (!a.isActive() && !b.isActive()) return false;
+        }
         return (a.getCollisionLayer() & b.getCollisionMask()) != 0 && (b.getCollisionLayer() & a.getCollisionMask()) != 0;
     }
 

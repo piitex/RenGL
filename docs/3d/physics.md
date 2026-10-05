@@ -4,7 +4,8 @@
 
 Rigid bodies for 3D scenes, in `me.piitex.engine.render3d.physics`: gravity, velocity, mass and inertia, forces and
 impulses, collisions with friction and bounce, stacking, sleeping, raycasts and trigger zones, with loaded meshes as
-ground and convex hulls for objects of any shape. It is plain Java with no native library, and like the rest of the 3D
+ground and convex hulls for objects of any shape, joints (hinges, ropes, springs, sliders, welds) and a character
+controller that walks a player around. It is plain Java with no native library, and like the rest of the 3D
 layer it costs nothing until you use it.
 
 A **`PhysicsWorld`** holds **`RigidBody`** objects. Each body moves a [`Node3D`](scenes.md#node3d): the world works out
@@ -83,7 +84,8 @@ public class FirstPhysics {
 `me.piitex.examples.demo.PhysicsDemo` is a fuller version: a pyramid and a tower of crates, a ramp, balls, and a panel
 that counts the bodies that are awake. `me.piitex.examples.demo.DominoDemo` is a quick one: a chain of dominoes along a
 curve, a button or a click to push one over, and slow motion. `me.piitex.examples.demo.TerrainDemo` drops rocks (convex
-hulls) and crates on a hilly terrain (a triangle mesh).
+hulls) and crates on a hilly terrain (a triangle mesh). `me.piitex.examples.demo.PlaygroundDemo` walks a character
+around stairs, ramps, a lift, a rope bridge of hinged planks, a door, a seesaw and a wrecking ball on a rope.
 
 ## Units and conventions
 
@@ -103,8 +105,10 @@ want crates you can push around easily, give them a smaller mass: what matters f
 | `setMaxSteps(int)` | The most steps one `update` runs (8). After a long stall the world drops the rest instead of trying to catch up |
 | `setInterpolation(boolean)` | Places the nodes between the last two steps, for smooth motion at any frame rate (on) |
 | `setStepHandler(StepHandler)` | Runs before every step: the place for forces that act over time |
-| `setVelocityIterations(int)` / `setPositionIterations(int)` | How hard the solver works (10 and 4). 10 holds a stack of ten boxes; 20 holds fifteen |
+| `setVelocityIterations(int)` / `setPositionIterations(int)` | How hard the solver works (10 and 4). 10 holds a stack of ten boxes; 20 holds fifteen. Joints get twice the position passes |
 | `setSleeping(boolean)` | Whether resting bodies may fall asleep (on) |
+| `addJoint(Joint)` / `removeJoint(Joint)` / `joints()` | The [joints](#joints). Add the bodies first |
+| `addCharacter(CharacterController)` / `removeCharacter(...)` / `characters()` | The [characters](#characters) |
 | `getContacts()` | Every pair of shapes touching or about to, with points and normal |
 | `raycast`, `raycastAll`, `overlap`, `overlapSphere`, `overlapBox` | Queries, below |
 | `addContactListener(ContactListener)` | Hears contacts begin and end, and triggers entered and left |
@@ -340,7 +344,95 @@ crate resting on the floor doesn't end its contact when it falls asleep. It is s
 listener.
 
 A **trigger** (`body.setTrigger(true)`) reports who enters and leaves but pushes nothing: a finish line, a pickup, a
-zone of water. A static trigger is a fixed zone; a kinematic one can move.
+zone of water. A static trigger is a fixed zone; a kinematic one can move. Dynamic and kinematic bodies set triggers
+off, characters included, and a kinematic body standing still in a trigger stays in it.
+
+## Joints
+
+A joint holds two bodies together, or one body to a point in the world (pass `null` for the second body):
+
+```java nocompile
+world.add(door);
+world.addJoint(new HingeJoint(door, null, hingePoint, Vec3.UP).setLimits(0f, (float) Math.PI / 2));
+
+world.add(lamp);
+world.addJoint(new BallJoint(lamp, null, ceilingPoint));                 // swings freely from the ceiling
+
+world.addJoint(new DistanceJoint(bucket, handle, null, hook).setMinLength(0f));  // a rope: slack, never stretches
+```
+
+| Joint | What it does |
+|---|---|
+| `BallJoint(a, b, anchor)` | Pins the bodies together at a point; they turn freely around it. Chains, pendulums, hitches |
+| `HingeJoint(a, b, anchor, axis)` | Turns around one axis only. Doors, wheels, levers. `setLimits(lower, upper)` in radians stops it, `setMotor(speed, maxTorque)` drives it; `getAngle()`, `getAngularSpeed()` |
+| `SliderJoint(a, b, anchor, axis)` | Slides along one axis without turning. Drawers, pistons, lifts. `setLimits` in metres, `setMotor(speed, maxForce)`; `getTranslation()`, `getSpeed()` |
+| `DistanceJoint(a, anchorA, b, anchorB)` | Keeps two points apart by a length: a rod by default, a rope with `setMinLength(0)`, a spring with `setSpring(frequency, damping)`, a bungee with both and `setMaxLength` |
+| `FixedJoint(a, b)` | Welds the bodies as they are. For parts that never come apart one body with several shapes is cheaper; a weld suits parts that should break off |
+
+Anchors and axes are in world space and are read against where the bodies are when the joint is added, so add and place
+the bodies first. Angles and translations count from there: a hinge starts at angle 0. For a body held to the world,
+angles, speeds and the reaction force are that body's own.
+
+Every joint has:
+
+| Method | Description |
+|---|---|
+| `setCollideConnected(boolean)` | Whether the two joined bodies collide with each other (off: joined parts usually overlap where they meet) |
+| `setBreakForce(newtons)` / `setBreakTorque(newtonMetres)` | Breaks the joint when it is pulled or twisted harder; the world drops it. A 10 kg lamp pulls with about 100 N |
+| `setBreakHandler(Consumer<Joint>)` / `isBroken()` | Hears the break, after the world has dropped the joint |
+| `getReactionForce()` / `getReactionTorque()` | What holding the bodies together took in the last step, on body B |
+
+A motor with a speed of 0 holds the joint still against whatever pushes it, up to its torque or force: a stiff hinge, a
+brake. A spring's frequency is how many times a second it bounces, whatever the masses, and its damping ratio how quickly
+it stops (0 bounces forever, 1 settles without overshooting).
+
+Joined bodies sleep and wake together, like a stack. Keep the masses of joined bodies within about 10 to 1 of each
+other: a heavy weight on a chain of light links stretches it (a little at 40 to 1, half a metre at 200 to 1), and more
+velocity iterations help. Links should also be about as long as the gap they span; a small ball with joints far from it
+acts much lighter at them than its mass.
+
+## Characters
+
+A `CharacterController` walks a character around: a standing capsule that goes where it's told rather than where it's
+pushed. It slides along walls, walks up slopes and steps, stays on the ground going down them, falls, jumps, rides
+moving platforms and pushes loose objects out of its way.
+
+```java nocompile
+CharacterController player = new CharacterController(playerNode, 0.35f, 1.8f);  // radius, height
+world.addCharacter(player);
+
+// Every frame, from the input:
+player.setWalkVelocity(forward.mul(ahead).add(right.mul(side)).mul(running ? 7f : 3.5f));
+if (input.isKeyJustPressed(GLFW_KEY_SPACE)) player.jump(5f);
+```
+
+The node's origin is the character's feet and the capsule stands on it along +Y. Turn a child node (the model) to face
+where it walks rather than the node itself, which the character moves. The walk velocity keeps applying until changed,
+so set it every frame; only its X and Z count.
+
+| Method | Description |
+|---|---|
+| `setWalkVelocity(Vec3)` | Where to walk, in metres per second |
+| `jump(speed)` | Jumps if on the ground; returns whether it did. 5 m/s rises about 1.3 m |
+| `setVelocity(Vec3)` | A knock back: carries on in the air until it lands |
+| `setPosition(Vec3)` / `getPosition()` | Teleports the feet / where they are |
+| `isGrounded()`, `getGroundNormal()`, `getGroundBody()` | What it stands on after the last step |
+| `isTouchingWall()`, `isTouchingCeiling()` | Whether it walked into something too steep, or bumped its head |
+| `getVelocity()` | How fast it actually went in the last step |
+| `setSlopeLimit(degrees)` | The steepest slope it walks up (45); steeper ground is a wall it slides down |
+| `setStepHeight(metres)` | The tallest step it walks up, and the furthest it drops to stay on the ground going down (0.3) |
+| `setAirAcceleration(m/s²)` | How quickly walking steers it in the air (instant by default). With no walk velocity it keeps going as it was |
+| `setMass(kilograms)` | How hard it pushes loose bodies and weighs on what it stands on (80) |
+| `setGravityScale(float)` | How much of the world's gravity pulls it (1) |
+| `getBody()` | Its kinematic body, for collision layers, a contact listener or user data |
+
+It moves in the world's fixed steps, before the bodies, and its node is placed between steps like theirs. Walking into a
+crate shoves it as an 80 kg character would: a 20 kg crate moves off almost at walking speed, a 2000 kg one hardly
+moves. Standing on a loose body puts the character's weight on it, so a rope bridge sags and a seesaw tips. Platforms
+carry it, kinematic or dynamic, and jumping off one keeps the platform's speed.
+
+Inside it is a kinematic body, so rays and triggers find it and objects falling on it land on it. Nothing pushes it but
+its own walking and what it stands on; to knock it back, call `setVelocity` from a contact listener.
 
 ## How it works
 
@@ -348,9 +440,12 @@ Each step: the step handler runs; the **broadphase** finds bodies whose boxes ov
 the bodies spread most along); the **narrowphase** tests each pair of shapes exactly (separating axes and face clipping
 for boxes and hulls, closest points for spheres and capsules, found by GJK against hulls and triangles; a mesh's tree
 gives the triangles near each shape), giving up to four contact points; gravity and forces change the
-velocities; the **solver** makes ten passes over the contacts, applying impulses so bodies don't move into each other
-and friction resists sliding; bounces are added; overlaps are pushed apart without adding speed; and the velocities
-move the bodies. Contacts remember last step's impulses, which is what lets stacks settle.
+velocities; the **solver** makes ten passes over the joints and contacts, applying impulses so joined bodies don't
+move apart, touching bodies don't move into each other and friction resists sliding; bounces are added; overlaps are
+pushed apart without adding speed; the velocities move the bodies; and the joints pull their bodies back together, since
+turning in a straight-line step moves an anchor a little off. Contacts and joints remember last step's impulses, which
+is what lets stacks settle and chains hang still. Characters move first, each step: they push out of whatever they
+walk into, in pieces no longer than half their radius, so they can't pass through thin walls.
 
 Shapes a little apart already get a contact, sized by how far the bodies could move in the step. That stops falling
 bodies at the surface and keeps a fast ball from passing through a thin wall, without a separate sweep test.
@@ -360,7 +455,10 @@ bodies at the surface and keeps a fast ball from passing through a thin wall, wi
 - Meshes can't move freely: a dynamic body needs hulls (or boxes, spheres and capsules) instead.
 - A mesh joins its corners only where they are at exactly the same place; a level whose pieces merely nearly meet keeps
   real edges along the gaps, which a sliding box can catch on.
-- No joints (hinges, ropes, ragdolls) and no character controller yet.
+- Joints have no cone or twist limits for a ball joint, so no ragdolls yet, and joined masses should stay within about
+  10 to 1 (see [Joints](#joints)).
+- A character stands along +Y, isn't turned by a turning platform (it is carried round, facing the same way), and isn't
+  pushed by bodies that hit it.
 - No continuous collision against spinning bodies: speculative contacts cover fast straight-line motion, not a long
   thin stick spinning very fast.
 - Queries test every body's bounding box, with no tree.

@@ -74,7 +74,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Lighting](3d/lighting.md) | How lights add up, shadows, and the skybox |
 | [Models](3d/models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files |
 | [Animation](3d/animation.md) | Clips, `AnimationPlayer` and skinned meshes |
-| [Physics](3d/physics.md) | Rigid bodies: gravity, forces, inertia, collisions, friction and bounce, raycasts and triggers |
+| [Physics](3d/physics.md) | Rigid bodies: gravity, forces, inertia, collisions, friction and bounce, raycasts and triggers, mesh and hull colliders, joints, a character controller |
 | [Instancing](3d/instancing.md) | Thousands of copies of one mesh in a single draw |
 | [Custom rendering](3d/custom-rendering.md) | Your own 3D with `GpuDevice`, pipelines and one GLSL shader for both APIs |
 | **[Audio](audio/README.md)** | Sound effects, streamed music, volume channels |

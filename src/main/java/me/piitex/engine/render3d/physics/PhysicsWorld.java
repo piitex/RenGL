@@ -58,6 +58,8 @@ public final class PhysicsWorld {
     private boolean queriesHitTriggers;
 
     private final List<RigidBody> bodies = new ArrayList<>();
+    private final List<Joint> joints = new ArrayList<>();
+    private final List<CharacterController> characters = new ArrayList<>();
     private final Broadphase broadphase = new Broadphase();
     private final Manifold manifold = new Manifold();
     private Map<PairKey, Contact> contactMap = new HashMap<>();
@@ -98,9 +100,11 @@ public final class PhysicsWorld {
 
     public boolean remove(RigidBody body) {
         if (!bodies.contains(body)) return false;
+        if (body.character != null && characters.remove(body.character)) body.character.detach();
         // Its contacts end now, so a listener counting what touches what stays balanced.
         List<BodyPair> ended = new ArrayList<>();
         for (BodyPair pair : touching.keySet()) if (pair.a() == body || pair.b() == body) ended.add(pair);
+        for (Joint joint : List.copyOf(body.joints)) removeJoint(joint);
         bodies.remove(body);
         broadphase.remove(body);
         for (Contact c : contacts) { // whatever rested on it has to fall
@@ -119,6 +123,73 @@ public final class PhysicsWorld {
 
     public List<RigidBody> bodies() {
         return Collections.unmodifiableList(bodies);
+    }
+
+    /**
+     * Adds a joint between bodies already in this world, reading its anchors against where they are now. Adding a
+     * joint twice does nothing.
+     */
+    public PhysicsWorld addJoint(Joint joint) {
+        if (joint.getWorld() == this) return this;
+        if (joint.getWorld() != null) throw new IllegalStateException(joint + " is already in another world");
+        if (joint.getBodyA().getWorld() != this || (joint.getBodyB() != null && joint.getBodyB().getWorld() != this)) {
+            throw new IllegalStateException("Add both bodies to the world before the joint between them");
+        }
+        joints.add(joint);
+        joint.getBodyA().joints.add(joint);
+        if (joint.getBodyB() != null) joint.getBodyB().joints.add(joint);
+        joint.attach(this);
+        return this;
+    }
+
+    /**
+     * Takes a joint out, letting its bodies go.
+     */
+    public boolean removeJoint(Joint joint) {
+        if (!joints.remove(joint)) return false;
+        joint.getBodyA().joints.remove(joint);
+        if (joint.getBodyB() != null) joint.getBodyB().joints.remove(joint);
+        joint.getBodyA().wakeUp();
+        if (joint.getBodyB() != null) joint.getBodyB().wakeUp();
+        joint.detach();
+        return true;
+    }
+
+    public List<Joint> joints() {
+        return Collections.unmodifiableList(joints);
+    }
+
+    /**
+     * Adds a character, starting where its node is. It moves in each step before the bodies, so they see where it
+     * went.
+     */
+    public PhysicsWorld addCharacter(CharacterController character) {
+        if (character.getWorld() == this) return this;
+        if (character.getWorld() != null) throw new IllegalStateException(character + " is already in another world");
+        add(character.getBody());
+        characters.add(character);
+        character.attach(this);
+        return this;
+    }
+
+    public boolean removeCharacter(CharacterController character) {
+        if (!characters.contains(character)) return false;
+        return remove(character.getBody());
+    }
+
+    public List<CharacterController> characters() {
+        return Collections.unmodifiableList(characters);
+    }
+
+    /**
+     * Whether a joint between {@code a} and {@code b} keeps them from colliding.
+     */
+    private static boolean jointedApart(RigidBody a, RigidBody b) {
+        List<Joint> list = a.joints.size() <= b.joints.size() ? a.joints : b.joints;
+        for (Joint joint : list) {
+            if (!joint.isCollideConnected() && (joint.getBodyA() == a && joint.getBodyB() == b || joint.getBodyA() == b && joint.getBodyB() == a)) return true;
+        }
+        return false;
     }
 
     /**
@@ -321,7 +392,8 @@ public final class PhysicsWorld {
     }
 
     /**
-     * How many passes fix overlaps each step (4 by default).
+     * How many passes fix overlaps each step (4 by default). Joints get twice as many to pull their bodies back
+     * together, stopping early once every joint is closed.
      */
     public PhysicsWorld setPositionIterations(int iterations) {
         positionIterations = Math.max(0, iterations);
@@ -399,6 +471,7 @@ public final class PhysicsWorld {
         RigidBody[] active = bodies.toArray(RigidBody[]::new);
         for (RigidBody body : active) body.savePrevious();
         if (stepHandler != null) stepHandler.step(this, dt);
+        for (CharacterController character : List.copyOf(characters)) character.step(dt);
         collide(dt);
         updateSleep(dt);
         for (RigidBody body : active) {
@@ -406,18 +479,42 @@ public final class PhysicsWorld {
         }
         List<Contact> solving = new ArrayList<>(contacts.size());
         for (Contact contact : contacts) if (ContactSolver.active(contact)) solving.add(contact);
+        List<Joint> holding = new ArrayList<>(joints.size());
+        for (Joint joint : joints) if (joint.active()) holding.add(joint);
         ContactSolver.prepare(solving, dt);
-        for (int i = 0; i < velocityIterations; i++) ContactSolver.solveVelocities(solving, dt, i % 2 == 1);
+        for (Joint joint : holding) joint.prepare(dt);
+        // Joints first, so the contacts have the last word and joined bodies don't get pulled into the ground.
+        for (int i = 0; i < velocityIterations; i++) {
+            for (Joint joint : holding) joint.solveVelocity();
+            ContactSolver.solveVelocities(solving, dt, i % 2 == 1);
+        }
         ContactSolver.applyRestitution(solving, dt);
         for (int i = 0; i < positionIterations; i++) ContactSolver.solvePositions(solving, dt, i % 2 == 1);
+        List<Joint> broken = null;
+        for (Joint joint : holding) {
+            if (!joint.checkBreak()) continue;
+            if (broken == null) broken = new ArrayList<>();
+            broken.add(joint);
+            removeJoint(joint);
+        }
+        if (broken != null) holding.removeAll(broken);
         for (RigidBody body : active) {
             if (body.getWorld() == this) body.integratePosition(dt);
             body.clearForces();
+        }
+        // The velocities kept the joints from coming apart, as far as a straight-line step can; turning moved the
+        // anchors a little anyway, so pull them back together now, before anything sees the drift. Joints are few and
+        // a chain passes each fix along one link per pass, so they get twice the passes.
+        for (int i = 0; i < Math.max(2 * positionIterations, 1); i++) {
+            boolean done = true;
+            for (Joint joint : holding) done &= joint.solvePosition();
+            if (done) break;
         }
         for (RigidBody body : bodies) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries
         time += dt;
         stepCount++;
         fireEvents();
+        if (broken != null) for (Joint joint : broken) joint.fireBreak();
     }
 
     /**
@@ -493,6 +590,7 @@ public final class PhysicsWorld {
         }
         for (Contact c : contacts) if (found.containsKey(keyOf(c))) list.add(c);
         broadphase.findPairs((a, b) -> {
+            if (!a.joints.isEmpty() && !b.joints.isEmpty() && jointedApart(a, b)) return;
             float margin = a.speculative + b.speculative - CONTACT_MARGIN;
             for (int i = 0; i < a.shapeCount(); i++) {
                 for (int j = 0; j < b.shapeCount(); j++) {
@@ -563,6 +661,10 @@ public final class PhysicsWorld {
             RigidBody a = c.getBodyA(), b = c.getBodyB();
             if (!c.isTrigger() && a.isDynamic() && b.isDynamic()) union(a.islandIndex, b.islandIndex);
         }
+        for (Joint joint : joints) { // joined bodies sleep and wake together
+            RigidBody a = joint.getBodyA(), b = joint.getBodyB();
+            if (b != null && a.isDynamic() && b.isDynamic()) union(a.islandIndex, b.islandIndex);
+        }
         // An island stays awake if any body in it is: still moving, not allowed to sleep, or pushed by a moving kinematic body.
         boolean[] awake = new boolean[n];
         for (int i = 0; i < n; i++) {
@@ -572,6 +674,12 @@ public final class PhysicsWorld {
         for (Contact c : contacts) {
             if (c.isTrigger()) continue;
             RigidBody a = c.getBodyA(), b = c.getBodyB();
+            if (a.isDynamic() && b.getType() == BodyType.KINEMATIC && b.isMoving()) awake[find(a.islandIndex)] = true;
+            if (b.isDynamic() && a.getType() == BodyType.KINEMATIC && a.isMoving()) awake[find(b.islandIndex)] = true;
+        }
+        for (Joint joint : joints) {
+            RigidBody a = joint.getBodyA(), b = joint.getBodyB();
+            if (b == null) continue;
             if (a.isDynamic() && b.getType() == BodyType.KINEMATIC && b.isMoving()) awake[find(a.islandIndex)] = true;
             if (b.isDynamic() && a.getType() == BodyType.KINEMATIC && a.isMoving()) awake[find(b.islandIndex)] = true;
         }
