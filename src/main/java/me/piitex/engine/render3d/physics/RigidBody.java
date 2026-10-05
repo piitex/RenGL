@@ -38,6 +38,7 @@ public final class RigidBody {
     private BodyType type;
     private PhysicsWorld world;
     int id;
+    int proxy = BodyTree.NONE; // its leaf in the world's tree
 
     private final List<BodyShape> shapes = new ArrayList<>();
     private List<BodyShape> scaledShapes = List.of();
@@ -720,6 +721,15 @@ public final class RigidBody {
     /**
      * Places each shape in the world and boxes it, grown by {@code margin}.
      */
+    /**
+     * Whether placing the shapes again would give what they have now: the body hasn't moved since and can't move this
+     * step, and its boxes have no room for motion in them. Moving one by hand places its shapes then and there.
+     */
+    boolean settled() {
+        boolean still = type == BodyType.STATIC || (type == BodyType.DYNAMIC ? sleeping : !isMoving());
+        return still && speculative == PhysicsWorld.CONTACT_MARGIN && shapePoses.length == scaledShapes.size();
+    }
+
     void updateCollisionShapes(float margin, float dt, Vec3 gravity) {
         // Grow by how far the body could move this step, so contacts are found before it gets there.
         float speed = (float) Math.sqrt(vx * vx + vy * vy + vz * vz);
@@ -747,6 +757,7 @@ public final class RigidBody {
             max = max == null ? box.max() : new Vec3(Math.max(max.x(), box.max().x()), Math.max(max.y(), box.max().y()), Math.max(max.z(), box.max().z()));
         }
         bounds = min == null ? new Bounds(body.position(), body.position()) : new Bounds(min, max);
+        if (world != null) world.tree.update(this);
     }
 
     static Bounds worldBounds(Shape shape, Pose pose, float margin) {
@@ -897,16 +908,22 @@ public final class RigidBody {
     }
 
     /**
+     * Where the body is {@code alpha} of the way from the previous step to the current one; just where it is, for a
+     * body that isn't stepped.
+     */
+    Pose interpolatedPose(float alpha) {
+        if (alpha >= 1f || world == null) return new Pose(getPosition(), getRotation());
+        return new Pose(previousPosition.lerp(getPosition(), alpha), previousRotation.slerp(getRotation(), alpha));
+    }
+
+    /**
      * Puts the node at the place {@code alpha} of the way from the previous step to the current one.
      */
     void writeNode(float alpha) {
         if (node == null) return;
-        Vec3 position = getPosition();
-        Quat rotation = getRotation();
-        if (alpha < 1f) {
-            position = previousPosition.lerp(position, alpha);
-            rotation = previousRotation.slerp(rotation, alpha);
-        }
+        Pose pose = interpolatedPose(alpha);
+        Vec3 position = pose.position();
+        Quat rotation = pose.rotation();
         Node3D parent = node.getParent();
         if (parent != null) {
             Mat4 parentWorld = parent.worldMatrix();

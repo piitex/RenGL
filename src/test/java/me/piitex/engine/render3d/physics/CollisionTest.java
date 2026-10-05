@@ -275,14 +275,11 @@ class CollisionTest {
         }
         world.add(new RigidBody(BodyType.STATIC).addShape(FLOOR));
         bodies.add(world.bodies().getLast());
+        for (int i = 3; i < bodies.size(); i += 7) bodies.get(i).sleep(); // sleeping bodies only pair with moving ones
         Broadphase broadphase = new Broadphase();
-        for (RigidBody body : bodies) {
-            broadphase.add(body);
-            body.updateCollisionShapes(M);
-        }
         for (int round = 0; round < 3; round++) {
             Set<String> found = new HashSet<>();
-            broadphase.findPairs((a, b) -> assertTrue(found.add(a.id + "-" + b.id), "each pair once"));
+            broadphase.findPairs(world.bodies(), world.tree, (a, b) -> assertTrue(found.add(a.id + "-" + b.id), "each pair once"));
             Set<String> expected = new HashSet<>();
             for (RigidBody a : bodies) {
                 for (RigidBody b : bodies) {
@@ -291,9 +288,13 @@ class CollisionTest {
             }
             assertEquals(expected, found);
             assertFalse(found.isEmpty());
+            world.tree.validate();
             for (RigidBody body : bodies) { // shuffle things about and go again
-                if (body.isDynamic()) body.setPosition(body.getPosition().add(new Vec3(random.nextFloat() - 0.5f, 0, random.nextFloat() * 3 - 1.5f)));
-                body.updateCollisionShapes(M);
+                if (body.isDynamic()) {
+                    boolean asleep = body.isSleeping();
+                    body.setPosition(body.getPosition().add(new Vec3(random.nextFloat() - 0.5f, 0, random.nextFloat() * 3 - 1.5f)));
+                    if (asleep) body.sleep();
+                }
             }
         }
     }

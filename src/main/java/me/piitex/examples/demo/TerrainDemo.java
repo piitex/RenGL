@@ -10,6 +10,7 @@ import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.physics.BodyType;
 import me.piitex.engine.render3d.physics.BoxShape;
+import me.piitex.engine.render3d.physics.ColliderView;
 import me.piitex.engine.render3d.physics.ConvexHullShape;
 import me.piitex.engine.render3d.physics.MeshShape;
 import me.piitex.engine.render3d.physics.PhysicsMaterial;
@@ -127,6 +128,14 @@ public class TerrainDemo {
         slowText.setPosition(54, 239);
         root.addElement(slowText);
 
+        CheckBoxOverlay show = new CheckBoxOverlay(20, false);
+        show.setPosition(24, 272);
+        show.onToggle(hills.colliders::setVisible);
+        root.addElement(show);
+        TextOverlay showText = new TextOverlay("Show colliders", 14f, Color.WHITE);
+        showText.setPosition(54, 273);
+        root.addElement(showText);
+
         new Engine().start(window);
     }
 
@@ -141,6 +150,7 @@ public class TerrainDemo {
         final Scene3D scene = new Scene3D();
         final OrbitControls orbit = new OrbitControls(scene.camera());
         final PhysicsWorld world = new PhysicsWorld();
+        final ColliderView colliders = new ColliderView(world).setVisible(false);
         final List<RigidBody> dropped = new ArrayList<>();
         final Random random = new Random(7);
         float speed = 1f;
@@ -152,6 +162,7 @@ public class TerrainDemo {
             scene.setBackground(new Color(0.55f, 0.7f, 0.85f, 1f));
             scene.setAmbient(Color.WHITE, 0.25f);
             scene.lights().getFirst().setShadows(Shadows.of(ShadowQuality.HIGH).cascades(3).distance(45f));
+            scene.add(colliders.getNode());
             scene.setUpdateHandler((_, dt) -> {
                 world.update(dt * speed);
                 // Whatever rolls off the edge falls forever; let it go.

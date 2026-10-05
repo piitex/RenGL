@@ -5,7 +5,7 @@
 Rigid bodies for 3D scenes, in `me.piitex.engine.render3d.physics`: gravity, velocity, mass and inertia, forces and
 impulses, collisions with friction and bounce, stacking, sleeping, raycasts and trigger zones, with loaded meshes as
 ground and convex hulls for objects of any shape, joints (hinges, ropes, springs, sliders, welds) and a character
-controller that walks a player around. It is plain Java with no native library, and like the rest of the 3D
+controller that walks a player around, and a view that draws the colliders. It is plain Java with no native library, and like the rest of the 3D
 layer it costs nothing until you use it.
 
 A **`PhysicsWorld`** holds **`RigidBody`** objects. Each body moves a [`Node3D`](scenes.md#node3d): the world works out
@@ -306,8 +306,8 @@ for (RigidBody body : world.overlapSphere(center, 5f)) { ... }
 
 A ray that starts inside a body doesn't hit that body, so a ray from a character's centre finds the ground, not the
 character. Distances are in units of the ray direction's length, so give it a direction of length 1 (`Ray.of`) to
-measure in metres. Queries look at every body's box first and then test the shapes exactly; that is fine for a few
-hundred bodies and a few rays a frame.
+measure in metres. The world keeps its bodies in a tree of boxes, so a query only visits the branches it passes
+through and then tests those shapes exactly: a raycast in a level of 20,000 bodies takes about a microsecond.
 
 ## Contacts, events and triggers
 
@@ -434,10 +434,32 @@ carry it, kinematic or dynamic, and jumping off one keeps the platform's speed.
 Inside it is a kinematic body, so rays and triggers find it and objects falling on it land on it. Nothing pushes it but
 its own walking and what it stands on; to knock it back, call `setVelocity` from a contact listener.
 
+## Seeing the colliders
+
+A **`ColliderView`** draws what the world collides with, as see-through outlines over the scene: the way to find a
+collider that doesn't fit its mesh, a body that sleeps when it shouldn't, or a trigger in the wrong place.
+
+```java nocompile
+ColliderView colliders = new ColliderView(world);
+scene.add(colliders.getNode());
+colliders.setVisible(false);             // and true again from a key or a check box
+colliders.setShowStatic(false);          // hide the level's own colliders
+```
+
+The colour says what a body is: green for an awake dynamic body, grey-blue for a sleeping one, blue for kinematic, light
+grey for static, yellow for a trigger and pink for a character. Lines run along each shape's edges and about every metre
+across big faces. Red dots mark where bodies touch, with a short line along the push (`setShowContacts`); orange dots
+mark where joints hold their bodies, with a line between them for a rope or spring and along a hinge's or slider's axis
+(`setShowJoints`). The view follows the world each time it updates, smoothed between steps like the bodies' nodes;
+`refresh()` follows it while the world is paused, and `dispose()` takes it out of the scene. An endless plane is drawn
+as a 100 m square around its body. A hidden view costs nothing, and the view's nodes are never picked or shadowed.
+
+The Physics, Terrain and Playground demos have it on a check box (or the V key).
+
 ## How it works
 
-Each step: the step handler runs; the **broadphase** finds bodies whose boxes overlap (sweep and prune along the axis
-the bodies spread most along); the **narrowphase** tests each pair of shapes exactly (separating axes and face clipping
+Each step: the step handler runs; the **broadphase** asks the world's tree of boxes what each moving body might touch
+(bodies at rest don't ask, so a big level with a few things moving costs a few small queries); the **narrowphase** tests each pair of shapes exactly (separating axes and face clipping
 for boxes and hulls, closest points for spheres and capsules, found by GJK against hulls and triangles; a mesh's tree
 gives the triangles near each shape), giving up to four contact points; gravity and forces change the
 velocities; the **solver** makes ten passes over the joints and contacts, applying impulses so joined bodies don't
@@ -461,7 +483,6 @@ bodies at the surface and keeps a fast ball from passing through a thin wall, wi
   pushed by bodies that hit it.
 - No continuous collision against spinning bodies: speculative contacts cover fast straight-line motion, not a long
   thin stick spinning very fast.
-- Queries test every body's bounding box, with no tree.
 - Gyroscopic effects are left out: a spinning body keeps its angular velocity rather than its angular momentum, which
   only differs for an unevenly shaped body spinning freely.
 - One thread.

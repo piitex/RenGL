@@ -11,6 +11,7 @@ import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.physics.BodyType;
 import me.piitex.engine.render3d.physics.BoxShape;
 import me.piitex.engine.render3d.physics.CharacterController;
+import me.piitex.engine.render3d.physics.ColliderView;
 import me.piitex.engine.render3d.physics.Contact;
 import me.piitex.engine.render3d.physics.ContactListener;
 import me.piitex.engine.render3d.physics.DistanceJoint;
@@ -76,7 +77,7 @@ public class PlaygroundDemo {
         TextOverlay title = new TextOverlay("Playground", 24f, Color.WHITE);
         title.setPosition(24, 18);
         root.addElement(title);
-        String[] lines = {"WASD  walk", "Shift  run", "Space  jump", "C  rebuild the crates", "R  back to the start",
+        String[] lines = {"WASD  walk", "Shift  run", "Space  jump", "C  rebuild the crates", "R  back to the start", "V  show the colliders",
                 "Drag  turn the camera", "Scroll  zoom"};
         for (int i = 0; i < lines.length; i++) {
             TextOverlay line = new TextOverlay(lines[i], 14f, new Color(1f, 1f, 1f, 0.75f));
@@ -86,7 +87,7 @@ public class PlaygroundDemo {
         TextOverlay[] stats = new TextOverlay[4];
         for (int i = 0; i < stats.length; i++) {
             stats[i] = new TextOverlay("", 14f, Color.WHITE);
-            stats[i].setPosition(24, 260 + i * 22);
+            stats[i].setPosition(24, 284 + i * 22);
             root.addElement(stats[i]);
         }
         playground.onStats = text -> {
@@ -115,6 +116,7 @@ public class PlaygroundDemo {
         final Scene3D scene = new Scene3D();
         final OrbitControls orbit = new OrbitControls(scene.camera());
         final PhysicsWorld world = new PhysicsWorld();
+        final ColliderView colliders = new ColliderView(world).setVisible(false);
         final Input input;
         final CharacterController player;
         final Node3D model;
@@ -160,6 +162,7 @@ public class PlaygroundDemo {
             pad();
             buildCrates();
 
+            scene.add(colliders.getNode());
             orbit.setDistance(9f).setAngles(0.3f, 0.35f).setDistanceLimits(3f, 30f);
             scene.setUpdateHandler((_, dt) -> update(dt));
         }
@@ -180,6 +183,7 @@ public class PlaygroundDemo {
                 player.setVelocity(Vec3.ZERO);
             }
             if (input.isKeyJustPressed(GLFW_KEY_C)) buildCrates();
+            if (input.isKeyJustPressed(GLFW_KEY_V)) colliders.setVisible(!colliders.isVisible());
 
             world.update(dt);
 

@@ -10,6 +10,7 @@ import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.physics.BodyType;
 import me.piitex.engine.render3d.physics.BoxShape;
+import me.piitex.engine.render3d.physics.ColliderView;
 import me.piitex.engine.render3d.physics.PhysicsMaterial;
 import me.piitex.engine.render3d.physics.PhysicsWorld;
 import me.piitex.engine.render3d.physics.PlaneShape;
@@ -126,7 +127,8 @@ public class PhysicsDemo {
         y = checkBox(root, "Paused", y, false, playground::setPaused);
         y = checkBox(root, "Slippery floor (ice)", y, false, playground::setIce);
         y = checkBox(root, "Bouncy balls", y, true, on -> playground.bouncy = on);
-        checkBox(root, "Low gravity", y, false, on -> playground.world.setGravity(new Vec3(0, on ? -1.6f : -9.81f, 0)));
+        y = checkBox(root, "Low gravity", y, false, on -> playground.world.setGravity(new Vec3(0, on ? -1.6f : -9.81f, 0)));
+        checkBox(root, "Show colliders", y, false, playground.colliders::setVisible);
 
         new Engine().start(window);
     }
@@ -164,6 +166,7 @@ public class PhysicsDemo {
         final Scene3D scene = new Scene3D();
         final OrbitControls orbit = new OrbitControls(scene.camera());
         final PhysicsWorld world = new PhysicsWorld();
+        final ColliderView colliders = new ColliderView(world).setVisible(false);
         final List<RigidBody> crates = new ArrayList<>();
         final Deque<RigidBody> shots = new ArrayDeque<>();
         final Random random = new Random(1);
@@ -186,6 +189,7 @@ public class PhysicsDemo {
             scene.setAmbient(Color.WHITE, 0.15f);
             scene.lights().getFirst().setShadows(Shadows.of(ShadowQuality.HIGH).cascades(2).distance(45f));
             scene.setPhysics(world);
+            scene.add(colliders.getNode());
             scene.setUpdateHandler((s, dt) -> updateStats());
 
             Node3D floorNode = new Node3D("floor", Mesh.plane(40, 40), new Material(

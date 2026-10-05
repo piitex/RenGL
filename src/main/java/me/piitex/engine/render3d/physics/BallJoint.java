@@ -30,6 +30,16 @@ public final class BallJoint extends Joint {
     }
 
     @Override
+    Vec3 localAnchorA() {
+        return localA;
+    }
+
+    @Override
+    Vec3 localAnchorB() {
+        return localB;
+    }
+
+    @Override
     void anchor() {
         localA = toLocal(a, anchor);
         localB = toLocal(b, anchor);

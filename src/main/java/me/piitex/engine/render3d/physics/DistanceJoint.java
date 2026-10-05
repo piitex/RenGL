@@ -131,6 +131,16 @@ public final class DistanceJoint extends Joint {
     }
 
     @Override
+    Vec3 localAnchorA() {
+        return localA;
+    }
+
+    @Override
+    Vec3 localAnchorB() {
+        return localB;
+    }
+
+    @Override
     void anchor() {
         // Held to the world, the solver's A is the world and B is body A.
         localA = toLocal(a, held() ? anchorB : anchorA);

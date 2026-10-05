@@ -23,6 +23,16 @@ public final class FixedJoint extends Joint {
     }
 
     @Override
+    Vec3 localAnchorA() {
+        return localA;
+    }
+
+    @Override
+    Vec3 localAnchorB() {
+        return localB;
+    }
+
+    @Override
     void anchor() {
         // Joined halfway between the two centres, which spreads the work evenly between them.
         Vec3 middle = held() ? center(b) : center(a).add(center(b)).mul(0.5f);

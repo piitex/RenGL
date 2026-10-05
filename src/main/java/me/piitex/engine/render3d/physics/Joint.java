@@ -207,6 +207,14 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
      */
     abstract void anchor();
 
+    /**
+     * Where the joint holds the solver's bodies {@link #a} and {@link #b}, each in its own space from its origin, or
+     * null before the joint is added: for drawing it.
+     */
+    abstract Vec3 localAnchorA();
+
+    abstract Vec3 localAnchorB();
+
     abstract void resetImpulses();
 
     /**
