@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.physics;
 
+import me.piitex.engine.render3d.math.Bounds;
 import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
@@ -60,7 +61,10 @@ public final class PhysicsWorld {
     private final List<RigidBody> bodies = new ArrayList<>();
     private final List<Joint> joints = new ArrayList<>();
     private final List<CharacterController> characters = new ArrayList<>();
+    private final List<ColliderView> views = new ArrayList<>();
+    float nodesAlpha = 1f; // how far between steps the nodes were last put
     private final Broadphase broadphase = new Broadphase();
+    final BodyTree tree = new BodyTree();
     private final Manifold manifold = new Manifold();
     private Map<PairKey, Contact> contactMap = new HashMap<>();
     private List<Contact> contacts = new ArrayList<>();
@@ -92,7 +96,6 @@ public final class PhysicsWorld {
         if (body.isDynamic() && body.hasSurface()) throw new IllegalStateException("A body with a plane or mesh can't be dynamic");
         body.id = nextId++;
         bodies.add(body);
-        broadphase.add(body);
         body.attach(this);
         body.updateCollisionShapes(CONTACT_MARGIN, fixedStep, gravity);
         return this;
@@ -106,7 +109,7 @@ public final class PhysicsWorld {
         for (BodyPair pair : touching.keySet()) if (pair.a() == body || pair.b() == body) ended.add(pair);
         for (Joint joint : List.copyOf(body.joints)) removeJoint(joint);
         bodies.remove(body);
-        broadphase.remove(body);
+        tree.remove(body);
         for (Contact c : contacts) { // whatever rested on it has to fall
             RigidBody other = c.getOther(body);
             if (other != null) other.wakeUp();
@@ -238,7 +241,7 @@ public final class PhysicsWorld {
      */
     public RaycastHit raycast(Ray ray, float maxDistance, int mask) {
         RaycastHit best = null;
-        for (RigidBody body : bodies) {
+        for (RigidBody body : alongRay(ray, maxDistance)) {
             RaycastHit hit = raycastBody(body, ray, best == null ? maxDistance : best.distance(), mask);
             if (hit != null) best = hit;
         }
@@ -250,7 +253,7 @@ public final class PhysicsWorld {
      */
     public List<RaycastHit> raycastAll(Ray ray, float maxDistance, int mask) {
         List<RaycastHit> hits = new ArrayList<>();
-        for (RigidBody body : bodies) {
+        for (RigidBody body : alongRay(ray, maxDistance)) {
             RaycastHit hit = raycastBody(body, ray, maxDistance, mask);
             if (hit != null) hits.add(hit);
         }
@@ -281,7 +284,7 @@ public final class PhysicsWorld {
         probe.setPosition(position).setRotation(pose.rotation());
         probe.updateCollisionShapes(0f);
         List<RigidBody> found = new ArrayList<>();
-        for (RigidBody body : bodies) {
+        for (RigidBody body : near(probe.collisionBounds())) {
             if (!queryable(body, mask) || !Broadphase.overlap(probe.collisionBounds(), body.collisionBounds())) continue;
             for (int i = 0; i < body.shapeCount(); i++) {
                 if (!Broadphase.overlap(probe.collisionBounds(), body.shapeBounds(i))) continue;
@@ -316,6 +319,23 @@ public final class PhysicsWorld {
      */
     public List<RigidBody> overlapBox(Vec3 center, Vec3 halfExtents, Quat rotation) {
         return overlap(new BoxShape(halfExtents), center, rotation, -1);
+    }
+
+    /**
+     * The bodies whose leaves in the tree the box reaches, in the order they were added: a few more than overlap it.
+     */
+    List<RigidBody> near(Bounds box) {
+        List<RigidBody> found = new ArrayList<>();
+        tree.query(box, found::add);
+        found.sort(Broadphase.BY_ID);
+        return found;
+    }
+
+    private List<RigidBody> alongRay(Ray ray, float maxDistance) {
+        List<RigidBody> found = new ArrayList<>();
+        tree.raycast(ray, maxDistance, found::add);
+        found.sort(Broadphase.BY_ID);
+        return found;
     }
 
     private boolean queryable(RigidBody body, int mask) {
@@ -457,6 +477,14 @@ public final class PhysicsWorld {
         writeNodes(interpolation ? getInterpolationAlpha() : 1f);
     }
 
+    void addView(ColliderView view) {
+        views.add(view);
+    }
+
+    void removeView(ColliderView view) {
+        views.remove(view);
+    }
+
     /**
      * Runs one step of exactly {@code dt} seconds and puts the nodes where it left the bodies.
      */
@@ -510,7 +538,7 @@ public final class PhysicsWorld {
             for (Joint joint : holding) done &= joint.solvePosition();
             if (done) break;
         }
-        for (RigidBody body : bodies) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries
+        for (RigidBody body : bodies) if (!body.settled()) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries
         time += dt;
         stepCount++;
         fireEvents();
@@ -578,7 +606,9 @@ public final class PhysicsWorld {
      * solver learned about it.
      */
     private void collide(float dt) {
-        for (RigidBody body : bodies) body.updateCollisionShapes(CONTACT_MARGIN, dt, gravity);
+        // A static or sleeping body's shapes stay where they were; with a big level, placing them all each step would
+        // cost more than everything else.
+        for (RigidBody body : bodies) if (!body.settled()) body.updateCollisionShapes(CONTACT_MARGIN, dt, gravity);
         Map<PairKey, Contact> previous = contactMap;
         Map<PairKey, Contact> found = new HashMap<>();
         List<Contact> list = new ArrayList<>();
@@ -589,7 +619,7 @@ public final class PhysicsWorld {
             if (!a.isActive() && !b.isActive() && (a.isSleeping() || b.isSleeping())) found.put(entry.getKey(), c);
         }
         for (Contact c : contacts) if (found.containsKey(keyOf(c))) list.add(c);
-        broadphase.findPairs((a, b) -> {
+        broadphase.findPairs(bodies, tree, (a, b) -> {
             if (!a.joints.isEmpty() && !b.joints.isEmpty() && jointedApart(a, b)) return;
             float margin = a.speculative + b.speculative - CONTACT_MARGIN;
             for (int i = 0; i < a.shapeCount(); i++) {
@@ -714,6 +744,8 @@ public final class PhysicsWorld {
     }
 
     private void writeNodes(float alpha) {
+        nodesAlpha = alpha;
         for (RigidBody body : bodies) body.writeNode(alpha);
+        for (ColliderView view : views) view.sync(alpha);
     }
 }

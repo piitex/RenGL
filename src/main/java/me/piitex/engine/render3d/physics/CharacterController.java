@@ -488,7 +488,7 @@ public final class CharacterController {
         var box = RigidBody.worldBounds(capsule, pose, margin + 0.01f);
         boolean found = false;
         out.depth = -Float.MAX_VALUE;
-        for (RigidBody other : world.bodies()) {
+        for (RigidBody other : world.near(box)) {
             if (other == body || other == ignore || other.isTrigger() || !blocks(other)) continue;
             if (!Broadphase.overlap(box, other.collisionBounds())) continue;
             for (int i = 0; i < other.shapeCount(); i++) {
@@ -534,7 +534,7 @@ public final class CharacterController {
         Pose pose = new Pose(feet.add(new Vec3(0f, centreHeight(), 0f)), Quat.IDENTITY);
         var box = RigidBody.worldBounds(capsule, pose, GROUND_PROBE + 0.01f);
         Ground best = null;
-        for (RigidBody other : world.bodies()) {
+        for (RigidBody other : world.near(box)) {
             if (other == body || other.isTrigger() || !blocks(other)) continue;
             if (!Broadphase.overlap(box, other.collisionBounds())) continue;
             for (int i = 0; i < other.shapeCount(); i++) {
