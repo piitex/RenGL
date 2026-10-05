@@ -249,3 +249,18 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 - **No seeking or playback position.** A playback can be paused and resumed but not moved to a time.
 - **MP3 loops are not sample-tight.** MP3 has encoder delay and no sample index, so use Ogg, Opus or FLAC where a loop must be seamless.
 - **Audio output cannot be chosen.** OpenAL uses the system default device, and it is not re-opened if that changes.
+
+## Video
+
+- **Only AVI with Motion JPEG or uncompressed video and PCM audio.** No H.264, H.265, VP9, AV1 or AAC: they are
+  patent-encumbered, and a compact royalty-free codec (VP8 in WebM) has not been written yet. Files are large because
+  every frame is stored whole. MP4, MOV and MKV are not read.
+- **Soundtracks must be PCM,** mono or stereo (extra channels are dropped). Any other audio codec plays silently.
+- **No hardware decoding.** Frames are decoded on the CPU, so very large resolutions (8K Motion JPEG) may not hold
+  their frame rate; the picture then waits or drops frames. Uncompressed video needs the disk to keep up too.
+- **Seeking lands on a keyframe, then decodes forward.** With the two supported codecs every frame is a keyframe, so
+  seeks are exact. Files without an index (rare) are scanned once on the first seek.
+- **A video does not stop itself when its element is removed.** Call `VideoOverlay.dispose()`.
+- **Looping and seeking restart the sound,** which can leave a brief gap.
+- **Tested with files the engine's own test writer produces,** covering all three AVI index layouts, not yet with
+  FFmpeg or camera output. If a real file fails to open or looks wrong, that is a bug to report.

@@ -87,6 +87,19 @@ public final class Audio {
     }
 
     /**
+     * Plays audio you produce yourself, such as the soundtrack of a video, on {@code channel}. The stream is read on
+     * the audio thread as it plays and closed when the playback ends. Use {@link Playback#getPlayedSeconds()} on the
+     * result as a clock.
+     */
+    public static Playback playStream(PcmStream stream, AudioChannel channel) {
+        if (!ensureInit()) {
+            stream.close();
+            return Playback.silent(channel);
+        }
+        return Playback.start(new Playback.Spec(stream, channel, 0, stream.channels(), stream, 1f, 1f, false, 0, 0, null));
+    }
+
+    /**
      * Plays a sound effect once at {@code volume}.
      */
     public static Playback play(String path, float volume) {

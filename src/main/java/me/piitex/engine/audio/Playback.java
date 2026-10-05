@@ -8,9 +8,11 @@ import org.lwjgl.openal.AL;
 import org.lwjgl.openal.EXTStereoAngles;
 import org.lwjgl.openal.SOFTSourceSpatialize;
 
+import java.util.ArrayDeque;
 import java.util.Arrays;
 
 import static org.lwjgl.openal.AL10.*;
+import static org.lwjgl.openal.AL11.AL_SAMPLE_OFFSET;
 
 /**
  * One playing instance of a {@link Sound} or {@link Music}. You get one back from every {@code play} call and can
@@ -42,6 +44,9 @@ public final class Playback {
     private final int channels;
     private long loopStart, loopEnd; // stream loop region in sample frames; loopEnd 0 means the end of the file
     private long framePos;           // sample frame the stream has been read up to
+    private final ArrayDeque<Integer> queuedFrames = new ArrayDeque<>(); // frames in each queued buffer, oldest first
+    private long processedFrames;    // frames in buffers the device has finished with
+    private int lastFillFrames;
 
     private float volume = 1f, pitch = 1f, pan = 0f;
     private boolean positional;
@@ -122,12 +127,13 @@ public final class Playback {
                 alSourcei(p.source, AL_LOOPING, spec.loop() ? AL_TRUE : AL_FALSE);
             } else {
                 p.format = stream.channels() == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
-                p.scratch = new short[STREAM_FRAMES * stream.channels()];
+                p.scratch = new short[(stream.bufferFrames() > 0 ? stream.bufferFrames() : STREAM_FRAMES) * stream.channels()];
                 p.streamBuffers = new int[STREAM_BUFFERS];
                 for (int i = 0; i < STREAM_BUFFERS; i++) {
                     p.streamBuffers[i] = alGenBuffers();
                     if (p.fill(p.streamBuffers[i])) {
                         alSourceQueueBuffers(p.source, p.streamBuffers[i]);
+                        p.queuedFrames.add(p.lastFillFrames);
                         p.queued++;
                     }
                 }
@@ -272,6 +278,19 @@ public final class Playback {
     public boolean isLooping() {
         synchronized (Audio.LOCK) {
             return looping;
+        }
+    }
+
+    /**
+     * How many seconds of a streamed playback the audio device has actually played, counted from where the stream
+     * began and ignoring {@link #pitch}. This is the audio clock a video follows to stay in sync. It stops while
+     * paused, and is 0 for a loaded {@link Sound} or a finished playback.
+     */
+    public double getPlayedSeconds() {
+        synchronized (Audio.LOCK) {
+            if (finished || stream == null) return 0;
+            int inBuffer = alGetSourcei(source, AL_SAMPLE_OFFSET);
+            return (processedFrames + inBuffer) / (double) stream.sampleRate();
         }
     }
 
@@ -466,6 +485,7 @@ public final class Playback {
             return false;
         }
         alBufferData(buffer, format, n == scratch.length ? scratch : Arrays.copyOf(scratch, n), stream.sampleRate());
+        lastFillFrames = n / stream.channels();
         return true;
     }
 
@@ -494,8 +514,11 @@ public final class Playback {
             while (processed-- > 0) {
                 int buffer = alSourceUnqueueBuffers(source);
                 queued--;
+                Integer done = queuedFrames.poll();
+                if (done != null) processedFrames += done;
                 if (!streamEnded && fill(buffer)) {
                     alSourceQueueBuffers(source, buffer);
+                    queuedFrames.add(lastFillFrames);
                     queued++;
                 }
             }
