@@ -28,7 +28,7 @@ first time something draws 3D, and closed with the window.
 | [Lighting](lighting.md) | How lights add up, **shadows**, and the **skybox** |
 | [Models](models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files, and what carries over |
 | [Animation](animation.md) | Clips, `AnimationPlayer`, and skinned meshes that bend with a skeleton |
-| [Physics](physics.md) | Rigid bodies: gravity, velocity, mass and inertia, forces, collisions with friction and bounce, sleeping, raycasts and trigger zones |
+| [Physics](physics.md) | Rigid bodies: gravity, velocity, mass and inertia, forces, collisions with friction and bounce, sleeping, raycasts and trigger zones, mesh and hull colliders, joints, a character controller |
 | [Instancing](instancing.md) | Thousands of copies of one mesh in a single draw |
 | [Custom rendering](custom-rendering.md) | Drawing your own 3D with `GpuDevice`, pipelines and one GLSL shader that runs on both APIs |
 

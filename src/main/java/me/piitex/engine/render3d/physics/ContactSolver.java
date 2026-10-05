@@ -33,7 +33,19 @@ final class ContactSolver {
     }
 
     static boolean active(Contact contact) {
-        return !contact.isTrigger() && (contact.getBodyA().isAwakeDynamic() || contact.getBodyB().isAwakeDynamic());
+        return !contact.isTrigger() && (contact.getBodyA().isAwakeDynamic() || contact.getBodyB().isAwakeDynamic()) && !standsOn(contact);
+    }
+
+    /**
+     * Whether a character stands on a loose body. The character puts its weight on the body itself; solved, the contact
+     * would hold the body down as if the character were infinitely heavy, and a plank of a rope bridge would follow the
+     * character down rather than hold it up.
+     */
+    private static boolean standsOn(Contact contact) {
+        RigidBody a = contact.getBodyA(), b = contact.getBodyB();
+        if (a.character != null && b.isDynamic()) return contact.normal.y() < -0.3f;
+        if (b.character != null && a.isDynamic()) return contact.normal.y() > 0.3f;
+        return false;
     }
 
     /**
