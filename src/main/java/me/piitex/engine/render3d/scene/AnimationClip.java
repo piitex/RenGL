@@ -53,13 +53,21 @@ public final class AnimationClip {
     }
 
     /**
-     * One property of one node over time.
-     *
-     * @param times  the keys' times in seconds, rising
-     * @param values the value at each key, {@code path} width numbers per key
+     * One property of one node over time. The key arrays are copied when you build a channel, and are shared between a
+     * channel and its {@link AnimationClip#retarget retargeted} copies: don't change the arrays the accessors return.
      */
-    public record Channel(Node3D target, Path path, float[] times, float[] values, Interpolation interpolation) {
-        public Channel {
+    public static final class Channel {
+        private final Node3D target;
+        private final Path path;
+        private final float[] times;
+        private final float[] values;
+        private final Interpolation interpolation;
+
+        /**
+         * @param times  the keys' times in seconds, rising
+         * @param values the value at each key, {@code path} width numbers per key
+         */
+        public Channel(Node3D target, Path path, float[] times, float[] values, Interpolation interpolation) {
             if (times.length == 0) throw new IllegalArgumentException("A channel needs at least one key");
             if (path == Path.WEIGHTS) {
                 if (values.length == 0 || values.length % times.length != 0) {
@@ -68,8 +76,45 @@ public final class AnimationClip {
             } else if (values.length != times.length * path.width) {
                 throw new IllegalArgumentException(path + " needs " + path.width + " values per key, " + times.length + " keys");
             }
-            times = times.clone();
-            values = values.clone();
+            this(target, path, times.clone(), values.clone(), interpolation, true);
+        }
+
+        /**
+         * Takes the arrays as they are, already checked and not to be changed; the flag only tells it from the public one.
+         */
+        private Channel(Node3D target, Path path, float[] times, float[] values, Interpolation interpolation, boolean shared) {
+            this.target = target;
+            this.path = path;
+            this.times = times;
+            this.values = values;
+            this.interpolation = interpolation;
+        }
+
+        public Node3D target() {
+            return target;
+        }
+
+        public Path path() {
+            return path;
+        }
+
+        public float[] times() {
+            return times;
+        }
+
+        public float[] values() {
+            return values;
+        }
+
+        public Interpolation interpolation() {
+            return interpolation;
+        }
+
+        /**
+         * The same keys moving another node.
+         */
+        public Channel withTarget(Node3D other) {
+            return new Channel(other, path, times, values, interpolation, true);
         }
     }
 
@@ -96,5 +141,36 @@ public final class AnimationClip {
 
     public List<Channel> channels() {
         return channels;
+    }
+
+    /**
+     * The same movement for another character: a clip whose channels move the nodes under {@code skeletonRoot} that have
+     * the same names as the nodes this clip moves ({@link Node3D#find}). One animation library can then drive any number
+     * of characters that share a skeleton, such as an NPC crowd made with {@link Node3D#copy()}; give each its own
+     * {@link AnimationPlayer} ({@link AnimationPlayer#retarget}).
+     * <pre>
+     * AnimationClip walk = library.clip("Walk");
+     * AnimationClip npcWalk = walk.retarget(npc.find("Armature"));
+     * </pre>
+     * The keys are shared with this clip, not copied. A channel whose node the other skeleton lacks (a prop, a bone it
+     * doesn't have) is left out.
+     *
+     * @throws IllegalArgumentException if none of the channels found a node, which means the names don't match
+     */
+    public AnimationClip retarget(Node3D skeletonRoot) {
+        return retarget(skeletonRoot.nodesByName());
+    }
+
+    AnimationClip retarget(java.util.Map<String, Node3D> nodes) {
+        List<Channel> mapped = new java.util.ArrayList<>(channels.size());
+        for (Channel channel : channels) {
+            String targetName = channel.target().getName();
+            Node3D node = targetName == null ? null : nodes.get(targetName);
+            if (node != null) mapped.add(channel.withTarget(node));
+        }
+        if (mapped.isEmpty() && !channels.isEmpty()) {
+            throw new IllegalArgumentException("None of the nodes " + name + " moves exist in the skeleton, so there is nothing to retarget");
+        }
+        return new AnimationClip(name, duration, mapped);
     }
 }
