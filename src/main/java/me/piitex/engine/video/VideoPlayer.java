@@ -91,6 +91,7 @@ public final class VideoPlayer implements AutoCloseable {
     private VideoPlayer(File file, Demuxer demuxer) {
         this.file = file;
         this.info = demuxer.info();
+        demuxer.useBuffers(buffers);
         FrameDecoder videoDecoder = demuxer.videoDecoder();
         videoDecoder.useBuffers(buffers);
         AudioTrackDecoder audioDecoder = demuxer.audioDecoder();

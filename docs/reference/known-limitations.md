@@ -252,13 +252,19 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 ## Video
 
-- **Only Motion JPEG or uncompressed video and PCM audio, in AVI or MP4/MOV.** MP4 files are read, but H.264, H.265,
-  VP9, AV1 and AAC are not decoded yet (the first two and AAC are patent-encumbered). A typical MP4 therefore fails to
-  open with a message that says so and shows an FFmpeg command to convert it. Files are large because every frame is
-  stored whole. MKV and WebM are not read.
-- **Soundtracks must be PCM,** mono or stereo (extra channels are dropped). Any other audio codec plays silently.
-- **No hardware decoding.** Frames are decoded on the CPU, so very large resolutions (8K Motion JPEG) may not hold
-  their frame rate; the picture then waits or drops frames. Uncompressed video needs the disk to keep up too.
+- **H.264, HEVC and AAC play only on macOS,** where the system decoder reads them. The engine has no decoder of
+  its own for those patent-encumbered codecs. On Windows and Linux only Motion JPEG or uncompressed video with PCM
+  audio, in AVI or MP4/MOV, plays; anything else fails to open with a message that shows an FFmpeg command to
+  convert it. A Windows backend (Media Foundation) is not written yet, and Linux has no system decoder to use.
+- **With the system decoder, a rotated phone video is not rotated** (the rotation flag is ignored), and it plays
+  whatever the machine's own codecs allow: VP9 and AV1 depend on the Mac. MKV and WebM are not read by the
+  engine's own readers.
+- **Without the system decoder, soundtracks must be PCM,** mono or stereo (extra channels are dropped). Any other
+  audio codec plays silently. The system decoder plays any audio it can decode, asked for as stereo; surround
+  soundtracks have not been tested.
+- **The engine's own decoders run on the CPU,** so very large resolutions (8K Motion JPEG) may not hold their frame
+  rate; the picture then waits or drops frames. Uncompressed video needs the disk to keep up too. The system decoder
+  uses the machine's video hardware.
 - **Seeking lands on a keyframe, then decodes forward.** With the two supported codecs every frame is a keyframe, so
   seeks are exact. Files without an index (rare) are scanned once on the first seek.
 - **A video does not stop itself when its element is removed.** Call `VideoOverlay.dispose()`.

@@ -11,6 +11,8 @@ import java.nio.file.Files;
  * Recognises a video file from its first bytes (not its extension) and opens the matching demuxer.
  */
 final class MediaFiles {
+    private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger("Video");
+
     private MediaFiles() {
     }
 
@@ -22,13 +24,41 @@ final class MediaFiles {
                 in.readNBytes(head, 0, head.length);
             }
             if (AviDemuxer.matches(head)) return new AviDemuxer(file);
-            if (Mp4Demuxer.matches(head)) return new Mp4Demuxer(file);
+            if (Mp4Demuxer.matches(head)) {
+                Mp4Demuxer own = new Mp4Demuxer(file);
+                if (own.fullySupported() || !MacMediaSource.available()) {
+                    own.warnIfDegraded();
+                    return own;
+                }
+                own.close();
+                Demuxer os = openWithSystem(file);
+                return os != null ? os : reopen(file);
+            }
+            Demuxer os = openWithSystem(file);
+            if (os != null) return os;
             throw new UnsupportedOperationException("Unsupported video format: " + file.getName() + " is " + container(head)
-                    + ". RenGL plays AVI and MP4 files with Motion JPEG or uncompressed video and PCM audio. "
+                    + ". RenGL plays AVI and MP4 files with Motion JPEG or uncompressed video and PCM audio, and on macOS any file the system can play. "
                     + convertHint(file.getName()));
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read video file: " + file, e);
         }
+    }
+
+    /** The operating system's decoder, when there is one and it accepts the file. Null otherwise. */
+    private static Demuxer openWithSystem(File file) throws IOException {
+        if (!MacMediaSource.available()) return null;
+        try {
+            return new MacMediaSource(file);
+        } catch (UnsupportedOperationException e) {
+            log.debug("The system cannot play {}: {}", file.getName(), e.getMessage());
+            return null;
+        }
+    }
+
+    private static Demuxer reopen(File file) throws IOException {
+        Mp4Demuxer own = new Mp4Demuxer(file);
+        own.warnIfDegraded();
+        return own;
     }
 
     /** How to turn a file into one the player reads; shown with errors. */

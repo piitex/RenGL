@@ -34,6 +34,8 @@ final class Mp4Demuxer implements Demuxer {
         /** Edit list: the media time that plays first, and the silence before it. */
         long mediaStart;
         double delay;
+        /** How long the edit list says the media plays, or 0 when it does not say. */
+        double editSeconds;
 
         // the sample table
         long[] off = new long[1024];
@@ -43,6 +45,7 @@ final class Mp4Demuxer implements Demuxer {
         final BitSet sync = new BitSet();
         int count;
         long endDts;
+        int maxCto;
 
         // fragment defaults from trex
         int defDuration, defSize, defFlags;
@@ -65,6 +68,7 @@ final class Mp4Demuxer implements Demuxer {
             size[count] = bytes;
             dts[count] = decode;
             cto[count] = composition;
+            if (composition > maxCto) maxCto = composition;
             if (key) sync.set(count);
             count++;
         }
@@ -83,6 +87,8 @@ final class Mp4Demuxer implements Demuxer {
     private final List<Track> tracks = new ArrayList<>();
     private Track video, audio;
     private MediaInfo info;
+    private boolean audioDropped;
+    private String droppedAudio = "";
     private long movieTimescale = 1;
     private long movieDuration;
     private final List<int[]> trexes = new ArrayList<>();
@@ -313,6 +319,7 @@ final class Mp4Demuxer implements Demuxer {
                 delay += duration / (double) movieTimescale;
             } else {
                 start = mediaTime;
+                t.editSeconds = duration / (double) movieTimescale;
                 started = true;
             }
         }
@@ -490,7 +497,8 @@ final class Mp4Demuxer implements Demuxer {
         }
         if (audio != null && (audio.rate == 0 || audio.timescale > 65535)) audio.rate = (int) audio.timescale;
         if (audio != null && audioCodec(audio) == null) {
-            log.warn("MP4 audio codec '{}' is not supported; playing without sound.", audio.codec);
+            audioDropped = true;
+            droppedAudio = audio.codec;
             audio = null;
         }
     }
@@ -535,12 +543,27 @@ final class Mp4Demuxer implements Demuxer {
     }
 
     private void buildInfo() {
-        double endSec = video.count == 0 ? 0 : (video.endDts - video.mediaStart) / (double) video.timescale + video.delay;
+        // the last picture is shown after the last decode time by the composition delay
+        double endSec = video.count == 0 ? 0 : (video.endDts + video.maxCto - video.mediaStart) / (double) video.timescale + video.delay;
+        if (video.editSeconds > 0) endSec = video.delay + video.editSeconds; // the edit list is the authority
         double duration = endSec > 0 ? endSec : movieDuration / (double) movieTimescale;
         double fps = duration > 0 ? video.count / duration : 0;
         info = new MediaInfo(video.width, video.height, fps, duration, describeVideo(video.codec),
                 audio == null ? 0 : Math.min(audio.channels, 2), audio == null ? 0 : audio.rate,
                 audio == null ? null : audioCodec(audio), "MP4");
+    }
+
+    /**
+     * Whether this class can play the whole file itself: its picture codec is one it decodes, and no soundtrack
+     * had to be left out.
+     */
+    boolean fullySupported() {
+        return MJPEG.contains(video.codec) && !audioDropped;
+    }
+
+    /** Logs that the soundtrack is being left out, when this is the reader that ends up used. */
+    void warnIfDegraded() {
+        if (audioDropped) log.warn("{}: the '{}' soundtrack is not supported; playing without sound.", name, droppedAudio);
     }
 
     // ------------------------------------------------------------------ Demuxer

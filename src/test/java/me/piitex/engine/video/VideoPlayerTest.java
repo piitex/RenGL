@@ -239,4 +239,19 @@ class VideoPlayerTest {
             }
         }
     }
+
+    @Test
+    void playsAndSeeksH264ThroughTheSystemDecoder() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(MacMediaSource.available(), "no system media framework on this OS");
+        VideoPlayer p = VideoPlayer.open(MacMediaSourceTest.fixture("h264-640x360.mp4")); // no soundtrack: stays silent
+        players.add(p);
+        assertEquals("H.264", p.getInfo().videoCodec());
+        assertTrue(pump(p, p::isFinished), "plays to the end");
+        assertShows(p, 89);
+        for (int target : new int[]{45, 12, 70}) {
+            p.seek(target / 30.0 + 0.01);
+            assertTrue(pump(p, () -> Math.round(p.getFrameTime() * 30) == target), "seek to " + target);
+            assertShows(p, target);
+        }
+    }
 }
