@@ -162,4 +162,25 @@ class Mp4DemuxerTest {
             assertTrue(n > 0 && n < 40, "read " + n + " packets");
         }
     }
+
+    @Test
+    void readsFilesWrittenByAppleEncoder() throws Exception {
+        // Real H.264 with B-frames, an edit list and an AAC soundtrack: only the container is read, nothing decoded.
+        try (Mp4Demuxer d = new Mp4Demuxer(MacMediaSourceTest.fixture("h264-aac-640x360.mp4"))) {
+            MediaInfo info = d.info();
+            assertEquals("H.264", info.videoCodec());
+            assertEquals(640, info.width());
+            assertEquals(3.0, info.duration(), 0.001);
+            assertFalse(d.fullySupported(), "H.264 and AAC need the system decoder");
+            int frames = 0;
+            double first = -1;
+            Packet p;
+            while ((p = d.next()) != null) {
+                if (first < 0) first = p.pts();
+                frames++;
+            }
+            assertEquals(90, frames);
+            assertEquals(0.0, first, 1e-9);
+        }
+    }
 }

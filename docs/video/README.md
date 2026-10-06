@@ -22,7 +22,15 @@ instantly and costs no more memory than a short clip.
 
 ## Supported files
 
-The container and codec are recognised from the file's bytes, not its extension.
+The container and codec are recognised from the file's bytes, not its extension. There are two routes, and the
+player picks one for you:
+
+**The system decoder (macOS).** Any file macOS can play, which includes **H.264 and HEVC in MP4 and MOV** with
+**AAC** sound, plays through Apple's AVFoundation. The video is decoded by the machine's hardware video engine, so
+the engine contains no H.264 or AAC decoder of its own, and the licence for those codecs is the operating system's.
+Nothing is installed or shipped: the engine calls the system frameworks directly.
+
+**The engine's own readers.** These work on every platform and need nothing from the system:
 
 | | Supported |
 |---|---|
@@ -30,23 +38,33 @@ The container and codec are recognised from the file's bytes, not its extension.
 | Video | **Motion JPEG** (`MJPG` in AVI, `jpeg` in MP4), **uncompressed RGB** (AVI only; 24 and 32-bit, with alpha) |
 | Audio | **PCM**: 8, 16, 24 and 32-bit integer, or 32-bit float (in MP4: `sowt`, `twos`, `in24`, `in32`, `fl32`, `ipcm`). Mono and stereo; extra channels are dropped |
 
-An unsupported file fails to open with an `UnsupportedOperationException` that names the codec and gives an FFmpeg
-command that converts the file. An MP4 is read, but a typical one holds H.264 video, which is not decoded yet, so
-it fails with that message.
-
-Both video formats store every frame whole, which is what makes them quick to seek and cheap to decode, and why
-they suit pre-rendered animation: render an image sequence, encode it as Motion JPEG (high quality) or uncompressed
-(lossless; a 32-bit file keeps its alpha channel), and play it. They are not small files. **H.264, H.265, VP9, AV1 and AAC are not
-supported**: the engine avoids patent-encumbered codecs (see [known limitations](../reference/known-limitations.md#video)),
-and a compact open codec (VP8/WebM) has not been written yet. Video with a soundtrack in any other format plays
-without sound.
-
-Encode a file for RenGL with FFmpeg:
+A file the engine can read itself always uses its own reader, so it plays the same everywhere. Anything else uses
+the system decoder where there is one. **On Windows and Linux there is no system decoder yet**, so there only the
+table above plays. A file that cannot play fails to open with an `UnsupportedOperationException` that names the
+codec and gives an FFmpeg command that converts it:
 
 ```bash
-ffmpeg -i in.mov -c:v mjpeg -q:v 2 -c:a pcm_s16le out.avi        # Motion JPEG, near lossless (out.mp4 also works)
+ffmpeg -i in.mkv -c:v mjpeg -q:v 2 -c:a pcm_s16le out.avi        # Motion JPEG, near lossless (out.mp4 also works)
 ffmpeg -i frames/%04d.png -r 30 -c:v rawvideo -pix_fmt bgr24 -c:a pcm_s16le out.avi  # uncompressed
 ```
+
+Motion JPEG and uncompressed video store every frame whole, which is what makes them quick to seek and cheap to
+decode, and why they suit pre-rendered animation. They are not small files; a game that ships on Windows or Linux
+should ship those, or convert its videos once at build time.
+
+### Speed of the system decoder
+
+Measured on an Apple M-series MacBook Air, decoding H.264 and copying each frame into the engine's pixel format
+(the work the decode thread does; playback needs 1x):
+
+| Video | Decode speed | CPU used by the engine's process |
+|---|---|---|
+| 1080p, 14 Mbit/s | about 32x real time (~950 frames/s) | 2 to 5% of one core at normal speed |
+| 4K, 57 Mbit/s | about 10x real time (~290 frames/s) | 7 to 10% of one core at normal speed |
+
+The decoding itself runs on the video engine, not the CPU. The costs that remain are one copy of each frame out of
+the decoder's buffer (about 8 MB at 1080p, 33 MB at 4K) and uploading it as an image. A seek restarts the decoder,
+which took about 25 ms at 1080p and 85 ms at 4K.
 
 ## VideoOverlay
 

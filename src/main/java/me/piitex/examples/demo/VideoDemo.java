@@ -25,7 +25,7 @@ public class VideoDemo {
     static void main(String[] args) {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
         if (args.length == 0) {
-            System.err.println("Usage: VideoDemo <video file>   (AVI or MP4 with Motion JPEG or uncompressed video, PCM audio)");
+            System.err.println("Usage: VideoDemo <video file>   (AVI or MP4; on macOS also H.264/HEVC)");
             return;
         }
         try {

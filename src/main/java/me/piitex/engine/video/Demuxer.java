@@ -17,6 +17,12 @@ interface Demuxer extends AutoCloseable {
     int audioStream();
 
     /**
+     * Lets a source that produces finished pictures take its pixel arrays from the player's pool.
+     */
+    default void useBuffers(Buffers buffers) {
+    }
+
+    /**
      * A decoder for the picture track, or null when the file has none. Throws when the codec is not supported.
      */
     FrameDecoder videoDecoder();
