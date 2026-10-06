@@ -252,9 +252,10 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 ## Video
 
-- **Only AVI with Motion JPEG or uncompressed video and PCM audio.** No H.264, H.265, VP9, AV1 or AAC: they are
-  patent-encumbered, and a compact royalty-free codec (VP8 in WebM) has not been written yet. Files are large because
-  every frame is stored whole. MP4, MOV and MKV are not read.
+- **Only Motion JPEG or uncompressed video and PCM audio, in AVI or MP4/MOV.** MP4 files are read, but H.264, H.265,
+  VP9, AV1 and AAC are not decoded yet (the first two and AAC are patent-encumbered). A typical MP4 therefore fails to
+  open with a message that says so and shows an FFmpeg command to convert it. Files are large because every frame is
+  stored whole. MKV and WebM are not read.
 - **Soundtracks must be PCM,** mono or stereo (extra channels are dropped). Any other audio codec plays silently.
 - **No hardware decoding.** Frames are decoded on the CPU, so very large resolutions (8K Motion JPEG) may not hold
   their frame rate; the picture then waits or drops frames. Uncompressed video needs the disk to keep up too.

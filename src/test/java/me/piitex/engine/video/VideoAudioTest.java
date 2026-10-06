@@ -44,7 +44,7 @@ class VideoAudioTest {
         double lastPos = 0;
         while (!done[0] && System.nanoTime() - start < 8_000_000_000L) {
             player.update(1 / 60f);
-            assertTrue(player.getPosition() >= lastPos - 1e-9, "the clock never runs backwards");
+            assertTrue(player.getPosition() >= lastPos - 1e-9, "the clock never runs backwards: " + lastPos + " then " + player.getPosition());
             lastPos = player.getPosition();
             Thread.sleep(5);
         }

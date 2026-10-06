@@ -219,4 +219,24 @@ class VideoPlayerTest {
         var e = assertThrows(UnsupportedOperationException.class, () -> VideoPlayer.open(f));
         assertTrue(e.getMessage().contains("H264"), e.getMessage());
     }
+
+    @Test
+    void playsAndSeeksMp4FilesLikeAvi() throws Exception {
+        for (Mp4Builder.Layout layout : Mp4Builder.Layout.values()) {
+            Mp4Builder b = new Mp4Builder(32, 32, 10, 20);
+            b.layout = layout;
+            b.keyEvery = 5;
+            b.audio = false; // tests never play sound on the real speakers
+            VideoPlayer p = VideoPlayer.open(b.write(dir, layout + ".mp4"));
+            players.add(p);
+            assertEquals("MP4", p.getInfo().container());
+            assertTrue(pump(p, p::isFinished), layout + " plays to the end");
+            assertShows(p, 19);
+            for (int target : new int[]{12, 3, 17}) {
+                p.seek(target / 10.0 + 0.03);
+                assertTrue(pump(p, () -> Math.round(p.getFrameTime() * 10) == target), layout + " seek to " + target);
+                assertShows(p, target);
+            }
+        }
+    }
 }
