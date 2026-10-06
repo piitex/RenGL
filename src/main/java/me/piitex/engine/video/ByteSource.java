@@ -113,6 +113,24 @@ final class ByteSource implements AutoCloseable {
         return scratch(8).getLong();
     }
 
+    int be16() throws IOException {
+        readFully(scratch, 0, 2);
+        return ((scratch[0] & 0xFF) << 8) | (scratch[1] & 0xFF);
+    }
+
+    int be32s() throws IOException {
+        readFully(scratch, 0, 4);
+        return ((scratch[0] & 0xFF) << 24) | ((scratch[1] & 0xFF) << 16) | ((scratch[2] & 0xFF) << 8) | (scratch[3] & 0xFF);
+    }
+
+    long be32() throws IOException {
+        return be32s() & 0xFFFFFFFFL;
+    }
+
+    long be64() throws IOException {
+        return (be32() << 32) | be32();
+    }
+
     /**
      * Four bytes as text, for chunk ids such as {@code "RIFF"} or {@code "00dc"}.
      */

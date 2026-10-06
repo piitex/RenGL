@@ -289,6 +289,12 @@ public final class Playback {
     public double getPlayedSeconds() {
         synchronized (Audio.LOCK) {
             if (finished || stream == null) return 0;
+            if (alGetSourcei(source, AL_SOURCE_STATE) == AL_STOPPED) {
+                // Every queued buffer has been played, but the device reports offset 0 until they are unqueued.
+                long all = processedFrames;
+                for (int frames : queuedFrames) all += frames;
+                return all / (double) stream.sampleRate();
+            }
             int inBuffer = alGetSourcei(source, AL_SAMPLE_OFFSET);
             return (processedFrames + inBuffer) / (double) stream.sampleRate();
         }

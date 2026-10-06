@@ -26,11 +26,13 @@ The container and codec are recognised from the file's bytes, not its extension.
 
 | | Supported |
 |---|---|
-| Container | **AVI**, including files over 4 GB (OpenDML, split into `RIFF AVIX` segments) |
-| Video | **Motion JPEG** (`MJPG`), **uncompressed RGB** (24 and 32-bit, with alpha) |
-| Audio | **PCM**: 8, 16, 24 and 32-bit integer, or 32-bit float. Mono and stereo; extra channels are dropped |
+| Container | **AVI**, including files over 4 GB (OpenDML, split into `RIFF AVIX` segments); **MP4 / MOV**, plain or fragmented, with the index at either end of the file |
+| Video | **Motion JPEG** (`MJPG` in AVI, `jpeg` in MP4), **uncompressed RGB** (AVI only; 24 and 32-bit, with alpha) |
+| Audio | **PCM**: 8, 16, 24 and 32-bit integer, or 32-bit float (in MP4: `sowt`, `twos`, `in24`, `in32`, `fl32`, `ipcm`). Mono and stereo; extra channels are dropped |
 
-An unsupported file fails to open with an `UnsupportedOperationException` that names the codec.
+An unsupported file fails to open with an `UnsupportedOperationException` that names the codec and gives an FFmpeg
+command that converts the file. An MP4 is read, but a typical one holds H.264 video, which is not decoded yet, so
+it fails with that message.
 
 Both video formats store every frame whole, which is what makes them quick to seek and cheap to decode, and why
 they suit pre-rendered animation: render an image sequence, encode it as Motion JPEG (high quality) or uncompressed
@@ -42,7 +44,7 @@ without sound.
 Encode a file for RenGL with FFmpeg:
 
 ```bash
-ffmpeg -i in.mov -c:v mjpeg -q:v 2 -c:a pcm_s16le out.avi        # Motion JPEG, near lossless
+ffmpeg -i in.mov -c:v mjpeg -q:v 2 -c:a pcm_s16le out.avi        # Motion JPEG, near lossless (out.mp4 also works)
 ffmpeg -i frames/%04d.png -r 30 -c:v rawvideo -pix_fmt bgr24 -c:a pcm_s16le out.avi  # uncompressed
 ```
 
