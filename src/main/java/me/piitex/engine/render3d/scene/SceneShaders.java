@@ -78,7 +78,8 @@ final class SceneShaders {
     private static final String SKIN_INPUTS = """
             layout(location = 14) in vec4 aJoints;
             layout(location = 15) in vec4 aWeights;
-            layout(set = 0, binding = 1) uniform Joints { mat4 joints[256]; };
+            layout(set = 0, binding = 1) uniform Joints { mat4 joints[""" + Skin.MAX_JOINTS + """
+            ]; };
             """;
 
     static final String FRAME_BLOCK = """
@@ -151,7 +152,7 @@ final class SceneShaders {
                 """;
     }
 
-    static final int ENV_NONE = 0, ENV_GRADIENT = 1, ENV_CUBE = 2, ENV_EQUIRECT = 3;
+    static final int ENV_NONE = 0, ENV_GRADIENT = 1, ENV_CUBE = 2, ENV_EQUIRECT = 3, ENV_EQUIRECT_HDR = 4;
 
     /**
      * The scene's fragment shader. {@code env} says what lights the scene from the sky: nothing, or a gradient, cube or
@@ -185,6 +186,18 @@ final class SceneShaders {
                 .replace("//@FALLOFF_CASES", falloffCases);
     }
 
+    /**
+     * The tone mappers: 0 cuts off at white, 1 is c / (1 + c), 2 a fit of the ACES film curve (Narkowicz), which expects
+     * the exposure already in.
+     */
+    private static final String TONE_MAP = """
+            vec3 toneMap(vec3 c, int mode) {
+                if (mode == 1) return c / (1.0 + c);
+                if (mode == 2) return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
+                return c;
+            }
+            """;
+
     private static final String FRAGMENT_BODY = """
             layout(location = 0) in vec3 vWorldPos;
             layout(location = 1) in vec3 vNormal;
@@ -203,12 +216,13 @@ final class SceneShaders {
             layout(set = 0, binding = 7) uniform sampler2D shadowMap;
             #if ENV_KIND == 2
             layout(set = 0, binding = 8) uniform samplerCube envMap;
-            #elif ENV_KIND == 3
+            #elif ENV_KIND >= 3
             layout(set = 0, binding = 8) uniform sampler2D envMap;
             #endif
             layout(location = 0) out vec4 outColor;
 
             const float PI = 3.14159265;
+            """ + TONE_MAP + """
 
             #if ENV_KIND != 0
             // The light the sky gives a surface facing n, divided by pi: spherical harmonics worked out on the CPU.
@@ -230,7 +244,11 @@ final class SceneShaders {
                 vec2 uv = vec2(atan(r.x, -r.z) / (2.0 * PI) + 0.5, acos(clamp(r.y, -1.0, 1.0)) / PI);
                 vec3 c = textureLod(envMap, uv, roughness * envParams.z).rgb;
             #endif
+            #if ENV_KIND == 4
+                return c * envParams.w * envParams.x; // already linear light
+            #else
                 return pow(c, vec3(2.2)) * envParams.w * envParams.x;
+            #endif
             }
 
             // How much of a surface's reflection the sky supplies: a fit to the split-sum integral.
@@ -480,15 +498,7 @@ final class SceneShaders {
                     float amount = 1.0 - exp(-k * k);
                     lit = vExtra2.y > 0.5 ? lit * (1.0 - amount) : mix(lit, fog.rgb, amount);
                 }
-                lit *= fogParams.y;
-                int toneMapping = int(fogParams.z + 0.5);
-                if (toneMapping == 1) {
-                    lit = lit / (1.0 + lit);
-                } else if (toneMapping == 2) {
-                    // A fit of the ACES film curve (Narkowicz), which expects the exposure already in.
-                    lit = clamp((lit * (2.51 * lit + 0.03)) / (lit * (2.43 * lit + 0.59) + 0.14), 0.0, 1.0);
-                }
-                outColor = vec4(pow(lit, vec3(1.0 / 2.2)), alpha);
+                outColor = vec4(pow(toneMap(lit * fogParams.y, int(fogParams.z + 0.5)), vec3(1.0 / 2.2)), alpha);
             }
             """;
 
@@ -581,6 +591,21 @@ final class SceneShaders {
             layout(set = 0, binding = 1) uniform samplerCube skyTexture;
             void main() {
                 outColor = vec4(texture(skyTexture, normalize(vDir)).rgb * top.a, 1.0);
+            }
+            """;
+
+    /**
+     * A sky of linear light with no upper limit: it takes the scene's exposure and tone mapping (the sky block's horizon
+     * holds them: x the exposure, y the tone mapper) and the sky's brightness (top.a), and is gamma encoded at the end.
+     */
+    static final String SKY_EQUIRECT_HDR_FRAGMENT = "#version 450\n" + SKY_BLOCK + """
+            layout(set = 0, binding = 1) uniform sampler2D skyTexture;
+            """ + TONE_MAP + """
+            void main() {
+                vec3 d = normalize(vDir);
+                vec2 uv = vec2(atan(d.x, -d.z) / (2.0 * 3.14159265) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / 3.14159265);
+                vec3 c = textureLod(skyTexture, uv, 0.0).rgb * top.a * horizon.x;
+                outColor = vec4(pow(toneMap(c, int(horizon.y + 0.5)), vec3(1.0 / 2.2)), 1.0);
             }
             """;
 

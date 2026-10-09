@@ -72,7 +72,7 @@ elbow.setRotation(Quat.fromAxisAngle(new Vec3(0, 0, 1), 0.8f));            // th
   it was rotated).
 - A mesh drawn with a skin **ignores its own node's transform**: the joints place it, as in glTF. Move the skeleton
   instead, or give the skeleton a parent node and move that.
-- `Skin.MAX_JOINTS` (256) is the most joints in one skin; a model with a bigger skin is drawn without skinning, with a log
+- `Skin.MAX_JOINTS` (512) is the most joints in one skin; a model with a bigger skin is drawn without skinning, with a log
   line.
 - A vertex follows at most four joints. Files with more are reduced to the four strongest, which is what nearly every
   engine does.

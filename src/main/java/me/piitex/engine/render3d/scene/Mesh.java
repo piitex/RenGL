@@ -26,6 +26,7 @@ public final class Mesh {
     private int[] skinJoints;
     private float[] skinWeights;
     private float[] uvs2;
+    private final boolean lines;
     private List<MorphTarget> morphTargets = List.of();
     private float[] morphDefaults = new float[0];
     private volatile Bvh bvh;
@@ -37,16 +38,34 @@ public final class Mesh {
      * @param indices   three per triangle
      */
     public Mesh(float[] positions, float[] normals, float[] uvs, int[] indices) {
+        this(positions, normals, uvs, indices, false);
+    }
+
+    /**
+     * Line segments instead of triangles, one pixel wide: an outline, a path, a grid. Each pair of indices is a segment.
+     * A node with a line mesh is drawn unlit in its material's colour (give it {@code setUnlit(true)}), casts no shadow
+     * and can't be picked.
+     *
+     * @param positions x, y, z per vertex
+     * @param segments  two indices per line segment
+     */
+    public static Mesh lines(float[] positions, int[] segments) {
+        return new Mesh(positions, null, null, segments, true);
+    }
+
+    private Mesh(float[] positions, float[] normals, float[] uvs, int[] indices, boolean lines) {
+        this.lines = lines;
         if (positions.length == 0 || positions.length % 3 != 0) throw new IllegalArgumentException("positions must hold x, y, z per vertex");
         int count = positions.length / 3;
         if (normals != null && normals.length != positions.length) throw new IllegalArgumentException("normals must match positions");
         if (uvs != null && uvs.length != count * 2) throw new IllegalArgumentException("uvs must hold u, v per vertex");
-        if (indices.length == 0 || indices.length % 3 != 0) throw new IllegalArgumentException("indices must hold three per triangle");
+        int per = lines ? 2 : 3;
+        if (indices.length == 0 || indices.length % per != 0) throw new IllegalArgumentException("indices must hold " + (lines ? "two per line segment" : "three per triangle"));
         for (int index : indices) {
             if (index < 0 || index >= count) throw new IllegalArgumentException("index " + index + " is outside the " + count + " vertices");
         }
 
-        float[] n = normals != null ? normals : smoothNormals(positions, indices);
+        float[] n = normals != null ? normals : lines ? new float[positions.length] : smoothNormals(positions, indices);
         vertices = new float[count * FLOATS_PER_VERTEX];
         float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, minZ = Float.MAX_VALUE;
         float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
@@ -101,6 +120,13 @@ public final class Mesh {
 
     public boolean isSkinned() {
         return skinJoints != null;
+    }
+
+    /**
+     * Whether the mesh is {@linkplain #lines line segments} rather than triangles.
+     */
+    public boolean isLines() {
+        return lines;
     }
 
     /**

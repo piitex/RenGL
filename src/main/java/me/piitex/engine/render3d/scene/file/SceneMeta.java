@@ -269,9 +269,16 @@ final class SceneMeta {
             }
             case GRADIENT -> box = Skybox.gradient(info.top, info.horizon, info.bottom);
             case PANORAMA -> {
-                TextureData picture = Textures.load(info.panorama, base);
-                if (picture != null) box = Skybox.equirect(picture);
-                else info.problem = info.panorama.isEmpty() ? "No picture chosen" : "Can't read " + info.panorama;
+                if (info.panorama.toLowerCase(java.util.Locale.ROOT).endsWith(".hdr")) {
+                    // A picture of light with no upper limit: the sky of a sun that really lights the scene.
+                    var hdr = Textures.loadHdr(info.panorama, base);
+                    if (hdr != null) box = Skybox.equirectHdr(hdr);
+                    else info.problem = "Can't read " + info.panorama;
+                } else {
+                    TextureData picture = Textures.load(info.panorama, base);
+                    if (picture != null) box = Skybox.equirect(picture);
+                    else info.problem = info.panorama.isEmpty() ? "No picture chosen" : "Can't read " + info.panorama;
+                }
             }
             case CUBE -> {
                 TextureData[] faces = new TextureData[6];

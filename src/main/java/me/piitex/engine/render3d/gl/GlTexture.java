@@ -45,6 +45,30 @@ final class GlTexture implements GpuTexture {
     }
 
     /**
+     * A 2D texture of 16-bit floats, with repeat wrapping.
+     */
+    GlTexture(int width, int height, java.nio.FloatBuffer rgba, boolean mipmaps, float anisotropy) {
+        if (rgba.remaining() < width * height * 4) throw new IllegalArgumentException("Not enough pixel data");
+        this.width = width;
+        this.height = height;
+        this.target = GL_TEXTURE_2D;
+        this.owned = true;
+        this.mipLevels = mipmaps ? 32 - Integer.numberOfLeadingZeros(Math.max(width, height)) : 1;
+        id = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, id);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        glTexImage2D(GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL30C.GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, rgba);
+        if (mipmaps) glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mipmaps ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        if (mipmaps) applyAnisotropy(GL_TEXTURE_2D, anisotropy);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    /**
      * A cube texture with edge clamping.
      */
     GlTexture(int size, ByteBuffer[] faces, boolean mipmaps, float anisotropy) {

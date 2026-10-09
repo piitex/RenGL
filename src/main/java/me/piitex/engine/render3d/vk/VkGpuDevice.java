@@ -38,6 +38,7 @@ import static org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1;
 public final class VkGpuDevice implements GpuDevice {
     static final int FRAMES = 2;
     static final int COLOR_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
+    static final int HDR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
     /**
      * Sets in each descriptor pool. A frame that needs more gets another pool, so this is a step, not a ceiling.
      */
@@ -74,6 +75,10 @@ public final class VkGpuDevice implements GpuDevice {
      * Whether the colour format can be shrunk by {@code vkCmdBlitImage}, which is how mipmaps are made.
      */
     final boolean canBlitColor;
+    /**
+     * The same for the 16-bit float colour format of HDR textures.
+     */
+    final boolean canBlitHdr;
 
     private final String name;
     private final LongSupplier frames;
@@ -112,6 +117,9 @@ public final class VkGpuDevice implements GpuDevice {
             int blitFeatures = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT
                     | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
             canBlitColor = (colorProperties.optimalTilingFeatures() & blitFeatures) == blitFeatures;
+            VkFormatProperties hdrProperties = VkFormatProperties.calloc(stack);
+            vkGetPhysicalDeviceFormatProperties(physical, HDR_FORMAT, hdrProperties);
+            canBlitHdr = (hdrProperties.optimalTilingFeatures() & blitFeatures) == blitFeatures;
             VkPhysicalDeviceProperties properties = VkPhysicalDeviceProperties.calloc(stack);
             vkGetPhysicalDeviceProperties(physical, properties);
             int supported = properties.limits().framebufferColorSampleCounts() & properties.limits().framebufferDepthSampleCounts();
@@ -273,6 +281,20 @@ public final class VkGpuDevice implements GpuDevice {
     @Override
     public GpuTexture createTexture(int width, int height, ByteBuffer rgba, boolean mipmaps) {
         return new VkTex(this, width, height, 1, new ByteBuffer[]{rgba}, mipmaps && canBlitColor);
+    }
+
+    @Override
+    public GpuTexture createHdrTexture(int width, int height, java.nio.FloatBuffer rgba, boolean mipmaps) {
+        int count = width * height * 4;
+        if (rgba.remaining() < count) throw new IllegalArgumentException("Not enough pixel data");
+        ByteBuffer halves = org.lwjgl.system.MemoryUtil.memAlloc(count * 2).order(java.nio.ByteOrder.nativeOrder());
+        try {
+            for (int i = 0; i < count; i++) halves.putShort(Float.floatToFloat16(Math.min(rgba.get(rgba.position() + i), 65504f)));
+            halves.flip();
+            return new VkTex(this, width, height, 1, new ByteBuffer[]{halves}, mipmaps && canBlitHdr, HDR_FORMAT, 8);
+        } finally {
+            org.lwjgl.system.MemoryUtil.memFree(halves);
+        }
     }
 
     @Override

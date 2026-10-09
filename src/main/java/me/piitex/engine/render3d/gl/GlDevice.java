@@ -85,6 +85,11 @@ public final class GlDevice implements GpuDevice {
     }
 
     @Override
+    public GpuTexture createHdrTexture(int width, int height, java.nio.FloatBuffer rgba, boolean mipmaps) {
+        return new GlTexture(width, height, rgba, mipmaps, anisotropy);
+    }
+
+    @Override
     public GpuTexture createCubeTexture(int size, ByteBuffer[] faces, boolean mipmaps) {
         return new GlTexture(size, faces, mipmaps, anisotropy);
     }

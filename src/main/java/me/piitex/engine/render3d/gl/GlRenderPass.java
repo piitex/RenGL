@@ -150,17 +150,21 @@ final class GlRenderPass implements RenderPass {
         }
     }
 
+    private int mode() {
+        return pipeline.desc.topology() == PipelineDesc.Topology.LINES ? GL_LINES : GL_TRIANGLES;
+    }
+
     @Override
     public void draw(int vertexCount, int instanceCount, int firstInstance) {
         applyAttributes(firstInstance);
-        glDrawArraysInstanced(GL_TRIANGLES, 0, vertexCount, instanceCount);
+        glDrawArraysInstanced(mode(), 0, vertexCount, instanceCount);
     }
 
     @Override
     public void drawIndexed(int indexCount, int instanceCount, int firstInstance) {
         if (indexBuffer == null) throw new IllegalStateException("Bind an index buffer before drawing");
         applyAttributes(firstInstance);
-        glDrawElementsInstanced(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0, instanceCount);
+        glDrawElementsInstanced(mode(), indexCount, GL_UNSIGNED_INT, 0, instanceCount);
     }
 
     @Override

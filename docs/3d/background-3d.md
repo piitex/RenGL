@@ -94,7 +94,7 @@ Run it with `-XstartOnFirstThread`, and `-Drengl.demo.api=VULKAN` or `OPENGL` to
 - **It re-renders a full-window picture every frame,** an offscreen target plus a GPU copy. Lower
   `setResolutionScale`, `setEnabled(false)` while a full-screen menu covers it, or `setContinuous(false)` if the scene
   only changes when you say so.
-- **Window backgrounds replace each other.** `window.setBackground(...)` holds one `Background`, so setting a
-  `Background3D` removes an effect such as a [`ConstellationBackground`](../styling/backgrounds.md) you set before.
-- **Untested as an element background.** `Background` can also be set on an `Element`, but a `Background3D`'s input
-  assumes its area is the window.
+- **Window backgrounds replace each other.** `window.setBackground(...)` holds one `Background`; put several in a
+  `LayeredBackground` to keep an effect such as a [`ConstellationBackground`](../styling/backgrounds.md) with the 3D. A
+  replaced or removed background frees its GPU objects by itself, and so does a `Viewport3D` taken out of its container.
+- **As an element background** its input is limited to that element's box, in the element's coordinates.

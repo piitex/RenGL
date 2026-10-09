@@ -105,8 +105,10 @@ public final class Model {
         // From the path, not from memory, so Assimp's own file access finds the .mtl, .bin and texture files beside it.
         AIScene scene = aiImportFile(file.toAbsolutePath().toString(), IMPORT_FLAGS);
         String lower = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        List<GltfTextureInfo.Material> placing = lower.endsWith(".gltf") || lower.endsWith(".glb") ? GltfTextureInfo.read(Files.readAllBytes(file)) : List.of();
-        return convert(scene, file.getFileName().toString(), file.toAbsolutePath().getParent(), placing);
+        boolean gltf = lower.endsWith(".gltf") || lower.endsWith(".glb");
+        byte[] bytes = gltf ? Files.readAllBytes(file) : null;
+        return convert(scene, file.getFileName().toString(), file.toAbsolutePath().getParent(),
+                gltf ? GltfTextureInfo.read(bytes) : List.of(), gltf ? GltfAnimations.read(bytes, file.toAbsolutePath().getParent()) : List.of());
     }
 
     /**
@@ -126,7 +128,8 @@ public final class Model {
             MemoryUtil.memFree(buffer);
         }
         String lower = name.toLowerCase(Locale.ROOT);
-        return convert(scene, name, null, lower.endsWith(".gltf") || lower.endsWith(".glb") ? GltfTextureInfo.read(data) : List.of());
+        boolean gltf = lower.endsWith(".gltf") || lower.endsWith(".glb");
+        return convert(scene, name, null, gltf ? GltfTextureInfo.read(data) : List.of(), gltf ? GltfAnimations.read(data, null) : List.of());
     }
 
     private static final int IMPORT_FLAGS = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenSmoothNormals
@@ -134,13 +137,14 @@ public final class Model {
             // Assimp hands out OpenGL-style texture coordinates for every format; undo that for top-first images.
             | aiProcess_FlipUVs;
 
-    private static Model convert(AIScene scene, String name, Path directory, List<GltfTextureInfo.Material> placing) throws IOException {
+    private static Model convert(AIScene scene, String name, Path directory, List<GltfTextureInfo.Material> placing,
+                                 List<List<GltfAnimations.Channel>> exact) throws IOException {
         if (scene == null || scene.mRootNode() == null) {
             throw new IOException("Could not load the model " + name + ": " + aiGetErrorString());
         }
         String lower = name.toLowerCase(Locale.ROOT);
         try {
-            return new Converter(scene, name, directory, lower.endsWith(".gltf") || lower.endsWith(".glb"), placing).convert();
+            return new Converter(scene, name, directory, lower.endsWith(".gltf") || lower.endsWith(".glb"), placing, exact).convert();
         } finally {
             aiReleaseImport(scene);
         }
@@ -152,6 +156,7 @@ public final class Model {
         final Path directory;
         final boolean linearColors;
         final List<GltfTextureInfo.Material> placing;
+        final List<List<GltfAnimations.Channel>> exactChannels;
         final Map<String, TextureData> textures = new HashMap<>();
         final List<Mesh> meshes = new ArrayList<>();
         final List<Material> materials = new ArrayList<>();
@@ -161,8 +166,10 @@ public final class Model {
         /** Every node that got a mesh, with the number of the Assimp mesh, to attach skins once all nodes exist. */
         final List<Object[]> meshNodes = new ArrayList<>();
 
-        Converter(AIScene scene, String name, Path directory, boolean linearColors, List<GltfTextureInfo.Material> placing) {
+        Converter(AIScene scene, String name, Path directory, boolean linearColors, List<GltfTextureInfo.Material> placing,
+                  List<List<GltfAnimations.Channel>> exactChannels) {
             this.placing = placing;
+            this.exactChannels = exactChannels;
             this.scene = scene;
             this.name = name;
             this.directory = directory;
@@ -297,10 +304,35 @@ public final class Model {
                     }
                     channels.add(new AnimationClip.Channel(node, AnimationClip.Path.WEIGHTS, times, values, AnimationClip.Interpolation.LINEAR));
                 }
+                if (a < exactChannels.size()) applyExact(channels, exactChannels.get(a));
                 String clipName = source.mName().dataString();
                 clips.add(new AnimationClip(clipName.isEmpty() ? "animation" + a : clipName, (float) (source.mDuration() / ticks), channels));
             }
             return clips;
+        }
+
+        /**
+         * Puts the glTF file's own step and cubic spline channels in place of what Assimp made for the same node and
+         * property (or beside it, if it made none).
+         */
+        void applyExact(List<AnimationClip.Channel> channels, List<GltfAnimations.Channel> exact) {
+            for (GltfAnimations.Channel e : exact) {
+                Node3D node = nodesByName.get(e.node());
+                if (node == null) continue;
+                AnimationClip.Channel made = e.interpolation() == AnimationClip.Interpolation.CUBICSPLINE
+                        ? new AnimationClip.Channel(node, e.path(), e.times(), e.values(), e.in(), e.out())
+                        : new AnimationClip.Channel(node, e.path(), e.times(), e.values(), e.interpolation());
+                boolean replaced = false;
+                for (int i = 0; i < channels.size(); i++) {
+                    AnimationClip.Channel old = channels.get(i);
+                    if (old.target() == node && old.path() == e.path()) {
+                        channels.set(i, made);
+                        replaced = true;
+                        break;
+                    }
+                }
+                if (!replaced) channels.add(made);
+            }
         }
 
         /**

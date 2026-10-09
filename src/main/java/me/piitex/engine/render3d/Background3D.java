@@ -22,7 +22,9 @@ import org.lwjgl.glfw.GLFW;
  * <p>
  * <b>Input.</b> A background has no place in the UI's hit testing, so it is fed from the window's game
  * {@link Input}: the clicks, wheel turns and keys that the interface left alone. A press on a button or a text field
- * never reaches it, and a press on empty space, or on a panel that has no click listener, does. A
+ * never reaches it, and a press on empty space, or on a panel that has no click listener, does. (A container with a
+ * click listener, or a draggable or scrollable element, takes the press first; that is the interface having priority,
+ * and not something a background can opt out of.) A
  * {@link Viewport3D.InputListener} (set with {@link #setInputListener}, or the content itself if it implements one,
  * as {@code OrbitControls} does) gets:
  * <ul>
@@ -36,6 +38,16 @@ import org.lwjgl.glfw.GLFW;
  *   <li>{@code focusChanged}: the background counts as focused while the window has the OS focus and no UI element
  *   holds the keyboard, so it follows the same rule as the keys and the typed text it receives.</li>
  * </ul>
+ * <p>
+ * <b>As an element's background.</b> {@link me.piitex.engine.ui.Element#setBackground} takes it too: the 3D then fills that
+ * element (a panel with a spinning model behind its text) and the input is limited to that element's box: a press, the
+ * mouse moving and the wheel only count over it (a drag that began there goes on wherever the mouse is), and the
+ * coordinates the listener gets are relative to its corner. Keys and typed text follow the window's focus, as for a
+ * whole-window background.
+ * <p>
+ * Backgrounds replace each other, one to a window or element: to keep an effect such as a constellation behind the 3D
+ * (or in front of it), put both in a {@link me.piitex.engine.ui.background.LayeredBackground}. A background that is
+ * replaced or removed frees its GPU objects by itself, after that frame.
  * <p>
  * Threading: everything here runs on the render thread, like the engine's other backgrounds.
  */
@@ -171,6 +183,8 @@ public class Background3D implements Background {
         Input in = window.getInput();
         float mouseX = in.getMouseX() - x, mouseY = in.getMouseY() - y;
 
+        // Over the background's own box: the whole window, or the element it is the background of.
+        boolean over = in.isMouseInWindow() && mouseX >= 0f && mouseY >= 0f && mouseX < width && mouseY < height;
         boolean down = in.isMouseDown(GLFW.GLFW_MOUSE_BUTTON_LEFT);
         boolean fed = false;
         boolean focused = window.isFocused() && window.getFocusedElement() == null;
@@ -184,7 +198,7 @@ public class Background3D implements Background {
             dragging = false;
             listener.dragEnded(mouseX, mouseY);
             if (!pressMoved && Math.hypot(mouseX - pressX, mouseY - pressY) <= Viewport3D.CLICK_SLOP) listener.clicked(mouseX, mouseY);
-        } else if (!dragging && in.isMouseJustPressed(GLFW.GLFW_MOUSE_BUTTON_LEFT) && down) {
+        } else if (!dragging && over && in.isMouseJustPressed(GLFW.GLFW_MOUSE_BUTTON_LEFT) && down) {
             fed = true;
             dragging = true;
             pressX = mouseX;
@@ -199,19 +213,18 @@ public class Background3D implements Background {
             if (dragging) {
                 if (Math.hypot(mouseX - pressX, mouseY - pressY) > Viewport3D.CLICK_SLOP) pressMoved = true;
                 listener.dragged(mouseX, mouseY, dx, dy);
-            } else if (in.isMouseInWindow()) {
+            } else if (over) {
                 listener.pointerMoved(mouseX, mouseY);
             }
         }
-        boolean inside = in.isMouseInWindow();
-        if (wasInside && !inside && !dragging) {
+        if (wasInside && !over && !dragging) {
             fed = true;
             listener.pointerExited();
         }
-        wasInside = inside;
+        if (!dragging) wasInside = over; // a drag that ends outside the box still owes the exit
 
         float scrollX = in.getScrollX(), scrollY = in.getScrollY();
-        if (scrollX != 0f || scrollY != 0f) {
+        if (over && (scrollX != 0f || scrollY != 0f)) {
             fed = true;
             listener.scrolled(scrollX, scrollY, mouseX, mouseY);
         }
@@ -248,5 +261,14 @@ public class Background3D implements Background {
      */
     public void close() {
         view.close();
+    }
+
+    /**
+     * Frees the GPU objects once the frame that took the background away has finished: it was replaced by another or
+     * removed with null. A background that is put back later starts afresh.
+     */
+    @Override
+    public void onDetached() {
+        view.closeAfterFrame();
     }
 }

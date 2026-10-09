@@ -29,7 +29,14 @@ final class VkTex implements GpuTexture {
      * An uploaded texture: one layer for an ordinary one, six for a cube map. {@code data[i]} is layer {@code i}.
      */
     VkTex(VkGpuDevice device, int width, int height, int layers, ByteBuffer[] data, boolean mipmaps) {
-        long bytes = (long) width * height * 4;
+        this(device, width, height, layers, data, mipmaps, VkGpuDevice.COLOR_FORMAT, 4);
+    }
+
+    /**
+     * The same in another colour format, {@code pixelBytes} to a pixel.
+     */
+    VkTex(VkGpuDevice device, int width, int height, int layers, ByteBuffer[] data, boolean mipmaps, int format, int pixelBytes) {
+        long bytes = (long) width * height * pixelBytes;
         for (ByteBuffer layer : data) {
             if (layer.remaining() < bytes) throw new IllegalArgumentException("Not enough pixel data");
         }
@@ -44,7 +51,7 @@ final class VkTex implements GpuTexture {
         // Mipmaps are made by shrinking each level into the next, so every level is both a source and a destination.
         int usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
                 | (mipLevels > 1 ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0);
-        image = device.createImage(width, height, VkGpuDevice.COLOR_FORMAT, usage, mipLevels, VK_SAMPLE_COUNT_1_BIT, layers);
+        image = device.createImage(width, height, format, usage, mipLevels, VK_SAMPLE_COUNT_1_BIT, layers);
         VkGpuDevice.Alloc staging = device.createMappedBuffer(bytes * layers, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
         for (int layer = 0; layer < layers; layer++) {
             device.upload(staging, bytes * layer, data[layer].duplicate().limit(data[layer].position() + (int) bytes));
@@ -67,7 +74,7 @@ final class VkTex implements GpuTexture {
             if (mipLevels > 1) generateMipmaps(cmd);
             else toShaderRead(cmd, 0, 1);
         }, () -> vmaDestroyBuffer(device.allocator, staging.handle(), staging.allocation()));
-        view = device.createImageView(image.handle(), VkGpuDevice.COLOR_FORMAT, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels, layers);
+        view = device.createImageView(image.handle(), format, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels, layers);
     }
 
     /**

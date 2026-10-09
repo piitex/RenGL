@@ -34,6 +34,7 @@ final class Environment {
             case GRADIENT -> gradient(sky, sh);
             case CUBE -> cube(sky, sh);
             case EQUIRECT -> equirect(sky, sh);
+            case EQUIRECT_HDR -> equirectHdr(sky, sh);
         }
         // Radiance coefficients to irradiance over pi: the lobe's 1, 2/3 and 1/4 for bands 0, 1 and 2, and each basis
         // function's normalisation constant, which the shader leaves out of its polynomials.
@@ -54,6 +55,7 @@ final class Environment {
             case GRADIENT -> 1;
             case CUBE -> sky.faces[0].width();
             case EQUIRECT -> Math.max(sky.panorama.width(), sky.panorama.height());
+            case EQUIRECT_HDR -> Math.max(sky.hdr.width(), sky.hdr.height());
         };
         return (float) Math.max(0, Math.floor(Math.log(size) / Math.log(2)));
     }
@@ -102,6 +104,50 @@ final class Environment {
                 accumulate(sh, Math.sin(theta) * Math.sin(phi), Math.cos(theta), -Math.sin(theta) * Math.cos(phi), c[0], c[1], c[2], weight);
             }
         }
+    }
+
+    /**
+     * Pixels this much brighter than white (or more) count as this much in the harmonics: nine coefficients can't hold a
+     * sun, and a few thousand times white in one cell would drown the whole sky's light in a bright patch that is far
+     * too wide. The sun still shines in the reflections, which read the picture itself.
+     */
+    private static final float LIGHT_LIMIT = 64f;
+
+    private static void equirectHdr(Skybox sky, double[] sh) {
+        HdrTextureData img = sky.hdr;
+        float[] px = img.pixels();
+        int w = EQUIRECT_WIDTH, h = EQUIRECT_HEIGHT;
+        for (int y = 0; y < h; y++) {
+            double theta = (y + 0.5) / h * Math.PI;
+            double weight = Math.sin(theta) * (Math.PI / h) * (2 * Math.PI / w);
+            for (int x = 0; x < w; x++) {
+                double phi = (x + 0.5) / w * 2 * Math.PI - Math.PI;
+                double[] c = averageHdr(px, img.width(), img.height(), x * img.width() / w, (x + 1) * img.width() / w,
+                        y * img.height() / h, (y + 1) * img.height() / h);
+                accumulate(sh, Math.sin(theta) * Math.sin(phi), Math.cos(theta), -Math.sin(theta) * Math.cos(phi), c[0], c[1], c[2], weight);
+            }
+        }
+    }
+
+    /**
+     * The mean linear colour of a block of float pixels, each limited to {@link #LIGHT_LIMIT}.
+     */
+    private static double[] averageHdr(float[] px, int width, int height, int x0, int x1, int y0, int y1) {
+        x1 = Math.max(x1, x0 + 1);
+        y1 = Math.max(y1, y0 + 1);
+        double r = 0, g = 0, b = 0;
+        int count = 0;
+        for (int y = y0; y < Math.min(y1, height); y++) {
+            for (int x = x0; x < Math.min(x1, width); x++) {
+                int o = (y * width + x) * 4;
+                r += Math.min(px[o], LIGHT_LIMIT);
+                g += Math.min(px[o + 1], LIGHT_LIMIT);
+                b += Math.min(px[o + 2], LIGHT_LIMIT);
+                count++;
+            }
+        }
+        count = Math.max(count, 1);
+        return new double[]{r / count, g / count, b / count};
     }
 
     private static void cube(Skybox sky, double[] sh) {

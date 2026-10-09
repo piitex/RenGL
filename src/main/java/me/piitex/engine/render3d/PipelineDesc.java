@@ -19,15 +19,38 @@ import java.util.Objects;
  *                       for light-like effects (fire, sparks, glows)
  * @param depthWrite     write to the depth buffer; {@code false} still tests against it. Blended geometry usually
  *                       turns this off so transparent pixels don't hide what is drawn behind them later
+ * @param topology       what the indices (or the vertices, for a plain {@code draw}) make: triangles, or lines
  */
 public record PipelineDesc(String vertexSource, String fragmentSource, VertexLayout vertexLayout,
                            boolean depthTest, boolean cullBackFaces, boolean blend, boolean frontClockwise,
-                           List<VertexLayout> extraLayouts, boolean additive, boolean depthWrite) {
+                           List<VertexLayout> extraLayouts, boolean additive, boolean depthWrite, Topology topology) {
+    /**
+     * How a pipeline joins the vertices it is given.
+     */
+    public enum Topology {
+        /**
+         * Three indices (or vertices) make a triangle. The default.
+         */
+        TRIANGLES,
+        /**
+         * Two make a line segment, one pixel wide: the debug outline of a box, a path, a grid. Culling and front faces
+         * mean nothing for lines.
+         */
+        LINES
+    }
+
     public PipelineDesc {
+        topology = topology == null ? Topology.TRIANGLES : topology;
         Objects.requireNonNull(vertexSource);
         Objects.requireNonNull(fragmentSource);
         Objects.requireNonNull(vertexLayout);
         extraLayouts = extraLayouts == null ? List.of() : List.copyOf(extraLayouts);
+    }
+
+    public PipelineDesc(String vertexSource, String fragmentSource, VertexLayout vertexLayout,
+                        boolean depthTest, boolean cullBackFaces, boolean blend, boolean frontClockwise,
+                        List<VertexLayout> extraLayouts, boolean additive, boolean depthWrite) {
+        this(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite, Topology.TRIANGLES);
     }
 
     public PipelineDesc(String vertexSource, String fragmentSource, VertexLayout vertexLayout,
@@ -50,37 +73,44 @@ public record PipelineDesc(String vertexSource, String fragmentSource, VertexLay
         return new PipelineDesc(vertexSource, fragmentSource, layout, true, true, false);
     }
 
+    /**
+     * The same pipeline drawing {@link Topology#LINES lines} (or triangles again).
+     */
+    public PipelineDesc withTopology(Topology topology) {
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite, topology);
+    }
+
     public PipelineDesc withDepthTest(boolean depthTest) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite, topology);
     }
 
     public PipelineDesc withCullBackFaces(boolean cull) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cull, blend, frontClockwise, extraLayouts, additive, depthWrite);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cull, blend, frontClockwise, extraLayouts, additive, depthWrite, topology);
     }
 
     public PipelineDesc withBlend(boolean blend) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite, topology);
     }
 
     /**
      * The same pipeline blending additively; turns blending on too.
      */
     public PipelineDesc withAdditive(boolean additive) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend || additive, frontClockwise, extraLayouts, additive, depthWrite);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend || additive, frontClockwise, extraLayouts, additive, depthWrite, topology);
     }
 
     public PipelineDesc withDepthWrite(boolean depthWrite) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite, topology);
     }
 
     public PipelineDesc withFrontClockwise(boolean frontClockwise) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, extraLayouts, additive, depthWrite, topology);
     }
 
     /**
      * The same pipeline reading further vertex buffers at bindings 1, 2 and so on.
      */
     public PipelineDesc withExtraLayouts(VertexLayout... layouts) {
-        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, List.of(layouts), additive, depthWrite);
+        return new PipelineDesc(vertexSource, fragmentSource, vertexLayout, depthTest, cullBackFaces, blend, frontClockwise, List.of(layouts), additive, depthWrite, topology);
     }
 }

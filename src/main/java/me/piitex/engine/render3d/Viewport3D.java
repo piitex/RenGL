@@ -181,6 +181,7 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     // Render thread
     private Content activeContent;
     private Gpu3D gpu;
+    private long lastDrawnFrame = -1;
     private RenderTarget target;
     /**
      * The picture of the last frame drawn, shown again by frames that don't redraw.
@@ -358,6 +359,7 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     }
 
     private void drawFrame(Renderer renderer, GpuInterop interop, int width, int height) {
+        lastDrawnFrame = interop.frameNumber();
         if (gpu == null) {
             gpu = Gpu3D.of(interop);
             gpu.attach(this);
@@ -439,9 +441,33 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     }
 
     /**
+     * Frees the GPU objects when the viewport is taken out of its container: once the frame that is in progress, or the
+     * next one, has finished, unless it has been drawn again by then (put back in a container). So a viewport that is
+     * removed does not hold its content and its picture until the window closes.
+     */
+    @Override
+    public void onRemoved() {
+        super.onRemoved();
+        closeAfterFrame();
+    }
+
+    /**
+     * Like {@link #close()}, when the frame that is in progress, or the next one, has finished, and not at all if the
+     * viewport is drawn again in the meantime. Safe from any thread.
+     */
+    void closeAfterFrame() {
+        Gpu3D owner = gpu;
+        if (owner == null) return;
+        long asked = owner.interop.frameNumber();
+        owner.interop.afterFrame(() -> {
+            if (gpu == owner && lastDrawnFrame <= asked) close();
+        });
+    }
+
+    /**
      * Frees the viewport's GPU objects: the content (disposed) and the target. The viewport can draw again, which
-     * starts them afresh. Render thread, between frames. This happens by itself when the window closes; call it when
-     * the viewport is removed earlier.
+     * starts them afresh. Render thread, between frames. This happens by itself when the window closes, and when the
+     * viewport is removed from its container (see {@link #onRemoved()}); call it yourself to free them at another time.
      */
     public void close() {
         if (gpu == null) return;

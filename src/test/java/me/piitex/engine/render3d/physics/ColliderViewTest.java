@@ -206,4 +206,45 @@ class ColliderViewTest {
         assertNotNull(texture);
         assertSame(texture, ColliderMeshes.Pattern.SQUARES.texture());
     }
+
+    @Test
+    void outlinesAreRealLinesOfEachShape() {
+        Mesh box = ColliderLines.of(new BoxShape(0.5f, 1f, 2f));
+        assertTrue(box.isLines());
+        assertEquals(24, box.indexCount(), "twelve edges");
+        assertEquals(96 * 2, ColliderLines.of(new SphereShape(0.7f)).indexCount(), "three circles of 32");
+        Mesh capsule = ColliderLines.of(CapsuleShape.ofHeight(0.3f, 2f));
+        assertEquals((2 * 32 + 4 + 4 * 16) * 2, capsule.indexCount(), "two rings, four rods and four half circles");
+        ConvexHullShape pyramid = ConvexHullShape.of(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1));
+        assertEquals(12, ColliderLines.of(pyramid).indexCount(), "a tetrahedron's six edges");
+        MeshShape sheet = new MeshShape(new float[]{0, 0, 0, 4, 0, 0, 0, 0, -4, 4, 0, -4}, new int[]{0, 1, 2, 2, 1, 3});
+        assertEquals(8, ColliderLines.of(sheet).indexCount(), "a flat sheet of two triangles: its four borders, and the shared edge is a seam");
+        assertEquals(102 * 2, ColliderLines.of(new PlaneShape()).indexCount(), "a grid of 51 lines each way");
+        // A box's lines sit just outside it.
+        float[] v = box.vertices();
+        for (int i = 0; i < box.vertexCount(); i++) {
+            float x = v[i * Mesh.FLOATS_PER_VERTEX], y = v[i * Mesh.FLOATS_PER_VERTEX + 1], z = v[i * Mesh.FLOATS_PER_VERTEX + 2];
+            assertTrue(Math.abs(x) > 0.5f && Math.abs(y) > 1f && Math.abs(z) > 2f);
+        }
+    }
+
+    @Test
+    void eachSurfaceCarriesItsOutlineInTheSameColour() {
+        PhysicsWorld world = new PhysicsWorld();
+        RigidBody ball = new RigidBody(BodyType.DYNAMIC).addShape(new SphereShape(0.5f)).setPosition(0, 2, 0);
+        world.add(ball);
+        ColliderView view = new ColliderView(world);
+        Node3D surface = bodies(view).getFirst();
+        assertEquals(1, surface.getChildren().size());
+        Node3D outline = surface.getChildren().getFirst();
+        assertTrue(outline.getMesh().isLines());
+        assertTrue(outline.getMaterial().isUnlit());
+        assertFalse(outline.isPickable());
+        assertEquals(surface.getMaterial().getGreen(), outline.getMaterial().getGreen(), 1e-6f);
+        ball.sleep();
+        world.step(DT);
+        assertEquals(0.58f, outline.getMaterial().getGreen(), 1e-6f, "it follows the state too");
+        view.setVisible(false);
+        assertFalse(view.getNode().isVisible(), "hiding the view hides the lines with the surfaces");
+    }
 }

@@ -13,7 +13,11 @@ import java.util.List;
  * {@link #MAX_JOINTS} joints.
  */
 public final class Skin {
-    public static final int MAX_JOINTS = 256;
+    /**
+     * The most joints in one skin: 512. Each joint is a 64-byte matrix in a uniform block, so a skin takes 32 KB of the 64 KB
+     * the GPUs this layer runs on give a block.
+     */
+    public static final int MAX_JOINTS = 512;
 
     private final List<Node3D> joints;
     private final Mat4[] inverseBind;

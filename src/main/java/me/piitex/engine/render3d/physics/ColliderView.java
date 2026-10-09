@@ -15,7 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Draws what a {@link PhysicsWorld} collides with: each body's shapes as see-through outlines, where they really are,
+ * Draws what a {@link PhysicsWorld} collides with: each body's shapes as faint see-through surfaces with outlines of real
+ * lines, where they really are,
  * which is how to find a collider that doesn't fit its mesh, a body that is asleep when it shouldn't be, or a trigger
  * in the wrong place.
  * <pre>
@@ -48,6 +49,8 @@ public final class ColliderView {
     private final Node3D bodyGroup = new Node3D("Bodies"), contactGroup = new Node3D("Contacts"), jointGroup = new Node3D("Joints");
     private final Map<RigidBody, Entry> entries = new IdentityHashMap<>();
     private final Map<Shape, ColliderMeshes.Built> meshes = new HashMap<>();
+    private final Map<Shape, Mesh> outlines = new HashMap<>();
+    private final Map<State, Material> lineMaterials = new EnumMap<>(State.class);
     private final Map<ColliderMeshes.Pattern, Map<State, Material>> materials = new EnumMap<>(ColliderMeshes.Pattern.class);
     private final List<Node3D> contactMarks = new ArrayList<>(), jointMarks = new ArrayList<>();
     private final Mesh dot = Mesh.sphere(MARKER, 8, 6), stick = Mesh.cube(1f);
@@ -72,6 +75,7 @@ public final class ColliderView {
     private static final class Entry {
         List<BodyShape> shapes;
         final List<Node3D> nodes = new ArrayList<>();
+        final List<Node3D> lines = new ArrayList<>();
         final List<ColliderMeshes.Pattern> patterns = new ArrayList<>();
         State state;
         boolean seen;
@@ -178,7 +182,10 @@ public final class ColliderView {
             State state = stateOf(body);
             if (state != entry.state) {
                 entry.state = state;
-                for (int i = 0; i < entry.nodes.size(); i++) entry.nodes.get(i).setMaterial(material(entry.patterns.get(i), state));
+                for (int i = 0; i < entry.nodes.size(); i++) {
+                    entry.nodes.get(i).setMaterial(material(entry.patterns.get(i), state));
+                    entry.lines.get(i).setMaterial(lineMaterial(state));
+                }
             }
             boolean shown = showStatic || body.getType() != BodyType.STATIC;
             Pose pose = body.interpolatedPose(alpha);
@@ -196,7 +203,10 @@ public final class ColliderView {
                 for (Node3D node : entry.nodes) bodyGroup.remove(node);
                 return true;
             });
-            if (meshes.size() > 2 * Math.max(16, entries.size())) meshes.clear(); // drop the meshes of shapes now gone
+            if (meshes.size() > 2 * Math.max(16, entries.size())) { // drop the meshes of shapes now gone
+                meshes.clear();
+                outlines.clear();
+            }
         }
 
         int used = 0;
@@ -251,12 +261,18 @@ public final class ColliderView {
     private void build(Entry entry, List<BodyShape> shapes) {
         for (Node3D node : entry.nodes) bodyGroup.remove(node);
         entry.nodes.clear();
+        entry.lines.clear();
         entry.patterns.clear();
         entry.shapes = shapes;
         entry.state = null;
         for (BodyShape shape : shapes) {
             ColliderMeshes.Built built = meshes.computeIfAbsent(shape.shape(), ColliderMeshes::of);
             Node3D node = quiet(new Node3D("Collider", built.mesh(), null));
+            // The outline hangs under the surface, so it goes where the surface goes and is shown or hidden with it.
+            Node3D outline = quiet(new Node3D("Outline", outlines.computeIfAbsent(shape.shape(), ColliderLines::of), null));
+            outline.setFrustumCulled(!(shape.shape() instanceof PlaneShape));
+            node.add(outline);
+            entry.lines.add(outline);
             entry.patterns.add(built.pattern());
             node.setFrustumCulled(!(shape.shape() instanceof PlaneShape));
             entry.nodes.add(node);
@@ -267,6 +283,10 @@ public final class ColliderView {
     private Material material(ColliderMeshes.Pattern pattern, State state) {
         return materials.computeIfAbsent(pattern, _ -> new EnumMap<>(State.class)).computeIfAbsent(state, _ ->
                 new Material(pattern.texture()).setColor(state.r, state.g, state.b, state.a).setUnlit(true).setBlend(true).setDoubleSided(true));
+    }
+
+    private Material lineMaterial(State state) {
+        return lineMaterials.computeIfAbsent(state, _ -> new Material().setColor(state.r, state.g, state.b, 1f).setUnlit(true));
     }
 
     private static Material flat(float r, float g, float b) {

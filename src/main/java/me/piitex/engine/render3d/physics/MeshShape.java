@@ -163,6 +163,7 @@ public final class MeshShape implements Shape {
      * {@link #MeshShape(float[], int[], float)}).
      */
     public static MeshShape of(Mesh mesh, float weldDistance) {
+        if (mesh.isLines()) throw new IllegalArgumentException("A mesh of line segments has no surface to collide with");
         float[] v = mesh.vertices();
         float[] positions = new float[mesh.vertexCount() * 3];
         for (int i = 0; i < mesh.vertexCount(); i++) System.arraycopy(v, i * Mesh.FLOATS_PER_VERTEX, positions, i * 3, 3);

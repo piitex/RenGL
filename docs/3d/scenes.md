@@ -172,6 +172,20 @@ Mesh quad = new Mesh(
         new int[]{0, 1, 2,  0, 2, 3});                           // three indices per triangle
 ```
 
+**Lines.** `Mesh.lines(positions, segments)` makes a mesh of line segments, two indices each, drawn one pixel wide: an
+outline, a path, a grid, a debug shape (the [collider view](physics.md#seeing-the-colliders) is made of them).
+
+```java nocompile
+Mesh cross = Mesh.lines(new float[]{-1, 0, 0,  1, 0, 0,  0, -1, 0,  0, 1, 0}, new int[]{0, 1, 2, 3});
+scene.add(new Node3D("cross", cross, new Material(Color.RED).setUnlit(true)));
+```
+
+A node with a line mesh is drawn unlit in its material's colour whatever the material says, casts no shadow, and can't be
+picked or turned into a physics shape. `mesh.isLines()` tells the two kinds apart.
+
+**A second set of texture coordinates** (`setUvs2`) is for a texture laid out apart from the colour texture, usually a
+baked light or occlusion map: give the textures that read it `Material.setTexCoordSet(slot, 1)`.
+
 A mesh can also carry [morph targets](animation.md#morph-targets) (`setMorphTargets`) and [skinning](animation.md#skins)
 (`setSkinning`). Set skinning before the mesh is first drawn, as the scene reads it once when it uploads the mesh; morph
 targets can be added at any time.

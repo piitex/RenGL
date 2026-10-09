@@ -497,8 +497,9 @@ and which joints join them. `Scene3DFile.load` builds the world and gives it to 
 
 ## Seeing the colliders
 
-A **`ColliderView`** draws what the world collides with, as see-through outlines over the scene: the way to find a
-collider that doesn't fit its mesh, a body that sleeps when it shouldn't, or a trigger in the wrong place.
+A **`ColliderView`** draws what the world collides with, as faint see-through surfaces outlined with real lines, where
+they really are: the way to find a collider that doesn't fit its mesh, a body that sleeps when it shouldn't, or a trigger
+in the wrong place.
 
 ```java nocompile
 ColliderView colliders = new ColliderView(world);
@@ -508,8 +509,9 @@ colliders.setShowStatic(false);          // hide the level's own colliders
 ```
 
 The colour says what a body is: green for an awake dynamic body, grey-blue for a sleeping one, blue for kinematic, light
-grey for static, yellow for a trigger and pink for a character. Lines run along each shape's edges and about every metre
-across big faces. Red dots mark where bodies touch, with a short line along the push (`setShowContacts`); orange dots
+grey for static, yellow for a trigger and pink for a character. The outlines are line segments (a [line mesh](scenes.md#mesh), one pixel wide): the twelve edges of a box, three
+circles round a ball, the rings and rods of a capsule, every edge of a hull, the real edges of a mesh (not the seams
+between its flat triangles) and a grid for a plane. Red dots mark where bodies touch, with a short line along the push (`setShowContacts`); orange dots
 mark where joints hold their bodies, with a line between them for a rope or spring and along a hinge's or slider's axis
 (`setShowJoints`). The view follows the world each time it updates, smoothed between steps like the bodies' nodes;
 `refresh()` follows it while the world is paused, and `dispose()` takes it out of the scene. An endless plane is drawn

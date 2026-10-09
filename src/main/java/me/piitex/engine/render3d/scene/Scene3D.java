@@ -84,6 +84,7 @@ public class Scene3D implements Viewport3D.Content {
     private float fogHeightFalloff;
     private ToneMapping toneMapping = ToneMapping.NONE;
     private float exposure = 1f;
+    private float bloom, bloomThreshold = 0.8f, bloomRadius = 1f;
     private final List<AnimationPlayer> animators = new ArrayList<>();
 
     private final Map<GpuDevice, Shared> renderers = new IdentityHashMap<>();
@@ -321,6 +322,51 @@ public class Scene3D implements Viewport3D.Content {
      */
     public Scene3D setExposure(float exposure) {
         this.exposure = Math.max(0f, exposure);
+        return this;
+    }
+
+    public float getBloom() {
+        return bloom;
+    }
+
+    /**
+     * How much light bleeds out of the brightest parts of the picture (0, off, by default): a glow round a lamp, a glint on
+     * metal, the sun in a window. Try 0.3 to 1. Everything brighter than the {@link #setBloomThreshold threshold} glows,
+     * after tone mapping and exposure, so with an ACES tone mapper only real highlights do.
+     * <p>
+     * Bloom draws the scene into a target of its own and then through a few full-screen passes, which costs a few percent of
+     * the frame and two small textures; and the scene is no longer multisampled (the glow needs to read the picture, which
+     * a multisampled one can't be without a resolve step), so edges are rougher: raise the viewport's
+     * {@code setResolutionScale} to 1.5 or 2 to smooth them again.
+     */
+    public Scene3D setBloom(float strength) {
+        this.bloom = Math.max(0f, strength);
+        return this;
+    }
+
+    public float getBloomThreshold() {
+        return bloomThreshold;
+    }
+
+    /**
+     * How bright, as a share of white, a pixel has to be before it glows (0.8 by default; 1 is white, and only things the
+     * tone mapper leaves at full white glow).
+     */
+    public Scene3D setBloomThreshold(float threshold) {
+        this.bloomThreshold = Math.max(0f, threshold);
+        return this;
+    }
+
+    public float getBloomRadius() {
+        return bloomRadius;
+    }
+
+    /**
+     * How far the glow spreads, 1 by default; 2 is about twice as wide, 0.5 half. A wide glow of more than about 3 shows
+     * its taps as faint copies of the light.
+     */
+    public Scene3D setBloomRadius(float radius) {
+        this.bloomRadius = Math.clamp(radius, 0.1f, 8f);
         return this;
     }
 

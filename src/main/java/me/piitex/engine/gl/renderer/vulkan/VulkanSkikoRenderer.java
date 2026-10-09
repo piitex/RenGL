@@ -196,6 +196,7 @@ public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
         canvas = null;
         frameValid = false;
         imageAcquired = false;
+        runFrameTasks();
     }
 
     private void dumpFrame() {
@@ -222,6 +223,7 @@ public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
     public void dispose() {
         vulkan.waitIdle();
         disposed = true;
+        disposedRenderer = true;
         for (Runnable cleanup : disposeListeners) {
             try {
                 cleanup.run();
