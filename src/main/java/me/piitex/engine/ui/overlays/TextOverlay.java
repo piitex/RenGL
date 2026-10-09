@@ -35,6 +35,7 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
     private String text;
     private float fontSize;
     private Overridable<Paint> textColor;
+    private boolean underlineOnHover;
     private Typeface typeface;
 
     private org.jetbrains.skia.Font skiaFont;
@@ -205,6 +206,36 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
      */
     public void setTextColor(Paint textColor) {
         this.textColor.set(textColor);
+    }
+
+    /**
+     * The color the text turns while the mouse is over it, or null (the default) to keep {@link #getTextColor()}.
+     * Shorthand for {@code getStyling().getTextHoverColor()}.
+     */
+    public Paint getHoverColor() {
+        return getStyling().getTextHoverColor();
+    }
+
+    /**
+     * Turns the text this color while the mouse is over it; null goes back to the normal color. With
+     * {@link #setCursorMode} and {@link #onMouseClick} it makes a link or a breadcrumb.
+     */
+    public void setHoverColor(Paint hoverColor) {
+        getStyling().setTextHoverColor(hoverColor);
+    }
+
+    /**
+     * Whether the text is underlined while the mouse is over it.
+     */
+    public boolean isUnderlineOnHover() {
+        return underlineOnHover;
+    }
+
+    /**
+     * Underlines the text while the mouse is over it, in the color the text is drawn in. Off by default.
+     */
+    public void setUnderlineOnHover(boolean underlineOnHover) {
+        this.underlineOnHover = underlineOnHover;
     }
 
     /**
@@ -383,6 +414,11 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
             }
             Paint color = resolveTextColor(textColor.get());
             renderer.drawText(shown, x, y, font, color);
+            if (underlineOnHover && isHovered()) {
+                FontMetricsCompat m = FontMetricsCompat.of(font);
+                float lineY = y - m.getAscent() + Math.max(1f, m.getDescent() / 2f) + 1f;
+                renderer.drawLine(x, lineY, x + font.measureTextWidth(shown), lineY, color, Math.max(1f, font.getSize() / 14f));
+            }
         }
     }
 

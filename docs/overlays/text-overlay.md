@@ -131,6 +131,21 @@ title.setTooltip("Click me");
 
 Hit-testing uses the overlay's computed bounds, so only the area covered by the text is clickable.
 
+### A link or a breadcrumb
+
+`setHoverColor(Paint)` turns the text that color while the mouse is over it, and `setUnderlineOnHover(true)` underlines it
+then, in the color it is drawn in. With a pointer cursor and a click handler that is a link:
+
+```java nocompile
+TextOverlay crumb = new TextOverlay("Documents", 14f, Color.GRAY);
+crumb.setHoverColor(theme.getText());
+crumb.setUnderlineOnHover(true);
+crumb.setCursorMode(CursorMode.POINTER);
+crumb.onMouseClick(e -> openFolder(path));
+```
+
+`setHoverColor(null)` goes back to the normal color. It is shorthand for `getStyling().setTextHoverColor(...)`.
+
 ## Cleanup
 
 ```java
@@ -152,6 +167,8 @@ title.dispose(); // release the native Font when permanently discarding this ove
 | `getMaxWidth()/setMaxWidth(double)` | The widest an overlay that sizes itself may be; longer text is shortened with `…` |
 | `isEllipsize()/setEllipsize(boolean)` | Shorten text wider than a width set with `setWidth` |
 | `isEllipsizeMiddle()/setEllipsizeMiddle(boolean)` | Put the `…` in the middle, keeping both ends |
+| `getHoverColor()/setHoverColor(Paint)` | The color while the mouse is over the text; null is the normal color |
+| `isUnderlineOnHover()/setUnderlineOnHover(boolean)` | Underline the text while the mouse is over it |
 | `render(Renderer)`, `update(float)` | Overridable; `update` also advances an animated text paint |
 | `dispose()` | Releases the native `Font` |
 | Protected | `drawText(Renderer)`, `getOrBuildFont()`, `updateComputedSize()`, `textLimit()`, `fit(String, Font, float)` (used by [`ButtonOverlay`](button-overlay.md)) |
