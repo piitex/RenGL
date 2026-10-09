@@ -88,7 +88,7 @@ the first thread:
 ```
 
 The [demos](src/main/java/me/piitex/examples/demo) are the quickest way to see what it can do. Start with `Demo`, then try
-`GameLoopDemo`, `SpriteDemo`, `ResizableContainerDemo`, `Scene3DDemo`, `PhysicsDemo` or `VideoDemo`.
+`FireworksDemo`, `GameLoopDemo`, `SpriteDemo`, `ResizableContainerDemo`, `Scene3DDemo`, `PhysicsDemo` or `VideoDemo`.
 
 ## Documentation
 
