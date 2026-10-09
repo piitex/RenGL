@@ -2,6 +2,7 @@ package me.piitex.engine.tilemap;
 
 import me.piitex.engine.graphics.Sprite;
 import me.piitex.engine.graphics.TextureRegion;
+import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.math.Circle;
 import me.piitex.engine.math.Polygon;
 import me.piitex.engine.math.Rect;
@@ -45,14 +46,15 @@ public final class MapObject {
     private final float[] points; // polygon and polyline points, from (x, y), before turning
     private final Tile tile;
     private final boolean flipX, flipY;
-    private final String text;
+    private final ObjectText text;
+    private org.jetbrains.skia.Font textFont;
     private final Properties properties;
     private boolean visible;
     private float opacity;
     ObjectLayer layer;
 
     MapObject(int id, String name, String type, Kind kind, float x, float y, float width, float height, float rotation,
-              float[] points, Tile tile, boolean flipX, boolean flipY, String text, boolean visible, float opacity,
+              float[] points, Tile tile, boolean flipX, boolean flipY, ObjectText text, boolean visible, float opacity,
               Properties properties) {
         this.id = id;
         this.name = name == null ? "" : name;
@@ -184,7 +186,57 @@ public final class MapObject {
      * The text of a text object, or null for other kinds.
      */
     public String getText() {
+        return text == null ? null : text.text();
+    }
+
+    /**
+     * The text of a text object along with its font, size, color and alignment, or null for other kinds. Text objects are
+     * drawn with their layer; see {@link ObjectLayer}.
+     */
+    public ObjectText getTextFormat() {
         return text;
+    }
+
+    /**
+     * Draws a text object's text in its box, turned with the object and clipped to its box (when it has a size), moved
+     * by ({@code shiftX}, {@code shiftY}) and in {@code color}.
+     */
+    void drawText(me.piitex.engine.gl.renderer.Renderer renderer, float shiftX, float shiftY, Color color) {
+        if (text == null || text.text().isEmpty()) return;
+        if (textFont == null) {
+            textFont = me.piitex.engine.ui.text.Font.sized(text.pixelSize());
+            textFont.setEmboldened(text.bold());
+            if (text.italic()) textFont.setSkewX(-0.25f);
+        }
+        org.jetbrains.skia.Font font = textFont;
+        float lineHeight = me.piitex.engine.ui.text.TextLayout.lineHeight(font);
+        java.util.List<String> lines = text.wrap() && width > 0f
+                ? me.piitex.engine.ui.text.TextLayout.wrap(text.text(), font, width)
+                : java.util.List.of(text.text().split("\n", -1));
+        boolean sized = width > 0f && height > 0f;
+
+        renderer.pushTransform(getX() + shiftX, getY() + shiftY, rotation, 1f, 1f, 0f, 0f);
+        if (sized) renderer.pushClip(0f, 0f, width, height);
+        float top = height > 0f ? (height - lines.size() * lineHeight) * text.vertical() : 0f;
+        me.piitex.engine.ui.text.TextAlign align = width > 0f ? text.horizontal() : me.piitex.engine.ui.text.TextAlign.LEFT;
+        float anchor = align.fraction() * (width > 0f ? width : 0f);
+        me.piitex.engine.ui.text.FontMetricsCompat metrics = me.piitex.engine.ui.text.FontMetricsCompat.of(font);
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            float y = top + i * lineHeight;
+            if (line.isEmpty()) continue;
+            renderer.drawText(line, anchor, y, font, color, align);
+            if (text.underline() || text.strikeout()) {
+                float lineWidth = font.measureTextWidth(line);
+                float left = anchor - align.fraction() * lineWidth;
+                float thickness = Math.max(1f, font.getSize() / 14f);
+                float baseline = y - metrics.getAscent();
+                if (text.underline()) renderer.drawLine(left, baseline + thickness + 1f, left + lineWidth, baseline + thickness + 1f, color, thickness);
+                if (text.strikeout()) renderer.drawLine(left, baseline - font.getSize() * 0.3f, left + lineWidth, baseline - font.getSize() * 0.3f, color, thickness);
+            }
+        }
+        if (sized) renderer.popClip();
+        renderer.popTransform();
     }
 
     /**

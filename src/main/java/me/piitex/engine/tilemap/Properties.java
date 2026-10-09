@@ -21,8 +21,8 @@ import java.util.Set;
  * {@link IllegalArgumentException} naming the property when a value can't be read as asked, such as a string that
  * isn't a number.
  * <p>
- * Members of a custom class that were left at their default aren't saved by Tiled, so they read as not set, and the
- * getter's default applies. Immutable.
+ * Members of a custom class that were left at their default aren't saved by Tiled, so they read as not set and the
+ * getter's default applies, unless the map was loaded with its {@link TiledProject}, which supplies them. Immutable.
  */
 public final class Properties {
     static final Properties EMPTY = new Properties(Map.of(), null);
@@ -39,6 +39,13 @@ public final class Properties {
     Properties(Map<String, Object> values, TileMap map) {
         this.values = Collections.unmodifiableMap(new LinkedHashMap<>(values));
         this.map = map;
+    }
+
+    /**
+     * The values as stored, for building a class on top of another.
+     */
+    Map<String, Object> raw() {
+        return values;
     }
 
     public boolean has(String name) {

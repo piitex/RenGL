@@ -90,7 +90,7 @@ All five are done.
   dependencies `optional` changes what every consumer's classpath gets and the other projects built on RenGL may rely on
   them. What the engine's source never imports (so these are the candidates): `bgfx, egl, fmod, freetype, harfbuzz, hwloc,
   jawt, jemalloc, ktx, llvm, lmdb, lz4, meshoptimizer, mimalloc, msdfgen, nanovg, nuklear, odbc, opencl, opengles, openxr,
-  par, renderdoc, rpmalloc, sdl, spng, tinyexr, tinyfd, xxhash, yoga, zstd` (jars and macOS natives). `lucene` is used by
+  par, renderdoc, rpmalloc, sdl, spng, tinyexr, tinyfd, xxhash, yoga` (jars and macOS natives). `zstd` is now used, for Tiled maps. `lucene` is used by
   the spell checker. In use: `lwjgl, glfw, opengl, vulkan, openal, vma, spvc, shaderc, stb, nfd, assimp, opus`.
 - **`jpackage` file types for double extensions.** The OS matches the last extension, so `.tar.gz` can't be registered
   on its own. Nothing to fix in RenGL; noted in [packaging/README.md](../OpenZip/packaging/README.md).

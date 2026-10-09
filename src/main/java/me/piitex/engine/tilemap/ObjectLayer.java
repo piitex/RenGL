@@ -20,7 +20,8 @@ import java.util.List;
  * for (MapObject spawn : entities.getObjectsOfType("EnemySpawn")) spawnEnemy(spawn.getX(), spawn.getY());
  * List<Shape> walls = map.getObjectLayer("collision").getShapes();
  * }</pre>
- * Drawing the layer draws its visible tile objects. Other kinds are markers for the game and aren't drawn.
+ * Drawing the layer draws its visible tile objects and text objects. Other kinds are markers for the game and aren't
+ * drawn.
  */
 public final class ObjectLayer extends MapLayer {
     private static final Comparator<MapObject> TOP_DOWN = Comparator.comparingDouble(MapObject::getY);
@@ -88,13 +89,24 @@ public final class ObjectLayer extends MapLayer {
         TileMap map = requireMap();
         drawOrder.clear();
         for (MapObject object : objects) {
-            if (object.getTile() != null && object.isVisible() && object.getOpacity() > 0f) drawOrder.add(object);
+            boolean drawn = object.getTile() != null || object.getTextFormat() != null;
+            if (drawn && object.isVisible() && object.getOpacity() > 0f) drawOrder.add(object);
         }
         if (drawOrder.isEmpty()) return;
         if (topDown) drawOrder.sort(TOP_DOWN);
         float shiftX = state.shiftX(map, view), shiftY = state.shiftY(map, view);
         double time = map.getTime();
         for (MapObject object : drawOrder) {
+            if (object.getTile() == null) {
+                Color text = object.getTextFormat().color();
+                float reach = (float) Math.hypot(object.getWidth(), object.getHeight());
+                if (view != null && object.getWidth() > 0f && object.getHeight() > 0f
+                        && !new Rect(object.getX() + shiftX - reach, object.getY() + shiftY - reach,
+                        object.getWidth() + 2 * reach, object.getHeight() + 2 * reach).intersects(view)) continue;
+                object.drawText(renderer, shiftX, shiftY, new Color(text.getR() * state.red, text.getG() * state.green,
+                        text.getB() * state.blue, text.getA() * state.alpha * object.getOpacity()));
+                continue;
+            }
             object.configure(sprite, object.getTile().getRegionAt(time), shiftX, shiftY);
             if (view != null && !sprite.getBounds().intersects(view)) continue;
             sprite.setColor(state.color(object.getOpacity()));

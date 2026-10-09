@@ -62,6 +62,6 @@ public final class GroupLayer extends MapLayer {
     void render(Renderer renderer, Rect view, DrawState parent) {
         DrawState state = parent.with(this);
         if (state == null) return;
-        for (MapLayer layer : layers) layer.render(renderer, view, state);
+        for (MapLayer layer : layers) layer.renderBlended(renderer, view, state);
     }
 }

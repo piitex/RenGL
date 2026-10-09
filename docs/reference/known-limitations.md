@@ -12,8 +12,8 @@ something not listed, please add it.
   renderer that [snapshots](../core/snapshots.md) use does this, and only for sprites of a smooth texture drawn
   turned. On screen, and for pixel-art textures, sprites side by side never leave gaps.
 - **Tile maps are orthogonal only.** [`TileMap`](../graphics/tile-maps.md#loading) reads Tiled's square and
-  rectangular grids, not isometric, staggered or hexagonal maps, nor layers compressed with zstd or images embedded
-  in the file. Layer blend modes are ignored and text objects aren't drawn.
+  rectangular grids, not isometric, staggered or hexagonal maps. Text objects are drawn in the engine's default font,
+  whatever family Tiled shows.
 - **Post effects on a turned camera are resampled.** Inside a turned `Camera`, `pushEffect`'s layer is drawn upright
   and turned afterwards, so its content is slightly softer than without the effect. Push effects outside the camera,
   in window coordinates, to avoid it.

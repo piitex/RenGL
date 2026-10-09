@@ -538,6 +538,16 @@ public interface Renderer {
     void pushOpacityLayer(float x, float y, float width, float height, float opacity);
 
     /**
+     * Like {@link #pushOpacityLayer}, but the finished layer is combined with what is underneath it by {@code mode}
+     * instead of covering it: {@link me.piitex.engine.graphics.BlendMode#ADD} for a glow, {@code MULTIPLY} for a
+     * shadow. Pair it with {@link #popOpacityLayer()}. The default ignores the mode and draws a plain
+     * {@link #pushOpacityLayer opacity layer}, so a custom Renderer keeps working.
+     */
+    default void pushBlendLayer(float x, float y, float width, float height, me.piitex.engine.graphics.BlendMode mode, float opacity) {
+        pushOpacityLayer(x, y, width, height, opacity);
+    }
+
+    /**
      * Pops the layer most recently pushed by {@link #pushOpacityLayer}, compositing
      * everything drawn since then onto the canvas beneath it at that layer's opacity.
      */

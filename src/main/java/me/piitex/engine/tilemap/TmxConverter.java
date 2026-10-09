@@ -232,10 +232,18 @@ final class TmxConverter {
      */
     private static void image(Element image, Map<String, Object> into) {
         if (image == null) return;
-        if (!image.hasAttribute("source")) {
-            throw new IllegalArgumentException("images embedded in the file aren't supported; save the image as a file");
+        if (image.hasAttribute("source")) {
+            into.put("image", image.getAttribute("source"));
+        } else {
+            Element data = child(image, "data");
+            if (data == null) throw new IllegalArgumentException("an <image> has neither a source file nor embedded data");
+            String encoding = data.getAttribute("encoding");
+            if (!encoding.equals("base64")) {
+                throw new IllegalArgumentException("an embedded image is stored as '" + encoding + "', and only base64 is read");
+            }
+            byte[] bytes = java.util.Base64.getMimeDecoder().decode(data.getTextContent().trim());
+            into.put("imagedata", TileCompression.decompress(bytes, data.getAttribute("compression"), "An embedded image"));
         }
-        into.put("image", image.getAttribute("source"));
         if (image.hasAttribute("width")) into.put("imagewidth", image.getAttribute("width"));
         if (image.hasAttribute("height")) into.put("imageheight", image.getAttribute("height"));
         if (image.hasAttribute("trans")) into.put("transparentcolor", image.getAttribute("trans"));
