@@ -10,7 +10,6 @@
     <option name="enabledProfiles">
       <list>
         <option value="natives-bundle-macos-aarch64" />
-        <option value="test-macos" />
       </list>
     </option>
   </component>
