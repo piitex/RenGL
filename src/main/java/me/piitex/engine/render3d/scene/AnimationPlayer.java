@@ -235,11 +235,19 @@ public final class AnimationPlayer {
             while (i < last && times[i + 1] <= t) i++;
             int j = Math.min(i + 1, last);
             float f = 0f;
-            if (channel.interpolation() == AnimationClip.Interpolation.LINEAR && j != i && t > times[i]) {
+            AnimationClip.Interpolation mode = channel.interpolation();
+            if (mode != AnimationClip.Interpolation.STEP && j != i && t > times[i]) {
                 f = Math.min(1f, (t - times[i]) / (times[j] - times[i]));
             }
             float[] v = channel.values();
             int w = channel.path() == AnimationClip.Path.WEIGHTS ? v.length / times.length : channel.path().width;
+            if (mode == AnimationClip.Interpolation.CUBICSPLINE && j != i && f > 0f) {
+                // The curve through the keys, which the plain blends below can't give. The result takes the place of the
+                // two keys' values, so the code below only has to read it.
+                v = hermite(channel, i, j, f, w, times[j] - times[i]);
+                i = 0;
+                j = 0;
+            }
             Node3D node = channel.target();
             switch (channel.path()) {
                 case WEIGHTS -> {
@@ -266,10 +274,26 @@ public final class AnimationPlayer {
                 case ROTATION -> {
                     Quat a = new Quat(v[i * w], v[i * w + 1], v[i * w + 2], v[i * w + 3]);
                     Quat b = new Quat(v[j * w], v[j * w + 1], v[j * w + 2], v[j * w + 3]);
-                    Quat value = a.slerp(b, f);
+                    Quat value = mode == AnimationClip.Interpolation.CUBICSPLINE ? a.normalized() : a.slerp(b, f);
                     node.setRotation(weight >= 1f ? value : node.getRotation().slerp(value, weight));
                 }
             }
         }
+    }
+
+    /**
+     * The value of a cubic spline channel between key {@code i} and key {@code j} at fraction {@code f} of the way, one
+     * number per component (the channel's width): the Hermite curve through both values with the slopes the keys give
+     * (each slope is per second, so it is scaled by the time between the keys).
+     */
+    private static float[] hermite(AnimationClip.Channel channel, int i, int j, float f, int width, float dt) {
+        float[] v = channel.values(), in = channel.inTangents(), out = channel.outTangents();
+        float f2 = f * f, f3 = f2 * f;
+        float h00 = 2f * f3 - 3f * f2 + 1f, h10 = f3 - 2f * f2 + f, h01 = -2f * f3 + 3f * f2, h11 = f3 - f2;
+        float[] result = new float[width];
+        for (int c = 0; c < width; c++) {
+            result[c] = h00 * v[i * width + c] + h10 * dt * out[i * width + c] + h01 * v[j * width + c] + h11 * dt * in[j * width + c];
+        }
+        return result;
     }
 }

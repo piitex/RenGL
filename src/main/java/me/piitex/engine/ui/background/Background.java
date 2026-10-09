@@ -37,4 +37,12 @@ public interface Background {
      */
     default void update(float delta, float x, float y, float width, float height) {
     }
+
+    /**
+     * Called when this background is taken away: replaced by another with {@link Element#setBackground} (or the window's),
+     * or removed with null. For a background that holds something it should let go of, such as a 3D scene's GPU
+     * objects. It may be attached again later, so it should be able to start afresh. The default does nothing.
+     */
+    default void onDetached() {
+    }
 }

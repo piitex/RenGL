@@ -58,6 +58,15 @@ public interface GpuDevice extends AutoCloseable {
     GpuTexture createTexture(int width, int height, ByteBuffer rgba, boolean mipmaps);
 
     /**
+     * A texture of linear light with a range far beyond white, for a sky with a real sun in it. Four channels of 16-bit
+     * floats (values up to 65504), whole picture top row first, repeat wrapping, smoothly filtered.
+     *
+     * @param rgba    {@code width * height * 4} floats, tightly packed, from the buffer's position
+     * @param mipmaps also make the smaller versions of the picture and filter between them
+     */
+    GpuTexture createHdrTexture(int width, int height, java.nio.FloatBuffer rgba, boolean mipmaps);
+
+    /**
      * A cube map from six square faces, for skies and reflections. Faces are RGBA8, top row first, each
      * {@code size * size * 4} bytes, in the order +X, -X, +Y, -Y, +Z, -Z, laid out the way OpenGL and Vulkan expect
      * (the common skybox image sets work as they are). Sample it with a {@code samplerCube} and a direction.

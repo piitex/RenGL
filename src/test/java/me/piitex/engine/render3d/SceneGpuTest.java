@@ -4,6 +4,7 @@ import me.piitex.engine.RenderAPI;
 import me.piitex.engine.render3d.math.Mat4;
 import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Vec3;
+import me.piitex.engine.render3d.scene.HdrTextureData;
 import me.piitex.engine.render3d.scene.Instances;
 import me.piitex.engine.render3d.scene.Light;
 import me.piitex.engine.render3d.scene.Material;
@@ -65,6 +66,13 @@ class SceneGpuTest {
             Vec3 ndc = camera.projection((float) w / h).mul(camera.view()).transformPoint(new Vec3(x, y, z));
             int sx = Math.round((ndc.x() * 0.5f + 0.5f) * w), sy = Math.round((1 - (ndc.y() * 0.5f + 0.5f)) * h);
             int i = (Math.clamp(sy, 0, h - 1) * w + Math.clamp(sx, 0, w - 1)) * 4;
+            return new int[]{data.get(i) & 255, data.get(i + 1) & 255, data.get(i + 2) & 255};
+        }
+
+        /** The colour at a place in the picture given as shares of its width and height from the top-left. */
+        int[] rgbAt(float u, float v) {
+            int w = target.width(), h = target.height();
+            int i = (Math.clamp(Math.round(v * h), 0, h - 1) * w + Math.clamp(Math.round(u * w), 0, w - 1)) * 4;
             return new int[]{data.get(i) & 255, data.get(i + 1) & 255, data.get(i + 2) & 255};
         }
 
@@ -156,6 +164,12 @@ class SceneGpuTest {
                 new Scenario("a skinned mesh", SceneGpuTest::skinned, scene -> {
                     scene.root().find("joint").setPosition(500f, 0f, 0f);
                 }, SceneGpuTest::skinnedCheck),
+                new Scenario("a skin of 400 joints", SceneGpuTest::bigSkin, null, (scene, b, a, px, r) -> bigSkinCheck(a, px, r)),
+                new Scenario("no bloom", () -> lamp(0f), null, (scene, b, a, px, r) -> lampCheck(false, px, r)),
+                new Scenario("bloom", () -> lamp(0.8f), null, (scene, b, a, px, r) -> lampCheck(true, px, r)),
+                new Scenario("an HDR sky seen", () -> hdrSky(false, true), null, (scene, b, a, px, r) -> hdrSeen(px, r)),
+                new Scenario("an HDR sky with a sun lights a sphere", () -> hdrSky(true, false), null, (scene, b, a, px, r) -> hdrLit(true, px, r)),
+                new Scenario("an HDR sky without a sun lights it less", () -> hdrSky(false, false), null, (scene, b, a, px, r) -> hdrLit(false, px, r)),
                 new Scenario("see-through instances far first", () -> glass(true), null, SceneGpuTest::glassCheck),
                 new Scenario("see-through instances near first", () -> glass(false), null, SceneGpuTest::glassCheck),
                 new Scenario("no tone mapping", () -> toned(ToneMapping.NONE, 1f), null, (scene, b, a, px, r) -> toneCheck("none", px, r, 252, 256)),
@@ -268,6 +282,127 @@ class SceneGpuTest {
         r.check("a skinned mesh: left out once its joints are far away", after.culled() == 1 && after.instances() == 0,
                 "culled " + after.culled() + ", drew " + after.instances());
         r.guard("a skinned mesh: and the picture is empty", () -> r.check("a skinned mesh: and the picture is empty", px.luma(0f, 0f, 0f) < 20,
+                "luma " + px.luma(0f, 0f, 0f)));
+    }
+
+    // ---- a sky of linear light ---------------------------------------------------------------------------------------------
+
+    /**
+     * An 8 by 4 panorama of dim blue-grey sky, with a sun (40 times white) four pixels wide at the horizon either looking along
+     * -Z or along +Z, the way the camera is turned: when {@code lookAtSun} the camera is at the middle looking at it, and
+     * otherwise it looks at a matte sphere from the sun's side, with the sun behind the camera.
+     */
+    private static Scene3D hdrSky(boolean sunBehind, boolean lookAtSun) {
+        Scene3D scene = base();
+        int w = 32, h = 16;
+        float[] rgba = new float[w * h * 4];
+        for (int i = 0; i < w * h; i++) {
+            rgba[i * 4] = 0.05f;
+            rgba[i * 4 + 1] = 0.06f;
+            rgba[i * 4 + 2] = 0.1f;
+            rgba[i * 4 + 3] = 1f;
+        }
+        if (lookAtSun || sunBehind) {
+            // Rows 7 and 8 are just above and below the horizon. u = 0.5 looks along -Z; the edges (columns 0 and 31), along +Z.
+            int[] columns = lookAtSun ? new int[]{15, 16} : new int[]{0, 31};
+            for (int row = 7; row <= 8; row++) {
+                for (int column : columns) {
+                    int o = (row * w + column) * 4;
+                    rgba[o] = 40f;
+                    rgba[o + 1] = 38f;
+                    rgba[o + 2] = 30f;
+                }
+            }
+        }
+        scene.setSkybox(Skybox.equirectHdr(new HdrTextureData(w, h, rgba)));
+        scene.setToneMapping(ToneMapping.ACES);
+        scene.setEnvironmentLighting(1f);
+        if (lookAtSun) {
+            // From the middle, looking at the sun.
+            scene.camera().lookAt(new Vec3(0, 0, 0), new Vec3(0, 0, -1)).setFovYDegrees(40);
+        } else {
+            // From +Z towards a matte ball, so the sun, if there is one, is behind the camera and shines on the ball.
+            scene.add(new Node3D("ball", Mesh.sphere(1f, 32, 16), new Material(Color.WHITE).setPbr(true).setMetallic(0f).setRoughness(0.9f)));
+            scene.camera().lookAt(new Vec3(0, 0, 5), new Vec3(0, 0, 0)).setFovYDegrees(40);
+        }
+        return scene;
+    }
+
+    private static void hdrSeen(Pixels px, GpuHarness.Recorder r) {
+        r.guard("an HDR sky: the sun, tone mapped, is white", () -> {
+            int[] centre = px.rgbAt(0.5f, 0.5f), corner = px.rgbAt(0.05f, 0.05f);
+            r.check("an HDR sky: the sun, tone mapped, is white", centre[0] > 240 && centre[1] > 240, java.util.Arrays.toString(centre));
+            r.check("an HDR sky: the rest of the sky is dim", corner[0] + corner[1] + corner[2] < 300, java.util.Arrays.toString(corner));
+        });
+    }
+
+    private static void hdrLit(boolean sun, Pixels px, GpuHarness.Recorder r) {
+        String name = sun ? "an HDR sky with a sun lights the sphere" : "an HDR sky with no sun lights it dimly";
+        r.guard(name, () -> {
+            int centre = px.luma(0f, 0f, 1f);
+            r.check(name, sun ? centre > 500 : centre < 330, "luma " + centre);
+        });
+    }
+
+    // ---- bloom ---------------------------------------------------------------------------------------------------------
+
+    /**
+     * A small white lamp in a dark room.
+     */
+    private static Scene3D lamp(float bloom) {
+        Scene3D scene = base();
+        scene.setBloom(bloom).setBloomThreshold(0.5f);
+        Node3D lamp = new Node3D("lamp", Mesh.cube(0.6f), new Material(Color.WHITE).setUnlit(true));
+        scene.add(lamp);
+        scene.camera().lookAt(new Vec3(0, 0, 10), new Vec3(0, 0, 0)).setFovYDegrees(40);
+        return scene;
+    }
+
+    private static void lampCheck(boolean bloom, Pixels px, GpuHarness.Recorder r) {
+        String name = bloom ? "bloom: light spreads out of the lamp" : "no bloom: the lamp stays a box";
+        r.guard(name, () -> {
+            int centre = px.luma(0f, 0f, 0f), near = px.luma(0.55f, 0f, 0f), far = px.luma(3f, 0f, 0f);
+            r.check(name + " (the lamp itself)", centre > 600, "centre " + centre);
+            r.check(name + " (far away it is dark)", far < 30, "far " + far);
+            r.check(name, bloom ? near > 60 : near < 30, "just beside the lamp " + near);
+        });
+    }
+
+    // ---- more than 256 joints ----------------------------------------------------------------------------------------
+
+    /**
+     * A cube skinned to the last of 400 joints, which stands in view while the others are scattered far away.
+     */
+    private static Scene3D bigSkin() {
+        Scene3D scene = base();
+        scene.setAmbient(Color.WHITE, 1f);
+        List<Node3D> joints = new ArrayList<>();
+        List<Mat4> inverse = new ArrayList<>();
+        for (int i = 0; i < 400; i++) {
+            Node3D joint = new Node3D("j" + i);
+            joint.setPosition(i == 399 ? 0f : 500f, 0f, 0f);
+            scene.add(joint);
+            joints.add(joint);
+            inverse.add(Mat4.identity());
+        }
+        Mesh mesh = Mesh.cube(1f);
+        int[] ids = new int[mesh.vertexCount() * 4];
+        float[] weights = new float[mesh.vertexCount() * 4];
+        for (int v = 0; v < mesh.vertexCount(); v++) {
+            ids[v * 4] = 399;
+            weights[v * 4] = 1f;
+        }
+        mesh.setSkinning(ids, weights);
+        Node3D body = new Node3D("body", mesh, new Material(Color.WHITE).setUnlit(true));
+        body.setSkin(new Skin(joints, inverse));
+        scene.add(body);
+        scene.camera().lookAt(new Vec3(0, 0, 10), new Vec3(0, 0, 0)).setFovYDegrees(60);
+        return scene;
+    }
+
+    private static void bigSkinCheck(Scene3D.Stats after, Pixels px, GpuHarness.Recorder r) {
+        r.check("a skin of 400 joints: drawn", after.instances() == 1 && after.culled() == 0, "drew " + after.instances() + ", culled " + after.culled());
+        r.guard("a skin of 400 joints: at its last joint", () -> r.check("a skin of 400 joints: at its last joint", px.luma(0f, 0f, 0f) > 300,
                 "luma " + px.luma(0f, 0f, 0f)));
     }
 

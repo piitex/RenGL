@@ -120,7 +120,7 @@ final class VkPipe implements Pipeline {
                     .pVertexAttributeDescriptions(attributes);
 
             VkPipelineInputAssemblyStateCreateInfo assembly = VkPipelineInputAssemblyStateCreateInfo.calloc(stack).sType$Default()
-                    .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+                    .topology(desc.topology() == PipelineDesc.Topology.LINES ? VK_PRIMITIVE_TOPOLOGY_LINE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
             VkPipelineViewportStateCreateInfo viewport = VkPipelineViewportStateCreateInfo.calloc(stack).sType$Default()
                     .viewportCount(1).scissorCount(1);
             VkPipelineRasterizationStateCreateInfo raster = VkPipelineRasterizationStateCreateInfo.calloc(stack).sType$Default()

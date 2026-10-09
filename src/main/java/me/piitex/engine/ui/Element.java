@@ -719,7 +719,9 @@ public class Element {
      * effect, see {@link me.piitex.engine.ui.theme.Theme#getContainerEffect()}, doesn't replace it.
      */
     public void setBackground(Background background) {
+        Background old = this.background.get();
         this.background.set(background);
+        if (old != null && old != this.background.get()) old.onDetached();
     }
 
     /**

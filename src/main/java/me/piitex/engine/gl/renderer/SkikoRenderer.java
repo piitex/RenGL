@@ -40,6 +40,7 @@ public class SkikoRenderer extends SkiaRenderer implements GpuInterop {
      */
     public void dispose() {
         disposed = true;
+        disposedRenderer = true;
         runDisposeListeners();
         if (surface != null) surface.close();
         if (renderTarget != null) renderTarget.close();
@@ -146,6 +147,7 @@ public class SkikoRenderer extends SkiaRenderer implements GpuInterop {
         canvas.restore();
         directContext.flushAndSubmit(surface, false);
         frameValid = false;
+        runFrameTasks();
     }
 
     @Override

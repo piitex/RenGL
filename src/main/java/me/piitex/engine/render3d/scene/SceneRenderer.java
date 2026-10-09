@@ -51,9 +51,13 @@ final class SceneRenderer {
 
     private static final int KEY_CULL = 1, KEY_BLEND = 2, KEY_MIRRORED = 4, KEY_SKINNED = 8, KEY_SHADOW = 16, KEY_ADDITIVE = 32, KEY_ENV_SHIFT = 6;
     /** The mesh has a second set of texture coordinates, read from a vertex buffer of its own. */
-    private static final int KEY_UV2 = 1 << 8;
-    /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 bit. */
-    private static final int KEY_VARIANT_SHIFT = 9;
+    private static final int KEY_UV2 = 1 << 9;
+    /** The mesh is line segments, not triangles. */
+    private static final int KEY_LINES = 1 << 10;
+    /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
+    private static final int KEY_ENV_MASK = 7;
+    /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
+    private static final int KEY_VARIANT_SHIFT = 11;
 
     /**
      * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
@@ -121,6 +125,7 @@ final class SceneRenderer {
         long instanceCapacity;
         final List<GpuBuffer> joints = new ArrayList<>();
         final List<GpuBuffer> sortedIndices = new ArrayList<>();
+        BloomPass bloom;
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
@@ -134,6 +139,7 @@ final class SceneRenderer {
             if (instances != null) instances.close();
             for (GpuBuffer b : joints) b.close();
             for (GpuBuffer b : sortedIndices) if (b != null) b.close();
+            if (bloom != null) bloom.close();
         }
     }
 
@@ -253,9 +259,10 @@ final class SceneRenderer {
             if (uv2) extra.add(uv2Layout);
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
-            desc = new PipelineDesc(vertex(skinned, uv2), fragment((key >> KEY_ENV_SHIFT) & 3, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
+            desc = new PipelineDesc(vertex(skinned, uv2), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
                     variants.get(key >> KEY_VARIANT_SHIFT).falloffs()), meshLayout, true, (key & KEY_CULL) != 0, blend,
-                    (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend);
+                    (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
+                    .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
         }
         Pipeline created = device.createPipeline(desc);
         pipelines.put(key, created);
@@ -267,6 +274,7 @@ final class SceneRenderer {
             case GRADIENT -> SKY_GRADIENT_FRAGMENT;
             case CUBE -> SKY_CUBE_FRAGMENT;
             case EQUIRECT -> SKY_EQUIRECT_FRAGMENT;
+            case EQUIRECT_HDR -> SKY_EQUIRECT_HDR_FRAGMENT;
         }, VertexLayout.of(VertexFormat.FLOAT2), false, false, false)));
     }
 
@@ -311,11 +319,18 @@ final class SceneRenderer {
         int variant = variantFor(scene, shadowFrame, env);
         writeFrameBlock(res.frame, scene, camera, viewProj, shadowFrame, env, variants.get(variant));
         int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT);
-        if (sky != null) writeSky(res.sky, camera, aspect, sky);
+        if (sky != null) writeSky(res.sky, scene, camera, aspect, sky);
 
         Color bg = scene.getBackground();
         int drawCalls = 0, drawnRecords = 0;
-        try (RenderPass pass = device.beginPass(target, bg.getR(), bg.getG(), bg.getB(), 1f)) {
+        // With bloom the scene goes into a target of its own first, and the viewport's target gets it with the glow.
+        boolean bloomed = scene.getBloom() > 0f;
+        RenderTarget drawTarget = target;
+        if (bloomed) {
+            if (res.bloom == null) res.bloom = new BloomPass(device, skyTriangle);
+            drawTarget = res.bloom.sceneTarget(target.width(), target.height());
+        }
+        try (RenderPass pass = device.beginPass(drawTarget, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
             pass.bindTexture(7, shadowFrame.plans().isEmpty() ? whiteTexture : atlas.texture());
             if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
@@ -330,6 +345,7 @@ final class SceneRenderer {
                 }
             }
         }
+        if (bloomed) res.bloom.apply(target, scene.getBloom(), scene.getBloomThreshold(), scene.getBloomRadius());
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
                 shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight()));
         if (frame % SWEEP_EVERY == 0) sweep();
@@ -344,6 +360,7 @@ final class SceneRenderer {
             case GRADIENT -> ENV_GRADIENT;
             case CUBE -> ENV_CUBE;
             case EQUIRECT -> ENV_EQUIRECT;
+            case EQUIRECT_HDR -> ENV_EQUIRECT_HDR;
         };
     }
 
@@ -407,7 +424,8 @@ final class SceneRenderer {
             // A mirrored node (negative scale) turns its triangles around, so what was the front is clockwise on screen.
             draw.mirrored = world.transformDirection(Vec3.X).cross(world.transformDirection(Vec3.UP))
                     .dot(world.transformDirection(Vec3.Z)) < 0f;
-            draw.cast = node.isCastShadow() && !draw.material.isBlend();
+            boolean lines = mesh.isLines();
+            draw.cast = node.isCastShadow() && !draw.material.isBlend() && !lines;
             draw.receive = node.isReceiveShadow();
             draw.morph = node.activeMorph();
             boolean skinned = node.getSkin() != null && mesh.isSkinned();
@@ -415,7 +433,7 @@ final class SceneRenderer {
                 log.warn("The node {} has a skin but its mesh has no skinning data; drawing it unskinned.", node.getName());
             }
             draw.key = (draw.material.isDoubleSided() ? 0 : KEY_CULL) | (draw.material.isBlend() ? KEY_BLEND : 0) | (draw.material.isAdditive() ? KEY_ADDITIVE : 0)
-                    | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0) | (mesh.hasUvs2() && usesSecondUvs(draw.material) ? KEY_UV2 : 0);
+                    | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0) | (mesh.hasUvs2() && usesSecondUvs(draw.material) ? KEY_UV2 : 0) | (lines ? KEY_LINES : 0);
             // A skinned mesh is placed by its joints, so it is bounded by them, not by its node.
             float[] skinSphere = skinned ? skinSphere(node, mesh) : null;
             Instances instances = skinned ? null : node.getInstances();
@@ -803,7 +821,7 @@ final class SceneRenderer {
         Material m = draw.material;
         float[] world = draw.world.toArray();
         int flags = (m.getNormalTexture() != null ? FLAG_NORMAL_MAP : 0) | (draw.receive ? FLAG_RECEIVE_SHADOW : 0) | (m.texCoordBits() << FLAG_UV1_SHIFT);
-        int mode = m.isUnlit() ? MODE_UNLIT : m.isPbr() ? MODE_PBR : MODE_CLASSIC;
+        int mode = m.isUnlit() || draw.mesh.isLines() ? MODE_UNLIT : m.isPbr() ? MODE_PBR : MODE_CLASSIC;
         float p0 = m.isPbr() ? m.getMetallic() : m.getSpecular();
         float p1 = m.isPbr() ? m.getRoughness() : Math.max(1f, m.getShininess());
         float rotationCos = (float) Math.cos(m.getUvRotation()), rotationSin = (float) Math.sin(m.getUvRotation());
@@ -1108,7 +1126,7 @@ final class SceneRenderer {
         buffer.update(scratch);
     }
 
-    private void writeSky(GpuBuffer buffer, Camera camera, float aspect, Skybox sky) {
+    private void writeSky(GpuBuffer buffer, Scene3D scene, Camera camera, float aspect, Skybox sky) {
         Vec3 f = camera.getTarget().sub(camera.getPosition()).normalized();
         Vec3 r = f.cross(camera.getUp()).normalized();
         Vec3 u = r.cross(f);
@@ -1123,7 +1141,8 @@ final class SceneRenderer {
             putColor(sky.bottom, 1f);
         } else {
             scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(sky.getBrightness());
-            scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(1f);
+            // A sky of linear light is exposed and tone mapped like the scene; the others are drawn as they are.
+            scratch.putFloat(scene.getExposure()).putFloat(scene.getToneMapping().ordinal()).putFloat(0f).putFloat(1f);
             scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(1f);
         }
         scratch.flip();
@@ -1257,6 +1276,13 @@ final class SceneRenderer {
                     image = new GpuImage(device.createCubeTexture(sky.faces[0].width(), faces, true));
                 } finally {
                     for (ByteBuffer face : faces) if (face != null) MemoryUtil.memFree(face);
+                }
+            } else if (sky.kind == Skybox.Kind.EQUIRECT_HDR) {
+                java.nio.FloatBuffer pixels = sky.hdr.toBuffer();
+                try {
+                    image = new GpuImage(device.createHdrTexture(sky.hdr.width(), sky.hdr.height(), pixels, true));
+                } finally {
+                    MemoryUtil.memFree(pixels);
                 }
             } else {
                 ByteBuffer pixels = sky.panorama.toBuffer();

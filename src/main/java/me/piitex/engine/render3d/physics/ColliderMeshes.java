@@ -7,13 +7,10 @@ import me.piitex.engine.render3d.scene.TextureData;
 import java.util.Arrays;
 
 /**
- * Meshes of collision shapes for {@link ColliderView}, drawn as see-through surfaces with their edges outlined.
- * <p>
- * The renderer only draws triangles, so the outlines come from a repeating texture: clear but for lines along whole
- * numbers of its coordinates. Each face's texture coordinates run from 0 at one edge to a whole number at the other, about
- * one per metre, so the lines fall on the face's edges and every metre or so across it, at the same width on a crate as
- * on a wall. Boxes, spheres, capsules and planes use a grid of {@linkplain Pattern#SQUARES squares}; hulls and meshes,
- * made of triangles, one of {@linkplain Pattern#TRIANGLES triangles}, which has lines along the diagonals too.
+ * Meshes of collision shapes for {@link ColliderView}, drawn as faint see-through surfaces; the outlines are
+ * {@linkplain ColliderLines real lines}. The texture coordinates still run to whole numbers along each face, a grid
+ * the {@linkplain Pattern pattern} of a shape picks (squares for boxes, balls and planes; triangles for hulls and meshes),
+ * though the texture is plain now.
  * <p>
  * Each mesh is grown a few millimetres out from the shape, so it doesn't flicker against a visible mesh of the same size.
  */
@@ -23,8 +20,8 @@ final class ColliderMeshes {
     /** About how far apart the lines across a face are, in metres. */
     private static final float CELL = 1f, TRIANGLE_CELL = 2f;
     private static final int PIXELS = 128;
-    /** The width of a line each side of it, as a share of a cell, and how clear the rest is. */
-    private static final float LINE = 0.013f, FILL = 0.12f;
+    /** How clear the fill is. */
+    private static final float FILL = 0.12f;
     private static final int SPHERE_SEGMENTS = 16, SPHERE_RINGS = 8;
     private static final float PLANE_SIZE = 100f, PLANE_CELL = 2f;
 
@@ -49,24 +46,15 @@ final class ColliderMeshes {
     private ColliderMeshes() {
     }
 
+    /**
+     * A faint white fill, to be tinted by the material's colour. The outlines are real lines, drawn by
+     * {@link ColliderLines}, so the texture has none of its own.
+     */
     private static TextureData draw(boolean diagonals) {
         byte[] rgba = new byte[PIXELS * PIXELS * 4];
-        float texel = 1f / PIXELS;
-        for (int y = 0; y < PIXELS; y++) {
-            for (int x = 0; x < PIXELS; x++) {
-                float u = (x + 0.5f) * texel, v = (y + 0.5f) * texel;
-                // How far to the nearest line, in cells: the lines are at whole u and v (and u + v), which the texture
-                // repeating puts at its edges.
-                float d = Math.min(Math.min(u, 1f - u), Math.min(v, 1f - v));
-                if (diagonals) {
-                    float s = u + v;
-                    d = Math.min(d, Math.abs(s - Math.round(s)) * 0.70710678f);
-                }
-                float line = Math.clamp((LINE - d) / texel + 0.5f, 0f, 1f);
-                int i = (y * PIXELS + x) * 4;
-                rgba[i] = rgba[i + 1] = rgba[i + 2] = (byte) 255;
-                rgba[i + 3] = (byte) Math.round(Math.max(FILL, line) * 255f);
-            }
+        for (int i = 0; i < PIXELS * PIXELS; i++) {
+            rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = (byte) 255;
+            rgba[i * 4 + 3] = (byte) Math.round(FILL * 255f);
         }
         return new TextureData(PIXELS, PIXELS, rgba);
     }

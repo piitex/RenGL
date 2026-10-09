@@ -46,4 +46,12 @@ public interface GpuInterop {
      * right away.
      */
     void onDispose(Runnable cleanup);
+
+    /**
+     * Runs {@code task} once the current frame (or, between frames, the next one) has been drawn and submitted, with the
+     * GPU context usable. For work that must not happen in the middle of a frame, such as freeing GPU objects a frame
+     * may still be using. May be called from any thread; the task runs on the render thread. Runs it right away when the
+     * renderer is already gone.
+     */
+    void afterFrame(Runnable task);
 }

@@ -24,6 +24,7 @@ final class Textures {
     }
 
     private static final Map<Key, TextureData> CACHE = new HashMap<>();
+    private static final Map<Key, me.piitex.engine.render3d.scene.HdrTextureData> HDR_CACHE = new HashMap<>();
     private static final Map<Path, Boolean> REPORTED = new HashMap<>();
 
     private Textures() {
@@ -43,6 +44,27 @@ final class Textures {
             TextureData loaded = TextureData.load(file);
             if (CACHE.size() >= LIMIT) CACHE.clear();
             CACHE.put(key, loaded);
+            REPORTED.remove(file);
+            return loaded;
+        } catch (IOException | RuntimeException e) {
+            if (REPORTED.put(file, true) == null) log.warn("Could not read the picture {}: {}", file, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * The same for a picture of light with no upper limit (a Radiance .hdr file).
+     */
+    static synchronized me.piitex.engine.render3d.scene.HdrTextureData loadHdr(String path, Path base) {
+        if (path == null || path.isEmpty()) return null;
+        Path file = base.resolve(path).toAbsolutePath().normalize();
+        try {
+            Key key = new Key(file, Files.getLastModifiedTime(file).toMillis());
+            var cached = HDR_CACHE.get(key);
+            if (cached != null) return cached;
+            var loaded = me.piitex.engine.render3d.scene.HdrTextureData.load(file);
+            if (HDR_CACHE.size() >= 8) HDR_CACHE.clear();
+            HDR_CACHE.put(key, loaded);
             REPORTED.remove(file);
             return loaded;
         } catch (IOException | RuntimeException e) {

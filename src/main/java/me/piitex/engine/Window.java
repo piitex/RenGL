@@ -743,7 +743,9 @@ public class Window implements Themeable {
      * unpins it.
      */
     public void setBackground(Background background) {
+        Background old = this.background.get();
         this.background.set(background);
+        if (old != null && old != this.background.get()) old.onDetached();
     }
 
     /**

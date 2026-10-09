@@ -433,6 +433,13 @@ public final class SceneKinds {
         prop(WORLD, "exposure", "Exposure", Float.class, gLight, Scene3D::getExposure, (s, x, b) -> s.setExposure(f(x))).omitWhen(1f)
                 .range(0, 8).step(0.05).tip("Scales the light before tone mapping: 2 is one stop brighter");
 
+        prop(WORLD, "bloom", "Bloom", Float.class, gLight, Scene3D::getBloom, (s, x, b) -> s.setBloom(f(x))).omitWhen(0f).range(0, 4).step(0.05)
+                .tip("Light bleeding out of the brightest parts of the picture, like a glow round a lamp. 0 turns it off. "
+                        + "It costs a little, and the scene is not anti-aliased while it is on");
+        prop(WORLD, "bloomThreshold", "Bloom Threshold", Float.class, gLight, Scene3D::getBloomThreshold, (s, x, b) -> s.setBloomThreshold(f(x)))
+                .omitWhen(0.8f).range(0, 2).step(0.05).when(s -> s.getBloom() > 0f).tip("How bright something has to be to glow. 1 is white");
+        prop(WORLD, "bloomRadius", "Bloom Radius", Float.class, gLight, Scene3D::getBloomRadius, (s, x, b) -> s.setBloomRadius(f(x)))
+                .omitWhen(1f).range(0.1, 8).step(0.1).when(s -> s.getBloom() > 0f).tip("How far the glow spreads");
         prop(WORLD, "fogColor", "Color", Color.class, gFog, Scene3D::getFogColor, (s, x, b) -> s.setFog(c(x), s.getFogDensity(), s.getFogHeightFalloff()))
                 .omitWhen(Color.WHITE).tip("What distant things fade into. Match it to the horizon");
         prop(WORLD, "fogDensity", "Density", Float.class, gFog, Scene3D::getFogDensity,

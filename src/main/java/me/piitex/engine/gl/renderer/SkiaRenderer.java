@@ -42,6 +42,41 @@ public abstract class SkiaRenderer implements Renderer {
         return frames;
     }
 
+    private final java.util.List<Runnable> frameTasks = new java.util.ArrayList<>();
+    protected boolean disposedRenderer;
+
+    /**
+     * See {@link GpuInterop#afterFrame}.
+     */
+    public void afterFrame(Runnable task) {
+        if (disposedRenderer) {
+            task.run();
+            return;
+        }
+        synchronized (frameTasks) {
+            frameTasks.add(task);
+        }
+    }
+
+    /**
+     * Runs the tasks waiting for the end of a frame. Each backend's {@link #end()} calls it after submitting.
+     */
+    protected void runFrameTasks() {
+        java.util.List<Runnable> due;
+        synchronized (frameTasks) {
+            if (frameTasks.isEmpty()) return;
+            due = new java.util.ArrayList<>(frameTasks);
+            frameTasks.clear();
+        }
+        for (Runnable task : due) {
+            try {
+                task.run();
+            } catch (RuntimeException e) {
+                org.apache.logging.log4j.LogManager.getLogger("Engine").error("A task that waited for the end of the frame failed", e);
+            }
+        }
+    }
+
     protected float clearR = 1f, clearG = 1f, clearB = 1f, clearA = 1f;
 
     @Override

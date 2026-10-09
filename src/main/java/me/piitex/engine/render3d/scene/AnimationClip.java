@@ -49,7 +49,13 @@ public final class AnimationClip {
         /**
          * Holds each key's value until the next key.
          */
-        STEP
+        STEP,
+        /**
+         * A smooth curve through the keys that also follows the slope a key says it should have, as glTF's
+         * {@code CUBICSPLINE}: between two keys the value is a cubic Hermite curve made from both keys' values and the
+         * out-slope of the first and in-slope of the second. Made with the channel constructor that takes the tangents.
+         */
+        CUBICSPLINE
     }
 
     /**
@@ -61,6 +67,8 @@ public final class AnimationClip {
         private final Path path;
         private final float[] times;
         private final float[] values;
+        private final float[] inTangents;
+        private final float[] outTangents;
         private final Interpolation interpolation;
 
         /**
@@ -68,6 +76,27 @@ public final class AnimationClip {
          * @param values the value at each key, {@code path} width numbers per key
          */
         public Channel(Node3D target, Path path, float[] times, float[] values, Interpolation interpolation) {
+            if (interpolation == Interpolation.CUBICSPLINE) {
+                throw new IllegalArgumentException("A cubic spline channel needs its tangents: use the constructor that takes them");
+            }
+            check(path, times, values);
+            this(target, path, times.clone(), values.clone(), null, null, interpolation, true);
+        }
+
+        /**
+         * A {@link Interpolation#CUBICSPLINE cubic spline} channel. The tangents are the slopes in units per second the
+         * curve has arriving at and leaving each key: arrays of the same size as {@code values}. glTF stores them beside
+         * the values, and so does this, separately.
+         */
+        public Channel(Node3D target, Path path, float[] times, float[] values, float[] inTangents, float[] outTangents) {
+            check(path, times, values);
+            if (inTangents.length != values.length || outTangents.length != values.length) {
+                throw new IllegalArgumentException("The tangents must be as many as the values (" + values.length + ")");
+            }
+            this(target, path, times.clone(), values.clone(), inTangents.clone(), outTangents.clone(), Interpolation.CUBICSPLINE, true);
+        }
+
+        private static void check(Path path, float[] times, float[] values) {
             if (times.length == 0) throw new IllegalArgumentException("A channel needs at least one key");
             if (path == Path.WEIGHTS) {
                 if (values.length == 0 || values.length % times.length != 0) {
@@ -76,18 +105,34 @@ public final class AnimationClip {
             } else if (values.length != times.length * path.width) {
                 throw new IllegalArgumentException(path + " needs " + path.width + " values per key, " + times.length + " keys");
             }
-            this(target, path, times.clone(), values.clone(), interpolation, true);
         }
 
         /**
          * Takes the arrays as they are, already checked and not to be changed; the flag only tells it from the public one.
          */
-        private Channel(Node3D target, Path path, float[] times, float[] values, Interpolation interpolation, boolean shared) {
+        private Channel(Node3D target, Path path, float[] times, float[] values, float[] inTangents, float[] outTangents,
+                        Interpolation interpolation, boolean shared) {
             this.target = target;
             this.path = path;
             this.times = times;
             this.values = values;
+            this.inTangents = inTangents;
+            this.outTangents = outTangents;
             this.interpolation = interpolation;
+        }
+
+        /**
+         * The slope arriving at each key, or null unless the channel is a cubic spline.
+         */
+        public float[] inTangents() {
+            return inTangents;
+        }
+
+        /**
+         * The slope leaving each key, or null unless the channel is a cubic spline.
+         */
+        public float[] outTangents() {
+            return outTangents;
         }
 
         public Node3D target() {
@@ -114,7 +159,7 @@ public final class AnimationClip {
          * The same keys moving another node.
          */
         public Channel withTarget(Node3D other) {
-            return new Channel(other, path, times, values, interpolation, true);
+            return new Channel(other, path, times, values, inTangents, outTangents, interpolation, true);
         }
     }
 
