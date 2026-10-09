@@ -85,7 +85,12 @@ Audio.play("voice/line1.ogg", AudioChannel.VOICE)
 
 ## Gotchas
 
-- **Prefer Ogg.** `.wav` music is fully decoded into memory when loaded (a 3-minute stereo track is about 30 MB).
-- **MP3 loop points are approximate.** MP3 files have a short silent lead-in from the encoder, and jumping back in an
-  MP3 decodes forward from the start of the file (fast for normal tracks, slow for very long ones with a late loop start).
+- **`.wav` music is big on disk, not in memory.** A `.wav` file loaded by path is read from disk a little at a time as it
+  plays, so a 3-minute stereo track costs a few kilobytes of memory, but the file itself is about 30 MB. A `.wav` that
+  comes from the classpath or a `.pak` is held in memory as its file bytes (still without a decoded copy). Prefer Ogg when
+  download size matters.
+- **MP3 loops are gapless only for files with an encoder tag.** An MP3 written by LAME (or ffmpeg) names how much silence
+  it added at each end, and RenGL drops it, so a loop joins without a gap. A file from an encoder that writes no tag keeps
+  its lead-in of a few milliseconds. Jumping back in an MP3 still decodes forward from the start of the file (fast for
+  normal tracks, slow for very long ones with a late loop start).
 - **Bad files fail at `load`,** not at play time.

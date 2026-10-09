@@ -70,7 +70,8 @@ its patents make it a licensing risk for a commercial product. Convert to Ogg Vo
 `ffmpeg -i song.m4a -c:a libvorbis -q:a 5 song.ogg`.
 
 Ogg Vorbis, Opus and FLAC seek exactly, which matters for [loop points](music.md#loop-points) and for
-[`Playback.seek`](playback.md). MP3 loops are not sample-tight.
+[`Playback.seek`](playback.md). MP3 loops are sample-tight when the file carries a LAME or ffmpeg encoder tag (most do);
+without one the encoder's few milliseconds of lead-in stay.
 
 A surround file is mixed to stereo like this: the front left and right stay on their sides, the centre and the back and
 side channels go into both ears at about 70%, the low-frequency (subwoofer) channel is dropped, and the sum is scaled so

@@ -19,31 +19,39 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  */
 public final class Music implements AutoCloseable {
     private final String name;
-    private final byte[] bytes;
+    private final byte[] bytes;   // the file, or null for a WAV on disk, which is read as it plays
+    private final String wavFile;
     private float loopStart, loopEnd;
     private boolean closed;
 
-    private Music(String name, byte[] bytes) {
+    private Music(String name, byte[] bytes, String wavFile) {
         this.name = name;
         this.bytes = bytes;
-        if (Audio.isAvailable()) AudioDecoder.open(name, bytes).close(); // fail now, not at play time, on a bad file
+        this.wavFile = wavFile;
+        if (Audio.isAvailable()) open().close(); // fail now, not at play time, on a bad file
+    }
+
+    private PcmStream open() {
+        return wavFile != null ? AudioDecoder.openWavFile(name, wavFile) : AudioDecoder.open(name, bytes);
     }
 
     /**
-     * Loads a track from a file path or classpath resource. Only the compressed file is read here.
+     * Loads a track from a file path or classpath resource. Only the compressed file is read here, and a {@code .wav} on
+     * disk is not read at all until it plays, then a little at a time.
      *
      * @throws java.io.UncheckedIOException if the file cannot be found or read
      * @throws IllegalArgumentException     if the format is unsupported or the file is corrupt
      */
     public static Music load(String path) {
-        return new Music(path, AudioDecoder.read(path));
+        if (AudioDecoder.isWavFile(path)) return new Music(path, null, path);
+        return new Music(path, AudioDecoder.read(path), null);
     }
 
     /**
      * Loads a track through an {@link AssetManager}, so it can come out of a mounted {@code .pak}.
      */
     public static Music load(AssetManager assets, String name) {
-        return new Music(name, AudioDecoder.read(assets, name));
+        return new Music(name, AudioDecoder.read(assets, name), null);
     }
 
     /**
@@ -105,7 +113,7 @@ public final class Music implements AutoCloseable {
     private Playback start(float fadeIn, boolean loop) {
         if (closed) throw new IllegalStateException("Music is closed: " + name);
         if (!Audio.ensureInit()) return Playback.silent(AudioChannel.MUSIC);
-        PcmStream stream = AudioDecoder.open(name, bytes);
+        PcmStream stream = open();
         int rate = stream.sampleRate();
         Playback p = Playback.start(new Playback.Spec(this, AudioChannel.MUSIC, 0, stream.channels(), stream,
                 fadeIn > 0f ? 0f : 1f, 1f, loop, Math.round(loopStart * rate), Math.round(loopEnd * rate), null));

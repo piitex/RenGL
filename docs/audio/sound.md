@@ -119,5 +119,6 @@ you got from `Audio.sound(path)` belongs to the cache: release it with `Audio.un
 - **Source limit.** OpenAL only allows a limited number of simultaneous sounds (typically 256, fewer on some
   platforms). Past that a play is dropped, a warning is logged, and the returned `Playback` is already
   finished.
-- **MP3 files carry a little silence at the start** (the encoder's delay), so loop points in an MP3 can drift by a few
-  milliseconds. Use `.ogg` or `.wav` for sample-tight loops.
+- **MP3 files from an encoder with no tag carry a little silence at the start** (the encoder's delay), so a loop in
+  one can drift by a few milliseconds. A file with a LAME or ffmpeg tag is trimmed to its true length on load. Use
+  `.ogg` or `.wav` when you don't know where a file came from.
