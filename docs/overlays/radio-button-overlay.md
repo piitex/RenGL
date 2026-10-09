@@ -65,7 +65,7 @@ group.onChange(b -> System.out.println("Plan: " + names.get(b)));
 
 ## Look
 
-The ring uses the same field tokens as a checkbox. The inner dot uses the theme text color.
+The ring uses the same field tokens as a checkbox. The inner dot uses the theme's [accent](../styling/theming.md#the-accent).
 
 ```java
 button.setDotColor(Color.BLUE); // pins the dot color

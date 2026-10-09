@@ -42,10 +42,9 @@ import java.util.function.Function;
  * than in further constructor overloads here. {@link PercentSliderOverlay} is an
  * example of that shape.
  * <p>
- * Track, fill, thumb, and tick colors use {@link Theme#getScrollTrack()},
- * {@link Theme#getScrollThumb()}, and {@link Theme#getFieldBorder()} as their baseline.
- * These are the tokens a scrollbar already defines for the same "groove with a
- * draggable thumb on it" concept, so no new ones are introduced here. The label uses
+ * The track and tick colors use {@link Theme#getScrollTrack()} and {@link Theme#getFieldBorder()}
+ * as their baseline, the tokens a scrollbar defines for the same "groove" concept. The fill and thumb
+ * use {@link Theme#getAccent()}. The label uses
  * {@link Theme#getText()}, the same as every other themed label in this engine.
  */
 public class SliderOverlay extends Overlay implements Themeable, Draggable, FontScalable {
@@ -550,8 +549,8 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
     @Override
     public void applyTheme(Theme theme) {
         trackColor.applyTheme(theme.getScrollTrack());
-        fillColor.applyTheme(theme.getScrollThumb());
-        thumbColor.applyTheme(theme.getScrollThumb());
+        fillColor.applyTheme(theme.getAccent());
+        thumbColor.applyTheme(theme.getAccent());
         tickColor.applyTheme(theme.getFieldBorder());
         labelColor.applyTheme(theme.getText());
         tickLabelColor.applyTheme(theme.getPlaceholderText());

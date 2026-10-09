@@ -63,6 +63,31 @@ public interface Theme {
     Color getSelection();
 
     /**
+     * The app's accent: the color of whatever shows "on", "filled" or "chosen" in a control. The fill of a
+     * {@link me.piitex.engine.ui.overlays.SliderOverlay} and its thumb, of a
+     * {@link me.piitex.engine.ui.overlays.ProgressBarOverlay}, the checkmark of a
+     * {@link me.piitex.engine.ui.overlays.CheckBoxOverlay}, the dot of a
+     * {@link me.piitex.engine.ui.overlays.RadioButtonOverlay} and the "on" track of a
+     * {@link me.piitex.engine.ui.overlays.ToggleSwitchOverlay}. Changing it restyles all of them at once, and a control
+     * that was given a color of its own keeps it. See {@link #getAccentTint()} for the faint version behind selected rows.
+     * <p>
+     * A theme written before this existed gets {@link #getSelection()} at full opacity, so it looks as it did.
+     */
+    default Color getAccent() {
+        Color selection = getSelection();
+        return new Color(selection.getR(), selection.getG(), selection.getB(), 1f);
+    }
+
+    /**
+     * The accent as a wash: the fill behind a selected row of a {@link me.piitex.engine.ui.containers.TreeView} or
+     * {@link me.piitex.engine.ui.containers.TableView}, faint enough for the row's text to stay readable. A theme that
+     * doesn't say gets {@link #getSelection()}.
+     */
+    default Color getAccentTint() {
+        return getSelection();
+    }
+
+    /**
      * A {@link ButtonOverlay}'s background at rest.
      */
     Color getButtonBackground();

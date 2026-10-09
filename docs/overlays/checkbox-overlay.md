@@ -39,7 +39,7 @@ box.onToggle(checked -> System.out.println(checked)); // fired with the new stat
 ## Look
 
 The box uses the same field tokens as a text field (background, hover, border, corner radius). The
-checkmark uses the theme text color.
+checkmark uses the theme's [accent](../styling/theming.md#the-accent).
 
 ```java
 box.setCheckColor(Color.GREEN); // pins the mark color

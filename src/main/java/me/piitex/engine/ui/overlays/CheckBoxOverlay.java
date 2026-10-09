@@ -18,9 +18,7 @@ import java.util.function.Consumer;
  * themed the same way {@link TextFieldOverlay}'s field box is, taking its background,
  * hover, and border from {@link Theme#getFieldBackground()},
  * {@link Theme#getFieldHoverBackground()}, and {@link Theme#getFieldBorder()}. The
- * checkmark drawn on top while {@link #isChecked()} uses {@link Theme#getText()}, the
- * same token and contrast pairing a themed text field's typed text uses against that
- * field background.
+ * checkmark drawn on top while {@link #isChecked()} uses {@link Theme#getAccent()}.
  * <p>
  * This class registers its own {@link #onMouseClick} handler to toggle state. Calling
  * {@code onMouseClick(...)} afterward replaces that handler and stops the checkbox from
@@ -132,7 +130,7 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
         getStyling().applyThemeBorderColor(theme.getFieldBorder());
         getStyling().applyThemeBorderThickness(theme.getBorderThickness());
         getStyling().applyThemeCornerRadius(theme.getCornerRadius());
-        checkColor.applyTheme(theme.getText());
+        checkColor.applyTheme(theme.getAccent());
     }
 
     @Override

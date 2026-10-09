@@ -90,7 +90,7 @@ slider.setLabelColor(Color.BLACK);
 slider.setTickLabelColor(Color.GRAY);
 ```
 
-Colors come from the theme (scroll track/thumb tokens and the border/text tokens) and setting one pins it. The track, fill, thumb, active thumb and tick colors are [`Paint`](../styling/colors-and-paints.md)s, so each can be a gradient. `isDragging()`
+Colors come from the theme and setting one pins it: the track from the scroll-track token, the fill and thumb from the [accent](../styling/theming.md#the-accent), the ticks from the border token and the labels from the text token. The track, fill, thumb, active thumb and tick colors are [`Paint`](../styling/colors-and-paints.md)s, so each can be a gradient. `isDragging()`
 reports whether the thumb is being dragged.
 
 ## PercentSliderOverlay
