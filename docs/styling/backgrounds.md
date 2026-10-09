@@ -48,13 +48,13 @@ All in `me.piitex.engine.ui.background`.
 
 ### DotGridBackground
 
-A tiled grid of small dots, the "infinite canvas" look of node editors and whiteboards. Fully static.
+A tiled grid of small dots, the "infinite canvas" look of node editors and whiteboards. Static unless its paint is animated.
 
 ```java
 DotGridBackground grid = new DotGridBackground();
 grid.setSpacing(24f); // distance between dots (default 24)
 grid.setDotRadius(1.5f); // default 1.5
-grid.setDotColor(new Color(0.5f, 0.5f, 0.5f, 0.35f)); // default
+grid.setDotColor(new Color(0.5f, 0.5f, 0.5f, 0.35f)); // default; any paint
 panel.setBackground(grid);
 ```
 
@@ -186,17 +186,38 @@ electric.discharge(); // fire a burst from every node at once, e.g. on a hit or 
 | `setBranchChance(float)` | 0.6 | Chance an arc forks into 1-3 thinner branches. |
 | `setBoltThickness(float)` | 2 | Width of a bolt's bright core; the glow scales with it. |
 | `setNodeLinkDistance(float)` | 260 | Nodes closer than this arc between each other. 0 disables. |
-| `setGlowColor(Color)` | light blue | Outer glow of bolts and nodes. Its alpha scales the whole glow. |
-| `setCoreColor(Color)` | near-white | Bright centre of bolts, nodes and sparks. |
+| `setGlowColor(Paint)` | light blue | Outer glow of bolts and nodes. Its alpha scales the whole glow. |
+| `setCoreColor(Paint)` | near-white | Bright centre of bolts, nodes and sparks. |
 | `setSparksEnabled(boolean)` | true | Sparks where an arc strikes a wall, node or the cursor. |
 | `setMouseInteractionEnabled(boolean)` | false | Nodes arc toward the cursor when it is inside the element. |
 | `setStrikeRadius(float)` | 220 | How close the cursor must be to a node to draw its arcs. |
 
 Each setter has a matching getter. For a different mood, change the two colors, or pass a
-[`RainbowColor`](colors-and-paints.md#rainbowcolor-rgb-cycling) for a cycling RGB glow. For example, a purple glow
+[`RainbowColor`](colors-and-paints.md#rainbowcolor-rgb-cycling) for a cycling RGB glow. A gradient runs along each bolt
+from where it starts to where it ends. For example, a purple glow
 `new Color(0.7f, 0.35f, 1f, 1f)` with a pale pink core, or a red glow with a yellow-white core. The renderer has no blur, so
 the glow is made of layered strokes (drawn with `Renderer.drawPolyline`) and stacked translucent circles. Cost is a
 few polylines and circles per node per frame, independent of element size. A dark base color shows it off best.
+
+### ImageBackground
+
+A picture behind an element or the window: the static background.
+
+```java
+ImageBackground sky = new ImageBackground(new File("assets/sky.png"));
+sky.setFit(ImageBackground.Fit.COVER);
+window.setBackground(sky);
+```
+
+| Fit | The picture |
+|---|---|
+| `COVER` (default) | Fills the space, keeping its proportions and cutting off what doesn't fit |
+| `CONTAIN` | Shows all of it, keeping its proportions, with the leftover space on two sides empty |
+| `STRETCH` | Fills the space and shows all of it, squeezed or stretched to fit |
+| `TILE` | Repeats at its own size from the top-left |
+
+`setPath(String)` names a picture without reading it and `resolveFrom(Path base)` reads it from a folder. If it can't be
+read the background draws nothing, `isMissing()` is true and the path is kept. Opacity and fades work as for the others.
 
 ### Fading a background
 
@@ -212,6 +233,41 @@ stars.setEnabled(false); // stop rendering and updating entirely
 
 `fadeOut` leaves the background enabled (particles keep simulating while invisible). Use `setEnabled(false)`
 to stop the work.
+
+## Backgrounds in files
+
+A layout file or a theme file can name a background and its settings, so an effect is data an editor changes. The
+kinds and their ids are in `BackgroundKinds`:
+
+| `type` | Class |
+|---|---|
+| `dotgrid` | `DotGridBackground` |
+| `animateddots` | `AnimatedDotBackground` |
+| `constellation` | `ConstellationBackground` |
+| `electric` | `ElectricNodeBackground` |
+| `image` | `ImageBackground` |
+
+```json
+{ "type": "constellation", "particleCount": 120, "linkDistance": 90, "particleColor": "#FFFFFFCC" }
+{ "type": "image", "image": "assets/sky.png", "fit": "COVER", "opacity": 0.8 }
+```
+
+Each setting is named as the setter is, without `set`, except where noted in `BackgroundKinds.get(id).getSettings()`,
+which lists every setting of a kind with its label, type and range, so a tool can build a field for each. A setting
+the file leaves out starts as it always does. A color setting is any [paint](colors-and-paints.md#paints-in-files): a color, a gradient
+or a [`RainbowColor`](colors-and-paints.md#rainbowcolor-rgb-cycling) written as `{ "type": "rainbow", ... }`. A picture's path is read from the project's folder.
+
+```java
+Background made = BackgroundKinds.read(json, projectFolder);   // json: the parsed object
+Map<String, Object> settings = BackgroundKinds.write(made);    // null for a background of your own class
+Background same = BackgroundKinds.apply(made, settings, projectFolder); // changes only what differs
+```
+
+`apply` is for a tool that shows an effect while it is edited: it changes the settings that differ on the background
+that is there, so changing a color doesn't start a particle field over.
+
+In a layout file the element's `effect` property holds these settings, and in a theme file `windowEffect` and
+`containerEffect` do. A background of another class, such as one you wrote, is left out of a file.
 
 ## Writing your own background
 
@@ -256,5 +312,7 @@ things such as the mouse.
 | `AnimatedDotBackground` | spacing, min/max radius, speed, intensity, hue span, wave length, saturation, brightness, alpha (all listed above) |
 | `ElectricNodeBackground` | node count, radius, speed range, arc rate, arc length range, arc lifetime, jaggedness, branch chance, bolt thickness, node link distance, glow/core colors, sparks, mouse strike, `discharge()` (all listed above) |
 | `ConstellationBackground` | particle count, speed range, radius, link distance, line thickness, colors, mouse repel, obstacles (all listed above) |
-| [`Element`](../core/element.md) | `getBackground()`, `setBackground(Background)` |
+| `ImageBackground` | `getPath/setPath`, `resolveFrom(Path)`, `getImage/setImage`, `isMissing`, `getFit/setFit` |
+| `BackgroundKinds` | `all()`, `get(id)`, `of(background)`, `read(json, base)`, `write(background)`, `apply(existing, json, base)`, `resolve(background, base)` |
+| [`Element`](../core/element.md) | `getBackground()`, `setBackground(Background)`, `isBackgroundSet()`, `resetBackground()`, `applyThemeBackground(Background)`, `applyThemeEffect(Map, Path)` |
 | [`Window`](../core/window.md#background-effects) | `getBackground()`, `setBackground(Background)` |

@@ -11,6 +11,7 @@ import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.scroll.ScrollBarStyle;
 import me.piitex.engine.ui.scroll.Scrollable;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.text.Font;
 import me.piitex.engine.ui.theme.Overridable;
@@ -55,9 +56,9 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
     private Consumer<T> onSelect;
     private int maxVisibleRows = 8;
     private float fontSize = 16f;
-    private final Overridable<Color> textColor = new Overridable<>(Color.BLACK);
-    private final Overridable<Color> placeholderColor = new Overridable<>(Color.LIGHT_GRAY);
-    private final Overridable<Color> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
+    private final Overridable<Paint> textColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> placeholderColor = new Overridable<>(Color.LIGHT_GRAY);
+    private final Overridable<Paint> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
     private ScrollBarStyle scrollBarStyle = new ScrollBarStyle();
 
     private org.jetbrains.skia.Font font;
@@ -178,14 +179,14 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         setFontSize(sizes[0]);
     }
 
-    public Color getTextColor() {
+    public Paint getTextColor() {
         return textColor.get();
     }
 
     /**
      * Pins the text color against theme switches. See {@link Overridable}.
      */
-    public void setTextColor(Color color) {
+    public void setTextColor(Paint color) {
         textColor.set(color);
     }
 
@@ -233,6 +234,15 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
     private void choose(int index) {
         selectedIndex = index;
         if (onSelect != null) onSelect.accept(getSelected());
+    }
+
+    @Override
+    public void update(float delta) {
+        super.update(delta);
+        scrollBarStyle.advance(delta);
+        AnimatedPaint.advanceIfAnimated(textColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(placeholderColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(selectionColor.get(), delta);
     }
 
     /* Theming */
@@ -497,11 +507,11 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
 
             if (strip > 0f) {
                 float thickness = scrollBarStyle.getThickness(), barRadius = scrollBarStyle.getCornerRadius();
-                Color track = scrollBarStyle.getTrackColor();
+                Paint track = scrollBarStyle.getTrackColor();
                 if (track != null) {
                     renderer.drawQuad((float) trackX(), (float) trackY(), thickness, (float) trackHeight(), track, barRadius);
                 }
-                Color thumb = draggingThumb ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
+                Paint thumb = draggingThumb ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
                 if (thumb != null) {
                     renderer.drawQuad((float) trackX(), (float) thumbY(), thickness, (float) thumbLength(), thumb, barRadius);
                 }

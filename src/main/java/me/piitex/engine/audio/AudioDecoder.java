@@ -97,7 +97,10 @@ final class AudioDecoder {
     static PcmStream open(String name, byte[] bytes) {
         if (isWav(bytes)) return decodeWav(name, bytes).stream();
         if (isOgg(bytes)) return isOpus(bytes) ? new OpusStream(name, bytes) : new VorbisStream(name, bytes);
-        if (isFlac(bytes)) return new FlacStream(name, bytes);
+        if (isFlac(bytes)) {
+            PcmStream flac = new FlacStream(name, bytes);
+            return flac.channels() > 2 ? Downmix.stream(flac) : flac;
+        }
         if (isMp3(bytes)) return new Mp3Stream(name, bytes);
         throw new IllegalArgumentException("Unsupported audio format: " + name
                 + " (supported: .ogg, .opus, .flac, .mp3, .wav)");
@@ -118,7 +121,8 @@ final class AudioDecoder {
     }
 
     static IllegalArgumentException tooManyChannels(String name, int channels) {
-        return new IllegalArgumentException(name + " has " + channels + " channels; only mono and stereo are supported");
+        return new IllegalArgumentException(name + " has " + channels + " channels; mono, stereo and up to "
+                + Downmix.MAX_CHANNELS + " channels (mixed down to stereo) are supported");
     }
 
     private static Pcm decodeWav(String name, byte[] bytes) {
@@ -145,7 +149,7 @@ final class AudioDecoder {
             pos = body + size + (size & 1); // chunks are word aligned
         }
         if (dataOff < 0 || channels == 0) throw new IllegalArgumentException("Invalid WAV file: " + name);
-        if (channels > 2) throw tooManyChannels(name, channels);
+        if (channels > Downmix.MAX_CHANNELS) throw tooManyChannels(name, channels);
         boolean pcm = format == 1 && (bits == 8 || bits == 16 || bits == 24 || bits == 32);
         boolean floating = format == 3 && bits == 32;
         if (!pcm && !floating) throw new IllegalArgumentException("Unsupported WAV encoding in " + name
@@ -166,6 +170,7 @@ final class AudioDecoder {
                         : (short) (b.getInt(p) >> 16);
             };
         }
+        if (Downmix.supports(channels)) return new Pcm(Downmix.toStereo(out, channels), 2, rate);
         return new Pcm(out, channels, rate);
     }
 }

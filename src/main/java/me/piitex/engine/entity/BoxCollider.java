@@ -12,8 +12,8 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  * {@link Polygon} while it is turned.
  */
 public class BoxCollider extends Collider {
-    @Property(min = 0) public float width = 32f;
-    @Property(min = 0) public float height = 32f;
+    @Property(min = 0, tooltip = "How wide the box is, in the entity's own units") public float width = 32f;
+    @Property(min = 0, tooltip = "How tall the box is, in the entity's own units") public float height = 32f;
 
     public BoxCollider() {
     }

@@ -108,8 +108,8 @@ The [`InputProcessor`](input/input-and-focus.md#reference-the-input-types) runs 
 into children, always preferring the highest-index child that contains the point. The result is the
 *topmost element* under the cursor. If that element has no click listener, the click goes up to the nearest
 container above it that has one, so clicking a `Label` inside a clickable `Panel` fires the panel's listener. Only
-one listener runs: if the label has a listener of its own, the panel's does not fire. Drags and the cursor shape
-go up the same way (see the table).
+one listener runs: if the label has a listener of its own, the panel's does not fire, unless the label
+[propagates clicks](core/element.md#onmouseclick). Drags and the cursor shape go up the same way (see the table).
 
 | Input | What happens |
 |---|---|
@@ -166,7 +166,7 @@ already true inside `render`, `onRender` and `Transition.render`.
 
 ## Memory and lifetime
 
-- Fonts (`Typeface`) and decoded images are cached process-wide and shared. They are never closed.
+- Fonts (`Typeface`) and decoded images are cached process-wide and shared, within a size limit: the ones used longest ago are let go (not closed, so nothing on screen breaks) and loaded again if asked for.
 - A text overlay owns a native Skia `Font`. Call `dispose()` when permanently discarding a [`TextOverlay`](overlays/text-overlay.md),
   [`TextFieldOverlay`](overlays/text-field-overlay.md), [`TextAreaOverlay`](overlays/text-area-overlay.md) or [`SliderOverlay`](overlays/slider-overlay.md) to release it.
 - Themeable elements register with [`ThemeManager`](styling/theming.md) through a weak set, so you do not need to unregister them.

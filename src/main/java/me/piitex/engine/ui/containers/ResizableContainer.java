@@ -6,6 +6,7 @@ import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.layout.Layout;
 import me.piitex.engine.ui.text.FontScalable;
 
 import java.util.Arrays;
@@ -19,11 +20,13 @@ import java.util.WeakHashMap;
 /**
  * A {@link Container} that can change size, and stretches or shrinks its children along with itself.
  * <p>
- * <b>Following the window.</b> A top-level ResizableContainer (one added straight to a {@link Window}) tracks
+ * <b>Following the window.</b> A ResizableContainer not inside another one tracks
  * the window's size proportionally: if it covers half the window's width, it keeps covering half. Its position
  * scales the same way. Turn that off with {@link #setResizeWithWindow(boolean)} to resize it only through
- * {@link #resizeTo}. A ResizableContainer nested inside another container is never driven by the window; if
- * its parent is a ResizableContainer, it is scaled as one of that parent's children.
+ * {@link #resizeTo}. One nested inside a plain container follows the window the same way, in its parent's
+ * coordinates, and inside a {@link me.piitex.engine.ui.layout.Layout} only its size follows, as the layout places it.
+ * One below another ResizableContainer is never driven by the window; it is scaled as one of that container's
+ * children.
  * <p>
  * <b>Dragging.</b> {@link #setUserResizable} lets the user resize it by dragging its corners (or any {@link
  * Handle}s you choose).
@@ -216,7 +219,7 @@ public class ResizableContainer extends Container {
     // ------------------------------------------------------------------------------------------ following the window
 
     /**
-     * Whether a top-level container tracks the window's size (default true). See the class docs.
+     * Whether this container tracks the window's size (default true). See the class docs.
      */
     public void setResizeWithWindow(boolean resizeWithWindow) {
         this.resizeWithWindow = resizeWithWindow;
@@ -237,7 +240,7 @@ public class ResizableContainer extends Container {
 
     @Override
     public void update(float delta) {
-        if (resizeWithWindow && getParent() == null && activeHandle == null) {
+        if (resizeWithWindow && !hasResizableAncestor() && activeHandle == null) {
             Window window = resolveWindow();
             if (window != null) {
                 syncToWindow(window);
@@ -246,25 +249,48 @@ public class ResizableContainer extends Container {
         super.update(delta);
     }
 
+    /** Whether a ResizableContainer above this one already scales it along with itself. */
+    private boolean hasResizableAncestor() {
+        for (Container up = getParent(); up != null; up = up.getParent()) {
+            if (up instanceof ResizableContainer) return true;
+        }
+        return false;
+    }
+
     private void syncToWindow(Window window) {
         double windowWidth = window.getWindowOptions().getWidth();
         double windowHeight = window.getWindowOptions().getHeight();
         if (windowWidth <= 0 || windowHeight <= 0) return;
 
         if (!hasReference) {
-            refWindowWidth = windowWidth;
-            refWindowHeight = windowHeight;
+            // A container built before the window opened was laid out for the size the window was asked for. If the
+            // window opened maximized, or shrunk to fit the screen, that is not the size it has now.
+            int designWidth = window.getWindowOptions().getDesignWidth();
+            int designHeight = window.getWindowOptions().getDesignHeight();
+            boolean builtForDesign = window.getFrameCount() <= 2 && designWidth > 0 && designHeight > 0;
+            refWindowWidth = builtForDesign ? designWidth : windowWidth;
+            refWindowHeight = builtForDesign ? designHeight : windowHeight;
             refX = getX();
             refY = getY();
             refWidth = getWidth();
             refHeight = getHeight();
             hasReference = true;
-            return;
+            if (!builtForDesign) return; // otherwise the window may already differ from it; scale now
         }
 
         double rx = windowWidth / refWindowWidth;
         double ry = windowHeight / refWindowHeight;
-        applyBounds(refX * rx, refY * ry, refWidth * rx, refHeight * ry);
+        // Once min/max holds the size, the container keeps its middle where the window put it rather than its
+        // corner, so it stays centered on the same spot instead of sliding off it.
+        double width = Math.max(minWidth, Math.min(refWidth * rx, maxWidth));
+        double height = Math.max(minHeight, Math.min(refHeight * ry, maxHeight));
+        double x = (refX + refWidth / 2) * rx - width / 2;
+        double y = (refY + refHeight / 2) * ry - height / 2;
+        if (getParent() instanceof Layout) { // the layout places it; only the size follows the window
+            x = getX();
+            y = getY();
+        }
+        applyBounds(x, y, width, height);
         hasReference = true; // applyBounds drops it; this resize came from the reference itself
     }
 
@@ -495,6 +521,9 @@ public class ResizableContainer extends Container {
         element.setHeight(element.getHeight() * t.sy());
         if (scaleFonts && element instanceof FontScalable scalable) {
             scaleFont(element, scalable, t); // after the size: a TextOverlay re-measures its own box when its font changes
+        }
+        if (element instanceof Layout layout) {
+            layout.scaleGaps(t.sx(), t.sy());
         }
         if (element instanceof Container container) {
             for (Element child : container.getElements().values()) {

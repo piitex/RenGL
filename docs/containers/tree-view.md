@@ -174,7 +174,7 @@ tree.setIndent(14f); // per level; the arrow takes the same width. Default 16
 tree.setFontSize(14f); // default 15
 tree.setIconSize(16f); // default 14
 tree.setRowCornerRadius(4f); // rounds the selected and hovered rows. Default 0
-tree.setTextColor(Color.WHITE); tree.setDimTextColor(Color.GRAY); tree.setSelectionColor(...); // pin against the theme
+tree.setTextColor(Color.WHITE); tree.setDimTextColor(Color.GRAY); tree.setSelectionColor(...); // pin against the theme; any paint
 tree.dispose(); // frees the font
 ```
 

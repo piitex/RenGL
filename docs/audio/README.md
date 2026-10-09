@@ -52,7 +52,7 @@ running. Bad *files* do throw (see below).
 
 | | |
 |---|---|
-| Formats | `.ogg` (Vorbis), `.opus`, `.flac`, `.mp3` and `.wav` (8, 16, 24 and 32-bit PCM, and 32-bit float). Mono or stereo (Opus with more channels is mixed down to stereo) |
+| Formats | `.ogg` (Vorbis), `.opus`, `.flac`, `.mp3` and `.wav` (8, 16, 24 and 32-bit PCM, and 32-bit float). Mono or stereo. Files with more channels are mixed down to stereo: Opus, WAV and FLAC up to 8 channels (7.1) and Ogg Vorbis up to 6 (5.1) |
 | Lookup | The path is tried on disk first, then on the classpath. `Sound.load` and `Music.load` also accept an [`AssetManager`](../reference/utilities.md#assetmanager) so audio can come from a `.pak` |
 | Detection | By file content, not extension |
 | Errors | `UncheckedIOException` if the file is missing, `IllegalArgumentException` if the format is unsupported or corrupt |
@@ -69,8 +69,28 @@ Every format here is royalty-free or out of patent. **AAC (`.m4a`, `.aac`) is de
 its patents make it a licensing risk for a commercial product. Convert to Ogg Vorbis or Opus, for example
 `ffmpeg -i song.m4a -c:a libvorbis -q:a 5 song.ogg`.
 
-Ogg Vorbis, Opus and FLAC seek exactly, which matters for [loop points](music.md#loop-points). MP3 loops are not
-sample-tight.
+Ogg Vorbis, Opus and FLAC seek exactly, which matters for [loop points](music.md#loop-points) and for
+[`Playback.seek`](playback.md). MP3 loops are not sample-tight.
+
+A surround file is mixed to stereo like this: the front left and right stay on their sides, the centre and the back and
+side channels go into both ears at about 70%, the low-frequency (subwoofer) channel is dropped, and the sum is scaled so
+a loud file cannot clip.
+
+## Output device
+
+Sound comes out of the system's default device unless you choose another:
+
+```java
+List<String> devices = Audio.getDevices();     // "Speakers", "Headphones", ...
+Audio.setDevice(devices.get(1));               // everything playing moves there, from where it was
+Audio.setDevice(null);                         // back to the system default
+String now = Audio.getDevice();
+```
+
+`setDevice` returns false, and leaves things as they were, if the device cannot be opened. The choice is remembered: if the
+chosen device disappears (an unplugged headset) the sound moves to the default one. While the default is in use, sound also
+follows the system's default device when the user changes it. Choose the device before the first sound plays and it is the
+one that opens.
 
 ## Playing UI sounds
 
@@ -121,5 +141,6 @@ Pass an `.ogg`, `.mp3` or `.wav` path as the first argument to try music crossfa
 | `Audio.setMasterVolume(v)` / `getMasterVolume()` | Master volume, 0 to 1 |
 | `Audio.setMuted(bool)` / `isMuted()` | Mute without losing volumes |
 | `Audio.pauseAll()` / `resumeAll()` / `stopAll()` | Act on everything playing |
+| `Audio.getDevices()` / `getDevice()` / `setDevice(name)` | List the [output devices](#output-device), read the one in use, switch to another or to the default (`null`) |
 | `Audio.isAvailable()` | Whether the audio device opened |
 | `Audio.shutdown()` | Stop everything and close the device |

@@ -24,7 +24,6 @@ import java.io.File;
  *   <li>"Reopen the last one" opens the last closed game window again, with the scene where it left off.</li>
  * </ul>
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class MultiWindowDemo {
     private static int opened;
     private static Window lastClosed;

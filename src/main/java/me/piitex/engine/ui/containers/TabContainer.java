@@ -7,6 +7,7 @@ import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.events.MouseClickEvent;
 import me.piitex.engine.ui.layout.Layout;
 import me.piitex.engine.ui.overlays.Overlay;
@@ -679,6 +680,12 @@ public class TabContainer extends Layout {
         }
 
         @Override
+        public void update(float delta) {
+            super.update(delta);
+            style.advance(delta);
+        }
+
+        @Override
         public boolean canScroll(double deltaX, double deltaY) {
             double delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
             if (delta == 0) return false;
@@ -776,7 +783,7 @@ public class TabContainer extends Layout {
                 float tabX = stripLeft + (float) (tab.x - scrollOffset);
                 if (tabX + tab.width < stripLeft || tabX > stripLeft + stripWidth) continue;
 
-                Color fill = tab == selected ? style.getSelectedColor()
+                Paint fill = tab == selected ? style.getSelectedColor()
                         : i == hovered && tab.enabled ? style.getHoverColor() : style.getTabColor();
                 renderer.drawQuad(tabX, top, (float) tab.width, height, fill, radius);
             }
@@ -792,10 +799,8 @@ public class TabContainer extends Layout {
                 if (tabX + tabWidth < stripLeft || tabX > stripLeft + stripWidth) continue;
 
                 boolean isSelected = tab == selected;
-                Color textColor = isSelected ? style.getSelectedTextColor() : style.getTextColor();
-                if (!tab.enabled) {
-                    textColor = new Color(textColor.getR(), textColor.getG(), textColor.getB(), textColor.getA() * 0.4f);
-                }
+                Paint textColor = isSelected ? style.getSelectedTextColor() : style.getTextColor();
+                if (!tab.enabled) renderer.pushAlpha(0.4f);
 
                 if (isSelected) {
                     if (indicator > 0) {
@@ -813,6 +818,7 @@ public class TabContainer extends Layout {
                 if (tab.closable) {
                     drawCloseButton(renderer, tab, tabX, top, height, textColor, i == hovered);
                 }
+                if (!tab.enabled) renderer.popAlpha();
             }
 
             renderer.popClip();
@@ -833,22 +839,25 @@ public class TabContainer extends Layout {
                 renderer.drawQuad(x, top, width, height, style.getHoverColor(), style.getCornerRadius());
             }
 
-            Color base = style.getTextColor();
-            Color color = enabled ? base : new Color(base.getR(), base.getG(), base.getB(), base.getA() * 0.35f);
+            Paint color = style.getTextColor();
+            if (!enabled) renderer.pushAlpha(0.35f);
             float reach = 5f;
             float centerX = x + width / 2f, centerY = top + height / 2f;
             float tip = centerX + direction * reach * 0.5f, back = centerX - direction * reach * 0.5f;
             renderer.drawLine(back, centerY - reach, tip, centerY, color, 1.5f);
             renderer.drawLine(tip, centerY, back, centerY + reach, color, 1.5f);
+            if (!enabled) renderer.popAlpha();
         }
 
-        private void drawCloseButton(Renderer renderer, Tab tab, float tabX, float top, float height, Color color, boolean tabHovered) {
+        private void drawCloseButton(Renderer renderer, Tab tab, float tabX, float top, float height, Paint color, boolean tabHovered) {
             float size = style.getCloseButtonSize();
             float x = tabX + (float) tab.width - style.getHorizontalPadding() / 2f - size;
             float y = top + (height - size) / 2f;
 
             if (tabHovered && onCloseButton(tab, MouseTracker.getX())) {
-                renderer.drawQuad(x, y, size, size, new Color(color.getR(), color.getG(), color.getB(), 0.2f), 3f);
+                renderer.pushAlpha(0.2f);
+                renderer.drawQuad(x, y, size, size, color, 3f);
+                renderer.popAlpha();
             }
             float reach = size * 0.25f;
             float centerX = x + size / 2f, centerY = y + size / 2f;

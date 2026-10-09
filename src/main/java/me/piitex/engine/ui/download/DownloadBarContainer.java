@@ -4,6 +4,7 @@ import me.piitex.engine.io.download.Download;
 import me.piitex.engine.io.download.DownloadManager;
 import me.piitex.engine.io.download.DownloadState;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.color.StripeStyle;
 import me.piitex.engine.ui.layout.HorizontalLayout;
 import me.piitex.engine.ui.layout.Layout;
@@ -57,11 +58,11 @@ public class DownloadBarContainer extends VerticalLayout {
     private DownloadManager manager;
     private boolean showControls = true;
 
-    private final Color themedFill;
-    private Color activeColor = new Color(0.20f, 0.70f, 0.30f, 1f);
-    private Color doneColor = new Color(0.20f, 0.70f, 0.30f, 1f);
-    private Color failedColor = Color.RED;
-    private Color pausedColor = Color.ORANGE;
+    private final Paint themedFill;
+    private Paint activeColor = new Color(0.20f, 0.70f, 0.30f, 1f);
+    private Paint doneColor = new Color(0.20f, 0.70f, 0.30f, 1f);
+    private Paint failedColor = Color.RED;
+    private Paint pausedColor = Color.ORANGE;
     private StripeStyle stripeStyle = new StripeStyle().setColor(new Color(0.65f, 0.65f, 0.65f, 1f));
     private Look look = Look.WAITING;
 
@@ -204,7 +205,7 @@ public class DownloadBarContainer extends VerticalLayout {
     /**
      * Fill color while downloading, under the stripes. Default: green.
      */
-    public void setActiveColor(Color color) {
+    public void setActiveColor(Paint color) {
         this.activeColor = color;
         if (look == Look.DOWNLOADING) bar.setFillColor(color);
     }
@@ -251,21 +252,21 @@ public class DownloadBarContainer extends VerticalLayout {
     /**
      * Fill color once completed. Default: green.
      */
-    public void setDoneColor(Color color) {
+    public void setDoneColor(Paint color) {
         this.doneColor = color;
     }
 
     /**
      * Fill color after a failure. Default: red.
      */
-    public void setFailedColor(Color color) {
+    public void setFailedColor(Paint color) {
         this.failedColor = color;
     }
 
     /**
      * Fill color while paused. Default: orange.
      */
-    public void setPausedColor(Color color) {
+    public void setPausedColor(Paint color) {
         this.pausedColor = color;
     }
 

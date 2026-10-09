@@ -1,12 +1,13 @@
 package me.piitex.engine.ui.text;
 
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.jetbrains.skia.FontMgr;
 import org.jetbrains.skia.FontStyle;
 import org.jetbrains.skia.Typeface;
 
+import me.piitex.engine.utils.WeightedCache;
+
 import java.io.File;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Caches {@link Typeface} instances by file path.
@@ -27,16 +28,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * so it is safe to call from any thread, including the main thread before the render
  * thread exists.
  * <p>
- * Cached Typefaces are never closed. They are native-backed, through Skia's Managed,
- * but bounded by the number of distinct font files an application uses and typically
- * live for the whole process, so reference-counting them against every TextOverlay that
- * might still be drawing with one is not worth the complexity for a UI toolkit. An
- * application loading many one-off fonts at runtime, such as user-uploaded fonts,
- * rather than a fixed set shipped with it, would need to revisit this.
+ * The cache stays under {@link #getCacheLimit()} bytes of font files (128 MiB by default) by dropping the typefaces
+ * used longest ago. A dropped typeface is not closed: text still drawn with it keeps working, its memory is freed once
+ * nothing uses it, and loading the file again parses it again. An application's own fonts fit and stay cached.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public final class Font {
-    private static final Map<String, Typeface> cache = new ConcurrentHashMap<>();
+    private static final WeightedCache<Typeface> cache = new WeightedCache<>(128L << 20);
     private static volatile Typeface defaultTypeface;
+    private static volatile Typeface monospaceTypeface;
     private static File defaultFont;
 
     private Font() {
@@ -47,16 +47,35 @@ public final class Font {
      */
     public static Typeface load(File fontFile) {
         String key = fontFile.getAbsolutePath();
-        return cache.computeIfAbsent(key, path -> {
+        return cache.get(key, () -> {
             // FontMgr.Companion.getDefault() is the underlying OS font manager
             // (CoreText, DirectWrite, or Fontconfig depending on the platform).
             // It is what knows how to parse a font file on disk.
-            Typeface t = FontMgr.Companion.getDefault().makeFromFile(path, 0);
+            Typeface t = FontMgr.Companion.getDefault().makeFromFile(key, 0);
             if (t == null) {
-                throw new IllegalArgumentException("Not a valid font file: " + path);
+                throw new IllegalArgumentException("Not a valid font file: " + key);
             }
             return t;
-        });
+        }, t -> Math.max(1, fontFile.length()));
+    }
+
+    /**
+     * How many bytes of font files the cache may hold before it drops the least recently used typeface. Default 128 MiB.
+     * 0 or less means no limit.
+     */
+    public static void setCacheLimit(long bytes) {
+        cache.setLimit(bytes);
+    }
+
+    public static long getCacheLimit() {
+        return cache.getLimit();
+    }
+
+    /**
+     * Drops every cached typeface loaded from a file. Text still using one keeps it.
+     */
+    public static void clearCache() {
+        cache.clear();
     }
 
     /**
@@ -90,6 +109,39 @@ public final class Font {
             }
         }
         return t;
+    }
+
+    /**
+     * A typeface whose letters are all the same width, for code: Menlo, Consolas, DejaVu Sans Mono or whichever of the
+     * common ones the system has, else the default font. Loaded once and reused.
+     */
+    public static Typeface monospace() {
+        Typeface t = monospaceTypeface;
+        if (t == null) {
+            synchronized (Font.class) {
+                t = monospaceTypeface;
+                if (t == null) {
+                    FontMgr fonts = FontMgr.Companion.getDefault();
+                    for (String family : new String[]{"Menlo", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Courier New", "Courier"}) {
+                        Typeface candidate = normalTypeface(fonts, "matchFamilyStyle", family);
+                        if (candidate != null && isMonospace(candidate)) {
+                            t = candidate;
+                            break;
+                        }
+                    }
+                    if (t == null) t = getDefault();
+                    monospaceTypeface = t;
+                }
+            }
+        }
+        return t;
+    }
+
+    /** Whether the narrowest and the widest of letters measure the same. */
+    private static boolean isMonospace(Typeface typeface) {
+        try (org.jetbrains.skia.Font font = new org.jetbrains.skia.Font(typeface, 20f)) {
+            return font.measureTextWidth("i") == font.measureTextWidth("W") && font.measureTextWidth("i") > 0f;
+        }
     }
 
     /**

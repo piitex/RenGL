@@ -1,6 +1,8 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 
@@ -10,8 +12,8 @@ import me.piitex.engine.ui.theme.Theme;
  * what should change and leave the rest at the defaults.
  * <p>
  * Colors follow the usual {@link Overridable} rule: they start out following the active {@link Theme}, and a
- * color you set explicitly is pinned against every later theme switch. Colors are plain {@link Color}s, not
- * {@link me.piitex.engine.ui.color.Paint}s.
+ * color you set explicitly is pinned against every later theme switch. Every one is a {@link Paint}, so tabs, text
+ * and the indicator can be gradients.
  */
 public class TabStyle {
     private float fontSize = 14f;
@@ -26,13 +28,13 @@ public class TabStyle {
     private float closeButtonSize = 14f;
     private float scrollButtonWidth = 24f;
 
-    private final Overridable<Color> tabColor = new Overridable<>(Color.TRANSPARENT);
-    private final Overridable<Color> hoverColor = new Overridable<>(Color.TRANSPARENT);
-    private final Overridable<Color> selectedColor = new Overridable<>(Color.TRANSPARENT);
-    private final Overridable<Color> textColor = new Overridable<>(new Color(0.5f, 0.5f, 0.5f, 1f));
-    private final Overridable<Color> selectedTextColor = new Overridable<>(Color.BLACK);
-    private final Overridable<Color> indicatorColor = new Overridable<>(Color.BLUE);
-    private final Overridable<Color> dividerColor = new Overridable<>(new Color(0.5f, 0.5f, 0.5f, 1f));
+    private final Overridable<Paint> tabColor = new Overridable<>(Color.TRANSPARENT);
+    private final Overridable<Paint> hoverColor = new Overridable<>(Color.TRANSPARENT);
+    private final Overridable<Paint> selectedColor = new Overridable<>(Color.TRANSPARENT);
+    private final Overridable<Paint> textColor = new Overridable<>(new Color(0.5f, 0.5f, 0.5f, 1f));
+    private final Overridable<Paint> selectedTextColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> indicatorColor = new Overridable<>(Color.BLUE);
+    private final Overridable<Paint> dividerColor = new Overridable<>(new Color(0.5f, 0.5f, 0.5f, 1f));
 
     /**
      * Point size of the tab titles.
@@ -159,78 +161,88 @@ public class TabStyle {
     /**
      * Fill of an idle, unselected tab.
      */
-    public Color getTabColor() {
+    public Paint getTabColor() {
         return tabColor.get();
     }
 
-    public void setTabColor(Color color) {
+    public void setTabColor(Paint color) {
         tabColor.set(color);
     }
 
     /**
      * Fill of an unselected tab while the cursor is over it.
      */
-    public Color getHoverColor() {
+    public Paint getHoverColor() {
         return hoverColor.get();
     }
 
-    public void setHoverColor(Color color) {
+    public void setHoverColor(Paint color) {
         hoverColor.set(color);
     }
 
     /**
      * Fill of the selected tab.
      */
-    public Color getSelectedColor() {
+    public Paint getSelectedColor() {
         return selectedColor.get();
     }
 
-    public void setSelectedColor(Color color) {
+    public void setSelectedColor(Paint color) {
         selectedColor.set(color);
     }
 
     /**
      * Title color of unselected tabs. Follows the theme's text color, same as the selected tab's, so only the fill changes on selection.
      */
-    public Color getTextColor() {
+    public Paint getTextColor() {
         return textColor.get();
     }
 
-    public void setTextColor(Color color) {
+    public void setTextColor(Paint color) {
         textColor.set(color);
     }
 
     /**
      * Title color of the selected tab.
      */
-    public Color getSelectedTextColor() {
+    public Paint getSelectedTextColor() {
         return selectedTextColor.get();
     }
 
-    public void setSelectedTextColor(Color color) {
+    public void setSelectedTextColor(Paint color) {
         selectedTextColor.set(color);
     }
 
     /**
      * Color of the bar marking the selected tab, and of the focus outline around it.
      */
-    public Color getIndicatorColor() {
+    public Paint getIndicatorColor() {
         return indicatorColor.get();
     }
 
-    public void setIndicatorColor(Color color) {
+    public void setIndicatorColor(Paint color) {
         indicatorColor.set(color);
     }
 
     /**
      * Color of the thin line separating the strip from the content.
      */
-    public Color getDividerColor() {
+    public Paint getDividerColor() {
         return dividerColor.get();
     }
 
-    public void setDividerColor(Color color) {
+    public void setDividerColor(Paint color) {
         dividerColor.set(color);
+    }
+
+    /**
+     * Moves the animated paints on, once per frame, whoever draws them.
+     */
+    void advance(float delta) {
+        for (Overridable<Paint> paint : java.util.List.of(tabColor, hoverColor, selectedColor, textColor, selectedTextColor,
+                indicatorColor, dividerColor)) {
+            AnimatedPaint.advanceIfAnimated(paint.get(), delta);
+        }
     }
 
     /**

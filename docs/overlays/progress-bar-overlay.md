@@ -10,7 +10,7 @@ Every moving part is a [`Transition`](../animation/transitions.md).
 
 ```java
 ProgressBarOverlay bar = new ProgressBarOverlay(300, 10);
-bar.setFillColor(Color.BLUE);
+bar.setFillColor(Color.BLUE); // or a gradient: bar.setFillColor(new LinearGradient(Color.BLUE, Color.CYAN))
 layout.addElement(bar);
 
 bar.setProgress(0.25); // jump to 25%
@@ -142,5 +142,5 @@ There is no method to remove a running transition from outside. Return `true` fr
 | `setStripes(Color)` / `setStripes(Color, float, float)` / `setStripes(StripeStyle)` | Moving stripes over the fill |
 | `getStripes()` / `clearStripes()` / `isStriped()` | The live style, removal, and whether stripes are showing |
 | `getFillWidth()` | Width in points of the fill as drawn |
-| `getFillColor()` / `setFillColor(Color)` | Fill color; setting pins it |
+| `getFillColor()` / `setFillColor(Paint)` | Fill color or gradient; setting pins it |
 | `applyAnimatedProgress(double)` | Used by [`ProgressTransition`](../animation/transitions.md#built-in-transitions-used-by-widgets); prefer `setProgress` |

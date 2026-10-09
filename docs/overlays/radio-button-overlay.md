@@ -116,4 +116,4 @@ root.addElement(options);
 | `setSelected(boolean)` | Silent select or deselect |
 | `isSelected()` | Whether it is the selected one |
 | `getGroup()` | Its `RadioGroup`, or `null` |
-| `getDotColor()` / `setDotColor(Color)` | Inner dot color; setting pins it |
+| `getDotColor()` / `setDotColor(Paint)` | Inner dot color or gradient; setting pins it |

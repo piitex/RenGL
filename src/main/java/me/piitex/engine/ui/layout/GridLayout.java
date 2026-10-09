@@ -75,6 +75,12 @@ public class GridLayout extends Layout {
         this.rowSpacing = rowSpacing;
     }
 
+    @Override
+    protected void scaleSpacing(double sx, double sy) {
+        columnSpacing *= (float) sx;
+        rowSpacing *= (float) sy;
+    }
+
     /**
      * Does nothing: child order is the order children are placed cell by cell, so moving one to the front would move
      * it to the end. Children do not overlap, so front and back make no difference.

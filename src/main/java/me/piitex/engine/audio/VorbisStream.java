@@ -18,6 +18,7 @@ final class VorbisStream implements PcmStream {
     private final ByteBuffer data; // must outlive the decoder handle
     private final long handle;
     private final int channels, rate;
+    private final int fileChannels;
     private final ShortBuffer chunk;
 
     VorbisStream(String name, byte[] bytes) {
@@ -32,14 +33,16 @@ final class VorbisStream implements PcmStream {
             }
             STBVorbisInfo info = STBVorbisInfo.malloc(stack);
             stb_vorbis_get_info(handle, info);
-            channels = info.channels();
+            fileChannels = info.channels();
             rate = info.sample_rate();
         }
-        if (channels > 2) {
+        // stb_vorbis mixes up to six channels (5.1) down to the stereo it is asked for.
+        if (fileChannels > 6) {
             stb_vorbis_close(handle);
             memFree(data);
-            throw AudioDecoder.tooManyChannels(name, channels);
+            throw AudioDecoder.tooManyChannels(name, fileChannels);
         }
+        channels = Math.min(fileChannels, 2);
         chunk = memAllocShort(CHUNK * channels);
     }
 

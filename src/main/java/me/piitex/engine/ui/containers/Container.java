@@ -4,6 +4,8 @@ import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.Draggable;
 import me.piitex.engine.ui.Element;
+import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.color.Styling;
 import me.piitex.engine.ui.scroll.ScrollContainer;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
@@ -53,6 +55,9 @@ public class Container extends Element implements Themeable, Draggable {
     private final List<Container> collideables = new ArrayList<>();
 
     private boolean clipping = true;
+
+    private boolean usesTheme;
+    private Look plain; // how it looked before it first used the theme, to go back to
 
     public Container(double width, double height) {
         this(0, 0, width, height);
@@ -138,7 +143,7 @@ public class Container extends Element implements Themeable, Draggable {
     }
 
     /**
-     * Removes {@code element} from this Container, wherever it sits, and detaches it (clears its owner/parent) so it can be re-added elsewhere. Other children keep their existing indices, so gaps are left in the key space; {@link #addElement(Element)} still appends after the highest remaining key. Returns false if {@code element} was not a direct child.
+     * Removes {@code element} from this Container, wherever it sits, and detaches it (clears its owner/parent) so it can be re-added elsewhere. The children after it move down one index, so the indices stay 0..n-1 (except in a container that keeps fixed slots, like {@link SplitContainer}). Returns false if {@code element} was not a direct child.
      */
     public boolean removeElement(Element element) {
         if (element == null) return false;
@@ -160,8 +165,42 @@ public class Container extends Element implements Themeable, Draggable {
             if (removed instanceof Container childContainer) {
                 childContainer.parent = null;
             }
+            closeGaps();
+            removed.onRemoved();
         }
         return removed;
+    }
+
+    /**
+     * Also tells every child it was removed.
+     */
+    @Override
+    public void onRemoved() {
+        for (Element element : elements.values()) element.onRemoved();
+    }
+
+    /**
+     * Whether the children's indices are fixed slots that a removal must leave alone. Plain containers and layouts
+     * number their children 0..n-1 in draw order and close up after a removal; a container that gives indices a
+     * meaning of their own (a split's two panes and its divider) overrides this to return true.
+     */
+    protected boolean keepsIndices() {
+        return false;
+    }
+
+    /** Renumbers the children 0..n-1 in draw order. Each one is copied down before its old index is dropped, so a frame
+     * being drawn on the render thread sees it twice at worst, never not at all. */
+    private void closeGaps() {
+        if (keepsIndices()) return;
+        int next = 0;
+        for (Map.Entry<Integer, Element> entry : elements.entrySet()) {
+            int key = entry.getKey();
+            if (key != next) {
+                elements.put(next, entry.getValue());
+                elements.remove(key);
+            }
+            next++;
+        }
     }
 
 
@@ -207,7 +246,49 @@ public class Container extends Element implements Themeable, Draggable {
      * called automatically; the class docs explain why.
      */
     public void useTheme() {
-        ThemeManager.register(this);
+        useTheme(true);
+    }
+
+    /**
+     * {@link #useTheme()} with {@code true}, or with {@code false} stops following the theme: this Container goes back
+     * to the plain look it had before it first used one, transparent unless set otherwise, and later theme changes
+     * pass it by. Anything set explicitly is left as it was.
+     */
+    public void useTheme(boolean use) {
+        if (use) {
+            if (plain == null) plain = Look.of(getStyling());
+            usesTheme = true;
+            ThemeManager.register(this);
+        } else if (usesTheme) {
+            usesTheme = false;
+            ThemeManager.unregister(this);
+            if (plain != null) plain.restore(getStyling());
+            applyThemeEffect(null, null);
+        }
+    }
+
+    /**
+     * Whether this Container follows the theme, as {@link #useTheme()} makes it.
+     */
+    public boolean isUsingTheme() {
+        return usesTheme;
+    }
+
+    /** What a container's styling gives a theme to restore. */
+    private record Look(Paint background, Paint hover, boolean hoverFollowsBackground, Paint border, float thickness, float radius) {
+        static Look of(Styling styling) {
+            return new Look(styling.getBackgroundColor(), styling.getHoverColor(), styling.isHoverFollowsBackground(),
+                    styling.getBorderColor(), styling.getBorderThickness(), styling.getCornerRadius());
+        }
+
+        void restore(Styling styling) {
+            styling.applyThemeBackgroundColor(background);
+            styling.applyThemeHoverColor(hover);
+            if (hoverFollowsBackground) styling.setHoverFollowsBackground(true);
+            styling.applyThemeBorderColor(border);
+            styling.applyThemeBorderThickness(thickness);
+            styling.applyThemeCornerRadius(radius);
+        }
     }
 
     /**
@@ -219,11 +300,13 @@ public class Container extends Element implements Themeable, Draggable {
      */
     @Override
     public void applyTheme(Theme theme) {
-        getStyling().applyThemeBackgroundColor(theme.getContainerBackground());
-        getStyling().applyThemeHoverColor(theme.getContainerBackground());
+        Paint fill = Styling.ownCopy(theme.getContainerBackground()); // one copy for both, so it is only advanced once
+        getStyling().applyThemeBackgroundColor(fill);
+        getStyling().applyThemeHoverColor(fill);
         getStyling().applyThemeBorderColor(theme.getContainerBorder());
         getStyling().applyThemeBorderThickness(theme.getBorderThickness());
         getStyling().applyThemeCornerRadius(theme.getCornerRadius());
+        applyThemeEffect(theme.getContainerEffect(), theme.assetBase());
         if (this instanceof ScrollContainer scrollContainer) {
             scrollContainer.getScrollBarStyle().applyThemeThumbColor(theme.getScrollThumb());
             scrollContainer.getScrollBarStyle().applyThemeTrackColor(theme.getScrollTrack());
@@ -407,6 +490,25 @@ public class Container extends Element implements Themeable, Draggable {
      */
     public boolean interceptsPointer(double px, double py) {
         return false;
+    }
+
+    /**
+     * Whether a pointer press, hover or wheel at (px, py), where no child is, falls through to whatever is drawn
+     * below this Container. True for a container that shows nothing and listens for nothing there: no visible
+     * background or border, no {@link me.piitex.engine.ui.Element#setBackground background effect}, no click listener,
+     * context menu, cursor or tooltip, and neither draggable nor scrollable. That is what lets a transparent
+     * full-window root sit above another container without swallowing its clicks.
+     */
+    public boolean isPointerPassthrough(double px, double py) {
+        if (this instanceof me.piitex.engine.ui.scroll.Scrollable || canDrag(px, py)) return false;
+        if (getMouseClickListenerConsumer() != null || getContextMenu() != null || getCursorMode() != null
+                || getTooltip() != null || getBackground() != null) return false;
+        Styling s = getStyling();
+        return !isVisible(s.getBackgroundColor()) && !(s.getBorderThickness() > 0f && isVisible(s.getBorderColor()));
+    }
+
+    private static boolean isVisible(Paint paint) {
+        return paint != null && !(paint instanceof me.piitex.engine.ui.color.Color c && c.getA() <= 0f);
     }
 
     /**
@@ -609,6 +711,7 @@ public class Container extends Element implements Themeable, Draggable {
         elements.remove(key);
         int frontKey = elements.isEmpty() ? 0 : elements.lastKey() + 1;
         elements.put(frontKey, child);
+        closeGaps();
     }
 
     @Override

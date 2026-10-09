@@ -7,6 +7,7 @@ import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.PopupKeyListener;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.containers.Container;
@@ -82,9 +83,9 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     private DateTimeFormatter dateFormatter, timeFormatter;
     private Consumer<DateTimePickerOverlay> onChange;
     private float fontSize = 15f;
-    private final Overridable<Color> textColor = new Overridable<>(Color.BLACK);
-    private final Overridable<Color> placeholderColor = new Overridable<>(Color.LIGHT_GRAY);
-    private final Overridable<Color> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
+    private final Overridable<Paint> textColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> placeholderColor = new Overridable<>(Color.LIGHT_GRAY);
+    private final Overridable<Paint> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
 
     private org.jetbrains.skia.Font font;
     private Typeface fontTypeface;
@@ -297,11 +298,11 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         setFontSize(sizes[0]);
     }
 
-    public Color getTextColor() {
+    public Paint getTextColor() {
         return textColor.get();
     }
 
-    public void setTextColor(Color color) {
+    public void setTextColor(Paint color) {
         textColor.set(color);
     }
 
@@ -381,6 +382,14 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     }
 
     @Override
+    public void update(float delta) {
+        super.update(delta);
+        AnimatedPaint.advanceIfAnimated(textColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(placeholderColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(selectionColor.get(), delta);
+    }
+
+    @Override
     public void render(Renderer renderer) {
         if (!isEnabled()) return;
         super.render(renderer);
@@ -404,14 +413,14 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         else drawCalendarIcon(renderer, ix, iy, icon, textColor.get());
     }
 
-    private static void drawCalendarIcon(Renderer r, float x, float y, float s, Color c) {
+    private static void drawCalendarIcon(Renderer r, float x, float y, float s, Paint c) {
         r.drawBorder(x, y + s * 0.12f, s, s * 0.88f, c, 1.5f, 2f);
         r.drawLine(x, y + s * 0.38f, x + s, y + s * 0.38f, c, 1.5f);
         r.drawLine(x + s * 0.3f, y, x + s * 0.3f, y + s * 0.24f, c, 1.5f);
         r.drawLine(x + s * 0.7f, y, x + s * 0.7f, y + s * 0.24f, c, 1.5f);
     }
 
-    private static void drawClockIcon(Renderer r, float x, float y, float s, Color c) {
+    private static void drawClockIcon(Renderer r, float x, float y, float s, Paint c) {
         r.drawBorder(x, y, s, s, c, 1.5f, s / 2f);
         float cx = x + s / 2f, cy = y + s / 2f;
         r.drawLine(cx, cy, cx, y + s * 0.2f, c, 1.5f);
@@ -705,10 +714,8 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             float ax = (float) getX(), ay = (float) getY();
             org.jetbrains.skia.Font f = owner.getFont();
             float textH = FontMetricsCompat.of(f).getHeight();
-            Color text = owner.textColor.get(), dim = owner.placeholderColor.get();
-            Color hoverFill = new Color(owner.selectionColor.get().getR(), owner.selectionColor.get().getG(),
-                    owner.selectionColor.get().getB(), owner.selectionColor.get().getA() * 0.5f);
-            Color border = owner.getStyling().getBorderColor() instanceof Color c ? c : Color.GRAY;
+            Paint text = owner.textColor.get(), dim = owner.placeholderColor.get();
+            Paint border = owner.getStyling().getBorderColor();
             boolean mouseOn = MouseTracker.isInWindow();
             double mx = MouseTracker.getX() - getX(), my = MouseTracker.getY() - getY();
             float radius = Math.min(owner.getStyling().getCornerRadius(), 6f);
@@ -718,7 +725,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                 float[] btnX = {PAD, PAD + NAV_BTN, W - PAD - 2 * NAV_BTN, W - PAD - NAV_BTN};
                 for (int i = 0; i < 4; i++) {
                     boolean hover = mouseOn && mx >= btnX[i] && mx < btnX[i] + NAV_BTN && my >= navY && my < navY + NAV_H;
-                    if (hover) renderer.drawQuad(ax + btnX[i], ay + navY, NAV_BTN, NAV_H, hoverFill, radius);
+                    if (hover) drawHover(renderer, ax + btnX[i], ay + navY, NAV_BTN, NAV_H, radius);
                     drawChevrons(renderer, ax + btnX[i] + NAV_BTN / 2f, ay + navY + NAV_H / 2f, i % 3 == 0 ? 2 : 1,
                             i < 2 ? -1 : 1, text);
                 }
@@ -746,7 +753,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                         if (selected)
                             renderer.drawQuad(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, owner.selectionColor.get(), radius);
                         else if (hover)
-                            renderer.drawQuad(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, hoverFill, radius);
+                            drawHover(renderer, cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, radius);
                         if (d.equals(today))
                             renderer.drawBorder(cx + 2f, cy + 2f, CELL_W - 4f, CELL_H - 4f, border, 1.5f, radius);
                         if (keyboardMode && !focusTime && d.equals(cursor)) {
@@ -773,7 +780,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                     if (hover != null && hover[0] == c) {
                         float zoneY = hover[1] == 1 ? 0f : hover[1] == 0 ? ARROW_H : ARROW_H + VALUE_H;
                         float zoneH = hover[1] == 0 ? VALUE_H : ARROW_H;
-                        renderer.drawQuad(cx, cy + zoneY, COL_W, zoneH, hoverFill, radius);
+                        drawHover(renderer, cx, cy + zoneY, COL_W, zoneH, radius);
                     }
                     if (keyboardMode && focusTime && timeCol == c) {
                         renderer.drawBorder(cx, cy + ARROW_H, COL_W, VALUE_H, text, 2f, radius);
@@ -797,25 +804,34 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             // Footer: Today/Now on the left, Clear on the right.
             String left = mode == Mode.TIME ? "Now" : "Today";
             drawFooterButton(renderer, f, ax + PAD, ay + footY, 90f, left, mouseOn && mx >= PAD && mx < PAD + 90f
-                    && my >= footY && my < footY + FOOT_H, hoverFill, text, radius, textH);
+                    && my >= footY && my < footY + FOOT_H, text, radius, textH);
             if (clearable) {
                 drawFooterButton(renderer, f, ax + W - PAD - 90f, ay + footY, 90f, "Clear",
                         mouseOn && mx >= W - PAD - 90f && mx < W - PAD && my >= footY && my < footY + FOOT_H,
-                        hoverFill, text, radius, textH);
+                        text, radius, textH);
             }
         }
 
         private void drawFooterButton(Renderer renderer, org.jetbrains.skia.Font f, float x, float y, float w, String label, boolean hover,
-                                      Color hoverFill, Color text, float radius, float textH) {
-            if (hover) renderer.drawQuad(x, y, w, FOOT_H, hoverFill, radius);
+                                      Paint text, float radius, float textH) {
+            if (hover) drawHover(renderer, x, y, w, FOOT_H, radius);
             float lw = f.measureTextWidth(label);
             renderer.drawText(label, x + (w - lw) / 2f, y + (FOOT_H - textH) / 2f, f, text);
         }
 
         /**
+         * The soft highlight under the pointer: the selection paint at half strength.
+         */
+        private void drawHover(Renderer renderer, float x, float y, float w, float h, float radius) {
+            renderer.pushAlpha(0.5f);
+            renderer.drawQuad(x, y, w, h, DateTimePickerOverlay.this.selectionColor.get(), radius);
+            renderer.popAlpha();
+        }
+
+        /**
          * {@code count} left- or right-pointing chevrons ({@code dir} -1 = left) centered on (cx, cy).
          */
-        private void drawChevrons(Renderer renderer, float cx, float cy, int count, int dir, Color color) {
+        private void drawChevrons(Renderer renderer, float cx, float cy, int count, int dir, Paint color) {
             float gap = 5f;
             float start = cx - (count - 1) * gap / 2f;
             for (int i = 0; i < count; i++) {
@@ -828,7 +844,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         /**
          * A small up ({@code dir} -1) or down (+1) chevron.
          */
-        private void drawChevronVertical(Renderer renderer, float cx, float cy, int dir, Color color) {
+        private void drawChevronVertical(Renderer renderer, float cx, float cy, int dir, Paint color) {
             renderer.drawLine(cx - 5f, cy - dir * 2.5f, cx, cy + dir * 2.5f, color, 1.8f);
             renderer.drawLine(cx, cy + dir * 2.5f, cx + 5f, cy - dir * 2.5f, color, 1.8f);
         }

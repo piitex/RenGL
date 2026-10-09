@@ -33,6 +33,8 @@ Audio.play("sfx/explosion.ogg").volume(0.8f).pitch(0.7f).pan(-0.5f);
 | `isPositional()` | Whether it has a world position |
 | `loop(boolean)` / `isLooping()` | Repeat forever |
 | `pause()` / `resume()` | Keep the position |
+| `seek(seconds)` | Jump to a time in the sound, clamped to its length. Keeps playing, or stays paused, from there |
+| `getPosition()` / `getDuration()` | Where it is, and how long the sound is, in seconds. A looping track reports its place in the current pass. `getDuration()` is -1 when the file does not say |
 | `stop()` | Stop immediately |
 | `stop(float seconds)` | Fade to silence over `seconds`, then stop |
 | `fadeTo(float volume, float seconds)` | Fade this playback's volume |

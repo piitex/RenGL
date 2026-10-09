@@ -161,18 +161,49 @@ public final class VulkanContext implements AutoCloseable {
      * The LWJGL objects behind the raw handles below, for the optional 3D layer, which records its own Vulkan work on
      * this device and queue.
      */
-    public VkInstance vkInstance() { return instance; }
-    public VkPhysicalDevice vkPhysicalDevice() { return physicalDevice; }
-    public VkDevice vkDevice() { return device; }
-    public VkQueue vkQueue() { return queue; }
+    public VkInstance vkInstance() {
+        return instance;
+    }
 
-    public long instance() { return instance.address(); }
-    public long physicalDevice() { return physicalDevice.address(); }
-    public long device() { return device.address(); }
-    public long queue() { return queue.address(); }
-    public int queueFamily() { return queueFamily; }
-    public int apiVersion() { return apiVersion; }
-    public String gpuName() { return gpuName; }
+    public VkPhysicalDevice vkPhysicalDevice() {
+        return physicalDevice;
+    }
+
+    public VkDevice vkDevice() {
+        return device;
+    }
+
+    public VkQueue vkQueue() {
+        return queue;
+    }
+
+    public long instance() {
+        return instance.address();
+    }
+
+    public long physicalDevice() {
+        return physicalDevice.address();
+    }
+
+    public long device() {
+        return device.address();
+    }
+
+    public long queue() {
+        return queue.address();
+    }
+
+    public int queueFamily() {
+        return queueFamily;
+    }
+
+    public int apiVersion() {
+        return apiVersion;
+    }
+
+    public String gpuName() {
+        return gpuName;
+    }
 
     public long instanceProcAddr() {
         long address = VK.getFunctionProvider().getFunctionAddress("vkGetInstanceProcAddr");
@@ -186,21 +217,35 @@ public final class VulkanContext implements AutoCloseable {
         return address;
     }
 
-    // ---- the current frame --------------------------------------------------------------------------------------
-
     /**
      * The swapchain image acquired by the last successful {@link #beginFrame()}.
      */
-    public long image() { return images[imageIndex]; }
-    public int format() { return swapchainFormat; }
-    public int imageUsage() { return swapchainUsage; }
-    public int width() { return width; }
-    public int height() { return height; }
+    public long image() {
+        return images[imageIndex];
+    }
+
+    public int format() {
+        return swapchainFormat;
+    }
+
+    public int imageUsage() {
+        return swapchainUsage;
+    }
+
+    public int width() {
+        return width;
+    }
+
+    public int height() {
+        return height;
+    }
 
     /**
      * True when the swapchain's images are BGRA, false when they are RGBA.
      */
-    public boolean isBgra() { return swapchainFormat == VK_FORMAT_B8G8R8A8_UNORM; }
+    public boolean isBgra() {
+        return swapchainFormat == VK_FORMAT_B8G8R8A8_UNORM;
+    }
 
     /**
      * Turns vsync on (FIFO) or off (IMMEDIATE, else MAILBOX). The swapchain is rebuilt on the next frame if the present
@@ -336,8 +381,6 @@ public final class VulkanContext implements AutoCloseable {
         }
     }
 
-    // ---- setup --------------------------------------------------------------------------------------------------
-
     private static VkInstance createInstance(MemoryStack stack, boolean validation) {
         PointerBuffer required = glfwGetRequiredInstanceExtensions();
         if (required == null) throw new IllegalStateException("GLFW found no Vulkan surface extensions");
@@ -449,7 +492,8 @@ public final class VulkanContext implements AutoCloseable {
         debugCallback = VkDebugUtilsMessengerCallbackEXT.create((severity, types, pData, user) -> {
             String message = VkDebugUtilsMessengerCallbackDataEXT.create(pData).pMessageString();
             if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) log.error("[Vulkan] {}", message);
-            else if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) log.warn("[Vulkan] {}", message);
+            else if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0)
+                log.warn("[Vulkan] {}", message);
             else log.debug("[Vulkan] {}", message);
             return VK_FALSE;
         });
@@ -465,7 +509,8 @@ public final class VulkanContext implements AutoCloseable {
         }
     }
 
-    private record Candidate(VkPhysicalDevice device, int queueFamily, String name, int apiVersion, int score) {}
+    private record Candidate(VkPhysicalDevice device, int queueFamily, String name, int apiVersion, int score) {
+    }
 
     /**
      * The best GPU that can present and run a swapchain, or null. With a surface, presentation is checked against it;
@@ -498,8 +543,10 @@ public final class VulkanContext implements AutoCloseable {
                 case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> 100;
                 default -> 0;
             };
-            if (wanted != null && !wanted.isBlank() && name.toLowerCase().contains(wanted.toLowerCase())) score += 10_000;
-            if (best == null || score > best.score) best = new Candidate(device, family, name, props.apiVersion(), score);
+            if (wanted != null && !wanted.isBlank() && name.toLowerCase().contains(wanted.toLowerCase()))
+                score += 10_000;
+            if (best == null || score > best.score)
+                best = new Candidate(device, family, name, props.apiVersion(), score);
         }
         return best;
     }
@@ -549,7 +596,8 @@ public final class VulkanContext implements AutoCloseable {
         List<String> extensions = new ArrayList<>();
         extensions.add(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
         // A device that advertises the portability subset (MoltenVK) requires it to be enabled.
-        if (deviceExtensions(physicalDevice).contains("VK_KHR_portability_subset")) extensions.add("VK_KHR_portability_subset");
+        if (deviceExtensions(physicalDevice).contains("VK_KHR_portability_subset"))
+            extensions.add("VK_KHR_portability_subset");
 
         VkDeviceQueueCreateInfo.Buffer queues = VkDeviceQueueCreateInfo.calloc(1, stack);
         queues.get(0).sType$Default().queueFamilyIndex(queueFamily).pQueuePriorities(stack.floats(1f));

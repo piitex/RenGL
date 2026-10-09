@@ -28,7 +28,8 @@ player picks one for you:
 **The system decoder (macOS).** Any file macOS can play, which includes **H.264 and HEVC in MP4 and MOV** with
 **AAC** sound, plays through Apple's AVFoundation. The video is decoded by the machine's hardware video engine, so
 the engine contains no H.264 or AAC decoder of its own, and the licence for those codecs is the operating system's.
-Nothing is installed or shipped: the engine calls the system frameworks directly.
+Nothing is installed or shipped: the engine calls the system frameworks directly. A video the file marks as turned (a
+phone held upright) is shown upright, and its width and height are the turned ones.
 
 **The engine's own readers.** These work on every platform and need nothing from the system:
 
@@ -85,8 +86,8 @@ first frame).
 | `dispose()` | Stops decoding, silences the sound, closes the file |
 
 The background is black by default, and shows in the bars of `CONTAIN`. Change it with `getStyling()`; fade the
-element with the normal element `setOpacity`. **Call `dispose()` when you remove a video**: the decode thread and the
-file stay open until you do.
+element with the normal element `setOpacity`. Removing a video from its container pauses it, but **call `dispose()` when you are done with it**: the decode thread and
+the file stay open until you do.
 
 ## VideoPlayer
 

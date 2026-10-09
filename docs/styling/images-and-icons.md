@@ -2,7 +2,7 @@
 
 [Documentation](../README.md) › [Styling](README.md)
 
-Three small classes back [`ImageOverlay`](../overlays/image-overlay.md) and
+Five small classes back [`ImageOverlay`](../overlays/image-overlay.md) and
 [`IconOverlay`](../overlays/icon-overlay.md). You rarely call them directly, but they explain the loading behavior
 and errors.
 
@@ -20,12 +20,56 @@ Image image = ImageLoader.load("src/main/resources/demo.png"); // File or String
   all go through the same call, limited by which codecs the Skia build includes.
 - Errors: `UncheckedIOException` if the file cannot be read, `IllegalArgumentException` if it is not a decodable
   image.
-- Cached images are **never closed**. Decoding is expensive and drawing from a decoded image is cheap, which is a
-  reasonable trade for a typical UI. If you load huge numbers of unique large images, this cache will grow.
+- The cache holds up to **256 MiB** of decoded pixels (`ImageLoader.setCacheLimit(bytes)`; `getCachedBytes()` says how
+  much it holds). Past that, the pictures used longest ago are let go and decoded again if loaded again. A letting go
+  does not close the image, so an overlay still showing it keeps working and its memory is freed when nothing draws it.
+  A fixed set of assets that fits stays cached for good. `evict(file)` and `clearCache()` drop pictures by hand.
 
 An image drawn at a size other than its own is sampled smoothly, blending neighbouring pixels. For pixel art that
 should keep hard edges when scaled, draw it as a [sprite](../graphics/sprites.md) from a texture with
 `setSmooth(false)`.
+
+## Animated images and GIFs as video
+
+`ImageLoader.load` on a GIF gives its **first frame** as a plain `Image`. To play it, use
+`me.piitex.engine.ui.image.AnimatedImage` (the frames) and `ImagePlayer` (the playback controls). An
+[`ImageOverlay`](../overlays/image-overlay.md#animated-gifs) does both for you, so most code never needs these directly.
+
+```java
+AnimatedImage gif = AnimatedImage.load("assets/intro.gif"); // File, String, Path or bytes
+gif.getFrameCount();     // 24
+gif.getDuration();       // seconds for one pass
+gif.getLoopCount();      // what the file asks for; 0 = forever
+
+ImagePlayer player = new ImagePlayer(gif); // already playing
+player.setLoopCount(1);                    // or setLooping(false)
+player.onFinish(() -> startGame());
+player.onLoop(() -> System.out.println("again"));
+
+// every frame, with the scene's delta so it follows game time and pauses with the game:
+player.update(delta);
+renderer.drawImage(player.getFrame(), x, y, w, h, 0f, 1f);
+```
+
+| `ImagePlayer` | |
+|---|---|
+| `play()` / `pause()` / `stop()` / `rewind()` | `play()` after a play-once animation ended starts it again; `stop()` pauses and goes to frame 0 |
+| `seek(seconds)` / `seekFrame(i)` / `setProgress(0..1)` | Jump without changing play/pause |
+| `getPosition()` / `getProgress()` / `getFrameIndex()` / `getDuration()` | Where playback is |
+| `setLoopCount(n)` / `setLooping(bool)` | 1 plays once, `n` plays `n` times, 0 loops forever |
+| `setSpeed(f)` | 1 is normal, 2 is double, 0.5 is half |
+| `onFinish(...)` / `onLoop(...)` | `onFinish` fires only for limited loops |
+
+Notes:
+
+- Frames are fully composited, following the file's own disposal rules, so `getFrame()` is always the whole picture.
+- Frames with a delay under 20 ms (including the 0 that many old files carry) show for 100 ms, matching browsers.
+- A short animation is decoded once and replays from memory; one whose frames total more than
+  `AnimatedImage.CACHE_LIMIT_BYTES` (64 MiB) is decoded as it plays, which is cheap in order but costs a re-decode on a backwards seek.
+- The `Image` from `getFrame()` belongs to the `AnimatedImage` and may be closed when a later frame is requested:
+  draw it right away. For frames that stay valid, `gif.toAnimation(PlayMode.LOOP)` decodes every frame into
+  its own texture and returns a sprite [`Animation`](../graphics/sprite-animation.md), at the cost of holding them all in memory.
+- Audio is not part of a GIF. Not thread-safe: use it on the render thread. `close()` frees the decoder early.
 
 ## IconCache
 
@@ -38,7 +82,8 @@ Image fromClasspath = IconCache.loadResource("icons/feather/alert-triangle.svg",
 ```
 
 An SVG has no pixel size of its own, so it is re-rendered at whatever size is requested. The cache key is
-**the source and the size**. The same icon at two sizes is rasterized (and cached) twice.
+**the source and the size**. The same icon at two sizes is rasterized (and cached) twice. The icon cache holds up to 64 MiB of pixels
+(`IconCache.setCacheLimit`) and lets go of the ones used longest ago, as the image cache does.
 
 `IconCache.rasterizeFile` and `IconCache.rasterizeResource` render without caching the result. You own the returned
 `Image` and should close it when nothing draws it any more. This is what a resized

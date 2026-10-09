@@ -14,7 +14,7 @@ Set `null` (the default) to remove a tooltip.
 
 | Method | Description |
 |---|---|
-| `Element.setTooltip(String)` / `getTooltip()` | The text, or `null` for none. Use `\n` for multiple lines |
+| `Element.setTooltip(String)` / `getTooltip()` | The text, or `null` for none. Use `\n` for multiple lines; a line wider than about 360 points is wrapped at spaces |
 | `Element.setTooltipDelay(float)` / `getTooltipDelay()` | Rest time in seconds before it shows (minimum 0, default `0.5`) |
 | `Element.setTooltipTheme(Theme)` / `getTooltipTheme()` | The theme this element's tooltip is drawn with, or `null` (the default) for the current theme |
 
@@ -49,11 +49,14 @@ the left of the cursor instead. Its colors come from the current theme's tooltip
 | `Theme.getTooltipBorder()` | Border |
 | `Theme.getTooltipText()` | Text |
 
+Each is a [`Paint`](../styling/colors-and-paints.md), so a tooltip can be a gradient or a scrolling one.
+
 To restyle tooltips, use a [custom theme](../styling/theming.md#making-your-own-theme):
 
 ```java
 BaseTheme theme = new BaseTheme();
 theme.setTooltipBackground(new Color(0.1f, 0.1f, 0.4f, 0.95f));
+theme.setTooltipBorder(new LinearGradient(Color.CYAN, Color.BLUE, 0f));
 theme.setTooltipText(Color.WHITE);
 ThemeManager.setCurrent(theme);
 ```

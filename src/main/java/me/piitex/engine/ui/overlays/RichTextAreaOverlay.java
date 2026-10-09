@@ -21,6 +21,10 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -38,8 +42,12 @@ import java.util.concurrent.TimeUnit;
  * An optional {@link TextChecker} (see {@link #setChecker}) adds spell and grammar
  * checking. Once the text has stopped changing for {@link #CHECK_DEBOUNCE_MS}, it is
  * checked on a background thread and each issue found is drawn as a squiggly underline.
- * The debounce keeps a half-typed word from being flagged. Underlines are independent
- * of the styler's colors, and both can be active at once.
+ * The debounce keeps a half-typed word from being flagged. After an edit a checker that
+ * {@link TextChecker#checksFragments() checks fragments} sees only the words that changed.
+ * Underlines are independent of the styler's colors, and both can be active at once.
+ * <p>
+ * Right-clicking a flagged word lists corrections, then "Add to dictionary" when the checker
+ * {@link TextChecker#canAddWords() can learn words} and "Ignore" to leave that word alone in this box.
  */
 public class RichTextAreaOverlay extends TextAreaOverlay {
     private TextSpanStyler styler;
@@ -58,8 +66,8 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         return t;
     });
 
-    private static final Color SPELLING_COLOR = new Color(0.9f, 0.2f, 0.2f, 1f);
-    private static final Color GRAMMAR_COLOR = new Color(0.25f, 0.5f, 0.95f, 1f);
+    private Color spellingColor = new Color(0.9f, 0.2f, 0.2f, 1f);
+    private Color grammarColor = new Color(0.25f, 0.5f, 0.95f, 1f);
 
     /**
      * The text a batch of issues was computed for, together with those issues, so stale ones can be told apart.
@@ -68,6 +76,8 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
     }
 
     private volatile TextChecker checker;
+    private final Set<String> ignoredWords = ConcurrentHashMap.newKeySet();
+    private volatile boolean checkInFull;
     private volatile CheckResult checkResult = new CheckResult("", List.of());
     private String lastScheduledText;
     private ScheduledFuture<?> pendingCheck;
@@ -123,9 +133,50 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
      */
     public void setChecker(TextChecker checker) {
         this.checker = checker;
+        ignoredWords.clear();
         this.checkResult = new CheckResult("", List.of());
         this.lastScheduledText = null;
         if (pendingCheck != null) pendingCheck.cancel(false);
+    }
+
+    /**
+     * Stops flagging {@code word} in this box (matched without regard to case), as the "Ignore" row of the correction
+     * list does. It lasts until {@link #clearIgnoredWords} or the next {@link #setChecker}, and is not saved.
+     */
+    public void ignoreWord(String word) {
+        ignoredWords.add(word.toLowerCase(Locale.ROOT));
+        dropIssuesOn(word);
+    }
+
+    /**
+     * Flags every word that {@link #ignoreWord} had stopped flagging again, from the next check.
+     */
+    public void clearIgnoredWords() {
+        ignoredWords.clear();
+        checkInFull = true;
+        lastScheduledText = null;
+    }
+
+    /**
+     * The color of the squiggle under a misspelled word. Red by default.
+     */
+    public Color getSpellingColor() {
+        return spellingColor;
+    }
+
+    public void setSpellingColor(Color spellingColor) {
+        this.spellingColor = Objects.requireNonNull(spellingColor, "spellingColor");
+    }
+
+    /**
+     * The color of the squiggle under a grammar problem. Blue by default.
+     */
+    public Color getGrammarColor() {
+        return grammarColor;
+    }
+
+    public void setGrammarColor(Color grammarColor) {
+        this.grammarColor = Objects.requireNonNull(grammarColor, "grammarColor");
     }
 
     /**
@@ -175,13 +226,29 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         if (suggestions.size() > SuggestionPopup.MAX_ROWS)
             suggestions = suggestions.subList(0, SuggestionPopup.MAX_ROWS);
 
-        SuggestionPopup popup = new SuggestionPopup(issue, current.substring(issue.start(), issue.end()), suggestions);
+        SuggestionPopup popup = new SuggestionPopup(issue, current.substring(issue.start(), issue.end()), suggestions, activeChecker);
         float w = popup.preferredWidth();
         float h = popup.preferredHeight();
         float px = (float) Math.min(x, window.getWindowOptions().getWidth() - w);
         float py = (float) Math.min(y, window.getWindowOptions().getHeight() - h);
         popup.setBounds(Math.max(0, px), Math.max(0, py), w, h);
         window.showPopup(popup, this, popup::closeFont);
+    }
+
+    /**
+     * Takes the underline off every flagged copy of {@code word} now, without waiting for the next check.
+     */
+    private void dropIssuesOn(String word) {
+        CheckResult result = checkResult;
+        List<TextIssue> kept = new ArrayList<>();
+        for (TextIssue issue : result.issues()) {
+            if (!wordOf(result.text(), issue).equalsIgnoreCase(word)) kept.add(issue);
+        }
+        checkResult = new CheckResult(result.text(), kept);
+    }
+
+    private static String wordOf(String text, TextIssue issue) {
+        return issue.end() <= text.length() ? text.substring(issue.start(), issue.end()) : "";
     }
 
     /**
@@ -196,28 +263,59 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         private static final float PADDING_X = 10f;
 
         private final TextIssue issue;
+        private final String header; // the issue's message, shown above the corrections, or null
         private final String word; // the word as it was when the menu opened, which guards against the text changing underneath
-        private final List<String> rows;
-        private final boolean empty;
+        private final List<String> rows; // the corrections (or a note that there are none), then the actions
+        private final int suggestionCount; // 0 when there are no corrections
+        private final int firstActionRow;
+        private final List<Runnable> actions = new ArrayList<>();
         private org.jetbrains.skia.Font font;
 
-        SuggestionPopup(TextIssue issue, String word, List<String> suggestions) {
+        SuggestionPopup(TextIssue issue, String word, List<String> suggestions, TextChecker checker) {
             super(0, 0);
             this.issue = issue;
+            this.header = issue.message() == null || issue.message().isBlank() ? null : issue.message();
             this.word = word;
-            this.empty = suggestions.isEmpty();
-            this.rows = empty ? List.of("No suggestions") : suggestions;
+            this.suggestionCount = suggestions.size();
+            List<String> all = new ArrayList<>(suggestions.isEmpty() ? List.of("No suggestions") : suggestions);
+            this.firstActionRow = all.size();
+            if (issue.kind() == TextIssue.Kind.SPELLING) {
+                if (checker.canAddWords()) {
+                    all.add("Add to dictionary");
+                    actions.add(() -> {
+                        checker.addWord(word);
+                        dropIssuesOn(word);
+                        checkInFull = true; // a check already under way may not know the word yet
+                        lastScheduledText = null;
+                    });
+                }
+                all.add("Ignore");
+                actions.add(() -> ignoreWord(word));
+            }
+            this.rows = all;
             setCursorMode(CursorMode.POINTER);
             onMouseClick(event -> {
-                int row = (int) Math.floor((event.getMouseY() - getY()) / ROW_HEIGHT);
-                if (empty || row < 0 || row >= rows.size()) return;
+                int row = (int) Math.floor((event.getMouseY() - getY()) / ROW_HEIGHT) - headerRows();
+                if (!isClickable(row)) return;
                 Window window = getWindow();
-                String current = getText();
-                if (issue.end() <= current.length() && current.regionMatches(issue.start(), word, 0, word.length())) {
-                    replaceRange(issue.start(), issue.end(), rows.get(row));
+                if (row < suggestionCount) {
+                    String current = getText();
+                    if (issue.end() <= current.length() && current.regionMatches(issue.start(), word, 0, word.length())) {
+                        replaceRange(issue.start(), issue.end(), rows.get(row));
+                    }
+                } else {
+                    actions.get(row - firstActionRow).run();
                 }
                 if (window != null) window.closePopup();
             });
+        }
+
+        private boolean isClickable(int row) {
+            return row >= 0 && row < rows.size() && (row < suggestionCount || row >= firstActionRow);
+        }
+
+        private int headerRows() {
+            return header == null ? 0 : 1;
         }
 
         private org.jetbrains.skia.Font font() {
@@ -235,11 +333,12 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         float preferredWidth() {
             float widest = 0f;
             for (String row : rows) widest = Math.max(widest, font().measureTextWidth(row));
+            if (header != null) widest = Math.max(widest, font().measureTextWidth(header));
             return Math.max(120f, widest + PADDING_X * 2);
         }
 
         float preferredHeight() {
-            return rows.size() * ROW_HEIGHT;
+            return (rows.size() + headerRows()) * ROW_HEIGHT;
         }
 
         @Override
@@ -251,12 +350,16 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
             renderer.drawQuad(x, y, w, h, theme.getFieldBackground(), radius);
 
             renderer.pushClip(x, y, w, h);
-            int hoverRow = !empty && MouseTracker.isInWindow() && contains(MouseTracker.getX(), MouseTracker.getY())
-                    ? (int) Math.floor((MouseTracker.getY() - y) / ROW_HEIGHT) : -1;
+            int hoverRow = MouseTracker.isInWindow() && contains(MouseTracker.getX(), MouseTracker.getY())
+                    ? (int) Math.floor((MouseTracker.getY() - y) / ROW_HEIGHT) - headerRows() : -1;
+            if (!isClickable(hoverRow)) hoverRow = -1;
             org.jetbrains.skia.Font f = font();
             float textHeight = FontMetricsCompat.of(f).getHeight();
+            if (header != null) {
+                renderer.drawText(header, x + PADDING_X, y + (ROW_HEIGHT - textHeight) / 2f, f, theme.getText().withOpacity(0.6f));
+            }
             for (int i = 0; i < rows.size(); i++) {
-                float rowY = y + i * ROW_HEIGHT;
+                float rowY = y + (i + headerRows()) * ROW_HEIGHT;
                 if (i == hoverRow) renderer.drawQuad(x, rowY, w, ROW_HEIGHT, theme.getFieldHoverBackground(), 0f);
                 renderer.drawText(rows.get(i), x + PADDING_X, rowY + (ROW_HEIGHT - textHeight) / 2f, f, theme.getText());
             }
@@ -275,7 +378,13 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         if (pendingCheck != null) pendingCheck.cancel(false);
         pendingCheck = CHECK_EXECUTOR.schedule(() -> {
             try {
-                checkResult = new CheckResult(text, activeChecker.check(text));
+                CheckResult previous = checkResult;
+                List<TextIssue> issues = new ArrayList<>(checkInFull
+                        ? activeChecker.check(text)
+                        : TextChecker.checkChanged(activeChecker, previous.text(), previous.issues(), text));
+                checkInFull = false;
+                issues.removeIf(issue -> ignoredWords.contains(wordOf(text, issue).toLowerCase(Locale.ROOT)));
+                checkResult = new CheckResult(text, issues);
             } catch (RuntimeException e) {
                 checkResult = new CheckResult(text, List.of()); // a broken checker shouldn't take the UI down
             }
@@ -302,7 +411,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
             int end = Math.min(issue.end(), lineEnd);
             float x0 = x + font.measureTextWidth(lineText.substring(0, start - lineStart));
             float x1 = x + font.measureTextWidth(lineText.substring(0, end - lineStart));
-            drawSquiggle(renderer, x0, x1, underlineY, issue.kind() == TextIssue.Kind.GRAMMAR ? GRAMMAR_COLOR : SPELLING_COLOR);
+            drawSquiggle(renderer, x0, x1, underlineY, issue.kind() == TextIssue.Kind.GRAMMAR ? grammarColor : spellingColor);
         }
     }
 

@@ -89,6 +89,15 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
         void render(GpuDevice device, RenderTarget target, float delta);
 
         /**
+         * True while the content has work that needs frames even though nothing changed on screen, such as a
+         * {@link me.piitex.engine.render3d.scene.Scene3D#preload preload} in progress. A viewport that is not
+         * {@link #setContinuous continuous} draws a frame whenever this is true.
+         */
+        default boolean needsFrames() {
+            return false;
+        }
+
+        /**
          * Called when the content is replaced, the viewport is closed or its window closes. Free what {@link #init}
          * made.
          */
@@ -373,7 +382,7 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
             renderRequested = true;
         }
 
-        if (continuous || renderRequested || picture == null) {
+        if (continuous || renderRequested || picture == null || activeContent.needsFrames()) {
             renderRequested = false;
             device.beginFrame();
             try {

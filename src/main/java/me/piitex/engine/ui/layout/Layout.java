@@ -90,6 +90,25 @@ public abstract class Layout extends Container {
     }
 
     /**
+     * Scales the padding and the gaps by the factors a resizing {@link me.piitex.engine.ui.containers.ResizableContainer}
+     * scaled its sizes by, {@code sx} across and {@code sy} down. The padding, which is the same on every side, goes
+     * by the geometric mean of the two, so scaling there and back returns it to what it was. Not meant to be called
+     * directly.
+     */
+    public void scaleGaps(double sx, double sy) {
+        setPadding((float) (getPadding() * Math.sqrt(sx * sy)));
+        scaleSpacing(sx, sy);
+    }
+
+    /**
+     * Scales the gap between children. The gap in a layout that arranges them along one axis goes by that axis's
+     * factor; in one that uses it both ways, by the mean of the two.
+     */
+    protected void scaleSpacing(double sx, double sy) {
+        setSpacing((float) (getSpacing() * Math.sqrt(sx * sy)));
+    }
+
+    /**
      * Where the children sit within this Layout. See {@link Alignment}. {@code TOP_LEFT} by default.
      */
     public Alignment getAlignment() {
@@ -182,11 +201,36 @@ public abstract class Layout extends Container {
     }
 
     private void arrange() {
+        double innerWidth = Math.max(0, getWidth() - 2 * getPadding()), innerHeight = Math.max(0, getHeight() - 2 * getPadding());
+        for (Element child : getElements().values()) {
+            child.applyRelativeSize(innerWidth, innerHeight);
+        }
         layoutChildren();
         for (Element child : getElements().values()) {
             if (child instanceof Layout nestedLayout) {
                 nestedLayout.arrange();
             }
+        }
+    }
+
+    /**
+     * Gives the children with a {@link Element#setLayoutWeight weight} their share of the space along one axis that the
+     * others and the spacing leave. For {@link HorizontalLayout} and {@link VerticalLayout}. Does nothing when this
+     * layout sizes itself to its content along that axis.
+     */
+    protected void shareSpace(boolean horizontal) {
+        if (horizontal ? sizeToContentWidth : sizeToContentHeight) return;
+        double totalWeight = 0, fixed = Math.max(0, getElements().size() - 1) * (double) getSpacing();
+        for (Element child : getElements().values()) {
+            if (child.getLayoutWeight() > 0) totalWeight += child.getLayoutWeight();
+            else fixed += horizontal ? child.getWidth() : child.getHeight();
+        }
+        if (totalWeight <= 0) return;
+        double leftover = Math.max(0, (horizontal ? getWidth() : getHeight()) - 2 * getPadding() - fixed);
+        for (Element child : getElements().values()) {
+            if (child.getLayoutWeight() <= 0) continue;
+            double size = leftover * child.getLayoutWeight() / totalWeight;
+            if (horizontal) child.setWidth(size); else child.setHeight(size);
         }
     }
 

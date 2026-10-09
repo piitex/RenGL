@@ -1,5 +1,6 @@
 package me.piitex.engine.gl.renderer;
 
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.Window;
 import me.piitex.engine.scheduler.Scheduler;
 import me.piitex.engine.ui.Element;
@@ -132,7 +133,7 @@ public final class Snapshot implements AutoCloseable {
         int h = window.getWindowOptions().getHeight();
 
         try (OffscreenRenderer renderer = new OffscreenRenderer(w, h, scale)) {
-            Paint background = window.getBackgroundColor();
+            Paint background = AnimatedPaint.resolve(window.getBackgroundColor());
             if (background instanceof Color solid) {
                 renderer.clear(solid.getR(), solid.getG(), solid.getB(), solid.getA());
             }

@@ -1,7 +1,11 @@
 package me.piitex.engine.property;
 
 import me.piitex.engine.math.Vec2;
+import me.piitex.engine.ui.background.Background;
+import me.piitex.engine.ui.background.BackgroundKinds;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.color.PaintCodec;
 import me.piitex.engine.utils.flags.GeneratedClass;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 
@@ -20,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <tr><td>{@code char}, {@link Character}, {@link String}</td><td>a string</td></tr>
  *   <tr><td>any enum</td><td>the constant's name, {@code "EASE_IN"}</td></tr>
  *   <tr><td>{@link Color}</td><td>{@code [r, g, b, a]}, each 0 to 1; {@code "#RRGGBB"} and {@code "#RRGGBBAA"} are also read</td></tr>
+ *   <tr><td>{@link Paint}</td><td>a color as above, or a gradient or rainbow as an object; see {@link PaintCodec}</td></tr>
+ *   <tr><td>{@link Background}</td><td>an object with the {@code "type"} of one of the {@link BackgroundKinds kinds} and its settings; one of another class is not written</td></tr>
  *   <tr><td>{@link Vec2}</td><td>{@code [x, y]}</td></tr>
  *   <tr><td>{@link TextureRef}</td><td>the image's path</td></tr>
  * </table>
@@ -100,6 +106,18 @@ public final class PropertyTypes {
                             PropertyCodec.toFloat(v.get(2)), a);
                 }
                 throw new IllegalArgumentException("expected [r, g, b, a] or \"#RRGGBB\", found " + PropertyCodec.describe(json));
+            }
+        });
+
+        codecs.put(Paint.class, PaintCodec.JSON);
+
+        codecs.put(Background.class, new PropertyCodec<Background>() {
+            public Object write(Background value) {
+                return BackgroundKinds.write(value);
+            }
+
+            public Background read(Object json) {
+                return BackgroundKinds.read(json, java.nio.file.Path.of(""));
             }
         });
 

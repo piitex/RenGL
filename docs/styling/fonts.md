@@ -61,7 +61,7 @@ built lazily and only rebuilt when the size or typeface actually changes.
 
 ## Cleanup
 
-- Typefaces are cached process-wide and **never closed**.
+- Typefaces are cached process-wide, up to 128 MiB of font files (`Font.setCacheLimit`). Past that the ones used longest ago are let go and parsed again if asked for. They are not closed, so text still using one keeps working.
 - Each widget owns its own native `Font`. Call `dispose()` on [`TextOverlay`](../overlays/text-overlay.md), [`ButtonOverlay`](../overlays/button-overlay.md),
   [`TextFieldOverlay`](../overlays/text-field-overlay.md), [`TextAreaOverlay`](../overlays/text-area-overlay.md), [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md) and [`SliderOverlay`](../overlays/slider-overlay.md) when you permanently discard
   one.

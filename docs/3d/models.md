@@ -93,8 +93,16 @@ Scheduler.async(() -> {                                 // worker thread
 
 For a loading screen with progress, see [`Loader`](../core/loading.md).
 
-A big model still stalls for a moment on the first frame that draws it, while its buffers and textures upload and the GPU
-is waited on.
+Uploading happens on the first frame that draws it, so a big model would stall that frame. To spread it over many
+frames, [preload](scenes.md#preloading) the model before showing it:
+
+```java nocompile
+.onSuccess(model -> {
+    model.root().setVisible(false);
+    scene.add(model.root());
+    scene.preload(model.root()).onDone(() -> model.root().setVisible(true));
+})
+```
 
 ## Gotchas
 

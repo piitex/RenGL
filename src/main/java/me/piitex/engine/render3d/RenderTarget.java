@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
  * UI layer later draws as an image.
  */
 public interface RenderTarget extends AutoCloseable {
+
     int width();
 
     int height();

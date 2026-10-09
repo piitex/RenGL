@@ -86,8 +86,6 @@ public class EntityScene extends Scene {
         }
     }
 
-    // --- Entities -------------------------------------------------------------------------------------------------
-
     /**
      * Makes a new top-level entity and adds it to the scene.
      */

@@ -26,15 +26,18 @@ The widgets also have shortcut methods (`setPlaceholder`, `setTextColor`, `setCa
 | Max length (codepoints) | `getMaxLength` / `setMaxLength` | `-1` (unlimited) |
 | Read-only | `isReadOnly` / `setReadOnly` | `false` |
 | Undo/redo enabled | `isUndoEnabled` / `setUndoEnabled` | `true` |
-| Undo steps kept per widget | `getUndoLimit` / `setUndoLimit` | `200` |
+| Indent size | `getIndentSize` / `setIndentSize` | `0`: Tab moves focus. Above 0, Tab indents in a text area (up to 16) |
+| Auto-indent | `isAutoIndent` / `setAutoIndent` | `false`: Enter keeps the line's indentation in a text area |
+| Auto-close brackets | `isAutoCloseBrackets` / `setAutoCloseBrackets` | `false`: typing "(", "[", "{" or a quote adds its closer, typing a closer (and a ";" that follows a ")") goes over the one that is next, Backspace takes an empty pair, and typing an opener over a selection puts the pair round it. Strings and comments are left alone, a quote after a letter is an apostrophe, and Enter after a call leaves its ";" on the line |
+| Undo steps kept per widget | `getUndoLimit` / `setUndoLimit` | `200`. A step stores only the part of the text that changed, so a big document with many steps stays small |
 | Text color ([`Paint`](../styling/colors-and-paints.md)) | `getTextColor` / `setTextColor` | Black (themed) |
 | Placeholder text | `getPlaceholder` / `setPlaceholder` | `""` |
 | Placeholder color (`Paint`) | `getPlaceholderColor` / `setPlaceholderColor` | Light gray (themed) |
-| Caret color | `getCaretColor` / `setCaretColor` | Black (themed) |
+| Caret color | `getCaretColor` / `setCaretColor(Paint)` | Black (themed) |
 | Caret shape | `getCaretShape` / `setCaretShape` | `LINE` |
 | Caret width | `getCaretWidth` / `setCaretWidth` | `2` |
 | Caret height ratio | `getCaretHeightRatio` / `setCaretHeightRatio` | `1.0` |
-| Selection color | `getSelectionColor` / `setSelectionColor` | Light blue, 55% alpha (themed) |
+| Selection color | `getSelectionColor` / `setSelectionColor(Paint)` | Light blue, 55% alpha (themed) |
 
 Notes:
 

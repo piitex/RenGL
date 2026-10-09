@@ -27,7 +27,7 @@ import me.piitex.engine.ui.color.Color;
  * once finished, leaving the Element at the opacity it ended on (1 after fading in, 0
  * after fading out).
  */
-public class FadeTransition implements Transition {
+public class FadeTransition extends LockableTransition<FadeTransition> {
 
     public enum Direction {
         /**
@@ -164,6 +164,11 @@ public class FadeTransition implements Transition {
         if (finished) return false;
         finished = true;
         return true;
+    }
+
+    @Override
+    protected void jumpToEnd() {
+        elapsed = durationSeconds;
     }
 
     @Override

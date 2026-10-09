@@ -51,12 +51,11 @@ import java.util.Random;
  * </ul>
  * Like the 3D demo it asks for Vulkan on macOS and OpenGL elsewhere; {@code -Drengl.demo.api=OPENGL} chooses.
  */
-@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class TerrainDemo {
     private static final int CELLS = 60;
     private static final float CELL = 0.5f;
     private static final Mesh CRATE = Mesh.cube(1f);
-    private static final int MAX_BODIES = 150;
+    private static final int MAX_BODIES = 15000;
 
     static void main() {
         // -XstartOnFirstThread is required on macOS.

@@ -15,12 +15,18 @@ import java.util.List;
  * {@link Sprite} draws a trimmed region exactly where the full picture would have been, so frames of an animation
  * stay lined up however much of each was trimmed. For an untrimmed region the offsets are 0 and the frame size is
  * the region's own size.
+ * <p>
+ * A region may also be <b>rotated</b>, as packers do to fit more in: the picture is stored on the texture turned 90
+ * degrees clockwise, so it occupies {@link #getHeight()} by {@link #getWidth()} pixels there. Everything about the
+ * region (its size, offsets and what a {@link Sprite} draws) is still of the upright picture; only {@link #getX()},
+ * {@link #getY()} and the sampling know about the turn.
  */
 @GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public final class TextureRegion {
     private final Texture texture;
     private final int x, y, width, height;
     private final int offsetX, offsetY, frameWidth, frameHeight;
+    private final boolean rotated;
 
     /**
      * The whole texture.
@@ -42,10 +48,21 @@ public final class TextureRegion {
      */
     public TextureRegion(Texture texture, int x, int y, int width, int height,
                          int offsetX, int offsetY, int frameWidth, int frameHeight) {
+        this(texture, x, y, width, height, offsetX, offsetY, frameWidth, frameHeight, false);
+    }
+
+    /**
+     * As the trimmed region above, stored {@code rotated} on the texture or not. A rotated picture of
+     * {@code width} by {@code height} (upright) takes the rectangle at ({@code x}, {@code y}) of {@code height} by
+     * {@code width} pixels on the texture, turned 90 degrees clockwise.
+     */
+    public TextureRegion(Texture texture, int x, int y, int width, int height,
+                         int offsetX, int offsetY, int frameWidth, int frameHeight, boolean rotated) {
         if (texture == null) throw new IllegalArgumentException("texture must not be null");
         if (width <= 0 || height <= 0) throw new IllegalArgumentException("region must not be empty: " + width + "x" + height);
-        if (x < 0 || y < 0 || x + width > texture.getWidth() || y + height > texture.getHeight()) {
-            throw new IllegalArgumentException("region " + x + "," + y + " " + width + "x" + height
+        int storedWidth = rotated ? height : width, storedHeight = rotated ? width : height;
+        if (x < 0 || y < 0 || x + storedWidth > texture.getWidth() || y + storedHeight > texture.getHeight()) {
+            throw new IllegalArgumentException("region " + x + "," + y + " " + storedWidth + "x" + storedHeight
                     + " is outside the " + texture.getWidth() + "x" + texture.getHeight() + " texture");
         }
         if (offsetX < 0 || offsetY < 0 || offsetX + width > frameWidth || offsetY + height > frameHeight) {
@@ -61,6 +78,7 @@ public final class TextureRegion {
         this.offsetY = offsetY;
         this.frameWidth = frameWidth;
         this.frameHeight = frameHeight;
+        this.rotated = rotated;
     }
 
     /**
@@ -135,13 +153,20 @@ public final class TextureRegion {
         return frameHeight;
     }
 
+    /**
+     * Whether the picture is stored turned 90 degrees clockwise on the texture. See the class docs.
+     */
+    public boolean isRotated() {
+        return rotated;
+    }
+
     public boolean isTrimmed() {
         return offsetX != 0 || offsetY != 0 || width != frameWidth || height != frameHeight;
     }
 
     @Override
     public String toString() {
-        return "TextureRegion[" + x + "," + y + " " + width + "x" + height
+        return "TextureRegion[" + x + "," + y + " " + width + "x" + height + (rotated ? " rotated" : "")
                 + (isTrimmed() ? " in " + frameWidth + "x" + frameHeight + " at " + offsetX + "," + offsetY : "") + "]";
     }
 }

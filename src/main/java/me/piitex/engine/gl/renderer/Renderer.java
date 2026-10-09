@@ -1,5 +1,6 @@
 package me.piitex.engine.gl.renderer;
 
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.gl.renderer.metal.MetalSkikoRenderer;
 import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.math.Polygon;
@@ -42,7 +43,9 @@ import java.util.List;
  * through {@link #drawGradient} and {@link #drawGradientBorder}. The
  * {@link #drawQuad(float, float, float, float, Paint, float)} and
  * {@link #drawBorder(float, float, float, float, Paint, float, float)} overloads take
- * any Paint and pick the right call. See {@link me.piitex.engine.ui.Element#render}.
+ * any Paint and pick the right call, and so do
+ * {@link #drawLine(float, float, float, float, Paint, float)} and
+ * {@link #drawCircle(float, float, float, Paint)}. See {@link me.piitex.engine.ui.Element#render}.
  */
 @GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public interface Renderer {
@@ -117,6 +120,31 @@ public interface Renderer {
         if (color == null || thickness <= 0 || pointCount < 2) return;
         for (int i = 1; i < pointCount; i++) {
             drawLine(points[i * 2 - 2], points[i * 2 - 1], points[i * 2], points[i * 2 + 1], color, thickness);
+        }
+    }
+
+    /**
+     * As {@link #drawPolyline(float[], int, Color, float)} in any {@link Paint}. A {@link LinearGradient} runs along the
+     * line itself, its first color at the first point and its last at the end, whatever the line's shape; each segment
+     * is drawn in the color of its middle. A null paint, a {@code thickness <= 0} or fewer than two points is a no-op.
+     */
+    default void drawPolyline(float[] points, int pointCount, Paint paint, float thickness) {
+        paint = AnimatedPaint.resolve(paint);
+        if (paint instanceof Color color) {
+            drawPolyline(points, pointCount, color, thickness);
+        } else if (paint instanceof LinearGradient gradient && thickness > 0 && pointCount >= 2) {
+            float total = 0f;
+            for (int i = 1; i < pointCount; i++) {
+                total += (float) Math.hypot(points[i * 2] - points[i * 2 - 2], points[i * 2 + 1] - points[i * 2 - 1]);
+            }
+            if (total <= 0f) return;
+            float done = 0f;
+            for (int i = 1; i < pointCount; i++) {
+                float length = (float) Math.hypot(points[i * 2] - points[i * 2 - 2], points[i * 2 + 1] - points[i * 2 - 1]);
+                drawLine(points[i * 2 - 2], points[i * 2 - 1], points[i * 2], points[i * 2 + 1],
+                        gradient.colorAt((done + length / 2f) / total), thickness);
+                done += length;
+            }
         }
     }
 
@@ -318,6 +346,7 @@ public interface Renderer {
      * a {@link LinearGradient} to {@link #drawGradient}. A null paint is a no-op.
      */
     default void drawQuad(float x, float y, float width, float height, Paint paint, float cornerRadius) {
+        paint = AnimatedPaint.resolve(paint);
         if (paint instanceof Color color) {
             drawQuad(x, y, width, height, color, cornerRadius);
         } else if (paint instanceof LinearGradient gradient) {
@@ -331,10 +360,44 @@ public interface Renderer {
      * null paint is a no-op.
      */
     default void drawBorder(float x, float y, float width, float height, Paint paint, float thickness, float cornerRadius) {
+        paint = AnimatedPaint.resolve(paint);
         if (paint instanceof Color color) {
             drawBorder(x, y, width, height, color, thickness, cornerRadius);
         } else if (paint instanceof LinearGradient gradient) {
             drawGradientBorder(x, y, width, height, gradient, thickness, cornerRadius);
+        }
+    }
+
+    /**
+     * Draws a line segment in any {@link Paint}: a {@link Color} goes to {@link #drawLine(float, float, float, float, Color, float)},
+     * a {@link LinearGradient} is drawn along the segment, its first color at (x0, y0) and its last at (x1, y1), as a
+     * flat-ended stroke. A null paint, a {@code thickness <= 0} or a zero-length segment is a no-op.
+     */
+    default void drawLine(float x0, float y0, float x1, float y1, Paint paint, float thickness) {
+        paint = AnimatedPaint.resolve(paint);
+        if (paint instanceof Color color) {
+            drawLine(x0, y0, x1, y1, color, thickness);
+        } else if (paint instanceof LinearGradient gradient && thickness > 0f) {
+            float dx = x1 - x0, dy = y1 - y0;
+            float length = (float) Math.hypot(dx, dy);
+            if (length <= 0f) return;
+            pushTransform(x0, y0, (float) Math.toDegrees(Math.atan2(dy, dx)), 1f, 1f, 0f, 0f);
+            drawGradient(0f, -thickness / 2f, length, thickness, new LinearGradient(gradient.getColors(), 0f), 0f);
+            popTransform();
+        }
+    }
+
+    /**
+     * Fills a circle with any {@link Paint}: a {@link Color} goes to {@link #drawCircle(float, float, float, Color)},
+     * a {@link LinearGradient} fills the circle's bounding square, rounded all the way. A null paint or a
+     * non-positive {@code radius} is a no-op.
+     */
+    default void drawCircle(float x, float y, float radius, Paint paint) {
+        paint = AnimatedPaint.resolve(paint);
+        if (paint instanceof Color color) {
+            drawCircle(x, y, radius, color);
+        } else if (paint instanceof LinearGradient gradient && radius > 0f) {
+            drawGradient(x - radius, y - radius, radius * 2f, radius * 2f, gradient, radius);
         }
     }
 

@@ -25,6 +25,8 @@ final class ObjC {
     static final GroupLayout CMTIME = MemoryLayout.structLayout(JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_LONG);
     static final GroupLayout CMTIME_RANGE = MemoryLayout.structLayout(CMTIME, CMTIME);
     static final GroupLayout CGSIZE = MemoryLayout.structLayout(JAVA_DOUBLE, JAVA_DOUBLE);
+    /** A CGAffineTransform: a, b, c, d, tx, ty. */
+    static final GroupLayout CGAFFINE = MemoryLayout.structLayout(JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE);
 
     /** A value passed by value, which needs its layout spelled out. */
     record Struct(MemorySegment segment, MemoryLayout layout) {

@@ -12,7 +12,8 @@ Window window = new Window(new WindowOptions("My App").setDimensions(1280, 720))
 
 ## WindowOptions
 
-A fluent builder. Every setter returns the same `WindowOptions`, so calls chain.
+The settings of a window, in one place. Every setter returns the same `WindowOptions`, so calls chain. Build it
+before the window opens and the window opens with those settings.
 
 ```java
 WindowOptions options = new WindowOptions("My App")
@@ -20,33 +21,67 @@ WindowOptions options = new WindowOptions("My App")
         .setResizable(true);
 ```
 
+The options stay connected to their window. Call a setter on a running window and the window changes, from any
+thread:
+
+```java
+window.getWindowOptions().setWidth(1280);           // resizes the window
+window.getWindowOptions().setTitle("My App - Level 2");
+window.getWindowOptions().setFullscreen(true);
+```
+
+The [`Window` methods](#window-styles-at-runtime) (`setSize`, `setTitle`, ...) do the same thing. One `WindowOptions`
+drives one `Window`: passing the same instance to a second window throws.
+
 | Setter | Default | Currently honored by the engine? |
 |---|---|---|
-| `new WindowOptions(title)` / `setTitle(String)` | none | Yes, becomes the OS window title. Can be changed at runtime with `Window.setTitle` |
-| `setDimensions(width, height)` | `0, 0` | **Yes.** Set this, or you get a zero-size window |
-| `setFullscreen(boolean)` | `false` | **Yes.** Covers the primary monitor (exclusive), creation-time only |
-| `setStyle(WindowStyle)` | `STANDARD` | **Yes.** `BORDERLESS` removes the title bar, title and close/minimize/maximize controls. Can be changed at runtime with `Window.setStyle` |
-| `setWindowed(boolean)` | `true` | **Yes.** `false` is `BORDERLESS`, `true` is `STANDARD`. With `setFullscreen(true)` it gives borderless fullscreen |
-| `setAlwaysOnTop(boolean)` | `false` | **Yes.** Keeps the window above others. Can be changed at runtime with `Window.setAlwaysOnTop` |
-| `setVsync(boolean)` | `true` | **Yes**, and can be changed while running. On: frames follow the display refresh and `maxFPS` is ignored. Off: the loop runs at `maxFPS` |
-| `setShowCursor(boolean)` | `true` | **Yes.** `false` hides the OS cursor over the window (it still moves freely) |
-| `setMaxFPS(int)` | `60` | **Yes**, and can be changed while running. Only used while vsync is off. `0` or less means unlimited |
-| `setHandleFocus(boolean)` | `false` | **Yes.** Clears keyboard focus when the OS window loses focus |
-| `setRenderer(RenderAPI)` | `AUTO` | **Yes**, before the window opens. `AUTO` is Metal on macOS and OpenGL elsewhere (or the `rengl.backend` system property); `METAL` and `VULKAN` ask for that API and fall back to the default, with a warning, where it can't be had. **`OPENGL` on macOS is a fatal error** (`IllegalStateException`) that says to use `VULKAN`, because macOS windows have no OpenGL context. `Window.getRenderer()` reports what was used. [3D](../3d/README.md) needs `OPENGL` or `VULKAN`. See [Rendering APIs](rendering-apis.md) |
-| `setResizable(boolean)` | `true` | **Yes.** `false` locks the window size |
-| `setIcon(Image)` | `null` | **Yes.** An image from `ImageLoader.load(...)`. Wins over `setIconPath`. On macOS it sets the Dock icon. Can be changed at runtime with `Window.setIcon` |
-| `setIconPath(String)` | `null` | **Yes.** File path or classpath resource. Same platform behavior as `setIcon` |
+| `new WindowOptions(title)` / `setTitle(String)` | none | The OS window title. **Live** |
+| `setDimensions(width, height)`, `setWidth(int)`, `setHeight(int)` | `0, 0` | The size of the window. Set this, or you get a zero-size window. **Live:** resizes the window, and `onResize` fires |
+| `setFullscreen(boolean)` | `false` | Covers the primary monitor. On Windows and Linux a `STANDARD` window takes the monitor exclusively and a `BORDERLESS` one is borderless fullscreen; macOS always uses a frameless window the size of the screen (no display mode switch). **Live:** leaving restores the earlier position and size, and the maximized state |
+| `setMaximized(boolean)` | `false` | Starts maximized, or maximizes and restores the live window. Ignored by a window that isn't resizable. During fullscreen the request waits until fullscreen ends. `isMaximized()` also follows the user's own title bar clicks. **Live** |
+| `setStyle(WindowStyle)` | `STANDARD` | `BORDERLESS` removes the title bar, title and close/minimize/maximize controls. **Live** |
+| `setWindowed(boolean)` | `true` | `false` is `BORDERLESS`, `true` is `STANDARD`. With `setFullscreen(true)` it gives borderless fullscreen. **Live** |
+| `setAlwaysOnTop(boolean)` | `false` | Keeps the window above others. **Live** |
+| `setVsync(boolean)` | `true` | On: frames follow the display refresh and `maxFPS` is ignored. Off: the loop runs at `maxFPS`. **Live,** picked up next frame |
+| `setShowCursor(boolean)` | `true` | `false` hides the OS cursor over the window (it still moves freely). **Live** |
+| `setMaxFPS(int)` | `60` | Only used while vsync is off. `0` or less means unlimited. **Live,** picked up next frame |
+| `setHandleFocus(boolean)` | `false` | Clears keyboard focus when the OS window loses focus. **Live,** checked every frame |
+| `setRenderer(RenderAPI)` | `AUTO` | **Live, but the window is rebuilt:** a window is made for one API, so on a running window the engine closes the OS window and opens it again with the new one (see [Switching the renderer](#switching-the-renderer)). `AUTO` is Metal on macOS and OpenGL elsewhere (or the `rengl.backend` system property); `METAL` and `VULKAN` ask for that API and fall back to the default, with a warning, where it can't be had. **`OPENGL` on macOS is a fatal error** (`IllegalStateException`) that says to use `VULKAN`, because macOS windows have no OpenGL context. `Window.getRenderer()` reports what was used. [3D](../3d/README.md) needs `OPENGL` or `VULKAN`. See [Rendering APIs](rendering-apis.md) |
+| `setResizable(boolean)` | `true` | `false` locks the window size (`setDimensions` still works). **Live** |
+| `setIcon(Image)` | `null` | An image from `ImageLoader.load(...)`. Wins over `setIconPath`. On macOS it sets the Dock icon. **Live** |
+| `setIconPath(String)` | `null` | File path or classpath resource. Same platform behavior as `setIcon`. **Live** |
 
-The getters (`getTitle`, `getWidth`, `getHeight`, `isFullscreen`, ...) return what was stored. The
+The getters (`getTitle`, `getWidth`, `getHeight`, `isFullscreen`, ...) return the current state. The
 engine uses `getWidth()`/`getHeight()` for the window background, for clamping the mouse position, and for
 [`ModalContainer`](../containers/modal-container.md) centering. `getWidth()`/`getHeight()` follow the real
 window size, including after a user resize or a fullscreen switch.
 
-Except for the ones with a `Window` method in the table below, the applied options are read once, when the window is created. Changing them afterwards has no effect.
+A live setter asks the OS for the change, and the OS can adjust it: a window can't be bigger than the screen allows,
+for example. `getWidth()`/`getHeight()` then report the size the window really has.
+
+## Switching the renderer
+
+```java nocompile
+window.getWindowOptions().setRenderer(RenderAPI.VULKAN); // on a running window
+```
+
+A window is made for one graphics API, so the engine does not change it in place. It closes the OS window and opens a
+new one with the API asked for, at the same size and position. The `Window` itself carries on: its containers,
+[scenes](../game/scenes.md), focus and settings are kept, and `onClose` does **not** run. Safe from any thread.
+
+- The window **flickers**: it disappears for a few frames and comes back once the new renderer has drawn.
+- [3D viewports](../3d/README.md) free their GPU objects with the old renderer and start afresh on the new one. On
+  Metal they draw nothing.
+- It works on the first window too; the engine keeps running.
+- `Window.getRenderer()` reports the old API until the new window is up.
+- If the new API can't start, the old one is restored and an error is logged. Asking for `OPENGL` on macOS throws
+  `IllegalStateException` from the setter and leaves the option as it was.
+- Setting the API a window already uses does nothing.
 
 ## Window styles at runtime
 
-`WindowStyle` is `STANDARD` (normal OS frame) or `BORDERLESS` (no title bar, title or window controls). These `Window` methods work while the app is running, from any thread:
+`WindowStyle` is `STANDARD` (normal OS frame) or `BORDERLESS` (no title bar, title or window controls). These `Window` methods work while the app is running, from any thread. The ones that match a `WindowOptions` setter are
+the same call by another name:
 
 | Method | Description |
 |---|---|
@@ -57,7 +92,7 @@ Except for the ones with a `Window` method in the table below, the applied optio
 | `setAlwaysOnTop(boolean)` | Floats above other windows |
 | `setIcon(Image)` | Changes the icon (Dock icon on macOS) |
 | `setResizable(boolean)` | Allows or forbids user resizing; `setSize` still works |
-| `setFullscreen(boolean)` | Enters or leaves fullscreen and remembers the windowed bounds. Follows the style: `BORDERLESS` is borderless fullscreen, `STANDARD` is exclusive |
+| `setFullscreen(boolean)` | Enters or leaves fullscreen and remembers the windowed bounds. See the `setFullscreen` row of the options table for what each style gives |
 | `setPosition(x, y)` | Moves the top-left corner, in screen coordinates |
 | `setSizeLimits(minW, minH, maxW, maxH)` | Limits user resizing. A negative value means no limit on that side |
 | `setOpacity(float)` | 0 to 1 for the whole window. Not supported everywhere |
@@ -66,7 +101,7 @@ Except for the ones with a `Window` method in the table below, the applied optio
 | `setCursorPosition(x, y)` | Moves the OS cursor, in window points. Only while the window has focus |
 | `isFocused()` | Whether the window has the OS focus |
 | `setVsync(boolean)`, `setMaxFPS(int)` | Same as the options, picked up next frame |
-| `setMinimized(boolean)`, `setMaximized(boolean)` | Set the state directly, so you can pass a flag instead of picking between `minimize()` / `maximize()` / `restore()`. A no-op if already in that state |
+| `setMinimized(boolean)`, `setMaximized(boolean)` | Set the state directly, so you can pass a flag instead of picking between `minimize()` / `maximize()` / `restore()`. A no-op if already in that state. `setMaximized` is the same as `getWindowOptions().setMaximized(...)` |
 | `minimize()`, `maximize()`, `restore()`, `focus()` | The usual window actions |
 | `hide()`, `show()`, `isHidden()` | Hide the window while the app keeps running (see below) |
 | `close()` | Closes the window, like clicking its close button. Closing the first window ends the engine |
@@ -134,7 +169,9 @@ window.onResize((width, height) -> {
 
 Fires with the new size whenever the window's logical size changes, whether the user dragged the border or
 your code called `setSize`. `WindowOptions.getWidth()`/`getHeight()` already hold the new size when it runs.
-It does not fire for a DPI or monitor change that leaves the logical size the same. It runs on the render
+It also fires once when the window opens at a different size than you asked for (maximized, or shrunk to fit the
+screen); `getDesignWidth()`/`getDesignHeight()` on the options still hold the size you asked for. It does not fire
+for a DPI or monitor change that leaves the logical size the same. It runs on the render
 thread, is a single slot, and `null` removes it. [`ResizableContainer`](../containers/resizable-container.md)
 follows the window on its own, so you only need this for layouts you size by hand.
 
@@ -180,7 +217,7 @@ Nothing else can bring a hidden window back: there is no tray icon support, and 
 ```java
 Image icon = ImageLoader.load("src/main/resources/icon.png");
 new WindowOptions("My App").setIcon(icon); // at startup
-window.setIcon(otherIcon); // at runtime
+window.getWindowOptions().setIcon(otherIcon); // at runtime, same as window.setIcon(otherIcon)
 ```
 
 Windows and Linux set a real window icon. macOS windows have no icon of their own, so the image becomes the Dock and app-switcher icon instead. Use a square PNG, 256x256 or larger.
@@ -249,8 +286,11 @@ window.setBackground(null); // remove it
 ```
 
 `setBackground` attaches one of the animated [background effects](../styling/backgrounds.md) to the whole
-window. It draws over the flat `setBackgroundColor` fill and behind every container, at the window's size. It is
-independent of theming: a theme switch does not change or remove it.
+window. It draws over the flat `setBackgroundColor` fill and behind every container, at the window's size.
+
+It is themed like the color: a theme can ask for an effect (`Theme.getWindowEffect()`), which the window makes for itself
+and keeps up to date, until you call `setBackground`, which **pins** it, `null` included. `followThemeBackground()` unpins
+both the color and the effect.
 
 A window holds **one** background effect, so `setBackground` replaces the previous one. The same hook takes a
 [`Background3D`](../3d/background-3d.md), which puts a live 3D scene behind the whole window with the UI drawn over it:
@@ -338,8 +378,10 @@ modal.close(); // plays the modal's close animation, if any, then calls window.c
 ```
 
 `showModal`/`closeModal`/`getModal` exist on `Window`, but you normally use the [`ModalContainer`](../containers/modal-container.md) methods.
-`window.closeModal()` removes the modal at once and skips its close animation.
-Showing a modal closes any popup and any previous modal, and clears focus. See
+`window.closeModal()` removes the top modal at once and skips its close animation; `closeModal(modal)` removes
+a particular one, wherever it is in the stack.
+Modals stack: showing one closes any popup and clears focus, but leaves the modals already open beneath it.
+`getModal()` is the topmost, `getModals()` all of them bottom to top. See
 [ModalContainer](../containers/modal-container.md).
 
 ## Input manager

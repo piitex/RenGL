@@ -4,6 +4,8 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.color.AnimatedPaint;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,8 +51,8 @@ public class ConstellationBackground extends AbstractBackground {
     private float particleRadius = 2f;
     private float linkDistance = 120f;
     private float lineThickness = 1f;
-    private Color particleColor = new Color(1f, 1f, 1f, 0.8f);
-    private Color lineColor = new Color(1f, 1f, 1f, 0.35f);
+    private Paint particleColor = new Color(1f, 1f, 1f, 0.8f);
+    private Paint lineColor = new Color(1f, 1f, 1f, 0.35f);
 
     private boolean mouseInteractionEnabled = false;
     private float repelRadius = 120f;
@@ -81,6 +83,14 @@ public class ConstellationBackground extends AbstractBackground {
      * #setParticleCount}, this invalidates the field. Speed is baked in at seed time
      * rather than read live, so there is nothing to update in place.
      */
+    public float getMinSpeed() {
+        return minSpeed;
+    }
+
+    public float getMaxSpeed() {
+        return maxSpeed;
+    }
+
     public void setSpeedRange(float minSpeed, float maxSpeed) {
         this.minSpeed = Math.max(0f, minSpeed);
         this.maxSpeed = Math.max(this.minSpeed, maxSpeed);
@@ -127,11 +137,11 @@ public class ConstellationBackground extends AbstractBackground {
      * whole field through the colour wheel. Pair it with a matching RainbowColor for
      * {@link #setLineColor}, same cycle duration and a lower alpha, and the two stay in sync.
      */
-    public Color getParticleColor() {
+    public Paint getParticleColor() {
         return particleColor;
     }
 
-    public void setParticleColor(Color particleColor) {
+    public void setParticleColor(Paint particleColor) {
         this.particleColor = particleColor;
     }
 
@@ -139,11 +149,11 @@ public class ConstellationBackground extends AbstractBackground {
      * The line color's own alpha is the line's opacity at zero distance. See {@link #getLinkDistance()} for how it fades from there.
      * A {@link me.piitex.engine.ui.color.RainbowColor} works here too; see {@link #getParticleColor()}.
      */
-    public Color getLineColor() {
+    public Paint getLineColor() {
         return lineColor;
     }
 
-    public void setLineColor(Color lineColor) {
+    public void setLineColor(Paint lineColor) {
         this.lineColor = lineColor;
     }
 
@@ -276,6 +286,8 @@ public class ConstellationBackground extends AbstractBackground {
 
     @Override
     protected void updateEffect(float delta, float x, float y, float width, float height) {
+        AnimatedPaint.advanceIfAnimated(particleColor, delta);
+        AnimatedPaint.advanceIfAnimated(lineColor, delta);
         if (particles == null) seedParticles(width, height);
 
         // Mouse position is fetched once per frame, in local space, rather than per
@@ -384,8 +396,9 @@ public class ConstellationBackground extends AbstractBackground {
                     if (distSq >= maxDistSq) continue;
 
                     float proximity = 1f - (float) Math.sqrt(distSq) / linkDistance;
-                    Color faded = new Color(lineColor.getR(), lineColor.getG(), lineColor.getB(), lineColor.getA() * proximity);
-                    renderer.drawLine(x + a.x, y + a.y, x + b.x, y + b.y, faded, lineThickness);
+                    renderer.pushAlpha(proximity);
+                    renderer.drawLine(x + a.x, y + a.y, x + b.x, y + b.y, lineColor, lineThickness);
+                    renderer.popAlpha();
                 }
             }
         }

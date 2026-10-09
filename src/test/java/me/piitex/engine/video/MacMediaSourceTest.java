@@ -71,6 +71,27 @@ class MacMediaSourceTest {
     }
 
     @Test
+    void turnsAPictureTheFileMarksAsSideways() throws Exception {
+        // The same video, with a quarter turn in its display transform, as a phone writes one held upright.
+        try (Demuxer d = MediaFiles.open(fixture("h264-rotated-640x360.mp4"))) {
+            assertEquals(360, d.info().width());
+            assertEquals(640, d.info().height());
+            FrameDecoder video = d.videoDecoder();
+            Packet p;
+            int frames = 0;
+            while ((p = d.next()) != null) {
+                if (p.stream() != d.videoStream()) continue;
+                VideoFrame f = video.decode(p);
+                assertEquals(360, f.width());
+                assertEquals(640, f.height());
+                assertEquals(360 * 640 * 4, f.pixels().length);
+                frames++;
+            }
+            assertTrue(frames > 0);
+        }
+    }
+
+    @Test
     void decodesHevc() throws Exception {
         try (Demuxer d = MediaFiles.open(fixture("hevc-640x360.mp4"))) {
             assertEquals("H.265", d.info().videoCodec());

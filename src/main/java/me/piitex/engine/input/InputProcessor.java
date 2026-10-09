@@ -11,6 +11,8 @@ import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.events.MouseClickEvent;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 
@@ -24,10 +26,18 @@ public class InputProcessor {
      */
     private Element dragTarget;
     /**
-     * The {@link Element#setClickOnRelease click-on-release} Element a left press started on, or null. Its click fires
-     * if the release lands on it.
+     * The Elements a left press started on whose click waits for the release (click-on-release ones, and ones that
+     * {@link Element#setDragsContainer drag their container}), empty between presses. Each click fires if the release
+     * lands on it.
      */
-    private Element clickTarget;
+    private final List<Element> clickTargets = new ArrayList<>();
+    /**
+     * The Draggable a press on a drag-through Element will start dragging once the mouse has moved
+     * {@link #DRAG_THRESHOLD} points, or null. See {@link Element#setDragsContainer}.
+     */
+    private Element pendingDrag;
+    private double pendingDragX, pendingDragY;
+    private static final double DRAG_THRESHOLD = 4.0;
 
     public void processEvents(Window window) {
         InputManager manager = window.getInputManager();
@@ -45,7 +55,7 @@ public class InputProcessor {
                         mouseInWindow = true;
                         MouseTracker.setInWindow(true);
                     }
-                    if (mouseInWindow) handleMouseMove(window, event);
+                    if (mouseInWindow && !window.isInputLocked()) handleMouseMove(window, event);
                     break;
                 case MOUSE_ENTER:
                     mouseInWindow = event.action == 1;
@@ -54,15 +64,21 @@ public class InputProcessor {
                     if (!mouseInWindow) clearAllHover(window);
                     break;
                 case MOUSE_BUTTON:
+                    // A release still goes through, so a drag or held button that began before the lock can end.
+                    if (event.action != GLFW.GLFW_RELEASE && window.swallowInput(true)) break;
                     handleMouseButton(window, event);
                     break;
                 case KEY:
+                    // Only a fresh press skips, so the key that started the transition, held down, cannot end it.
+                    if (event.action != GLFW.GLFW_RELEASE && window.swallowInput(event.action == GLFW.GLFW_PRESS)) break;
                     handleKey(window, event);
                     break;
                 case CHAR:
+                    if (window.swallowInput(false)) break;
                     handleChar(window, event);
                     break;
                 case SCROLL:
+                    if (window.swallowInput(false)) break;
                     handleScroll(window, event);
                     break;
             }
@@ -89,6 +105,16 @@ public class InputProcessor {
         absoluteMouseX = Math.max(0, Math.min(absoluteMouseX, window.getWindowOptions().getWidth()));
         absoluteMouseY = Math.max(0, Math.min(absoluteMouseY, window.getWindowOptions().getHeight()));
         MouseTracker.update(absoluteMouseX, absoluteMouseY);
+
+        // A press on a clickable Element that drags its container turns into that drag once the mouse has moved a few
+        // points; until then it is still a click.
+        if (pendingDrag != null && Math.hypot(absoluteMouseX - pendingDragX, absoluteMouseY - pendingDragY) >= DRAG_THRESHOLD) {
+            Element started = pendingDrag;
+            pendingDrag = null;
+            clickTargets.clear();
+            dragTarget = started;
+            ((Draggable) started).onDragStart(pendingDragX, pendingDragY);
+        }
 
         // Find the single topmost (highest z-index) thing under the cursor across all
         // top-level containers. The first container whose bounds contain the point
@@ -154,22 +180,29 @@ public class InputProcessor {
      * plain Container be found; that nesting is ordinary, since Layout extends Container,
      * and a search that stopped at the immediate parent would never reach the Element
      * itself. Returns {@code container} if it contains the point but nothing inside it,
-     * at any depth, does, or null if the point is not in {@code container} at all.
+     * at any depth, does, or null if the point is not in {@code container} at all, or if it is only on the empty part of
+     * a container that {@link Container#isPointerPassthrough passes the pointer through}.
      */
     private Element findTopmostHit(Container container, double px, double py) {
-        if (!container.isEnabled() || !container.contains(px, py)) return null;
-        if (container.interceptsPointer(px, py)) return container;
+        if (!container.isEnabled()) return null;
+        // A container that doesn't clip shows its children past its own edge, so they can be pointed at there too.
+        boolean inside = container.contains(px, py);
+        if (!inside && container.isClipping()) return null;
+        if (inside && container.interceptsPointer(px, py)) return container;
 
         for (Map.Entry<Integer, Element> entry : container.getElements().descendingMap().entrySet()) {
             Element child = entry.getValue();
-            if (!child.isEnabled() || !child.contains(px, py)) continue;
+            if (!child.isEnabled()) continue;
 
             if (child instanceof Container childContainer) {
-                return findTopmostHit(childContainer, px, py);
+                // A container that shows and does nothing where it is empty lets the point through to what is below.
+                Element nested = findTopmostHit(childContainer, px, py);
+                if (nested != null) return nested;
+                continue;
             }
-            return child;
+            if (child.contains(px, py)) return child;
         }
-        return container;
+        return inside && !container.isPointerPassthrough(px, py) ? container : null;
     }
 
     private void handleMouseButton(Window window, InputEvent event) {
@@ -182,10 +215,13 @@ public class InputProcessor {
                 draggable.onDragEnd(absoluteMouseX, absoluteMouseY);
             }
             dragTarget = null;
-            Element target = clickTarget;
-            clickTarget = null;
-            if (target != null && target.getMouseClickListenerConsumer() != null && isUnderPointer(window, target)) {
-                target.getMouseClickListenerConsumer().accept(new MouseClickEvent(absoluteMouseX, absoluteMouseY, event.buttonOrKey, event.action));
+            pendingDrag = null;
+            List<Element> targets = List.copyOf(clickTargets);
+            clickTargets.clear();
+            for (Element target : targets) {
+                if (target.getMouseClickListenerConsumer() != null && isUnderPointer(window, target)) {
+                    target.getMouseClickListenerConsumer().accept(new MouseClickEvent(absoluteMouseX, absoluteMouseY, event.buttonOrKey, event.action));
+                }
             }
             return;
         }
@@ -193,7 +229,10 @@ public class InputProcessor {
         if (event.action != GLFW.GLFW_PRESS) {
             return; // ignore anything that isn't a fresh press/release (mouse buttons don't repeat)
         }
-        if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) clickTarget = null; // a press whose release was never seen
+        if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) { // a press whose release was never seen
+            clickTargets.clear();
+            pendingDrag = null;
+        }
 
         if (input.captureMouse(event.buttonOrKey, event.mods)) return; // a controls menu waiting for a binding
 
@@ -211,22 +250,24 @@ public class InputProcessor {
 
         for (Map.Entry<Integer, Container> entry : window.getContainers().descendingMap().entrySet()) {
             Container container = entry.getValue();
-            if (!container.isEnabled() || !container.contains(absoluteMouseX, absoluteMouseY)) continue;
+            if (!container.isEnabled()) continue;
 
             hitElement = findTopmostHit(container, absoluteMouseX, absoluteMouseY);
+            if (hitElement == null) continue;
             // The click goes to the nearest Element at or above the hit one that listens for it, so pressing on the
             // label or icon inside a clickable row or button counts as pressing the row or button.
+            boolean left = event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT;
             for (Element e = hitElement; e != null; e = e.owner) {
-                if (e.getMouseClickListenerConsumer() != null) {
-                    // A button-like Element fires once the left button is released over it, not now.
-                    if (!e.isClickOnRelease()) {
-                        e.getMouseClickListenerConsumer().accept(clickEvent);
-                    } else if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-                        clickTarget = e;
-                    }
-                    taken = true;
-                    break;
+                if (e.getMouseClickListenerConsumer() == null) continue;
+                // A button-like Element fires once the left button is released over it, not now. So does one that
+                // may turn the press into a drag of its container, which can only be known once the mouse moves.
+                if (!e.isClickOnRelease() && !(left && e.isDragsContainer())) {
+                    e.getMouseClickListenerConsumer().accept(clickEvent);
+                } else if (left) {
+                    clickTargets.add(e);
                 }
+                taken = true;
+                if (!e.isPropagateClicks()) break;
             }
             break;
         }
@@ -262,13 +303,27 @@ public class InputProcessor {
         // all (a label or image sitting on a draggable card) both hand it up to their owner. An Element that listens
         // for clicks is a control (a button, a clickable row) and keeps its press: nothing above it is dragged.
         Element dragCandidate = hitElement;
+        boolean throughClickable = false; // passed up through a clickable Element that drags its container
         while (dragCandidate != null && !acceptsDrag(dragCandidate)) {
-            dragCandidate = dragCandidate.getMouseClickListenerConsumer() != null ? null : dragCandidate.owner;
+            if (dragCandidate.getMouseClickListenerConsumer() != null) {
+                if (!dragCandidate.isDragsContainer()) {
+                    dragCandidate = null;
+                    break;
+                }
+                throughClickable = true;
+            }
+            dragCandidate = dragCandidate.owner;
         }
 
         if (dragCandidate instanceof Draggable draggable) {
-            dragTarget = dragCandidate;
-            draggable.onDragStart(absoluteMouseX, absoluteMouseY);
+            if (throughClickable) {
+                pendingDrag = dragCandidate;
+                pendingDragX = absoluteMouseX;
+                pendingDragY = absoluteMouseY;
+            } else {
+                dragTarget = dragCandidate;
+                draggable.onDragStart(absoluteMouseX, absoluteMouseY);
+            }
             taken = true;
         }
         if (!taken) input.mousePressed(event.buttonOrKey, event.mods);
@@ -279,8 +334,10 @@ public class InputProcessor {
      */
     private boolean isUnderPointer(Window window, Element element) {
         for (Container container : window.getContainers().descendingMap().values()) {
-            if (!container.isEnabled() || !container.contains(absoluteMouseX, absoluteMouseY)) continue;
-            for (Element e = findTopmostHit(container, absoluteMouseX, absoluteMouseY); e != null; e = e.owner) {
+            if (!container.isEnabled()) continue;
+            Element hit = findTopmostHit(container, absoluteMouseX, absoluteMouseY);
+            if (hit == null) continue;
+            for (Element e = hit; e != null; e = e.owner) {
                 if (e == element) return true;
             }
             return false;
@@ -309,7 +366,8 @@ public class InputProcessor {
         boolean taken = window.getPopup() != null || window.getModal() != null;
         for (Map.Entry<Integer, Container> entry : window.getContainers().descendingMap().entrySet()) {
             Container container = entry.getValue();
-            if (!container.isEnabled() || !container.contains(absoluteMouseX, absoluteMouseY)) continue;
+            if (!container.isEnabled()) continue;
+            if (findTopmostHit(container, absoluteMouseX, absoluteMouseY) == null) continue;
 
             Element target = findScrollTarget(container, absoluteMouseX, absoluteMouseY, event.x, event.y);
             if (target instanceof Scrollable scrollable) {
@@ -335,20 +393,22 @@ public class InputProcessor {
      * since a plain Element has no children to descend into.
      */
     private Element findScrollTarget(Container container, double px, double py, double dx, double dy) {
-        if (!container.isEnabled() || !container.contains(px, py)) return null;
+        if (!container.isEnabled()) return null;
+        boolean inside = container.contains(px, py);
+        if (!inside && container.isClipping()) return null;
 
         for (Map.Entry<Integer, Element> entry : container.getElements().descendingMap().entrySet()) {
             Element child = entry.getValue();
-            if (!child.isEnabled() || !child.contains(px, py)) continue;
+            if (!child.isEnabled()) continue;
             if (child instanceof Container childContainer) {
                 Element nested = findScrollTarget(childContainer, px, py, dx, dy);
                 if (nested != null) return nested;
-            } else if (child instanceof Scrollable scrollable && scrollable.canScroll(dx, dy)) {
+            } else if (child.contains(px, py) && child instanceof Scrollable scrollable && scrollable.canScroll(dx, dy)) {
                 return child;
             }
         }
 
-        return container instanceof Scrollable scrollable && scrollable.canScroll(dx, dy) ? container : null;
+        return inside && container instanceof Scrollable scrollable && scrollable.canScroll(dx, dy) ? container : null;
     }
 
     /**
@@ -377,6 +437,11 @@ public class InputProcessor {
         }
 
         if (event.buttonOrKey == GLFW.GLFW_KEY_TAB && event.action != GLFW.GLFW_RELEASE) {
+            if (window.getFocusedElement() instanceof Focusable focusable && focusable.wantsTab()
+                    && window.getPopup() == null && window.getModal() == null) {
+                focusable.onKeyPressed(event.buttonOrKey, event.action, event.mods);
+                return;
+            }
             boolean uiHasKeyboard = window.getFocusedElement() != null || window.getPopup() != null || window.getModal() != null;
             if (uiHasKeyboard || !sendKeyToGame(window, event)) {
                 if ((event.mods & GLFW.GLFW_MOD_SHIFT) != 0) {

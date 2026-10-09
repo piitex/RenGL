@@ -2,7 +2,7 @@
 
 [Documentation](../README.md) › [Overlays](README.md)
 
-`me.piitex.engine.ui.overlays.FormattedTextOverlay` is **scrollable text built from headings and paragraphs**,
+`me.piitex.engine.ui.overlays.FormattedTextOverlay` is **scrollable text built from headings, paragraphs, lists and code**,
 parsed from raw marked-up source through a pluggable `TextFormatPreset`. It's the widget behind something like
 a Terms of Service screen: mixed heading sizes and body text, wrapped and scrolled.
 
@@ -51,7 +51,8 @@ public interface TextFormatPreset {
     List<FormattedBlock> parse(String source);
 }
 
-public record FormattedBlock(String text, TextStyle style, float spacingBefore, float spacingAfter) {}
+public record FormattedBlock(String text, TextStyle style, float spacingBefore, float spacingAfter,
+                             float indent, String marker, Paint background) {}
 
 public record TextStyle(float fontSize, boolean bold, boolean italic, Paint color) {}
 ```
@@ -59,25 +60,54 @@ public record TextStyle(float fontSize, boolean bold, boolean italic, Paint colo
 A preset owns both the syntax **and** the resulting sizes, unlike
 [`TextSpanStyler`](rich-text-area-overlay.md#coloring-text-with-a-textspanstyler) (which only recolors runs of
 an already-fixed string, with no size or weight of its own). `TextStyle.color()` of `null` inherits the
-destination's own theme color, the same convention `TextSpan` uses. There is no inline styling within one
-block — a block draws its whole text in one `TextStyle`; mixing styles mid-paragraph means splitting into more
-blocks.
+destination's own theme color, the same convention `TextSpan` uses, and a color that is given is kept even when a
+theme is applied. There is no inline styling within one block — a block draws its whole text in one `TextStyle`; mixing
+styles mid-paragraph means splitting into more blocks.
+
+A block can also be a **list item**: its `marker` (a bullet, or `1.`) is drawn at `indent`, and the text lines up beside it,
+so a long item wraps under its own text and not under the bullet. A block with a `background` is a **code block**: the
+paint is drawn behind it with a little padding round the text, and the line breaks in its text are kept. A preset that
+makes plain paragraphs only uses the four-argument constructor, `new FormattedBlock(text, style, before, after)`.
 
 RenGL ships two presets:
 
 ### MarkdownFormatPreset
 
-`#`/`##`/`###` line prefixes, up to h6 (the same cap CommonMark uses). A heading needs a space after its
-`#`s — a bare `"#tag"` stays plain text. A blank line separates paragraphs; everything else on non-blank lines
-joins the current paragraph.
+The part of Markdown that documentation needs:
+
+- `#` to `######` line prefixes (the same cap CommonMark uses). A heading needs a space after its `#`s — a bare
+  `"#tag"` stays plain text.
+- A blank line separates paragraphs; everything else on non-blank lines joins the current paragraph.
+- Bulleted lists (`- item`, `* item` or `+ item`) and numbered ones (`1. item`). A line indented under an item carries
+  on its text, and an item indented two spaces or more sits one level in.
+- Fenced code between lines of three backticks. Line breaks and spacing are kept, and the block is drawn on a faint
+  background (`setCodeBackground`, or null for none) in the code style (`setCodeStyle`).
+- A line of three or more `-`, `*` or `_` ends the paragraph before it and draws nothing.
+
+There is no inline styling. The marks of `**bold**`, `*italic*` and `` `code` `` are taken out and what they wrap is
+left as plain text, and `[text](address)` shows as its text. Tables, quotes and pictures read as paragraphs.
 
 ```java
 MarkdownFormatPreset preset = new MarkdownFormatPreset();
 preset.setHeadingStyle(1, new TextStyle(30f, true, false, Color.WHITE));
 preset.setParagraphSpacing(14f);
+preset.setBodyStyle(new TextStyle(14f, false, false, Color.WHITE));
+preset.setCodeBackground(new Color(0f, 0f, 0f, 0.3f));
 
 FormattedTextOverlay doc = new FormattedTextOverlay(500, 360, preset);
-doc.setSource("# Title\n\nFirst paragraph.\n\n## Section\nMore text.");
+doc.setSource("""
+        # Title
+
+        First paragraph.
+
+        ## Section
+        - one
+        - two, which is long enough that it wraps under its own text and not under the bullet
+
+        ```
+        window.open();
+        ```
+        """);
 ```
 
 ### BracketFormatPreset
@@ -112,7 +142,8 @@ preset.setHeadingStyle(2, TextStyle.of(18f)); // non-bold h2
 preset.setBodyStyle(new TextStyle(15f, false, true, null)); // italic body
 preset.setHeadingSpacingBefore(24f);
 preset.setHeadingSpacingAfter(8f);
-preset.setParagraphSpacing(12f);
+preset.setParagraphSpacing(12f); // also above and below a list or a code block
+preset.setListItemSpacing(3f);
 ```
 
 ### Writing your own preset

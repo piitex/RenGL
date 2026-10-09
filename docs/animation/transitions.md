@@ -30,6 +30,9 @@ public interface Transition {
     void render(Renderer r, Element target); // draw ON TOP of the element
     boolean isFinished(); // done? then it is dropped
     default boolean stop() { return false; } // stop early; true if it was running
+    default boolean isLocking() { return false; } // lock the game while it plays?
+    default boolean isSkippable() { return false; } // may a key press or click end it?
+    default boolean finish(Element target) { return false; } // end it now, in its final state
 }
 ```
 
@@ -53,6 +56,54 @@ callback. It returns `true` if the transition was running and is now stopped, an
 FadeTransition fade = panel.fadeOut(2f);
 boolean stopped = fade.stop(); // panel stays at whatever opacity it had reached
 ```
+
+### Finishing one early
+
+`transition.finish(target)` ends a transition **as if its time were up**: the element is left in the final state and
+the completion callback fires. It returns `true` if it was running, and `false` if it had already ended or the
+transition cannot be finished (the default, and `SweepTransition`, `StripeTransition` and `SpinTransition`, which never
+end). `stop()` and `finish()` differ in where the element is left:
+
+| | `stop()` | `finish(target)` |
+|---|---|---|
+| Element is left | Where it had got to | In the final state |
+| `onComplete` | Skipped | Fires |
+
+`element.finishTransitions()` finishes every running transition on one element, and `element.hasLockingTransition()`
+says whether any of them locks the game.
+
+### Locking the game
+
+A transition can hold the game still until it ends, for a title card, a level intro or a fade to black. This is
+**off by default**; a transition only locks if you ask. `FadeTransition`, `ScaleTransition` and `ProgressTransition`
+have the switches, which chain off the constructor or off `fadeIn`/`fadeOut`:
+
+```java
+title.fadeIn(2f).lock();               // frozen until the fade is over
+title.fadeIn(2f).lock().skippable();   // ...unless the player presses a key or clicks
+card.playTransition(new ScaleTransition(0.5f, 1f, 0.4f, Easing.EASE_OUT, null).lock());
+```
+
+While a locking transition is playing on an enabled element, the window:
+
+- Does not update the [scenes](../game/scenes.md): no `fixedUpdate`, `update` or timers. Elements still animate, and
+  so does the `Scheduler`, so the picture keeps moving.
+- Ignores key presses and repeats, typed characters, mouse button presses, the wheel and hover. Key and button
+  **releases** still get through, so nothing is left stuck down.
+- With `skippable()`, ends the transition on a fresh key press or mouse button press (not a held key's repeat and not
+  the wheel), as `finish` does. That press is used up skipping; it does not also reach the game.
+
+`window.isInputLocked()` says whether anything is locking, a [scene transition](../game/transitions.md#locking-the-game-and-skipping)
+or an element one. Things to know:
+
+- The window looks for locking transitions once a frame, so one is noticed on the frame after it starts.
+- A disabled element, or one inside a disabled container, does not lock, because its transitions do not advance.
+- `skippable()` does nothing without `lock()`. A transition that is not locking never blocks or skips anything.
+- A locking transition has to end, or the window stays locked. Give it a finite duration, and do not lock a looping
+  one. Make anything that locks skippable unless it is short.
+- Your own `Transition` opts in by overriding `isLocking()`, `isSkippable()` and `finish(target)`. Extend
+  `LockableTransition<T>` to get the `lock()` and `skippable()` switches and a `finish` built on one method,
+  `jumpToEnd()`, which sets the transition to its last moment.
 
 Prefer a transition to an `onUpdate` hook for animation. An element holds only **one** `onUpdate` listener
 (registering a second replaces the first), while it can run any number of transitions at once.
@@ -96,6 +147,25 @@ panel.fadeOut(0.25f, () -> {
     next.fadeIn(0.25f);
 });
 ```
+
+#### Running something after any transition
+
+A transition built ahead of time, such as a scene's end and start transitions, has no callback of its own. Give `playTransition` a second argument and it runs once the transition is done, whatever its type:
+
+```java
+// End transition first, then swap scenes and play the start transition.
+Runnable show = () -> {
+    scene.render(window, true, events);
+    scene.getContainer().playTransition(scene.getStartTransition());
+};
+if (current != null && current.getEndTransition() != null) {
+    current.getContainer().playTransition(current.getEndTransition(), show);
+} else {
+    show.run();
+}
+```
+
+It runs when the transition runs out or is ended early (a skip, `finishTransitions()`). It does not run if the transition is `stop()`ped or the element is dropped first, and it runs at once for a transition that is already finished. Without it, both transitions start in the same frame, since `playTransition` returns immediately.
 
 ## ScaleTransition
 
@@ -275,7 +345,13 @@ Two other kinds of motion do not use transitions:
 | Member | Description |
 |---|---|
 | `Element.playTransition(Transition)` | Attach a transition |
+| `Element.playTransition(Transition, Runnable)` | Attach it and run the callback once it finishes, including when skipped |
 | `Element.isTransitioning()` | Whether any transition is running |
+| `Element.hasLockingTransition()` | Whether a running transition locks the game |
+| `Element.finishTransitions()` / `skipLockingTransitions()` | Finish every running transition, or only the locking skippable ones |
+| `Transition.isLocking()`, `isSkippable()`, `finish(target)` | Lock the game, allow a press to end it, end it in its final state (all off or unsupported by default) |
+| `LockableTransition<T>` | Base of the fade, scale and progress transitions: `lock()`, `skippable()` and `finish` |
+| `Window.isInputLocked()` | Whether a scene or element transition is locking |
 | `Element.fadeIn/fadeOut(...)` | Convenience fades (8 overloads) |
 | `Element.getOpacity/setOpacity` | Whole-element opacity (0..1) |
 | `Element.getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin` | Whole-element drawing scale (default 1) and the point it scales around |

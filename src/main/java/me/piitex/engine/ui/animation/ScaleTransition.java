@@ -8,7 +8,7 @@ import me.piitex.engine.ui.Element;
  * {@link Element#setScale}, so it scales around the Element's {@link Element#setScaleOrigin origin}, its center unless
  * set. It plays alongside a fade: {@code element.playTransition(new ScaleTransition(...))} then {@code element.fadeOut(...)}.
  */
-public class ScaleTransition implements Transition {
+public class ScaleTransition extends LockableTransition<ScaleTransition> {
     private final float from;
     private final float to;
     private final float durationSeconds;
@@ -55,6 +55,11 @@ public class ScaleTransition implements Transition {
         if (finished) return false;
         finished = true;
         return true;
+    }
+
+    @Override
+    protected void jumpToEnd() {
+        elapsed = durationSeconds;
     }
 
     @Override

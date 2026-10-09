@@ -8,6 +8,7 @@ package me.piitex.engine.render3d;
  * applies is Vulkan-style: +Y up in clip space, depth from 0 (near) to 1 (far), on both backends.
  */
 public interface RenderPass extends AutoCloseable {
+
     void bindPipeline(Pipeline pipeline);
 
     /**

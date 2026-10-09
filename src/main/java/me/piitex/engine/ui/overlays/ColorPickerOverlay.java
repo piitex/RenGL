@@ -6,6 +6,7 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.LinearGradient;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.containers.Container;
@@ -55,7 +56,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
     private Color[] presets = DEFAULT_PRESETS;
     private Consumer<Color> onChange;
     private float fontSize = 14f;
-    private final Overridable<Color> textColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> textColor = new Overridable<>(Color.BLACK);
 
     private org.jetbrains.skia.Font font;
     private Typeface fontTypeface;
@@ -152,11 +153,11 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         setFontSize(sizes[0]);
     }
 
-    public Color getTextColor() {
+    public Paint getTextColor() {
         return textColor.get();
     }
 
-    public void setTextColor(Color color) {
+    public void setTextColor(Paint color) {
         textColor.set(color);
     }
 
@@ -345,6 +346,12 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
             font.close();
             font = null;
         }
+    }
+
+    @Override
+    public void update(float delta) {
+        super.update(delta);
+        AnimatedPaint.advanceIfAnimated(textColor.get(), delta);
     }
 
     @Override

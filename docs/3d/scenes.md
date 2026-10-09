@@ -52,8 +52,38 @@ Call `scene.lights().clear()` for different lighting.
 | `getStats()` | A `Scene3D.Stats(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight)` for the last time the scene was drawn, see [Frustum culling](#frustum-culling) and [Which lights get shadows](lighting.md#which-lights-get-shadows) |
 | `animate(AnimationPlayer)` / `stopAnimating(AnimationPlayer)` | Registers a player that advances once per frame, see [Animation](animation.md) |
 | `setUpdateHandler(UpdateHandler)` | Runs once per frame before the scene is drawn, see below |
+| `preload(Node3D)` / `preload(Skybox)` | Uploads meshes and textures ahead of the frame that shows them, see [Preloading](#preloading) |
+| `setPreloadBudget(float)` / `getPreloadBudget()` | Milliseconds per frame spent on preloading, 4 by default |
 | `pick(x, y, width, height)` | The nearest [`Hit`](#picking) under a point of the picture, or `null` |
 | `pick(Ray)` / `pickAll(Ray)` | The nearest hit along a ray, or all of them nearest first. See [Picking](#picking) |
+
+### Preloading
+
+A mesh or texture goes to the GPU the first time a frame draws it, so a big model added to a running scene stalls
+that frame while its buffers and textures upload. `preload` does the same work a little each frame instead:
+
+```java nocompile
+model.root().setVisible(false);          // hidden nodes are uploaded too
+scene.add(model.root());
+Preload loading = scene.preload(model.root());
+loading.onDone(() -> model.root().setVisible(true));
+bar.setProgress(loading.getProgress());  // 0 to 1, from the render thread
+```
+
+Each frame uploads items until the budget (`setPreloadBudget`, 4 ms) is spent, and always at least one, so a single
+huge texture still takes its whole time in one frame. A mesh or texture shared by several nodes counts once.
+`preload(Skybox)` does the same for a sky's pictures, and also works out its light when
+[environment lighting](lighting.md#light-from-the-sky) is on. A [viewport that is not continuous](viewport-3d.md#drawing-only-when-needed)
+keeps drawing frames until the preload is done.
+
+| `Preload` | Description |
+|---|---|
+| `isDone()` | True once everything is uploaded (also true when there was nothing to upload) |
+| `getProgress()` / `getTotal()` | A fraction from 0 to 1, and the number of meshes and textures |
+| `onDone(Runnable)` | Runs on the render thread when it finishes, or at once if it already has |
+
+Shaders are a separate cost: a feature the scene has not used yet, such as the first shadow or a new custom filter,
+compiles its program on the frame that first needs it. Pipelines for the plain scene are built when it starts.
 
 ### The update handler
 
@@ -430,7 +460,7 @@ view volume, so a node just outside may still be drawn, and one inside is never 
 - **Mirrored nodes work.** A negative scale (a model exported with a flipped axis) turns the triangles inside out, and the scene turns the culling around for it, so the model looks as it should.
 - **Loading and building never need the GPU**, so it is safe to build a big scene on a worker thread with
   [`Scheduler.async`](../core/scheduler.md) and add it from the result callback. The first frame that draws it will pause
-  while it uploads (see [Known limitations](../reference/known-limitations.md#rendering-and-3d)).
+  while it uploads, unless you [preload](#preloading) it first.
 - **Colours are not linear.** Pick them as you would for the UI. Lights multiply in linear light internally.
 - **Many nodes are fine, many distinct materials cost more.** Nodes that share a mesh and a material draw together;
   each change of material binds its textures again. Use [`Instances`](instancing.md) for thousands of copies.

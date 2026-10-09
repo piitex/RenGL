@@ -80,7 +80,7 @@ card.getFormat().setShowEta(false); // choose which parts the status line shows
 card.setShowControls(false); // hide the buttons
 card.setManager(manager); // if managed: Resume/Retry go back through the queue
 card.getBar().getStyling().setCornerRadius(5f);
-card.setActiveColor(Color.BLUE); // fill while downloading, under the stripes (default green)
+card.setActiveColor(Color.BLUE); // fill while downloading, under the stripes (default green); any paint
 card.setStripeColor(Color.WHITE); // stripe color (default light gray)
 card.setDoneColor(Color.GREEN); card.setFailedColor(Color.RED); card.setPausedColor(Color.ORANGE);
 ```

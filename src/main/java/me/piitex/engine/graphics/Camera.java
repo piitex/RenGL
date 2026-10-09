@@ -150,11 +150,25 @@ public class Camera {
 
     // The point shown in the middle, kept inside the bounds.
     private float viewX() {
-        return bounds == null ? x : keepInside(x, bounds.x(), bounds.width(), viewportWidth / 2f / zoom);
+        return bounds == null ? x : keepInside(x, bounds.x(), bounds.width(), halfViewWidth());
     }
 
     private float viewY() {
-        return bounds == null ? y : keepInside(y, bounds.y(), bounds.height(), viewportHeight / 2f / zoom);
+        return bounds == null ? y : keepInside(y, bounds.y(), bounds.height(), halfViewHeight());
+    }
+
+    // How far the view reaches from its middle, in world units, along each axis: the viewport turned by the camera's
+    // rotation and the shake's, and moved by the shake.
+    private float halfViewWidth() {
+        double radians = Math.toRadians(viewRotation());
+        double reach = Math.abs(Math.cos(radians)) * viewportWidth / 2f + Math.abs(Math.sin(radians)) * viewportHeight / 2f;
+        return (float) (reach + Math.abs(shakeOffsetX)) / zoom;
+    }
+
+    private float halfViewHeight() {
+        double radians = Math.toRadians(viewRotation());
+        double reach = Math.abs(Math.sin(radians)) * viewportWidth / 2f + Math.abs(Math.cos(radians)) * viewportHeight / 2f;
+        return (float) (reach + Math.abs(shakeOffsetY)) / zoom;
     }
 
     private static float keepInside(float center, float start, float length, float halfView) {
@@ -239,8 +253,8 @@ public class Camera {
      * the view stops at the edges, and a level smaller than the view is shown in its middle. Null, the default,
      * lets the view go anywhere. The position is left as it is set, and only what is shown stops.
      * <p>
-     * The bounds hold the upright view. A turned camera, or the {@link #shake}, can show a little past them, so draw
-     * the level a few units larger if that must never show.
+     * A turned camera, or the {@link #shake}, stops further in so that its whole view stays inside, which can leave a
+     * level only a little larger than the view no room to move.
      */
     public void setBounds(Rect bounds) {
         this.bounds = bounds;

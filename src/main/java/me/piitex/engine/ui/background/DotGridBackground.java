@@ -2,6 +2,8 @@ package me.piitex.engine.ui.background;
 
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.AnimatedPaint;
+import me.piitex.engine.ui.color.Paint;
 
 /**
  * A tiled grid of small dots, the "infinite canvas" background used by node editors and
@@ -10,8 +12,8 @@ import me.piitex.engine.ui.color.Color;
  * {@link me.piitex.engine.ui.Element#setBackground} for how to attach one of these to
  * something.
  * <p>
- * This background is fully static. Unlike {@link ConstellationBackground}, nothing here
- * changes frame to frame, so {@link #updateEffect} is left at its no-op default. The
+ * This background is static unless its paint is animated. Unlike {@link ConstellationBackground}, nothing here
+ * changes frame to frame, so {@link #updateEffect} only moves an animated dot paint on. The
  * grid is recomputed from {@link #getSpacing()} and whatever bounds
  * {@link #renderEffect} is given on each call, which is a nested loop over however many
  * dots fit and is cheap enough not to cache.
@@ -23,7 +25,7 @@ import me.piitex.engine.ui.color.Color;
 public class DotGridBackground extends AbstractBackground {
     private float spacing = 24f;
     private float dotRadius = 1.5f;
-    private Color dotColor = new Color(0.5f, 0.5f, 0.5f, 0.35f);
+    private Paint dotColor = new Color(0.5f, 0.5f, 0.5f, 0.35f);
 
     /**
      * Distance, in points, between one dot and the next, in both directions, so the grid is always square-tiled rather than stretched.
@@ -44,12 +46,17 @@ public class DotGridBackground extends AbstractBackground {
         this.dotRadius = Math.max(0f, dotRadius);
     }
 
-    public Color getDotColor() {
+    public Paint getDotColor() {
         return dotColor;
     }
 
-    public void setDotColor(Color dotColor) {
+    public void setDotColor(Paint dotColor) {
         this.dotColor = dotColor;
+    }
+
+    @Override
+    protected void updateEffect(float delta, float x, float y, float width, float height) {
+        AnimatedPaint.advanceIfAnimated(dotColor, delta); // only an animated paint changes anything
     }
 
     @Override

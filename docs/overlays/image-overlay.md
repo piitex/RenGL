@@ -22,6 +22,37 @@ Loading goes through [`ImageLoader`](../styling/images-and-icons.md#imageloader)
 extension. PNG, JPEG, WEBP, GIF, BMP and ICO load through the same constructors, limited by which codecs the
 Skia build includes. See [Images and icons](../styling/images-and-icons.md).
 
+## Animated GIFs
+
+A GIF (or animated WEBP) with more than one frame **plays by itself**: it starts when the overlay is created, the
+engine advances it every frame, and it loops as often as the file asks (usually forever). Nothing else is needed.
+
+```java
+ImageOverlay cat = new ImageOverlay("assets/cat.gif", 320, 240);
+root.addElement(cat);
+```
+
+It also works like a small video. `getPlayer()` returns an [`ImagePlayer`](../styling/images-and-icons.md#animated-images-and-gifs-as-video)
+with seek, loop count, speed and callbacks, and the overlay has shortcuts for the common controls:
+
+```java
+cat.pause();   cat.play();   cat.stop();   // stop rewinds to the first frame
+cat.isPlaying();
+
+ImagePlayer player = cat.getPlayer();      // null for a still image
+player.setLoopCount(1);                    // play once instead of forever
+player.onFinish(() -> cat.fadeOut(0.5f));
+player.setSpeed(2f);
+player.seek(1.5);                          // seconds
+```
+
+Playback runs from `update(delta)`, which a container calls for each element every frame, so a GIF follows
+whatever time the scene gives it. An overlay drawn without being updated stays on its first frame. A GIF with a
+single frame is treated as a still image (`isAnimated()` is false and `getPlayer()` is null).
+
+Each animated overlay has its own decoder and position, so two overlays of the same file play independently.
+Call `dispose()` to free the decoder early; it is freed on garbage collection anyway.
+
 ## Size
 
 ```java
@@ -86,15 +117,21 @@ logo.setTooltip("Open the website");
 
 ## Memory
 
-There is no `dispose()`. The decoded image belongs to [`ImageLoader`](../styling/images-and-icons.md#imageloader), is shared by every overlay using the same
-file, and is never closed.
+A still image has nothing to dispose. The decoded image belongs to [`ImageLoader`](../styling/images-and-icons.md#imageloader), is shared by every overlay using the same
+file. The cache lets go of the pictures used longest ago once it holds more than its limit (256 MiB of pixels by default,
+`ImageLoader.setCacheLimit`); one an overlay still shows is never closed, and its memory is freed when nothing draws it.
+An animation is the exception: `dispose()` frees its decoder (see above).
 
 ## Method reference
 
 | Method | Description |
 |---|---|
 | `setImageFile(File)` / `setImageFile(String)` | Swap the image |
-| `getImage()` | The Skia `ImageLoader` |
+| `getImage()` | The Skia image (for an animation, the frame showing now; draw it, don't keep it) |
+| `isAnimated()` / `getPlayer()` | Whether a GIF is playing, and its `ImagePlayer` (null for stills) |
+| `play()` / `pause()` / `stop()` / `isPlaying()` | Shortcuts for the player; no-ops on a still image |
+| `dispose()` | Free an animation's decoder |
+| `ImageOverlay.of(AnimatedImage, w, h)` | Play an animation you decoded yourself |
 | `getNaturalWidth()` / `getNaturalHeight()` | Pixel size of the source |
 | `resetToNaturalSize()` | Resize to natural size |
 | `getOpacity()` / `setOpacity(float)` | Image opacity (0..1) |

@@ -4,13 +4,17 @@ import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.Element;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import org.jetbrains.skia.Typeface;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.function.ToDoubleFunction;
 
 /**
  * Drives {@link Element#getTooltip()}: finds the deepest hovered Element that has a
@@ -19,12 +23,16 @@ import java.util.WeakHashMap;
  * {@link me.piitex.engine.input.MouseTracker}, and only ever touched from the render
  * thread. {@link me.piitex.engine.Engine} calls {@link #update} and then
  * {@link #render} once per frame, the latter last so nothing draws over it.
+ * <p>
+ * A line of the tooltip's text that is wider than about 360 points, or than the window, is wrapped at spaces; a line
+ * break in the text still starts a new line.
  */
 public final class TooltipManager {
     private static final float FONT_SIZE = 13f;
     private static final float PADDING = 6f;
     private static final float CURSOR_OFFSET_X = 12f;
     private static final float CURSOR_OFFSET_Y = 20f;
+    private static final float MAX_WIDTH = 360f; // a longer line is wrapped
 
     // Each window has its own tooltip. Render thread only.
     private static final Map<Window, Hover> hovers = new WeakHashMap<>();
@@ -45,6 +53,12 @@ public final class TooltipManager {
             hover.time = 0f;
         } else if (hover.target != null) {
             hover.time += delta;
+            if (hover.time >= hover.target.getTooltipDelay()) {
+                Theme theme = hover.target.getTooltipTheme() != null ? hover.target.getTooltipTheme() : ThemeManager.getCurrent();
+                AnimatedPaint.advanceIfAnimated(theme.getTooltipBackground(), delta);
+                AnimatedPaint.advanceIfAnimated(theme.getTooltipBorder(), delta);
+                AnimatedPaint.advanceIfAnimated(theme.getTooltipText(), delta);
+            }
         }
     }
 
@@ -73,28 +87,53 @@ public final class TooltipManager {
 
         org.jetbrains.skia.Font f = getFont();
         float lineHeight = FontMetricsCompat.of(f).getHeight();
-        String[] lines = text.split("\n", -1);
+        float winW = window.getWindowOptions().getWidth();
+        float winH = window.getWindowOptions().getHeight();
+        List<String> lines = wrap(text, Math.max(80f, Math.min(MAX_WIDTH, winW - 2 * PADDING - 8f)), f::measureTextWidth);
         float textWidth = 0f;
         for (String line : lines) {
             textWidth = Math.max(textWidth, f.measureTextWidth(line));
         }
         float w = textWidth + PADDING * 2;
-        float h = lineHeight * lines.length + PADDING * 2;
+        float h = lineHeight * lines.size() + PADDING * 2;
 
         float x = (float) MouseTracker.getX() + CURSOR_OFFSET_X;
         float y = (float) MouseTracker.getY() + CURSOR_OFFSET_Y;
         // Keep it on screen: flip above/left of the cursor rather than clipping.
-        float winW = window.getWindowOptions().getWidth();
-        float winH = window.getWindowOptions().getHeight();
         if (x + w > winW) x = Math.max(0f, (float) MouseTracker.getX() - CURSOR_OFFSET_X - w);
         if (y + h > winH) y = Math.max(0f, (float) MouseTracker.getY() - h - 6f);
 
         Theme theme = target.getTooltipTheme() != null ? target.getTooltipTheme() : ThemeManager.getCurrent();
         renderer.drawQuad(x, y, w, h, theme.getTooltipBackground(), 4f);
         renderer.drawBorder(x, y, w, h, theme.getTooltipBorder(), 1f, 4f);
-        for (int i = 0; i < lines.length; i++) {
-            renderer.drawText(lines[i], x + PADDING, y + PADDING + i * lineHeight, f, theme.getTooltipText());
+        for (int i = 0; i < lines.size(); i++) {
+            renderer.drawText(lines.get(i), x + PADDING, y + PADDING + i * lineHeight, f, theme.getTooltipText());
         }
+    }
+
+    /**
+     * Breaks {@code text} into lines no wider than {@code maxWidth} by {@code measure}, at spaces. A line break in the
+     * text is kept, and a single word wider than the limit is left on a line of its own rather than cut.
+     */
+    static List<String> wrap(String text, float maxWidth, ToDoubleFunction<String> measure) {
+        List<String> lines = new ArrayList<>();
+        for (String paragraph : text.split("\n", -1)) {
+            if (measure.applyAsDouble(paragraph) <= maxWidth) {
+                lines.add(paragraph);
+                continue;
+            }
+            StringBuilder line = new StringBuilder();
+            for (String word : paragraph.split(" ")) {
+                if (!line.isEmpty() && measure.applyAsDouble(line + " " + word) > maxWidth) {
+                    lines.add(line.toString());
+                    line.setLength(0);
+                }
+                if (!line.isEmpty()) line.append(' ');
+                line.append(word);
+            }
+            lines.add(line.toString());
+        }
+        return lines;
     }
 
     private static org.jetbrains.skia.Font getFont() {

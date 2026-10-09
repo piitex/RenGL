@@ -50,6 +50,10 @@ toggle.onAction(() -> {
 
   Most containers only group children and stay transparent or whatever you set. Layouts, [`ScrollContainer`](../containers/scroll-container.md)
   (which also themes its scrollbar) and [`ModalContainer`](../containers/modal-container.md) panels are containers, so the same rule applies.
+  `panel.useTheme(false)` goes back: the container returns to the plain look it had before and later theme changes pass it
+  by, and `panel.isUsingTheme()` says which it is. In a [layout file](../containers/layout-files.md) this is the `panel`
+  property, `"panel": true`.
+- A themed panel takes the theme's panel **effect** too (`Theme.getContainerEffect()`), each panel making its own.
 - Tooltips read the tooltip tokens from the current theme every time they draw.
 
 ## The pinning rule
@@ -102,12 +106,14 @@ Every token is a getter on `Theme`. A widget picks the tokens it needs.
 | `getCaret()` | Text caret |
 | `getSelection()` | Text selection highlight, selected dropdown row |
 | `getButtonBackground()` / `getButtonHoverBackground()` / `getButtonBorder()` | [`ButtonOverlay`](../overlays/button-overlay.md) |
-| `getContainerBackground()` / `getContainerBorder()` | A container that called `useTheme()`; separator lines |
+| `getContainerBackground()` ([`Paint`](colors-and-paints.md)) / `getContainerBorder()` | A container that called `useTheme()`; separator lines. The background may be a gradient |
+| `getContainerEffect()` | An [effect](backgrounds.md#backgrounds-in-files) behind a themed container, as settings (a `Map`), or `null` |
 | `getScrollThumb()` / `getScrollTrack()` | Scrollbars; slider and progress fill/track; split divider; spinner dots |
-| `getWindowBackground()` ([`Paint`](colors-and-paints.md)) | The window backdrop. May be a gradient |
+| `getWindowBackground()` ([`Paint`](colors-and-paints.md)) | The window backdrop. May be a gradient, a scrolling one or a rainbow |
+| `getWindowEffect()` | An [effect](backgrounds.md#backgrounds-in-files) drawn over the backdrop, as settings (a `Map`), or `null` |
 | `getCornerRadius()` | Box rounding for themed controls (default `6`) |
 | `getBorderThickness()` | Box border width for themed controls (default `1`) |
-| `getTooltipBackground()` / `getTooltipBorder()` / `getTooltipText()` | Tooltip bubble |
+| `getTooltipBackground()` / `getTooltipBorder()` / `getTooltipText()` ([`Paint`](colors-and-paints.md)) | Tooltip bubble. Each may be a gradient, a scrolling one or a rainbow |
 
 ## Making your own theme
 
@@ -148,6 +154,50 @@ ThemeManager.setCurrent(compact);
 
 `Theme` is a pure read interface. If you need tokens computed at runtime (from a config file, the OS, time of
 day), implement `Theme` directly instead of extending `BaseTheme`.
+
+## Effects and gradients in a theme
+
+The window and panels can have more than a flat color. `setWindowBackground` and `setContainerBackground` take any
+[`Paint`](colors-and-paints.md): a gradient, a scrolling one, a rainbow. `setWindowEffect` and `setContainerEffect` take the
+settings of a [background effect](backgrounds.md#backgrounds-in-files), which is a `Map` so a theme stays plain data:
+
+```java
+BaseTheme night = new DarkTheme();
+night.setWindowBackground(new ScrollingGradient(
+        List.of(new Color(0.04f, 0.04f, 0.12f, 1f), new Color(0.16f, 0.06f, 0.28f, 1f)), 90f, 40f));
+night.setWindowEffect(Map.of("type", "constellation", "particleCount", 90));
+night.setContainerBackground(new LinearGradient(new Color(0.12f, 0.12f, 0.2f, 1f), new Color(0.08f, 0.08f, 0.14f, 1f), 90f));
+ThemeManager.setCurrent(night);
+```
+
+An effect is made for each window or panel from the settings, as it has state of its own, and a later `setCurrent` changes
+the one that is showing instead of starting it over. An effect an app sets itself (`window.setBackground`,
+`element.setBackground`) is pinned and a theme leaves it alone. A picture an effect names is looked for in
+`Theme.assetBase()`: the working folder, or for `ThemeFile.load` the folder of the file.
+
+A theme that implements `Theme` itself gets `null` effects and the working folder from the defaults.
+
+## Theme files
+
+`ThemeFile` reads and writes a theme as JSON, so an app's look is data. `ThemeManager.setCurrent(ThemeFile.load("theme.json"))`
+before the window is made is all an app needs. The [RenGL Editor](../../README.md) edits this file.
+
+```json
+{
+  "format": 1,
+  "base": "dark",
+  "buttonBackground": "#9E1221",
+  "cornerRadius": 4,
+  "windowBackground": { "type": "gradient", "colors": ["#101020", "#2A1040"], "angle": 90, "scroll": 30 },
+  "windowEffect": { "type": "constellation", "particleCount": 90 },
+  "containerBackground": "#1B1B24"
+}
+```
+
+A file need only say what differs from its `base`, `"light"`, `"dark"` or `"crimson"`. Colors are `"#RRGGBB"`, `"#RRGGBBAA"` or
+`[r, g, b, a]`. `windowBackground`, `containerBackground`, `tooltipBackground`, `tooltipBorder` and `tooltipText` are [paints](colors-and-paints.md#paints-in-files); `windowEffect`
+and `containerEffect` are effect settings, or `null` for none. `ThemeFile.save` writes every setting, so a saved file stands
+on its own, and `ThemeFile.tokens()` lists the settings with their labels, groups, types and a tooltip that says what each changes, for a tool.
 
 ## Making your own widget themeable
 
@@ -191,14 +241,16 @@ methods.
 theme is applied immediately, calling your overridden `applyTheme` *before* your subclass's own fields have been
 initialized. Guard against `null` fields inside `applyTheme`, or extend [`Overlay`](../core/overlay.md) as above.
 
-`ThemeManager` holds only weak references. There is no unregister, and an unreferenced element is collected
-normally.
+`ThemeManager` holds only weak references, so an unreferenced element is collected normally. `ThemeManager.unregister`
+stops a themeable being re-themed, which is what `Container.useTheme(false)` does.
 
 ## Method reference
 
 | Class | Members |
 |---|---|
-| `ThemeManager` | `getCurrent()`, `setCurrent(Theme)`, `register(Themeable)` |
+| `ThemeManager` | `getCurrent()`, `setCurrent(Theme)`, `register(Themeable)`, `unregister(Themeable)`, `using(Theme, Supplier)` |
 | `Themeable` | `applyTheme(Theme)` |
 | `Overridable<T>` | `get()`, `set(T)` (pins), `applyTheme(T)` (respects pin), `clearExplicit()` (unpins), `isExplicit()` |
-| [`Container`](../containers/container.md) | `useTheme()` |
+| [`Container`](../containers/container.md) | `useTheme()`, `useTheme(boolean)`, `isUsingTheme()` |
+| [`Element`](../core/element.md) | `applyThemeBackground`, `applyThemeEffect`, `resetBackground`, `isBackgroundSet` |
+| `ThemeFile` | `load`, `parse`, `save`, `toJson`, `tokens()`, `builtIn(id)`, `builtIns()`, `copy(Theme)` |

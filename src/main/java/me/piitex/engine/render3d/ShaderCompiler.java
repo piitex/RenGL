@@ -31,7 +31,9 @@ import static org.lwjgl.util.spvc.Spvc.*;
  * and bind blocks and texture units without the shader author declaring anything twice.
  */
 public final class ShaderCompiler {
+
     private ShaderCompiler() {
+
     }
 
     /**
@@ -42,6 +44,7 @@ public final class ShaderCompiler {
      * @param glName  the name OpenGL knows it by: the block's name, or the sampler variable's name
      */
     public record Binding(int binding, boolean sampler, String glName) {
+
     }
 
     public static final class Compiled {

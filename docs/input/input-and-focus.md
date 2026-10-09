@@ -22,7 +22,8 @@ element.onMouseClick(event -> {
   See [Element](../core/element.md#onmouseclick).
 - The **topmost** element under the cursor gets it if it has a listener. If it has none, the press goes up to the
   nearest container above it that has one, so a press on the label or icon inside a clickable row counts as a press
-  on the row. Only one listener runs per press: a child with its own listener stops the press there.
+  on the row. Only one listener runs per press: a child with its own listener stops the press there, unless it
+  calls `setPropagateClicks(true)`, which passes the press on to the next ancestor with a listener.
 - One listener per element. Setting another replaces it.
 - Widgets with their own click behavior (button, checkbox, radio, toggle switch, dropdown, color and date pickers,
   menu bar, rich text area) install their handler themselves, so do not replace it. See [Element](../core/element.md#onmouseclick).
@@ -100,7 +101,9 @@ a container returning `false` (a plain layout that fills its parent) passes the 
 `true` only after `setDraggable(true)`.
 
 Passing up stops at an element with a click listener. A button, checkbox or clickable row keeps its press, so
-pressing a button on a draggable panel clicks the button without moving the panel.
+pressing a button on a draggable panel clicks the button without moving the panel. An element that should also
+work as a handle, such as a title bar with a click listener, calls `setDragsContainer(true)`: a press released
+in place still clicks it (on release), and moving the mouse a few points drags the panel instead.
 
 A container can also claim the mouse ahead of its children with
 `public boolean interceptsPointer(double x, double y)` (default `false`). `ResizableContainer` uses it for its
@@ -177,7 +180,8 @@ public interface Focusable {
 - **Clicking** a `Focusable` gives it focus. Clicking anything else, including empty space, clears focus. The
   exception is a click listener (or a menu item it runs) that gives focus to something itself, such as a Rename item
   that opens a field to type in: that focus stays.
-- While focused, it receives every char and key event except Tab, which moves focus, and an Escape that closes an
+- While focused, it receives every char and key event except Tab, which moves focus (unless `wantsTab()` is
+  overridden to return true, as a code editor does), and an Escape that closes an
   open popup or modal. `onKeyPressed` gets presses, repeats and releases; `action` says which, and most controls
   ignore `GLFW_RELEASE`.
 - `mods` is a GLFW modifier bitmask (`GLFW.GLFW_MOD_SHIFT`, `_CONTROL`, `_ALT`, `_SUPER`).
@@ -235,7 +239,8 @@ element.setTabIndex(0); // explicit order; -1 (default) = natural order
 
 ### Reserved keys
 
-- **Tab / Shift+Tab** are consumed for focus traversal before any focused widget sees them. While nothing has focus
+- **Tab / Shift+Tab** are consumed for focus traversal before any focused widget sees them, unless the focused widget
+  says `wantsTab()` (a `TextAreaOverlay` with an indent size does; no popup or modal may be open). While nothing has focus
   and no popup or modal is open, the game gets Tab first, and it moves focus only if no scene's `onKey` consumes it and
   no [input context](game-input.md) binds it.
 - **Escape** first closes an open popup, then an open modal (if it allows dismissing on Escape). Only if neither

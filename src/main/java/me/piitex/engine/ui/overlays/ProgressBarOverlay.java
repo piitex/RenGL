@@ -5,7 +5,9 @@ import me.piitex.engine.ui.animation.Easing;
 import me.piitex.engine.ui.animation.ProgressTransition;
 import me.piitex.engine.ui.animation.StripeTransition;
 import me.piitex.engine.ui.animation.SweepTransition;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.color.StripeStyle;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
@@ -34,7 +36,7 @@ import me.piitex.engine.ui.theme.Themeable;
  */
 public class ProgressBarOverlay extends Overlay implements Themeable {
     private double progress;
-    private final Overridable<Color> fillColor = new Overridable<>(Color.GRAY);
+    private final Overridable<Paint> fillColor = new Overridable<>(Color.GRAY);
     private ProgressTransition activeTween;
     private SweepTransition activeSweep;
 
@@ -211,20 +213,26 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         }
     }
 
-    public Color getFillColor() {
+    public Paint getFillColor() {
         return fillColor.get();
     }
 
     /**
      * Pins the fill color against every future theme switch. See {@link Overridable}.
      */
-    public void setFillColor(Color fillColor) {
+    public void setFillColor(Paint fillColor) {
         this.fillColor.set(fillColor);
     }
 
     /**
      * Themes the track and fill as a baseline, skipping anything already pinned. See {@link Overridable}.
      */
+    @Override
+    public void update(float delta) {
+        super.update(delta);
+        AnimatedPaint.advanceIfAnimated(fillColor.get(), delta);
+    }
+
     @Override
     public void applyTheme(Theme theme) {
         getStyling().applyThemeBackgroundColor(theme.getScrollTrack());

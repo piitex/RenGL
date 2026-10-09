@@ -18,6 +18,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -34,6 +35,8 @@ import static org.lwjgl.system.macosx.ObjCRuntime.sel_getUid;
  * the same way {@link me.piitex.engine.gl.renderer.metal.MetalContext} does. On every other
  * platform {@link #isSupported()} is false and nothing here does anything, so the in-window bar
  * stays in use.
+ * <p>
+ * With several windows each showing a bar, the system menu bar shows the one of the window that has the focus.
  * <p>
  * Not meant to be called directly: {@code MenuBarOverlay} feeds it. The custom menus are
  * inserted between GLFW's own application menu (the first entry, with Quit) and its Window menu.
@@ -72,8 +75,16 @@ public final class NativeMenuBar {
 
     private static final AtomicReference<Snapshot> pending = new AtomicReference<>();
     private static final Queue<Runnable> actions = new ConcurrentLinkedQueue<>();
-    private static Object owner;          // render thread: the bar currently driving the native menu
-    private static Snapshot lastSent;     // render thread: what was last handed over
+    /**
+     * What one bar last offered, and whether its window had the keyboard focus then.
+     */
+    private record Offer(boolean focused, Snapshot snapshot) {
+    }
+
+    private static final Object LOCK = new Object();
+    private static final Map<Object, Offer> offers = new LinkedHashMap<>(); // guarded by LOCK
+    private static Object active;         // guarded by LOCK: the bar whose menus are in the system menu bar
+    private static Snapshot lastSent;     // guarded by LOCK: what was last handed over
 
     private NativeMenuBar() {
     }
@@ -86,31 +97,70 @@ public final class NativeMenuBar {
     }
 
     /**
-     * Render thread. Offers {@code owner}'s menus for the system menu bar; the native menus are rebuilt only when
-     * they differ from what was last offered. One native bar exists per application: the first owner to submit
-     * keeps it until it calls {@link #release}, and submissions from any other owner are ignored.
+     * {@link #submit(Object, boolean, List, List)} for a bar whose window is not known to have the focus.
      */
     public static void submit(Object owner, List<String> titles, List<PopupMenu> menus) {
-        if (!MAC) return;
-        if (NativeMenuBar.owner != null && NativeMenuBar.owner != owner) return;
-        NativeMenuBar.owner = owner;
-
-        List<List<Node>> nodes = new ArrayList<>(menus.size());
-        for (PopupMenu menu : menus) nodes.add(copy(menu.getItems()));
-        Snapshot snapshot = new Snapshot(List.copyOf(titles), nodes);
-        if (snapshot.equals(lastSent)) return;
-        lastSent = snapshot;
-        pending.set(snapshot);
+        submit(owner, false, titles, menus);
     }
 
     /**
-     * Render thread. Removes {@code owner}'s menus from the system menu bar and frees it for another bar.
+     * Render thread. Offers {@code owner}'s menus for the system menu bar; the native menus are rebuilt only when
+     * they differ from what was last offered. One native bar exists per application, so with several windows each
+     * offering a bar, the system menu bar shows the one whose window has the keyboard focus ({@code focused}), and keeps
+     * the last one shown while no window of the application is focused. Bars of other windows are remembered and take
+     * over as their windows are focused. Safe to call from every window's render thread.
+     */
+    public static void submit(Object owner, boolean focused, List<String> titles, List<PopupMenu> menus) {
+        if (!MAC) return;
+        List<List<Node>> nodes = new ArrayList<>(menus.size());
+        for (PopupMenu menu : menus) nodes.add(copy(menu.getItems()));
+        Snapshot snapshot = new Snapshot(List.copyOf(titles), nodes);
+        synchronized (LOCK) {
+            offers.put(owner, new Offer(focused, snapshot));
+            elect();
+        }
+    }
+
+    /**
+     * Render thread. Removes {@code owner}'s menus from the system menu bar; another window's bar takes its place.
      */
     public static void release(Object owner) {
-        if (!MAC || NativeMenuBar.owner != owner) return;
-        NativeMenuBar.owner = null;
-        lastSent = Snapshot.EMPTY;
-        pending.set(Snapshot.EMPTY);
+        if (!MAC) return;
+        synchronized (LOCK) {
+            if (offers.remove(owner) == null) return;
+            elect();
+        }
+    }
+
+    /**
+     * Picks the bar to show and hands its menus over if they are not already there. Call with {@link #LOCK} held.
+     */
+    private static void elect() {
+        Object next = active;
+        for (Map.Entry<Object, Offer> entry : offers.entrySet()) {
+            if (entry.getValue().focused()) {
+                next = entry.getKey();
+                break;
+            }
+        }
+        if (next == null || !offers.containsKey(next)) next = offers.isEmpty() ? null : offers.keySet().iterator().next();
+        active = next;
+        Snapshot shown = next == null ? Snapshot.EMPTY : offers.get(next).snapshot();
+        if (shown.equals(lastSent) || lastSent == null && shown == Snapshot.EMPTY) return;
+        lastSent = shown;
+        pending.set(shown);
+    }
+
+    /**
+     * The titles of the menus waiting to be applied to the system menu bar, or null if nothing is waiting. For tests.
+     */
+    static List<String> pendingTitles() {
+        Snapshot snapshot = pending.get();
+        return snapshot == null ? null : snapshot.titles();
+    }
+
+    static void clearPending() {
+        pending.set(null);
     }
 
     private static List<Node> copy(List<MenuItem> items) {

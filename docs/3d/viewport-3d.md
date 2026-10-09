@@ -176,7 +176,9 @@ A viewport that is not continuous draws when:
 - it draws for the first time, is resized, or gets new content;
 - the [`InputListener`](#input) receives anything (drag, scroll, a key, the mouse moving), so an
   [`OrbitControls`](scenes.md#orbit-controls) camera still redraws as you turn it;
-- `requestRender()` is called, which is what you do after changing a node, light or camera yourself.
+- `requestRender()` is called, which is what you do after changing a node, light or camera yourself;
+- the content's `needsFrames()` returns true, which a `Scene3D` does while a [preload](scenes.md#preloading) is
+  running. It is a `default` method of `Content` that returns false.
 
 Between those frames it shows the last picture again, which costs no 3D work and no GPU copy. A scene with an
 [update handler](scenes.md#the-update-handler) that animates it needs a continuous viewport, because the handler only

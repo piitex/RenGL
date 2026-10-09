@@ -38,7 +38,9 @@ final class Gpu3D {
      */
     static Gpu3D of(GpuInterop interop) {
         Gpu3D existing = BY_RENDERER.get(interop);
-        if (existing != null) return existing;
+        if (existing != null) {
+            return existing;
+        }
 
         GpuDevice device = interop.gpuApi() == RenderAPI.VULKAN
                 ? new VkGpuDevice(interop.vulkanContext(), interop::frameNumber)

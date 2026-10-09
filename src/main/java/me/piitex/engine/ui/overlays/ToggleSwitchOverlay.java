@@ -4,7 +4,10 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.animation.Easing;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.color.Paints;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
@@ -36,9 +39,9 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
     private float position;          // 0 = off end, 1 = on end; eased when drawn
     private boolean focused;
     private Consumer<Boolean> onToggle;
-    private final Overridable<Color> offColor = new Overridable<>(Color.LIGHT_GRAY);
-    private final Overridable<Color> onColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 1f));
-    private final Overridable<Color> knobColor = new Overridable<>(Color.WHITE);
+    private final Overridable<Paint> offColor = new Overridable<>(Color.LIGHT_GRAY);
+    private final Overridable<Paint> onColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 1f));
+    private final Overridable<Paint> knobColor = new Overridable<>(Color.WHITE);
 
     /**
      * An off 44x24 switch.
@@ -97,33 +100,33 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         this.onToggle = onToggle;
     }
 
-    public Color getOffColor() {
+    public Paint getOffColor() {
         return offColor.get();
     }
 
     /**
      * Pins the off-track color against theme switches. See {@link Overridable}.
      */
-    public void setOffColor(Color color) {
+    public void setOffColor(Paint color) {
         offColor.set(color);
     }
 
-    public Color getOnColor() {
+    public Paint getOnColor() {
         return onColor.get();
     }
 
     /**
      * Pins the on-track color against theme switches.
      */
-    public void setOnColor(Color color) {
+    public void setOnColor(Paint color) {
         onColor.set(color);
     }
 
-    public Color getKnobColor() {
+    public Paint getKnobColor() {
         return knobColor.get();
     }
 
-    public void setKnobColor(Color color) {
+    public void setKnobColor(Paint color) {
         knobColor.set(color);
     }
 
@@ -145,6 +148,9 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
     @Override
     public void update(float delta) {
         super.update(delta);
+        AnimatedPaint.advanceIfAnimated(offColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(onColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(knobColor.get(), delta);
         float target = on ? 1f : 0f;
         if (position == target) return;
         float step = delta / ANIMATION_SECONDS;
@@ -158,14 +164,8 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
 
         float x = (float) getX(), y = (float) getY(), w = (float) getWidth(), h = (float) getHeight();
         float t = Easing.EASE_OUT.apply(position);
-        Color off = offColor.get(), onC = onColor.get();
-        Color track = new Color(
-                off.getR() + (onC.getR() - off.getR()) * t,
-                off.getG() + (onC.getG() - off.getG()) * t,
-                off.getB() + (onC.getB() - off.getB()) * t,
-                off.getA() + (onC.getA() - off.getA()) * t);
-
-        renderer.drawQuad(x, y, w, h, track, h / 2f);
+        Paint onC = onColor.get();
+        Paints.fillMixed(renderer, x, y, w, h, offColor.get(), onC, t, h / 2f);
         if (isHovered()) {
             renderer.drawQuad(x, y, w, h, new Color(1f, 1f, 1f, 0.10f), h / 2f);
         }

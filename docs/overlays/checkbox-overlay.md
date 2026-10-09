@@ -78,5 +78,5 @@ root.addElement(row);
 | `setChecked(boolean)` | Silent set |
 | `toggle()` | Flip and fire `onToggle` |
 | `onToggle(Consumer<Boolean>)` | Callback for user toggles |
-| `getCheckColor()` / `setCheckColor(Color)` | Mark color; setting pins it |
+| `getCheckColor()` / `setCheckColor(Paint)` | Mark color or gradient; setting pins it |
 | `getCheckThickness()` / `setCheckThickness(float)` | Mark stroke width |

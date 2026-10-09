@@ -560,8 +560,6 @@ final class TiledReader {
         return values;
     }
 
-    // ---- Reading values: JSON has numbers and booleans, XML only strings
-
     static Color parseColor(String text) {
         if (text == null) return null;
         String hex = text.trim();

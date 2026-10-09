@@ -73,6 +73,20 @@ public class IconOverlay extends ImageOverlay {
     }
 
     /**
+     * Shows another of the engine's bundled icons, at this overlay's current size.
+     */
+    public void setIcon(IconAsset asset) {
+        int width = Math.max(1, (int) Math.round(getWidth())), height = Math.max(1, (int) Math.round(getHeight()));
+        svgFile = null;
+        resourcePath = asset.resourcePath();
+        setImage(IconCache.loadResource(resourcePath, width, height));
+        closeOwnedImage();
+        rasterWidth = width;
+        rasterHeight = height;
+        pendingSeconds = 0;
+    }
+
+    /**
      * Shows a raster image file instead of the SVG, which stops this overlay re-rendering on resize.
      */
     @Override

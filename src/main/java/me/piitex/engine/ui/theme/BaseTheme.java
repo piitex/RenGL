@@ -3,6 +3,11 @@ package me.piitex.engine.ui.theme;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
 
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * The engine's own mutable {@link Theme} implementation: a value object with the same
  * shape as {@link me.piitex.engine.ui.color.Styling} and
@@ -26,18 +31,21 @@ public class BaseTheme implements Theme {
     private Color buttonHoverBackground = new Color(0.85f, 0.85f, 0.85f, 1f);
     private Color buttonBorder = Color.DARK_GRAY;
 
-    private Color containerBackground = Color.WHITE;
+    private Paint containerBackground = Color.WHITE;
     private Color containerBorder = Color.LIGHT_GRAY;
 
     // Scroll bar
     private Color scrollThumb = Color.LIGHT_GRAY;
     private Color scrollTrack = new Color(0.9f, 0.9f, 0.9f, 1);
 
-    private Color tooltipBackground = new Color(0.15f, 0.15f, 0.16f, 0.96f);
-    private Color tooltipBorder = new Color(0.35f, 0.35f, 0.38f, 1f);
-    private Color tooltipText = Color.WHITE;
+    private Paint tooltipBackground = new Color(0.15f, 0.15f, 0.16f, 0.96f);
+    private Paint tooltipBorder = new Color(0.35f, 0.35f, 0.38f, 1f);
+    private Paint tooltipText = Color.WHITE;
 
     private Paint windowBackground = Color.WHITE;
+    private Map<String, Object> windowEffect;
+    private Map<String, Object> containerEffect;
+    private Path assetBase = Path.of("");
 
     private float cornerRadius = 6f;
     private float borderThickness = 1f;
@@ -133,12 +141,22 @@ public class BaseTheme implements Theme {
     }
 
     @Override
-    public Color getContainerBackground() {
+    public Paint getContainerBackground() {
         return containerBackground;
     }
 
-    public void setContainerBackground(Color containerBackground) {
+    public void setContainerBackground(Paint containerBackground) {
         this.containerBackground = containerBackground;
+    }
+
+    @Override
+    public Map<String, Object> getContainerEffect() {
+        return containerEffect;
+    }
+
+    /** Sets the effect behind panels, as {@link Theme#getContainerEffect()} describes; null for none. The settings are copied. */
+    public void setContainerEffect(Map<String, Object> containerEffect) {
+        this.containerEffect = frozen(containerEffect);
     }
 
     @Override
@@ -178,6 +196,30 @@ public class BaseTheme implements Theme {
     }
 
     @Override
+    public Map<String, Object> getWindowEffect() {
+        return windowEffect;
+    }
+
+    /** Sets the effect behind the window, as {@link Theme#getWindowEffect()} describes; null for none. The settings are copied. */
+    public void setWindowEffect(Map<String, Object> windowEffect) {
+        this.windowEffect = frozen(windowEffect);
+    }
+
+    @Override
+    public Path assetBase() {
+        return assetBase;
+    }
+
+    /** Sets where an effect's pictures are looked for; null for the working folder. */
+    public void setAssetBase(Path assetBase) {
+        this.assetBase = assetBase == null ? Path.of("") : assetBase;
+    }
+
+    private static Map<String, Object> frozen(Map<String, Object> settings) {
+        return settings == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(settings));
+    }
+
+    @Override
     public float getCornerRadius() {
         return cornerRadius;
     }
@@ -196,29 +238,29 @@ public class BaseTheme implements Theme {
     }
 
     @Override
-    public Color getTooltipBackground() {
+    public Paint getTooltipBackground() {
         return tooltipBackground;
     }
 
-    public void setTooltipBackground(Color tooltipBackground) {
+    public void setTooltipBackground(Paint tooltipBackground) {
         this.tooltipBackground = tooltipBackground;
     }
 
     @Override
-    public Color getTooltipBorder() {
+    public Paint getTooltipBorder() {
         return tooltipBorder;
     }
 
-    public void setTooltipBorder(Color tooltipBorder) {
+    public void setTooltipBorder(Paint tooltipBorder) {
         this.tooltipBorder = tooltipBorder;
     }
 
     @Override
-    public Color getTooltipText() {
+    public Paint getTooltipText() {
         return tooltipText;
     }
 
-    public void setTooltipText(Color tooltipText) {
+    public void setTooltipText(Paint tooltipText) {
         this.tooltipText = tooltipText;
     }
 }

@@ -130,16 +130,14 @@ public final class SkiaImages {
      * which the CPU rasterizer gives to the quad on the left or top, nor through rounding when the quad is turned.
      */
     private static void insetTexCoords(float[] from, int offset, float[] to, int toOffset) {
-        float left = from[offset], top = from[offset + 1], right = from[offset + 2], bottom = from[offset + 7];
-        float dx = right > left ? INSET : -INSET, dy = bottom > top ? INSET : -INSET;
-        to[toOffset] = left + dx;
-        to[toOffset + 1] = top + dy;
-        to[toOffset + 2] = right - dx;
-        to[toOffset + 3] = top + dy;
-        to[toOffset + 4] = right - dx;
-        to[toOffset + 5] = bottom - dy;
-        to[toOffset + 6] = left + dx;
-        to[toOffset + 7] = bottom - dy;
+        // Each corner moves toward the middle of the four, whichever way the quad is turned on the sheet.
+        float centerX = (from[offset] + from[offset + 2] + from[offset + 4] + from[offset + 6]) / 4f;
+        float centerY = (from[offset + 1] + from[offset + 3] + from[offset + 5] + from[offset + 7]) / 4f;
+        for (int i = 0; i < 8; i += 2) {
+            float x = from[offset + i], y = from[offset + i + 1];
+            to[toOffset + i] = x < centerX ? x + INSET : x > centerX ? x - INSET : x;
+            to[toOffset + i + 1] = y < centerY ? y + INSET : y > centerY ? y - INSET : y;
+        }
     }
 
     /**
@@ -166,13 +164,19 @@ public final class SkiaImages {
                     filterColor = color;
                 }
                 int p = q * 8;
-                float srcLeft = texCoords[p], srcTop = texCoords[p + 1], srcRight = texCoords[p + 2], srcBottom = texCoords[p + 7];
-                float srcWidth = srcRight - srcLeft, srcHeight = srcBottom - srcTop;
-                if (!(srcWidth > 0) || !(srcHeight > 0)) continue;
+                // A picture a packer stored turned 90 degrees clockwise has its top edge running down the sheet.
+                boolean turned = texCoords[p] == texCoords[p + 2] && texCoords[p + 1] != texCoords[p + 3];
+                float srcLeft = Math.min(Math.min(texCoords[p], texCoords[p + 2]), Math.min(texCoords[p + 4], texCoords[p + 6]));
+                float srcRight = Math.max(Math.max(texCoords[p], texCoords[p + 2]), Math.max(texCoords[p + 4], texCoords[p + 6]));
+                float srcTop = Math.min(Math.min(texCoords[p + 1], texCoords[p + 3]), Math.min(texCoords[p + 5], texCoords[p + 7]));
+                float srcBottom = Math.max(Math.max(texCoords[p + 1], texCoords[p + 3]), Math.max(texCoords[p + 5], texCoords[p + 7]));
+                float sheetWidth = srcRight - srcLeft, sheetHeight = srcBottom - srcTop;
+                if (!(sheetWidth > 0) || !(sheetHeight > 0)) continue;
+                float srcWidth = turned ? sheetHeight : sheetWidth, srcHeight = turned ? sheetWidth : sheetHeight; // of the upright picture
                 float x0 = positions[p], y0 = positions[p + 1];
                 float x1 = positions[p + 2], y1 = positions[p + 3];
                 float x3 = positions[p + 6], y3 = positions[p + 7];
-                if (y1 == y0 && x3 == x0 && x1 > x0 && y3 > y0) { // upright and not mirrored: no transform needed
+                if (!turned && y1 == y0 && x3 == x0 && x1 > x0 && y3 > y0) { // upright and not mirrored: no transform needed
                     canvas.drawImageRect(image, srcLeft, srcTop, srcRight, srcBottom, x0, y0, x1, y3, SMOOTH, paint, true);
                     continue;
                 }
@@ -185,7 +189,11 @@ public final class SkiaImages {
                 canvas.translate(x0, y0);
                 canvas.rotate((float) Math.toDegrees(angle));
                 canvas.scale(scaleX, scaleY);
-                canvas.drawImageRect(image, srcLeft, srcTop, srcRight, srcBottom, 0f, 0f, srcWidth, srcHeight, SMOOTH, paint, true);
+                if (turned) { // turn the sheet's rectangle back upright
+                    canvas.translate(0f, sheetWidth);
+                    canvas.rotate(-90f);
+                }
+                canvas.drawImageRect(image, srcLeft, srcTop, srcRight, srcBottom, 0f, 0f, sheetWidth, sheetHeight, SMOOTH, paint, true);
                 canvas.restore();
             }
         }

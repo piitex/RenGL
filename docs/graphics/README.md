@@ -12,7 +12,7 @@ move is up to the game; the camera has helpers for following and shaking, and pa
 | [Texture atlases](atlases.md) | `TextureAtlas`: named pictures from one packed image, read from the JSON that texture packers and Aseprite export, or built from a grid |
 | [Tile maps](tile-maps.md) | `TileMap`: levels made in the Tiled map editor, drawn in view only, with animated tiles and parallax; collision shapes for `Slide`; spawn points, triggers and other objects with their properties |
 | [Sprite animation](sprite-animation.md) | `Animation` and `AnimationPlayer`: frame-by-frame animation, loop modes, frame events |
-| [Particles](particles.md) | `ParticleSystem` and `ParticleEffect`: sparks, smoke and debris, reused and drawn in one batch |
+| [Particles](particles.md) | `ParticleSystem`, `ParticleEffect` and `ParticleEmitter`: sparks, smoke and debris, in bursts or steadily, reused and drawn in one batch |
 | [Shaders and post effects](shaders.md) | `ShaderEffect`: SkSL shaders that fill shapes, or post-process what's drawn, on the whole screen or one element |
 | [Debug drawing](debug-drawing.md) | `DebugDraw`: lines, shapes and labels in world space for seeing hit boxes, rays and state, from fixed steps or frames |
 

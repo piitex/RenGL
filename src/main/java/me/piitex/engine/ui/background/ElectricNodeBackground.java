@@ -3,6 +3,8 @@ package me.piitex.engine.ui.background;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.color.AnimatedPaint;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,8 +65,8 @@ public class ElectricNodeBackground extends AbstractBackground {
     private float branchChance = 0.6f;
     private float boltThickness = 2f;
     private float nodeLinkDistance = 260f;
-    private Color glowColor = new Color(0.35f, 0.7f, 1f, 1f);
-    private Color coreColor = new Color(0.92f, 0.97f, 1f, 1f);
+    private Paint glowColor = new Color(0.35f, 0.7f, 1f, 1f);
+    private Paint coreColor = new Color(0.92f, 0.97f, 1f, 1f);
     private boolean sparksEnabled = true;
     private boolean mouseInteractionEnabled = false;
     private float strikeRadius = 220f;
@@ -213,11 +215,11 @@ public class ElectricNodeBackground extends AbstractBackground {
      * {@link me.piitex.engine.ui.color.RainbowColor} gives a glow that cycles through the
      * colour wheel.
      */
-    public Color getGlowColor() {
+    public Paint getGlowColor() {
         return glowColor;
     }
 
-    public void setGlowColor(Color glowColor) {
+    public void setGlowColor(Paint glowColor) {
         this.glowColor = glowColor;
     }
 
@@ -226,11 +228,11 @@ public class ElectricNodeBackground extends AbstractBackground {
      * With a {@link me.piitex.engine.ui.color.RainbowColor} glow, a low-saturation RainbowColor
      * here, such as {@code new RainbowColor(6f, 0.15f, 1f, 1f)}, keeps the core pale but tinted to match.
      */
-    public Color getCoreColor() {
+    public Paint getCoreColor() {
         return coreColor;
     }
 
-    public void setCoreColor(Color coreColor) {
+    public void setCoreColor(Paint coreColor) {
         this.coreColor = coreColor;
     }
 
@@ -311,6 +313,8 @@ public class ElectricNodeBackground extends AbstractBackground {
     protected void updateEffect(float delta, float x, float y, float width, float height) {
         this.width = width;
         this.height = height;
+        AnimatedPaint.advanceIfAnimated(glowColor, delta);
+        AnimatedPaint.advanceIfAnimated(coreColor, delta);
         if (nodes == null) seedNodes();
 
         mouseActive = false;
@@ -586,32 +590,38 @@ public class ElectricNodeBackground extends AbstractBackground {
     /**
      * One stroke pass over an arc and its branches at {@code widthScale} times the bolt thickness.
      */
-    private void drawArc(Renderer renderer, Arc arc, Color color, float widthScale, float alpha) {
+    private void drawArc(Renderer renderer, Arc arc, Paint paint, float widthScale, float alpha) {
         float t = arc.age / arc.life;
         float fade = t < 0.15f ? 1f : 1f - (t - 0.15f) / 0.85f;
         float a = alpha * fade * arc.flicker;
         if (a <= 0f || arc.points == null) return;
 
         float thickness = boltThickness * widthScale;
-        renderer.drawPolyline(arc.points, arc.points.length / 2, withAlpha(color, a), thickness);
-        Color branchColor = withAlpha(color, a * 0.8f);
+        renderer.pushAlpha(a);
+        renderer.drawPolyline(arc.points, arc.points.length / 2, paint, thickness);
+        renderer.popAlpha();
+        renderer.pushAlpha(a * 0.8f);
         for (Branch b : arc.branches) {
-            if (b.points != null) renderer.drawPolyline(b.points, b.points.length / 2, branchColor, thickness * 0.6f);
+            if (b.points != null) renderer.drawPolyline(b.points, b.points.length / 2, paint, thickness * 0.6f);
         }
+        renderer.popAlpha();
     }
 
     private void drawNodeGlow(Renderer renderer, Node n) {
         float pulse = 1f + 0.08f * (float) Math.sin(n.pulsePhase);
         float swell = pulse * (1f + n.flash * 0.35f);
         float layerAlpha = 0.045f + n.flash * 0.025f;
-        Color layer = withAlpha(glowColor, layerAlpha);
         // Largest first: stacked translucent disks approximate a soft radial falloff.
+        renderer.pushAlpha(layerAlpha);
         for (int i = 0; i < GLOW_LAYERS; i++) {
             float f = (float) i / (GLOW_LAYERS - 1);
             float radius = nodeRadius * (5f - 3.6f * f) * swell;
-            renderer.drawCircle(n.x, n.y, radius, layer);
+            renderer.drawCircle(n.x, n.y, radius, glowColor);
         }
-        renderer.drawCircle(n.x, n.y, nodeRadius * 1.15f * swell, withAlpha(glowColor, 0.85f));
+        renderer.popAlpha();
+        renderer.pushAlpha(0.85f);
+        renderer.drawCircle(n.x, n.y, nodeRadius * 1.15f * swell, glowColor);
+        renderer.popAlpha();
     }
 
     private void drawNodeCore(Renderer renderer, Node n) {
@@ -628,16 +638,16 @@ public class ElectricNodeBackground extends AbstractBackground {
             float tailX = s.x - s.vx * 0.035f;
             float tailY = s.y - s.vy * 0.035f;
             if (glowColor != null) {
-                renderer.drawLine(tailX, tailY, s.x, s.y, withAlpha(glowColor, a * 0.35f), boltThickness * 2f);
+                renderer.pushAlpha(a * 0.35f);
+                renderer.drawLine(tailX, tailY, s.x, s.y, glowColor, boltThickness * 2f);
+                renderer.popAlpha();
             }
             if (coreColor != null) {
-                renderer.drawLine(tailX, tailY, s.x, s.y, withAlpha(coreColor, a), boltThickness * 0.6f);
+                renderer.pushAlpha(a);
+                renderer.drawLine(tailX, tailY, s.x, s.y, coreColor, boltThickness * 0.6f);
+                renderer.popAlpha();
             }
         }
-    }
-
-    private static Color withAlpha(Color color, float alpha) {
-        return new Color(color.getR(), color.getG(), color.getB(), Math.max(0f, Math.min(1f, color.getA() * alpha)));
     }
 
     private static float dist(float x0, float y0, float x1, float y1) {

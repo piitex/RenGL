@@ -132,7 +132,7 @@ Cameras are independent, so several can draw in one frame, each into its own vie
 
 - The camera draws through `Renderer.pushTransform`, which a custom `Renderer` must implement for rotation, and the
   shake's turning, to work. The built-in renderers do.
-- Bounds hold the upright view. A turned camera, or the shake, can show a little past them, so draw the level a few
-  units larger if that must never show.
+- Bounds hold the whole view even when it is turned or shaking, so the camera stops further in from the edges then,
+  and a level only a little larger than the view has no room to move.
 - Elements in the scene's container (buttons, text, the HUD) are not affected by the camera. They are drawn after
   `render`, in window coordinates.

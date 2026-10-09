@@ -7,6 +7,7 @@ import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.PopupKeyListener;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.text.Font;
 import org.lwjgl.glfw.GLFW;
@@ -305,6 +306,7 @@ final class MenuPopup extends Container implements PopupKeyListener {
     @Override
     public void update(float delta) {
         super.update(delta);
+        menu.advance(delta);
         if (closed || !MouseTracker.isInWindow()) return;
 
         double mx = MouseTracker.getX(), my = MouseTracker.getY();
@@ -381,7 +383,7 @@ final class MenuPopup extends Container implements PopupKeyListener {
                 if (i == shown && enabled) {
                     renderer.drawQuad(panel.x + PAD_X, rowY, panel.w - 2 * PAD_X, rowH, menu.highlight(), Math.min(radius, 6f));
                 }
-                Color color = enabled ? menu.text() : menu.disabledText();
+                Paint color = enabled ? menu.text() : menu.disabledText();
                 float textX = panel.x + PAD_X + TEXT_PAD;
 
                 if (item.isCheckable() && item.isChecked()) {

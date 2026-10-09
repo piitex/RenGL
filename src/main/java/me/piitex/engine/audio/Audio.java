@@ -6,6 +6,8 @@ import org.apache.logging.log4j.Logger;
 import org.lwjgl.openal.AL;
 import org.lwjgl.openal.ALC;
 import org.lwjgl.openal.ALCCapabilities;
+import org.lwjgl.openal.ALUtil;
+import org.lwjgl.openal.SOFTReopenDevice;
 
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
@@ -74,6 +76,12 @@ public final class Audio {
 
     private static Playback music;
     private static String musicPath;
+
+    // The output device asked for with setDevice, or null for the system default, and the one actually open.
+    private static String preferredDevice, openDevice;
+    private static ALCCapabilities alcCaps;
+    private static String lastDefaultDevice; // the system default as last seen, to notice it changing
+    private static long lastDeviceCheck;
 
     private Audio() {
 
@@ -393,6 +401,89 @@ public final class Audio {
     }
 
     /**
+     * The names of the output devices the system offers (speakers, headphones, ...), or an empty list when audio is
+     * unavailable or the system cannot list them. Pass one to {@link #setDevice}.
+     */
+    public static List<String> getDevices() {
+        synchronized (LOCK) {
+            if (!ensureInit()) return List.of();
+            List<String> names = ALUtil.getStringList(NULL, alcCaps.ALC_ENUMERATE_ALL_EXT
+                    ? org.lwjgl.openal.ALC11.ALC_ALL_DEVICES_SPECIFIER : ALC_DEVICE_SPECIFIER);
+            return names == null ? List.of() : List.copyOf(names);
+        }
+    }
+
+    /**
+     * The name of the device sound comes out of now, or null when audio is unavailable.
+     */
+    public static String getDevice() {
+        synchronized (LOCK) {
+            return ensureInit() ? openDevice : null;
+        }
+    }
+
+    /**
+     * Moves all sound to another output device, a name from {@link #getDevices()}, or {@code null} for the system's
+     * default. What is playing carries on from where it was on the new device. Nothing changes if the device cannot be
+     * opened, and the previous one keeps playing. The choice is remembered: if the chosen device later disappears (an unplugged
+     * headset), sound moves to the default device. With {@code null} chosen, sound also follows the system's default device
+     * when it changes.
+     * <p>
+     * Needs a sound system that supports switching devices live (OpenAL Soft, which the engine ships, does). Where it
+     * does not, this returns false and the device stays as it was.
+     *
+     * @return true if the sound now comes out of the requested device
+     */
+    public static boolean setDevice(String name) {
+        synchronized (LOCK) {
+            preferredDevice = name;
+            if (!ensureInit()) return false;
+            return reopen(name);
+        }
+    }
+
+    private static boolean reopen(String name) {
+        if (!alcCaps.ALC_SOFT_reopen_device) return false;
+        if (!SOFTReopenDevice.alcReopenDeviceSOFT(device, name, (IntBuffer) null)) {
+            log.warn("Could not switch audio to {}", name == null ? "the default device" : name);
+            return false;
+        }
+        openDevice = deviceName();
+        log.info("Audio moved to: {}", openDevice);
+        return true;
+    }
+
+    private static String deviceName() {
+        String name = null;
+        if (alcCaps.ALC_ENUMERATE_ALL_EXT) {
+            name = alcGetString(device, org.lwjgl.openal.ALC11.ALC_ALL_DEVICES_SPECIFIER);
+        }
+        return name != null ? name : alcGetString(device, ALC_DEVICE_SPECIFIER);
+    }
+
+    /**
+     * Every second: moves sound to a device that is available if the open one was lost, and follows the system default
+     * when that is what was asked for. Called by the audio thread with {@link #LOCK} held.
+     */
+    private static void watchDevice(long now) {
+        if (now - lastDeviceCheck < 1_000_000_000L) return;
+        lastDeviceCheck = now;
+        ALCCapabilities caps = alcCaps;
+        if (!caps.ALC_SOFT_reopen_device) return;
+        boolean lost = caps.ALC_EXT_disconnect && alcGetInteger(device, org.lwjgl.openal.EXTDisconnect.ALC_CONNECTED) == 0;
+        if (lost) {
+            log.warn("The audio device {} was lost", openDevice);
+            if (!reopen(preferredDevice)) reopen(null);
+        } else if (preferredDevice == null && caps.ALC_ENUMERATE_ALL_EXT) {
+            String current = alcGetString(NULL, org.lwjgl.openal.ALC11.ALC_DEFAULT_ALL_DEVICES_SPECIFIER);
+            if (current != null && !current.equals(lastDefaultDevice)) {
+                lastDefaultDevice = current;
+                reopen(null);
+            }
+        }
+    }
+
+    /**
      * True if the audio device opened. False means every playback is silent.
      */
     public static boolean isAvailable() {
@@ -425,6 +516,7 @@ public final class Audio {
             device = context = NULL;
             available = false;
             initTried = false;
+            openDevice = null;
         }
     }
 
@@ -479,9 +571,11 @@ public final class Audio {
             if (initTried) return available;
             initTried = true;
             try {
-                device = alcOpenDevice((ByteBuffer) null);
+                device = preferredDevice == null ? NULL : alcOpenDevice(preferredDevice);
+                if (device == NULL && preferredDevice != null) log.warn("Could not open the audio device {}; using the default", preferredDevice);
+                if (device == NULL) device = alcOpenDevice((ByteBuffer) null);
                 if (device == NULL) throw new IllegalStateException("no audio output device found");
-                ALCCapabilities alcCaps = ALC.createCapabilities(device);
+                alcCaps = ALC.createCapabilities(device);
                 context = alcCreateContext(device, (IntBuffer) null);
                 if (context == NULL) throw new IllegalStateException("could not create an audio context");
                 alcMakeContextCurrent(context);
@@ -494,7 +588,10 @@ public final class Audio {
                 thread = new Thread(Audio::run, "Audio-Thread");
                 thread.setDaemon(true);
                 thread.start();
-                log.info("Audio ready: {}", alcGetString(device, ALC_DEVICE_SPECIFIER));
+                openDevice = deviceName();
+                lastDefaultDevice = alcCaps.ALC_ENUMERATE_ALL_EXT ? alcGetString(NULL, org.lwjgl.openal.ALC11.ALC_DEFAULT_ALL_DEVICES_SPECIFIER) : null;
+                lastDeviceCheck = System.nanoTime();
+                log.info("Audio ready: {}", openDevice);
             } catch (Throwable t) {
                 log.warn("Audio is disabled: {}", t.getMessage());
                 if (context != NULL) alcDestroyContext(context);
@@ -523,6 +620,7 @@ public final class Audio {
             last = now;
             synchronized (LOCK) {
                 if (thread != self) return;
+                if (available) watchDevice(now);
                 for (Playback p : new ArrayList<>(active)) {
                     try {
                         p.update(dt);

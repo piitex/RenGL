@@ -1,15 +1,15 @@
 package me.piitex.engine.ui.image;
 
 import me.piitex.engine.ui.text.Font;
+import me.piitex.engine.utils.WeightedCache;
 import org.jetbrains.skia.Image;
 import org.jetbrains.skia.Typeface;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Caches decoded {@link Image} instances by file path, the same way
@@ -23,17 +23,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * that one call rather than needing per-format code here, and the formats actually
  * supported are whichever codecs this Skia build was compiled with.
  * <p>
- * As with Font's Typefaces, cached Images are never closed. Constructing a draw call
- * from an already-decoded Image is cheap, while re-decoding the file is not. That is a
- * reasonable trade for the fixed set of UI assets an application ships with, such as
- * icons, backgrounds, and sprites reused throughout. Images are typically much larger
- * than font files and far more numerous, though, so an application loading many one-off
- * images at runtime, such as user-uploaded avatars or fetched content, rather than a
- * bounded set of shipped assets, will grow this cache without limit. In that case,
- * decode those images without going through this cache and close them once done.
+ * The cache stays under {@link #getCacheLimit()} bytes (256 MiB of decoded pixels by default) by dropping the
+ * images used longest ago. A dropped image is not closed: an overlay still showing it keeps a working picture, whose
+ * memory is freed once nothing draws it, and loading the file again decodes it again. A fixed set of assets that fits
+ * stays cached for good, so drawing from it is cheap. Raise the limit for a game with more than that on screen at once.
  */
 public final class ImageLoader {
-    private static final Map<String, Image> cache = new ConcurrentHashMap<>();
+    private static final WeightedCache<Image> cache = new WeightedCache<>(256L << 20);
 
     private ImageLoader() {
     }
@@ -43,20 +39,75 @@ public final class ImageLoader {
      */
     public static Image load(File imageFile) {
         String key = imageFile.getAbsolutePath();
-        return cache.computeIfAbsent(key, path -> {
+        return cache.get(key, () -> {
             byte[] bytes;
             try {
                 bytes = Files.readAllBytes(imageFile.toPath());
             } catch (IOException e) {
-                throw new UncheckedIOException("Could not read image file: " + path, e);
+                throw new UncheckedIOException("Could not read image file: " + key, e);
             }
 
             Image image = Image.Companion.makeFromEncoded(bytes);
             if (image == null) {
-                throw new IllegalArgumentException("Not a decodable image file: " + path);
+                throw new IllegalArgumentException("Not a decodable image file: " + key);
             }
             return image;
-        });
+        }, image -> 4L * image.getWidth() * image.getHeight());
+    }
+
+    /**
+     * How many bytes of decoded pixels the cache may hold before it drops the least recently used picture.
+     * Default 256 MiB. Lowering it drops pictures at once; 0 or less means no limit.
+     */
+    public static void setCacheLimit(long bytes) {
+        cache.setLimit(bytes);
+    }
+
+    public static long getCacheLimit() {
+        return cache.getLimit();
+    }
+
+    /**
+     * The decoded bytes held by the cache now.
+     */
+    public static long getCachedBytes() {
+        return cache.getWeight();
+    }
+
+    /**
+     * Drops one picture from the cache, so the next {@link #load} decodes the file again. Returns whether it was cached.
+     */
+    public static boolean evict(File imageFile) {
+        return cache.remove(imageFile.getAbsolutePath());
+    }
+
+    /**
+     * Drops every cached picture. Overlays still showing one keep it.
+     */
+    public static void clearCache() {
+        cache.clear();
+    }
+
+    /**
+     * Opens {@code imageFile} as an {@link AnimatedImage}, or returns null when it is a still picture: any format
+     * but GIF and WEBP, or a GIF or WEBP with a single frame. Unlike {@link #load}, nothing is cached, because
+     * each animation is played at its own position and so needs a decoder of its own. A still file is recognised
+     * from its first bytes without reading the rest, so asking about a PNG costs next to nothing.
+     * <p>
+     * This is the first step of how {@link me.piitex.engine.ui.overlays.ImageOverlay} decides whether a file
+     * should play; {@link #load} on a GIF still gives its first frame as a plain Image.
+     */
+    public static AnimatedImage loadAnimated(File imageFile) {
+        byte[] head = new byte[12];
+        try (InputStream in = Files.newInputStream(imageFile.toPath())) {
+            if (in.readNBytes(head, 0, head.length) < head.length || !AnimatedImage.mayBeAnimated(head)) return null;
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read image file: " + imageFile, e);
+        }
+        AnimatedImage animated = AnimatedImage.load(imageFile);
+        if (animated.isAnimated()) return animated;
+        animated.close();
+        return null;
     }
 
     /**

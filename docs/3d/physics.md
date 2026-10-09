@@ -434,6 +434,12 @@ carry it, kinematic or dynamic, and jumping off one keeps the platform's speed.
 Inside it is a kinematic body, so rays and triggers find it and objects falling on it land on it. Nothing pushes it but
 its own walking and what it stands on; to knock it back, call `setVelocity` from a contact listener.
 
+## Scene files
+
+A [scene file](scene-files.md#physics) can say which nodes are bodies or characters, with their colliders and settings,
+and which joints join them. `Scene3DFile.load` builds the world and gives it to the scene, and `findBody`,
+`findCharacter` and `findJoint` find the parts by name, so a level made in the editor runs as it was set up.
+
 ## Seeing the colliders
 
 A **`ColliderView`** draws what the world collides with, as see-through outlines over the scene: the way to find a

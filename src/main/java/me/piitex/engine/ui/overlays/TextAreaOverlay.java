@@ -18,6 +18,7 @@ import me.piitex.engine.ui.text.TextUndoHistory.EditKind;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import me.piitex.engine.ui.theme.Themeable;
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import org.jetbrains.skia.Typeface;
 import org.lwjgl.glfw.GLFW;
@@ -25,6 +26,9 @@ import org.lwjgl.glfw.GLFW;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 /**
@@ -44,9 +48,8 @@ import java.util.function.Consumer;
  * {@link Line} layout cache ({@link #ensureLayout()}) rebuilt lazily whenever the text,
  * the width, or {@link #setWordWrap} changes.
  * <p>
- * <b>Known gap:</b> with {@link #setWordWrap} off, an overlong line clips at this
- * Element's own edge rather than scrolling horizontally. Only vertical scrolling is
- * implemented. Turn word wrap back on (the default) if that matters.
+ * With {@link #setWordWrap} off, a line wider than the box scrolls sideways instead: the wheel's or trackpad's
+ * horizontal movement, the caret moving out of view, and a thin bar along the bottom ({@link #getMaxScrollX()}).
  * <p>
  * Scrolling (mouse wheel through {@link Scrollable}, plus an optional draggable thumb)
  * is built directly into this class. A
@@ -62,6 +65,7 @@ import java.util.function.Consumer;
  * text coloring, such as an AI chat transcript with "quoted" and *emphasized* runs, on
  * top of everything here.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Scrollable, Themeable, FontScalable {
     private static final float BLINK_INTERVAL_SECONDS = 0.5f;
     private static final long DOUBLE_CLICK_NANOS = 400_000_000L;
@@ -92,11 +96,17 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     private boolean cursorVisible = false;
     private float blinkTimer = 0f;
     private float scrollOffsetY = 0f;
+    /** How far the text is scrolled to the left, which only happens with word wrap off. */
+    private float scrollOffsetX = 0f;
+    /** The width of the widest line, measured when the layout is rebuilt with word wrap off. */
+    private float widestLine = 0f;
     private float scrollSpeed = 40f;
 
     private boolean scrollbarVisible = true;
+    private Float scrollbarPadding; // null: same as paddingX
     private ScrollBarStyle scrollBarStyle = new ScrollBarStyle();
-    private boolean draggingThumb = false;
+    private boolean draggingThumb = false, draggingThumbX = false;
+    private double thumbDragAnchorMouseX, thumbDragAnchorOffsetX;
     private double thumbDragAnchorMouseY, thumbDragAnchorOffsetY;
 
     /**
@@ -105,6 +115,20 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     private final List<Line> lines = new ArrayList<>();
     private boolean layoutDirty = true;
     private double lastLayoutWidth = -1;
+    private float lastLayoutLane = -1;
+
+    private static final float GUTTER_GAP = 12f;
+    /** Room kept after the end of the widest line, so a caret at its end is in view. */
+    private static final float CARET_ROOM = 12f;
+    private BiPredicate<Integer, Integer> keyFilter;
+    private BiFunction<String, Integer, String> parenCloser;
+    private boolean lineNumbers = false;
+    private Color lineNumberColor = new Color(0.55f, 0.55f, 0.55f, 1f);
+    private Map<Integer, Color> lineMarks = Map.of();
+    private int[] highlightStarts = new int[0], highlightEnds = new int[0];
+    private Color highlightColor = Color.TRANSPARENT;
+    /** The width kept on the left for the line numbers and the gap after them, and how much of it is the numbers. */
+    private float gutter = 0f, gutterNumbers = 0f;
 
     /**
      * The horizontal position, in points from the start of its line, that Up/Down arrow
@@ -222,6 +246,15 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     }
 
     /**
+     * Uses {@code typeface} instead of the system default, such as {@link Font#monospace()} for code.
+     */
+    public void setTypeface(Typeface typeface) {
+        this.typeface = typeface == null ? Font.getDefault() : typeface;
+        fontDirty = true;
+        layoutDirty = true;
+    }
+
+    /**
      * The current contents, newlines included.
      */
     public String getText() {
@@ -241,6 +274,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         clearSelection();
         preferredX = -1f;
         scrollOffsetY = 0f;
+        scrollOffsetX = 0f;
         layoutDirty = true;
     }
 
@@ -310,19 +344,19 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         options.setPlaceholderColor(placeholderColor);
     }
 
-    public Color getCaretColor() {
+    public Paint getCaretColor() {
         return options.getCaretColor();
     }
 
-    public void setCaretColor(Color caretColor) {
+    public void setCaretColor(Paint caretColor) {
         options.setCaretColor(caretColor);
     }
 
-    public Color getSelectionColor() {
+    public Paint getSelectionColor() {
         return options.getSelectionColor();
     }
 
-    public void setSelectionColor(Color selectionColor) {
+    public void setSelectionColor(Paint selectionColor) {
         options.setSelectionColor(selectionColor);
     }
 
@@ -352,7 +386,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     }
 
     /**
-     * Horizontal inset, in logical points, between this box's edges and its text.
+     * Horizontal inset, in logical points, between this box's edges and its text. The scrollbar's width is kept free on the right on top of this.
      */
     public float getPaddingX() {
         return paddingX;
@@ -360,6 +394,23 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
 
     public void setPaddingX(float paddingX) {
         this.paddingX = paddingX;
+        layoutDirty = true;
+    }
+
+    /**
+     * The space, in logical points, between the right edge of the text and the scrollbar. Null, the default, uses {@link #getPaddingX()}, so it
+     * is the same as the space at the left edge. Without a visible scrollbar the text keeps {@link #getPaddingX()} from the right edge.
+     */
+    public Float getScrollbarPadding() {
+        return scrollbarPadding;
+    }
+
+    /**
+     * Sets the space between the text and the scrollbar, separately from {@link #setPaddingX}. A negative value is treated as 0. Null goes back
+     * to following {@link #getPaddingX()}. The text rewraps to the new width.
+     */
+    public void setScrollbarPadding(Float scrollbarPadding) {
+        this.scrollbarPadding = scrollbarPadding == null ? null : Math.max(0f, scrollbarPadding);
         layoutDirty = true;
     }
 
@@ -427,6 +478,35 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return Math.max(0, contentHeight - innerHeight);
     }
 
+    public double getScrollOffsetX() {
+        return scrollOffsetX;
+    }
+
+    /**
+     * How much further this can scroll to the right, in logical points: how much wider the widest line is than the room
+     * for text. Always 0 with word wrap on.
+     */
+    public double getMaxScrollX() {
+        ensureLayout();
+        if (wordWrap) return 0;
+        return Math.max(0, widestLine + CARET_ROOM - textRoom());
+    }
+
+    /** Scrolls sideways to {@code x} points, clamped to {@code [0, getMaxScrollX()]}. */
+    public void scrollToX(double x) {
+        scrollOffsetX = (float) Math.max(0, Math.min(x, getMaxScrollX()));
+    }
+
+    /** Scrolls sideways by {@code dx} points relative to where it is. */
+    public void scrollByX(double dx) {
+        scrollToX(scrollOffsetX + dx);
+    }
+
+    /** The width the text has between the gutter and the scrollbar. */
+    private float textRoom() {
+        return Math.max(0f, (float) getWidth() - paddingX - rightInset() - gutter);
+    }
+
     /**
      * Scrolls by {@code dy} logical points relative to the current offset, clamped to {@code [0, getMaxScrollY()]}.
      */
@@ -448,6 +528,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
      */
     @Override
     public boolean canScroll(double deltaX, double deltaY) {
+        if (deltaX != 0 && Math.abs(deltaX) > Math.abs(deltaY)) {
+            return deltaX > 0 ? scrollOffsetX > 0 : scrollOffsetX < getMaxScrollX();
+        }
         if (deltaY == 0) return false;
         return deltaY > 0 ? scrollOffsetY > 0 : scrollOffsetY < getMaxScrollY();
     }
@@ -460,7 +543,8 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
      */
     @Override
     public void onScroll(double deltaX, double deltaY) {
-        scrollBy(-deltaY * scrollSpeed);
+        if (deltaX != 0 && !wordWrap) scrollByX(-deltaX * scrollSpeed);
+        if (deltaY != 0) scrollBy(-deltaY * scrollSpeed);
     }
 
     /**
@@ -712,6 +796,10 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     @Override
     public void onCharTyped(int codepoint) {
         if (Character.isISOControl(codepoint)) return; // enter/backspace/etc arrive via onKeyPressed instead
+        if (options.isAutoCloseBrackets() && !options.isReadOnly()) {
+            if (hasSelection() ? wrappedSelection(codepoint) : pairedBracket(codepoint)) return;
+        }
+        if (codepoint == '}' && options.isAutoIndent() && !options.isReadOnly() && !hasSelection()) dedentBeforeBrace();
         insertText(new String(Character.toChars(codepoint)));
         resetBlink();
     }
@@ -719,6 +807,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     @Override
     public void onKeyPressed(int key, int action, int mods) {
         if (action == GLFW.GLFW_RELEASE) return;
+        if (keyFilter != null && keyFilter.test(key, mods)) return;
 
         boolean shift = options.isSelectionEnabled() && (mods & GLFW.GLFW_MOD_SHIFT) != 0;
         boolean commandModifier = (mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
@@ -789,10 +878,16 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
                     recordEdit(EditKind.OTHER);
                     deleteSelection();
                     fireTextChanged();
+                } else if (cursorIndex > 0 && options.getIndentSize() > 0 && smartBackspace()) {
+                    clearSelection();
+                    preferredX = -1f;
+                    layoutDirty = true;
+                    fireTextChanged();
                 } else if (cursorIndex > 0) {
                     recordEdit(EditKind.BACKSPACE);
                     int prev = Character.offsetByCodePoints(text, cursorIndex, -1);
-                    text.delete(prev, cursorIndex);
+                    int last = emptyPairEnd(prev);
+                    text.delete(prev, last > 0 ? last : cursorIndex);
                     cursorIndex = prev;
                     clearSelection();
                     preferredX = -1f;
@@ -822,12 +917,183 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             case GLFW.GLFW_KEY_DOWN -> moveCursorVertical(1, shift);
             case GLFW.GLFW_KEY_HOME -> moveCursorTo(currentLineStart(), shift);
             case GLFW.GLFW_KEY_END -> moveCursorTo(currentLineEnd(), shift);
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> insertText("\n");
+            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> insertNewline();
+            case GLFW.GLFW_KEY_TAB -> {
+                if (commandModifier || options.getIndentSize() <= 0 || options.isReadOnly()) return;
+                if ((mods & GLFW.GLFW_MOD_SHIFT) != 0 || hasSelection()) indentLines((mods & GLFW.GLFW_MOD_SHIFT) != 0);
+                else insertTab();
+            }
             default -> {
                 return;
             }
         }
         resetBlink();
+    }
+
+    /**
+     * Offers every key press, and repeat, to {@code filter} before the box handles it, with the {@code GLFW_KEY_*} code and the
+     * modifier bits. A filter that returns true has used the key, and the box ignores it. This is how a window's own
+     * shortcuts, such as Ctrl+S, work while the box has the keyboard, which it otherwise keeps for itself. Pass null to
+     * stop.
+     */
+    public void setKeyFilter(BiPredicate<Integer, Integer> filter) {
+        this.keyFilter = filter;
+    }
+
+    /** Tab is this box's when it has an indent size to use it for. See {@link TextEditingOptions#setIndentSize}. */
+    @Override
+    public boolean wantsTab() {
+        return options.getIndentSize() > 0;
+    }
+
+    /** The index where the line {@code index} is on starts: just after the Enter before it, or 0. */
+    private int lineStartAt(int index) {
+        return text.lastIndexOf("\n", index - 1) + 1;
+    }
+
+    /**
+     * Backspace with nothing selected in a box that has an indent size, as a code editor does it: on a line that is only
+     * spaces the whole line goes, and the caret is left at the end of the line before; and with only spaces before the
+     * caret on a line that has something on it, the spaces go back to the stop before instead of one at a time: the
+     * indentation of the line a bracket that is still open was opened on, the nearest first, or the next multiple of the
+     * indent size down, whichever is closer.
+     * Returns false, having done nothing, when neither is the case and Backspace is just a Backspace.
+     */
+    private boolean smartBackspace() {
+        int lineStart = lineStartAt(cursorIndex);
+        int lineEnd = text.indexOf("\n", cursorIndex);
+        if (lineEnd < 0) lineEnd = text.length();
+        boolean blank = true;
+        for (int i = lineStart; i < lineEnd && blank; i++) blank = text.charAt(i) == ' ' || text.charAt(i) == '\t';
+        if (blank && lineEnd > lineStart) {
+            recordEdit(EditKind.OTHER);
+            int from = lineStart > 0 ? lineStart - 1 : lineStart;
+            text.delete(from, lineEnd);
+            cursorIndex = from;
+            return true;
+        }
+        int column = cursorIndex - lineStart;
+        if (column == 0) return false;
+        for (int i = lineStart; i < cursorIndex; i++) if (text.charAt(i) != ' ') return false;
+        int size = options.getIndentSize();
+        int target = (column - 1) / size * size;
+        StringBuilder open = new StringBuilder();
+        List<Integer> at = new ArrayList<>();
+        lexAt(lineStart, open, at);
+        for (int bracket : at) { // the line each bracket that is open here was opened on is a place to line up with
+            int from = lineStartAt(bracket), indent = from;
+            while (indent < text.length() && text.charAt(indent) == ' ') indent++;
+            indent -= from;
+            if (indent < column && indent > target) target = indent;
+        }
+        recordEdit(EditKind.OTHER);
+        text.delete(lineStart + target, cursorIndex);
+        cursorIndex = lineStart + target;
+        return true;
+    }
+
+    /** One Tab press with nothing selected: spaces up to the next multiple of the indent size. */
+    private void insertTab() {
+        int size = options.getIndentSize();
+        int column = cursorIndex - lineStartAt(cursorIndex);
+        insertText(" ".repeat(size - column % size));
+    }
+
+    /**
+     * Enter. With {@link TextEditingOptions#isAutoIndent()} the new line starts at the indentation of the line it was
+     * pressed on, with one level more after an opening brace, and between a pair of braces the closing one goes on a line
+     * of its own, with the caret on the line between.
+     */
+    private void insertNewline() {
+        if (!options.isAutoIndent() || options.isReadOnly()) {
+            insertText("\n");
+            return;
+        }
+        if (options.isAutoCloseBrackets() && !hasSelection() && cursorIndex > 0 && cursorIndex < text.length() && text.charAt(cursorIndex - 1) == ')'
+                && text.charAt(cursorIndex) == ';' && (cursorIndex + 1 >= text.length() || text.charAt(cursorIndex + 1) == '\n')) {
+            cursorIndex++; // the ";" that ends the call stays on its line
+        }
+        int from = hasSelection() ? selectionStart() : cursorIndex;
+        int to = hasSelection() ? selectionEnd() : cursorIndex;
+        int lineStart = lineStartAt(from);
+        int end = lineStart;
+        while (end < from && text.charAt(end) == ' ') end++;
+        String indent = text.substring(lineStart, end);
+        int before = from - 1;
+        while (before >= lineStart && text.charAt(before) == ' ') before--;
+        boolean opens = before >= lineStart && text.charAt(before) == '{';
+        boolean closes = opens && to < text.length() && text.charAt(to) == '}';
+        String unit = " ".repeat(options.getIndentSize() > 0 ? options.getIndentSize() : 4);
+        if (closes) {
+            String tail = "\n" + indent;
+            insertText("\n" + indent + unit + tail);
+            cursorIndex -= tail.length();
+        } else {
+            insertText("\n" + indent + (opens ? unit : ""));
+        }
+    }
+
+    /**
+     * Puts one level of indentation on the start of each line the selection touches, or takes one off. A selection that
+     * ends at the very start of a line leaves that line alone, and a blank line is not given spaces.
+     */
+    private void indentLines(boolean outdent) {
+        int size = options.getIndentSize();
+        int from = hasSelection() ? selectionStart() : cursorIndex;
+        int to = hasSelection() ? selectionEnd() : cursorIndex;
+        if (to > from && text.charAt(to - 1) == '\n') to--;
+        int start = lineStartAt(from);
+        int end = text.indexOf("\n", to);
+        if (end < 0) end = text.length();
+
+        String[] lines = text.substring(start, end).split("\n", -1);
+        int[] starts = new int[lines.length]; // where each line was, in the text before
+        int[] changes = new int[lines.length]; // how many characters were added to it, or taken off as a negative
+        StringBuilder block = new StringBuilder();
+        int at = start;
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            starts[i] = at;
+            at += line.length() + 1;
+            if (outdent) {
+                int remove = 0;
+                while (remove < size && remove < line.length() && line.charAt(remove) == ' ') remove++;
+                if (remove == 0 && !line.isEmpty() && line.charAt(0) == '\t') remove = 1;
+                changes[i] = -remove;
+                line = line.substring(remove);
+            } else if (!line.isBlank()) {
+                changes[i] = size;
+                line = " ".repeat(size) + line;
+            }
+            if (i > 0) block.append('\n');
+            block.append(line);
+        }
+        int growth = 0;
+        for (int change : changes) growth += change;
+        if (growth == 0) return;
+        int limit = options.getMaxLength();
+        if (limit >= 0 && text.codePointCount(0, text.length()) + growth > limit) return;
+
+        recordEdit(EditKind.OTHER);
+        int selected = hasSelection() ? selectionAnchor : -1;
+        int newCursor = shifted(cursorIndex, starts, changes);
+        int newAnchor = selected < 0 ? -1 : shifted(selected, starts, changes);
+        text.replace(start, end, block.toString());
+        cursorIndex = newCursor;
+        selectionAnchor = newAnchor;
+        preferredX = -1f;
+        layoutDirty = true;
+        fireTextChanged();
+    }
+
+    /** Where {@code index} is after the lines that start at {@code starts} gained or lost {@code changes} characters. */
+    private static int shifted(int index, int[] starts, int[] changes) {
+        int result = index;
+        for (int i = 0; i < starts.length; i++) {
+            if (changes[i] > 0 && index > starts[i]) result += changes[i];
+            else if (changes[i] < 0) result -= Math.min(-changes[i], Math.max(0, index - starts[i]));
+        }
+        return result;
     }
 
     /**
@@ -928,6 +1194,13 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             return;
         }
 
+        if (scrollbarVisible && thumbXContains(toLocalX(x), toLocalY(y))) {
+            draggingThumbX = true;
+            thumbDragAnchorMouseX = x;
+            thumbDragAnchorOffsetX = scrollOffsetX;
+            return;
+        }
+
         history.seal();
         cursorIndex = indexForPoint(x, y);
         clearSelection();
@@ -951,7 +1224,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             selectionAnchor = 0;
             cursorIndex = text.length();
         } else if (clickCount == 2) {
-            selectWordAt(cursorIndex);
+            selectWordAtPoint(x, y);
         } else {
             dragAnchorIndex = cursorIndex;
         }
@@ -960,6 +1233,14 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
 
     @Override
     public void onDragUpdate(double x, double y) {
+        if (draggingThumbX) {
+            if (Math.abs(x - thumbDragAnchorMouseX) < DRAG_THRESHOLD_PIXELS) return;
+            float room = textRoom();
+            float thumb = Math.max(scrollBarStyle.getMinThumbLength(), Math.min(room, room * room / Math.max(1f, widestLine + CARET_ROOM)));
+            double travel = room - thumb;
+            scrollToX(thumbDragAnchorOffsetX + (travel > 0 ? (x - thumbDragAnchorMouseX) / travel : 0) * getMaxScrollX());
+            return;
+        }
         if (draggingThumb) {
             // Below the same DRAG_THRESHOLD_PIXELS the text-selection path already uses
             // to tell a real drag apart from an ordinary click's incidental jitter (real
@@ -989,14 +1270,470 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
 
     @Override
     public void onDragEnd(double x, double y) {
-        if (draggingThumb) {
+        if (draggingThumb || draggingThumbX) {
             draggingThumb = false;
+            draggingThumbX = false;
             return;
         }
         dragAnchorIndex = -1;
     }
 
+    /**
+     * Sets what typing "(" adds after it when {@link TextEditingOptions#isAutoCloseBrackets()} is on: it is given the text and
+     * the index the bracket is typed at, and returns what goes after the bracket, such as ")" or ");", or null for nothing.
+     * The caret stays right after the bracket. The default adds ")" when what follows is the end, a space or a closer.
+     */
+    public void setParenCloser(BiFunction<String, Integer, String> closer) {
+        this.parenCloser = closer;
+    }
+
+    /** What a place in the text is a part of, as Java's own syntax has it. */
+    private enum Lex { CODE, STRING, CHAR, LINE_COMMENT, BLOCK_COMMENT, TEXT_BLOCK }
+
+    /**
+     * What the text at {@code index} is a part of, reading from the start, so that a bracket or a quote inside a string or a
+     * comment is not taken for code. If {@code open} is given, it is filled with the brackets in code that are still open there.
+     */
+    private Lex lexAt(int index, StringBuilder open) {
+        return lexAt(index, open, null);
+    }
+
+    /** As {@link #lexAt(int, StringBuilder)}, and if {@code at} is given too, it is filled with where each of the open brackets is. */
+    private Lex lexAt(int index, StringBuilder open, List<Integer> at) {
+        Lex state = Lex.CODE;
+        int length = Math.min(index, text.length());
+        for (int i = 0; i < length; i++) {
+            char c = text.charAt(i);
+            switch (state) {
+                case CODE -> {
+                    if (c == '/' && i + 1 < length && text.charAt(i + 1) == '/') {
+                        state = Lex.LINE_COMMENT;
+                        i++;
+                    } else if (c == '/' && i + 1 < length && text.charAt(i + 1) == '*') {
+                        state = Lex.BLOCK_COMMENT;
+                        i++;
+                    } else if (c == '"') {
+                        if (i + 2 < length && text.charAt(i + 1) == '"' && text.charAt(i + 2) == '"') {
+                            state = Lex.TEXT_BLOCK;
+                            i += 2;
+                        } else {
+                            state = Lex.STRING;
+                        }
+                    } else if (c == '\'') {
+                        state = Lex.CHAR;
+                    } else if (open != null && (c == '(' || c == '[' || c == '{')) {
+                        open.append(c);
+                        if (at != null) at.add(i);
+                    } else if (open != null && (c == ')' || c == ']' || c == '}') && open.length() > 0) {
+                        open.setLength(open.length() - 1);
+                        if (at != null) at.remove(at.size() - 1);
+                    }
+                }
+                case STRING, CHAR -> {
+                    if (c == '\\') i++;
+                    else if (c == '\n' || c == (state == Lex.STRING ? '"' : '\'')) state = Lex.CODE;
+                }
+                case LINE_COMMENT -> {
+                    if (c == '\n') state = Lex.CODE;
+                }
+                case BLOCK_COMMENT -> {
+                    if (c == '*' && i + 1 < length && text.charAt(i + 1) == '/') {
+                        state = Lex.CODE;
+                        i++;
+                    }
+                }
+                case TEXT_BLOCK -> {
+                    if (c == '\\') i++;
+                    else if (c == '"' && i + 2 < length && text.charAt(i + 1) == '"' && text.charAt(i + 2) == '"') {
+                        state = Lex.CODE;
+                        i += 2;
+                    }
+                }
+            }
+        }
+        return state;
+    }
+
+    private static boolean room(char next) {
+        return next == 0 || " \t\n\r)]},;".indexOf(next) >= 0;
+    }
+
+    /**
+     * Handles the brackets and the quotes for {@link TextEditingOptions#isAutoCloseBrackets()}: an opening one in code adds
+     * its closing one, a closing one that is next is gone over, a ";" that came with a call is gone over. True if the
+     * character was used up. Nothing is added or skipped in a string or a comment.
+     */
+    private boolean pairedBracket(int codepoint) {
+        if (codepoint > 0xFFFF) return false;
+        char c = (char) codepoint;
+        char next = cursorIndex < text.length() ? text.charAt(cursorIndex) : 0;
+        char prev = cursorIndex > 0 ? text.charAt(cursorIndex - 1) : 0;
+        if (c == '(' || c == '[' || c == '{') {
+            if (lexAt(cursorIndex, null) != Lex.CODE) return false;
+            String closer;
+            if (c == '(' && parenCloser != null) {
+                closer = parenCloser.apply(text.toString(), cursorIndex);
+            } else {
+                closer = room(next) ? String.valueOf(c == '(' ? ')' : c == '[' ? ']' : '}') : null;
+            }
+            if (closer == null || closer.isEmpty()) return false;
+            recordEdit(EditKind.OTHER);
+            clearSelection();
+            text.insert(cursorIndex, c + closer);
+            cursorIndex++;
+        } else if (c == ';' && prev == ')' && next == ';' && (cursorIndex + 1 >= text.length() || text.charAt(cursorIndex + 1) == '\n')) {
+            history.seal(); // the ";" that came with the brackets is the one being typed
+            clearSelection();
+            cursorIndex++;
+        } else if ((c == ')' || c == ']' || c == '}') && next == c) {
+            StringBuilder open = new StringBuilder();
+            if (lexAt(cursorIndex, open) != Lex.CODE || open.length() == 0 || open.charAt(open.length() - 1) != (c == ')' ? '(' : c == ']' ? '[' : '{')) return false;
+            history.seal();
+            clearSelection();
+            cursorIndex++;
+        } else if (c == '"' || c == '\'') {
+            Lex state = lexAt(cursorIndex, null);
+            if (state == (c == '"' ? Lex.STRING : Lex.CHAR) && next == c && prev != '\\') {
+                history.seal(); // the end of the text that was begun
+                clearSelection();
+                cursorIndex++;
+            } else if (state == Lex.CODE && room(next) && !Character.isJavaIdentifierPart(prev) && prev != c) {
+                recordEdit(EditKind.OTHER);
+                clearSelection();
+                text.insert(cursorIndex, "" + c + c);
+                cursorIndex++;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        preferredX = -1f;
+        layoutDirty = true;
+        fireTextChanged();
+        resetBlink();
+        return true;
+    }
+
+    /**
+     * With text selected, typing an opening bracket or a quote in code puts the pair around the selection instead of
+     * replacing it, and the selection stays on the same text so another one can go round it. True if it was used up.
+     */
+    private boolean wrappedSelection(int codepoint) {
+        if (codepoint > 0xFFFF || !hasSelection()) return false;
+        char c = (char) codepoint;
+        char closer = switch (c) {
+            case '(' -> ')';
+            case '[' -> ']';
+            case '{' -> '}';
+            case '"', '\'' -> c;
+            default -> 0;
+        };
+        if (closer == 0) return false;
+        int start = selectionStart(), end = selectionEnd();
+        if (lexAt(start, null) != Lex.CODE) return false;
+        boolean forward = cursorIndex >= selectionAnchor;
+        recordEdit(EditKind.OTHER);
+        text.insert(end, closer);
+        text.insert(start, c);
+        selectionAnchor = forward ? start + 1 : end + 1;
+        cursorIndex = forward ? end + 1 : start + 1;
+        preferredX = -1f;
+        layoutDirty = true;
+        fireTextChanged();
+        resetBlink();
+        return true;
+    }
+
+    /**
+     * Where an empty pair that Backspace is about to cut the opening character of ends, or -1 if it isn't one: the closing
+     * one right after, and for a "(" a ";" after that if it is the last thing on the line, so a call that was only just opened
+     * goes whole.
+     */
+    private int emptyPairEnd(int open) {
+        if (!options.isAutoCloseBrackets() || cursorIndex >= text.length()) return -1;
+        char opener = text.charAt(open), closer = text.charAt(cursorIndex);
+        boolean pair = opener == '(' && closer == ')' || opener == '[' && closer == ']' || opener == '{' && closer == '}';
+        if (!pair) {
+            pair = (opener == '"' || opener == '\'') && closer == opener && lexAt(open, null) == Lex.CODE;
+        }
+        if (!pair) return -1;
+        int end = cursorIndex + 1;
+        if (opener == '(' && end < text.length() && text.charAt(end) == ';' && (end + 1 >= text.length() || text.charAt(end + 1) == '\n')) end++;
+        return end;
+    }
+
+    /** A closing brace typed on a line that so far is only spaces takes one level of indentation off the line. */
+    private void dedentBeforeBrace() {
+        int lineStart = lineStartAt(cursorIndex);
+        int size = options.getIndentSize() > 0 ? options.getIndentSize() : 4;
+        int spaces = cursorIndex - lineStart;
+        if (spaces <= 0) return;
+        for (int i = lineStart; i < cursorIndex; i++) if (text.charAt(i) != ' ') return;
+        int remove = Math.min(size, spaces);
+        recordEdit(EditKind.OTHER);
+        text.delete(cursorIndex - remove, cursorIndex);
+        cursorIndex -= remove;
+        layoutDirty = true;
+    }
+
+    // --- Line numbers and positions --------------------------------------------------------------
+
+    /** Whether a column of line numbers is drawn down the left. */
+    public boolean isLineNumbers() {
+        return lineNumbers;
+    }
+
+    /** Draws a column of line numbers down the left, one for each line of the text, as a code editor has. */
+    public void setLineNumbers(boolean lineNumbers) {
+        this.lineNumbers = lineNumbers;
+        layoutDirty = true;
+    }
+
+    /** The color of the line numbers. A grey by default. */
+    public void setLineNumberColor(Color color) {
+        this.lineNumberColor = color == null ? new Color(0.55f, 0.55f, 0.55f, 1f) : color;
+    }
+
+    /**
+     * Washes whole lines in a color, such as the lines a compiler found fault with. The keys are line numbers from 1,
+     * counting lines of the text, not of the wrapped rows they are drawn in. Pass an empty map for none.
+     */
+    public void setLineMarks(Map<Integer, Color> marks) {
+        this.lineMarks = marks == null ? Map.of() : Map.copyOf(marks);
+    }
+
+    /**
+     * Washes stretches of the text in a color, behind the text, such as every match of a search. Each range is
+     * {@code {start, end}}, as indexes into the text with the end not included. They are drawn under the selection, may touch
+     * but are expected not to overlap, and are not moved when the text is edited, so set them again after an edit. Pass an
+     * empty list for none.
+     */
+    public void setHighlights(java.util.List<int[]> ranges, Color color) {
+        java.util.List<int[]> sorted = ranges == null ? java.util.List.of() : ranges.stream().filter(r -> r[1] > r[0]).sorted(java.util.Comparator.comparingInt(r -> r[0])).toList();
+        highlightStarts = new int[sorted.size()];
+        highlightEnds = new int[sorted.size()];
+        for (int i = 0; i < sorted.size(); i++) {
+            highlightStarts[i] = sorted.get(i)[0];
+            highlightEnds[i] = sorted.get(i)[1];
+        }
+        highlightColor = color == null ? Color.TRANSPARENT : color;
+    }
+
+    /** How many stretches of the text are highlighted. */
+    public int getHighlightCount() {
+        return highlightStarts.length;
+    }
+
+    /** Draws the highlights that fall in {@code line}, with {@code content} the text. */
+    private void drawHighlights(Renderer renderer, org.jetbrains.skia.Font font, String content, Line line, float innerX, float drawY, float lineHeight) {
+        if (highlightStarts.length == 0 || highlightColor.getA() <= 0f) return;
+        // the first range that ends after the line starts, as the starts are in order and none overlap
+        int low = 0, high = highlightEnds.length;
+        while (low < high) {
+            int mid = (low + high) >>> 1;
+            if (highlightEnds[mid] <= line.start) low = mid + 1;
+            else high = mid;
+        }
+        for (int i = low; i < highlightStarts.length && highlightStarts[i] < line.end; i++) {
+            int from = Math.max(highlightStarts[i], line.start), to = Math.min(highlightEnds[i], Math.min(line.end, content.length()));
+            if (to <= from) continue;
+            float x = font.measureTextWidth(content.substring(line.start, from));
+            float width = font.measureTextWidth(content.substring(line.start, to)) - x;
+            renderer.drawQuad(innerX + x, drawY, width, lineHeight, highlightColor, 0f);
+        }
+    }
+
+    /** How many lines the text has: one more than it has line breaks, so an empty text has one. */
+    public int getLineCount() {
+        int count = 1;
+        for (int i = 0; i < text.length(); i++) if (text.charAt(i) == '\n') count++;
+        return count;
+    }
+
+    /** The line the caret is on, from 1. */
+    public int getCursorLine() {
+        int line = 1;
+        int end = Math.max(0, Math.min(cursorIndex, text.length()));
+        for (int i = 0; i < end; i++) if (text.charAt(i) == '\n') line++;
+        return line;
+    }
+
+    /** How many characters the caret is from the start of its line, plus 1. */
+    public int getCursorColumn() {
+        int index = Math.max(0, Math.min(cursorIndex, text.length()));
+        return index - lineStartAt(index) + 1;
+    }
+
+    /**
+     * Puts the caret at the start of line {@code line} (from 1, clamped to the text) with nothing selected, and scrolls
+     * to show it in the middle of the box if it wasn't already in view.
+     */
+    public void goToLine(int line) {
+        history.seal();
+        int target = Math.max(1, Math.min(line, getLineCount()));
+        int index = 0;
+        for (int seen = 1; seen < target; index++) if (text.charAt(index) == '\n') seen++;
+        cursorIndex = index;
+        clearSelection();
+        preferredX = -1f;
+        ensureLayout();
+        float pitch = linePitch();
+        int row = 0;
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).number == target) {
+                row = i;
+                break;
+            }
+        }
+        float innerHeight = Math.max(0f, (float) getHeight() - 2 * paddingY);
+        float top = row * pitch;
+        if (top < scrollOffsetY || top + pitch > scrollOffsetY + innerHeight) {
+            scrollTo(top - (innerHeight - pitch) / 2f);
+        }
+        resetBlink();
+    }
+
+    /** The caret's index into {@link #getText()}, from 0. With a selection it is the edge that moves. */
+    public int getCaretIndex() {
+        return getCursorIndex();
+    }
+
+    /** Puts the caret at {@code index} (clamped to the text) with nothing selected, and scrolls to show it. */
+    public void setCaretIndex(int index) {
+        history.seal();
+        cursorIndex = Math.max(0, Math.min(index, text.length()));
+        clearSelection();
+        preferredX = -1f;
+        resetBlink();
+    }
+
+    /**
+     * Selects {@code [start, end)} of the text (both clamped to it), with the caret at {@code end}, and scrolls to show the
+     * caret. An empty range is only the caret.
+     */
+    public void setSelection(int start, int end) {
+        history.seal();
+        int from = Math.max(0, Math.min(start, text.length()));
+        int to = Math.max(0, Math.min(end, text.length()));
+        cursorIndex = to;
+        selectionAnchor = from == to ? -1 : from;
+        preferredX = -1f;
+        resetBlink();
+    }
+
+    /**
+     * Replaces {@code [start, end)} of the text with {@code replacement}, as if it were selected and typed over, with the
+     * caret after it. It is one step to undo and fires the text-changed callback. Nothing happens in a read-only box.
+     */
+    public void replaceText(int start, int end, String replacement) {
+        replaceRange(start, end, replacement);
+        resetBlink();
+    }
+
+    /** The line of the text, from 1, that is under the window point (x, y), for a click on it. */
+    public int getLineAt(double windowX, double windowY) {
+        int index = indexForPoint(windowX, windowY);
+        int line = 1;
+        for (int i = 0; i < index && i < text.length(); i++) if (text.charAt(i) == '\n') line++;
+        return line;
+    }
+
+    /**
+     * The index of the character that is under the window point (x, y), or -1 when there is none: the point is in the line
+     * numbers, past the end of a line or of the text, or between the lines. For what a resting pointer is over, as against
+     * the caret gap that a click is nearest to.
+     */
+    public int getCharAt(double windowX, double windowY) {
+        ensureLayout();
+        float pitch = linePitch();
+        float localY = (float) (windowY - getAbsoluteY() - paddingY + scrollOffsetY);
+        if (pitch <= 0 || localY < 0) return -1;
+        int lineIndex = (int) Math.floor(localY / pitch);
+        if (lineIndex >= lines.size() || localY - lineIndex * pitch >= pitch - lineSpacing) return -1;
+        float localX = (float) (windowX - getAbsoluteX() - paddingX - gutter + scrollOffsetX);
+        if (localX < 0) return -1;
+        return charIndexInLine(lines.get(lineIndex), localX, getOrBuildFont());
+    }
+
+    /** Where the caret is drawn, in the window: its x, the y of its top, and its height. For something to show beside it. */
+    public double[] getCaretBounds() {
+        return getBoundsAt(getCursorIndex());
+    }
+
+    /**
+     * Where the gap before the character at {@code index} (clamped to the text) is drawn, in the window: its x, the y of the top
+     * of its line, and the line's height. As {@link #getCaretBounds()}, for any place in the text.
+     */
+    public double[] getBoundsAt(int index) {
+        ensureLayout();
+        int clamped = Math.max(0, Math.min(index, text.length()));
+        Line caretLine = lineForIndex(clamped);
+        float pitch = linePitch();
+        org.jetbrains.skia.Font font = getOrBuildFont();
+        double x = getAbsoluteX() + paddingX + gutter - scrollOffsetX + font.measureTextWidth(text.substring(caretLine.start, clamped));
+        double y = getAbsoluteY() + paddingY + lines.indexOf(caretLine) * pitch - scrollOffsetY;
+        return new double[]{x, y, pitch - lineSpacing};
+    }
+
+    /** Works out how wide the line numbers need to be for the number of lines the text has. */
+    private void measureGutter(String content, org.jetbrains.skia.Font font) {
+        if (!lineNumbers) {
+            gutter = 0f;
+            gutterNumbers = 0f;
+            return;
+        }
+        int count = 1;
+        for (int i = 0; i < content.length(); i++) if (content.charAt(i) == '\n') count++;
+        int digits = Math.max(2, String.valueOf(count).length());
+        gutterNumbers = font.measureTextWidth("0") * digits;
+        gutter = gutterNumbers + GUTTER_GAP;
+    }
+
+    private void drawLineMarks(Renderer renderer, float pitch, float innerTop) {
+        if (lineMarks.isEmpty()) return;
+        float width = (float) getWidth() - scrollbarLane();
+        for (int li = 0; li < lines.size(); li++) {
+            Color mark = lineMarks.get(lines.get(li).number);
+            if (mark == null) continue;
+            float drawY = innerTop + li * pitch - scrollOffsetY;
+            if (drawY + pitch < getY() || drawY > getY() + getHeight()) continue;
+            renderer.drawQuad((float) getX(), drawY, width, pitch, mark, 0f);
+        }
+    }
+
+    private void drawGutter(Renderer renderer, org.jetbrains.skia.Font font, float pitch, float lineHeight, float innerTop, int currentLine) {
+        if (!lineNumbers) return;
+        float left = (float) getX() + paddingX;
+        for (int li = 0; li < lines.size(); li++) {
+            Line line = lines.get(li);
+            if (!line.first) continue;
+            float drawY = innerTop + li * pitch - scrollOffsetY;
+            if (drawY + lineHeight < getY() || drawY > getY() + getHeight()) continue;
+            String label = Integer.toString(line.number);
+            Paint color = line.number == currentLine && focused ? resolveTextColor(options.getTextColor()) : lineNumberColor;
+            renderer.drawText(label, left + gutterNumbers - font.measureTextWidth(label), drawY, font, color);
+        }
+        float rule = left + gutterNumbers + GUTTER_GAP / 2f - 0.5f;
+        renderer.drawQuad(rule, (float) getY(), 1f, (float) getHeight(), new Color(lineNumberColor.getR(), lineNumberColor.getG(), lineNumberColor.getB(), 0.35f), 0f);
+    }
+
     // --- Scrollbar geometry ----------------------------------------------------------------------
+
+    /**
+     * Width kept free on the right for the scrollbar, so text wraps before it instead of running underneath. Reserved whenever the scrollbar is enabled, not only while it is showing, so the text does not reflow when it appears.
+     */
+    private float scrollbarLane() {
+        return scrollbarVisible ? scrollBarStyle.getThickness() + scrollBarStyle.getMargin() : 0f;
+    }
+
+    /**
+     * How far the text's right edge is from the box's right edge: the scrollbar's lane plus the gap before it.
+     */
+    private float rightInset() {
+        float gap = scrollbarVisible && scrollbarPadding != null ? scrollbarPadding : paddingX;
+        return scrollbarLane() + gap;
+    }
 
     private double trackX() {
         return getX() + getWidth() - scrollBarStyle.getThickness() - scrollBarStyle.getMargin();
@@ -1028,6 +1765,14 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         return trackY() + travel * (scrollOffsetY / maxScroll);
     }
 
+    /** Whether the local point is on the bar along the bottom (the whole strip of it, so it is easy to hit). */
+    private boolean thumbXContains(double px, double py) {
+        if (getMaxScrollX() <= 0) return false;
+        float thickness = scrollBarStyle.getThickness(), margin = scrollBarStyle.getMargin();
+        double top = getHeight() - thickness - margin - 3;
+        return py >= top && px >= paddingX + gutter && px <= paddingX + gutter + textRoom();
+    }
+
     private boolean thumbContains(double px, double py) {
         if (getMaxScrollY() <= 0) return false;
         double x = trackX(), y = thumbY(), w = scrollBarStyle.getThickness(), h = thumbLength();
@@ -1035,31 +1780,87 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     }
 
     /**
-     * Expands the selection to the maximal run of characters around {@code index} that
-     * share the same class (whitespace or not) as the character right at {@code
-     * index}, the same convention {@link TextFieldOverlay#selectWordAt} uses. {@code
-     * Character.isWhitespace('\n')} is true, so this naturally stops at a paragraph
-     * break without needing to special-case it.
+     * A double click at window-space (x, y): the word under the pointer, or the whole line when the pointer is past the end of the line's text (or on an empty one). It is the character under the pointer that counts, not the gap the caret lands in, so the right half of a letter still picks the word it is part of.
+     */
+    private void selectWordAtPoint(double windowX, double windowY) {
+        ensureLayout();
+        float pitch = linePitch();
+        float localY = (float) (windowY - getAbsoluteY() - paddingY + scrollOffsetY);
+        int lineIndex = pitch > 0 ? (int) Math.floor(localY / pitch) : 0;
+        lineIndex = Math.max(0, Math.min(lineIndex, lines.size() - 1));
+        Line line = lines.get(lineIndex);
+        float localX = (float) (windowX - getAbsoluteX() - paddingX - gutter + scrollOffsetX);
+
+        int under = charIndexInLine(line, localX, getOrBuildFont());
+        if (under < 0) {
+            selectLineAt(line.end);
+        } else {
+            selectWordAt(under);
+        }
+    }
+
+    /**
+     * The index of the character whose width on {@code line} covers local x-offset {@code x}, or -1 when {@code x} is past the last one (or the line is empty).
+     */
+    private int charIndexInLine(Line line, float x, org.jetbrains.skia.Font font) {
+        String content = text.toString();
+        if (line.start >= line.end) return -1;
+        if (x < 0) return line.start;
+
+        int i = line.start;
+        while (i < line.end) {
+            int next = i + Character.charCount(content.codePointAt(i));
+            if (x < font.measureTextWidth(content.substring(line.start, next))) return i;
+            i = next;
+        }
+        return -1;
+    }
+
+    /**
+     * Selects the line of the text (up to its newline, not through it) that {@code index} is on, however many rows it wraps over.
+     */
+    private void selectLineAt(int index) {
+        int at = Math.max(0, Math.min(index, text.length()));
+        int start = at;
+        while (start > 0 && text.charAt(start - 1) != '\n') start--;
+        int end = at;
+        while (end < text.length() && text.charAt(end) != '\n') end++;
+        selectionAnchor = start;
+        cursorIndex = end;
+    }
+
+    private static final int WORD = 0, SPACE = 1, SYMBOL = 2, BRACKET = 3, BREAK = 4;
+
+    private static int wordClass(int codePoint) {
+        if (codePoint == '\n' || codePoint == '\r') return BREAK;
+        if (Character.isLetterOrDigit(codePoint) || codePoint == '_' || codePoint == '$') return WORD;
+        if (Character.isWhitespace(codePoint)) return SPACE;
+        return "()[]{}<>\"'`".indexOf(codePoint) >= 0 ? BRACKET : SYMBOL;
+    }
+
+    /**
+     * Selects the word around the character at {@code index}: a run of letters, digits and underscores, a run of spaces, or a run of other symbols such as {@code ->}. A bracket or a quote is a word of its own, so a double click on {@code foo(bar)} takes {@code foo} or {@code bar} and not the lot. A line break is never part of the run.
      */
     private void selectWordAt(int index) {
         String content = text.toString();
         if (content.isEmpty()) return;
 
         int pos = Math.max(0, Math.min(index, content.length() - 1));
-        boolean whitespace = Character.isWhitespace(content.codePointAt(pos));
+        int kind = wordClass(content.codePointAt(pos));
 
         int start = pos;
-        while (start > 0) {
-            int prev = Character.offsetByCodePoints(content, start, -1);
-            if (Character.isWhitespace(content.codePointAt(prev)) != whitespace) break;
-            start = prev;
-        }
-
-        int end = pos;
-        while (end < content.length()) {
-            int cp = content.codePointAt(end);
-            if (Character.isWhitespace(cp) != whitespace) break;
-            end += Character.charCount(cp);
+        int end = pos + Character.charCount(content.codePointAt(pos));
+        if (kind != BRACKET && kind != BREAK) {
+            while (start > 0) {
+                int prev = Character.offsetByCodePoints(content, start, -1);
+                if (wordClass(content.codePointAt(prev)) != kind) break;
+                start = prev;
+            }
+            while (end < content.length()) {
+                int cp = content.codePointAt(end);
+                if (wordClass(cp) != kind) break;
+                end += Character.charCount(cp);
+            }
         }
 
         selectionAnchor = start;
@@ -1106,6 +1907,15 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         if (cursorLocalY + lineHeight - scrollOffsetY > innerHeight) {
             scrollOffsetY = cursorLocalY + lineHeight - innerHeight;
         }
+        if (wordWrap) {
+            scrollOffsetX = 0f;
+        } else {
+            float room = textRoom();
+            float caretX = getOrBuildFont().measureTextWidth(content.substring(cursorLine.start, clampedCursor));
+            if (caretX < scrollOffsetX) scrollOffsetX = caretX;
+            if (caretX + CARET_ROOM > scrollOffsetX + room) scrollOffsetX = caretX + CARET_ROOM - room;
+            scrollOffsetX = (float) Math.max(0, Math.min(scrollOffsetX, getMaxScrollX()));
+        }
     }
 
     // --- Line layout -----------------------------------------------------------------------------
@@ -1116,6 +1926,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     private static final class Line {
         final int start, end;
         final boolean hasNewline;
+        /** Which line of the text this belongs to, from 1, and whether it is the first of the visual lines that make it up. */
+        int number;
+        boolean first;
 
         Line(int start, int end, boolean hasNewline) {
             this.start = start;
@@ -1132,12 +1945,13 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
      * any layout-dependent read.
      */
     private void ensureLayout() {
-        if (!layoutDirty && getWidth() == lastLayoutWidth) return;
+        if (!layoutDirty && getWidth() == lastLayoutWidth && rightInset() == lastLayoutLane) return;
 
         lines.clear();
         String content = text.toString();
         org.jetbrains.skia.Font font = getOrBuildFont();
-        float innerWidth = wordWrap ? Math.max(1f, (float) getWidth() - 2 * paddingX) : Float.MAX_VALUE;
+        measureGutter(content, font);
+        float innerWidth = wordWrap ? Math.max(1f, (float) getWidth() - paddingX - rightInset() - gutter) : Float.MAX_VALUE;
 
         int paragraphStart = 0;
         int length = content.length();
@@ -1150,9 +1964,25 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         if (lines.isEmpty()) {
             lines.add(new Line(0, 0, false));
         }
+        widestLine = 0f;
+        if (!wordWrap) {
+            for (Line line : lines) {
+                if (line.end > line.start) widestLine = Math.max(widestLine, font.measureTextWidth(content.substring(line.start, line.end)));
+            }
+        }
+        int number = 0;
+        boolean first = true;
+        for (Line line : lines) {
+            if (first) number++;
+            line.number = number;
+            line.first = first;
+            first = line.hasNewline;
+        }
 
         lastLayoutWidth = getWidth();
+        lastLayoutLane = rightInset();
         layoutDirty = false;
+        scrollOffsetX = wordWrap ? 0f : (float) Math.max(0, Math.min(scrollOffsetX, Math.max(0, widestLine + CARET_ROOM - textRoom())));
     }
 
     /**
@@ -1268,7 +2098,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         int lineIndex = pitch > 0 ? (int) Math.floor(localY / pitch) : 0;
         lineIndex = Math.max(0, Math.min(lineIndex, lines.size() - 1));
 
-        float localX = (float) (windowX - getAbsoluteX() - paddingX);
+        float localX = (float) (windowX - getAbsoluteX() - paddingX - gutter + scrollOffsetX);
         return indexForXInLine(lines.get(lineIndex), localX, getOrBuildFont());
     }
 
@@ -1309,11 +2139,16 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         Line cursorLine = lineForIndex(clampedCursor);
         int cursorLineIndex = lines.indexOf(cursorLine);
 
-        float innerX = (float) getX() + paddingX;
+        float innerX = (float) getX() + paddingX + gutter - scrollOffsetX;
         float innerTop = (float) getY() + paddingY;
-        float innerWidth = Math.max(0f, (float) getWidth() - 2 * paddingX);
+        float innerWidth = textRoom();
 
         renderer.pushClip((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight());
+        drawLineMarks(renderer, pitch, innerTop);
+        boolean scrolledSideways = scrollOffsetX > 0f;
+        if (scrolledSideways) {
+            renderer.pushClip((float) getX() + paddingX + gutter, (float) getY(), innerWidth, (float) getHeight());
+        }
 
         if (content.isEmpty()) {
             String placeholder = options.getPlaceholder();
@@ -1330,12 +2165,14 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
                 float drawY = innerTop + li * pitch - scrollOffsetY;
                 if (drawY + lineHeight < getY() || drawY > getY() + getHeight()) continue; // off-screen, skip
 
+                drawHighlights(renderer, font, content, line, innerX, drawY, lineHeight);
+
                 if (selected && selStart < line.end && selEnd > line.start) {
                     int segStart = Math.max(selStart, line.start);
                     int segEnd = Math.min(selEnd, line.end);
                     float segX = font.measureTextWidth(content.substring(line.start, segStart));
                     float segWidth = font.measureTextWidth(content.substring(line.start, segEnd)) - segX;
-                    Color highlightColor = options.getSelectionColor();
+                    Paint highlightColor = options.getSelectionColor();
                     if (highlightColor != null) {
                         renderer.drawQuad(innerX + segX, drawY, segWidth, lineHeight, highlightColor, 0f);
                     }
@@ -1347,6 +2184,12 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             }
         }
 
+        if (scrolledSideways) renderer.popClip();
+        drawGutter(renderer, font, pitch, lineHeight, innerTop, cursorLine.number);
+        if (scrolledSideways) {
+            renderer.pushClip((float) getX() + paddingX + gutter, (float) getY(), innerWidth, (float) getHeight());
+        }
+
         // Drawn unconditionally rather than only in the non-empty branch above: an
         // empty, focused box still needs to show where typing will land, the same as a
         // fresh TextFieldOverlay does. hasSelection() is always false on empty text, so
@@ -1356,20 +2199,39 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             float cursorDrawY = innerTop + cursorLineIndex * pitch - scrollOffsetY;
             drawCaret(renderer, font, content, clampedCursor, innerX, cursorDrawY, lineHeight, cursorX);
         }
+        if (scrolledSideways) renderer.popClip();
 
         renderer.popClip();
 
         if (scrollbarVisible && getMaxScrollY() > 0) {
             drawScrollbar(renderer);
         }
+        if (scrollbarVisible && getMaxScrollX() > 0) {
+            drawHorizontalScrollbar(renderer);
+        }
+    }
+
+    /** The thin bar along the bottom that shows how far the text is scrolled sideways. */
+    private void drawHorizontalScrollbar(Renderer renderer) {
+        float thickness = scrollBarStyle.getThickness(), margin = scrollBarStyle.getMargin();
+        float left = (float) getX() + paddingX + gutter, room = textRoom();
+        float y = (float) (getY() + getHeight()) - thickness - margin;
+        Paint track = scrollBarStyle.getTrackColor();
+        if (track != null) renderer.drawQuad(left, y, room, thickness, track, scrollBarStyle.getCornerRadius());
+        float span = widestLine + CARET_ROOM;
+        float thumb = Math.max(scrollBarStyle.getMinThumbLength(), Math.min(room, room * room / Math.max(1f, span)));
+        double max = getMaxScrollX();
+        float x = left + (float) (max > 0 ? (room - thumb) * (scrollOffsetX / max) : 0);
+        Paint color = draggingThumbX ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
+        if (color != null) renderer.drawQuad(x, y, thumb, thickness, color, scrollBarStyle.getCornerRadius());
     }
 
     private void drawScrollbar(Renderer renderer) {
-        Color track = scrollBarStyle.getTrackColor();
+        Paint track = scrollBarStyle.getTrackColor();
         if (track != null) {
             renderer.drawQuad((float) trackX(), (float) trackY(), scrollBarStyle.getThickness(), (float) trackHeight(), track, scrollBarStyle.getCornerRadius());
         }
-        Color thumb = draggingThumb ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
+        Paint thumb = draggingThumb ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
         if (thumb != null) {
             renderer.drawQuad((float) trackX(), (float) thumbY(), scrollBarStyle.getThickness(), (float) thumbLength(), thumb, scrollBarStyle.getCornerRadius());
         }
@@ -1393,7 +2255,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
      * Draws the caret per {@link TextEditingOptions#getCaretShape()} at the cursor's current line and position, using the same shape logic as {@link TextFieldOverlay#drawCaret}.
      */
     private void drawCaret(Renderer renderer, org.jetbrains.skia.Font font, String content, int clampedCursor, float innerX, float lineY, float lineHeight, float cursorX) {
-        Color caretColor = options.getCaretColor();
+        Paint caretColor = options.getCaretColor();
         if (caretColor == null) return;
 
         float x = innerX + cursorX;
@@ -1429,6 +2291,8 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     @Override
     public void update(float delta) {
         super.update(delta);
+        options.advance(delta);
+        scrollBarStyle.advance(delta);
         if (options.getTextColor() instanceof AnimatedPaint animated) {
             animated.advance(delta);
         }

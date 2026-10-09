@@ -40,6 +40,9 @@ import java.util.function.Supplier;
  * way out leave the stack, the window and the input at once too, but are still drawn until the transition ends, and
  * only then get {@link Scene#onExit}.
  * <p>
+ * A transition made with {@link SceneTransition#lock()} also freezes the scenes and blocks input until it ends, and
+ * one made {@link SceneTransition#skippable()} ends early on a key press or click; see {@link #isInputLocked()}.
+ * <p>
  * Any other change to the stack while a transition plays, with or without a transition of its own, first finishes
  * the one that is playing, as {@link #finishTransition()} does.
  */
@@ -217,6 +220,27 @@ public class SceneManager {
      */
     public boolean isTransitioning() {
         return active != null;
+    }
+
+    /**
+     * True while a {@link SceneTransition#lock locking} transition is playing: the scenes are frozen and the window
+     * ignores presses and the wheel. {@link #finishTransition()} unlocks it.
+     */
+    public boolean isInputLocked() {
+        return active != null && active.transition.isLocking();
+    }
+
+    /**
+     * Render thread, called by the input processor for a key press or repeat, a mouse button press, a character or a
+     * wheel turn. Returns true if a locking transition is playing and so the event must go no further. If it is
+     * {@link SceneTransition#skippable() skippable} and {@code skip} is true (a key or button press, not a wheel turn),
+     * the transition ends first.
+     */
+    public boolean swallowInput(boolean skip) {
+        ActiveTransition current = active;
+        if (current == null || !current.transition.isLocking()) return false;
+        if (skip && current.transition.isSkippable()) finishTransition();
+        return true;
     }
 
     /**
@@ -432,6 +456,7 @@ public class SceneManager {
      * Render thread, called by the engine for each fixed step.
      */
     public void fixedUpdate() {
+        if (window.isInputLocked()) return;
         float step = GameTime.getFixedDelta();
         for (Scene scene : List.copyOf(stack)) {
             if (scene.running && scene.manager == this) scene.fixedUpdate(step);
@@ -446,6 +471,10 @@ public class SceneManager {
     public void update(float delta) {
         float realDelta = GameTime.getRealDelta();
         advanceTransition(realDelta);
+        if (window.isInputLocked()) { // a locking scene transition, or a locking Element transition
+            followWindowSize(); // frozen, but a resize still has to reach the scenes
+            return;
+        }
         for (Scene scene : stack) scene.age += realDelta;
         followWindowSize();
         for (Scene scene : List.copyOf(stack)) {

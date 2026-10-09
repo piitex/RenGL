@@ -50,7 +50,7 @@ picker.setAlphaEnabled(false); // hides the opacity bar and rejects 8-digit hex;
 picker.setShowHex(false); // the swatch fills the closed box instead of sitting next to the text. Default true
 picker.setPresets(Color.RED, Color.GREEN, Color.BLUE); // eight per row, more wrap; pass none to hide the row
 picker.setFontSize(14f);
-picker.setTextColor(Color.WHITE); // pins the hex text color
+picker.setTextColor(Color.WHITE); // pins the hex text color; a gradient works too
 ```
 
 The default presets are eight common colors. `setAlphaEnabled` and `setPresets` close an open panel so it can be rebuilt.

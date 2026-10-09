@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * A 3D scene to show in a {@link Viewport3D}: a tree of {@link Node3D}s, a {@link Camera}, {@link Light}s and a
@@ -84,6 +85,8 @@ public class Scene3D implements Viewport3D.Content {
     private final List<AnimationPlayer> animators = new ArrayList<>();
 
     private final Map<GpuDevice, Shared> renderers = new IdentityHashMap<>();
+    private final List<Preload> preloads = new CopyOnWriteArrayList<>();
+    private float preloadBudget = 4f;
 
     private static final class Shared {
         final SceneRenderer renderer;
@@ -379,6 +382,76 @@ public class Scene3D implements Viewport3D.Content {
         return this;
     }
 
+    /**
+     * Uploads the node's meshes and textures, and its descendants', to the GPU over the next frames instead of all in the
+     * frame that first draws them. Add the model hidden ({@link Node3D#setVisible}) or leave it out of the scene, call
+     * this, and show it when {@link Preload#isDone} or {@link Preload#onDone} says it is ready. Hidden nodes are
+     * included. Call it on the render thread; for a model loaded on a worker, from the result callback.
+     */
+    public Preload preload(Node3D root) {
+        Map<Object, Boolean> seen = new IdentityHashMap<>();
+        List<Object> items = new ArrayList<>();
+        root.traverse(node -> {
+            if (node.getMesh() != null && seen.put(node.getMesh(), true) == null) items.add(node.getMesh());
+            Material m = node.getMaterial();
+            if (m == null) return;
+            for (TextureData t : new TextureData[]{m.getTexture(), m.getNormalTexture(), m.getMetallicRoughnessTexture(),
+                    m.getOcclusionTexture(), m.getEmissiveTexture()}) {
+                if (t != null && seen.put(t, true) == null) items.add(t);
+            }
+        });
+        return queue(items);
+    }
+
+    /**
+     * Uploads a skybox's pictures over the next frames, like {@link #preload(Node3D)}. A gradient sky has none.
+     */
+    public Preload preload(Skybox skybox) {
+        return queue(skybox == null || skybox.kind == Skybox.Kind.GRADIENT ? List.of() : List.of(skybox));
+    }
+
+    private Preload queue(List<Object> items) {
+        Preload preload = new Preload(items);
+        if (!items.isEmpty()) preloads.add(preload);
+        return preload;
+    }
+
+    /**
+     * The most time in milliseconds a frame spends on {@link #preload uploads}, 4 by default. A frame always does at
+     * least one item, so one very large mesh or texture still takes its whole time in one frame.
+     */
+    public float getPreloadBudget() {
+        return preloadBudget;
+    }
+
+    public Scene3D setPreloadBudget(float milliseconds) {
+        this.preloadBudget = Math.max(0f, milliseconds);
+        return this;
+    }
+
+    @Override
+    public boolean needsFrames() {
+        return !preloads.isEmpty();
+    }
+
+    private void runPreloads(GpuDevice device, Shared shared) {
+        long deadline = System.nanoTime() + (long) (preloadBudget * 1_000_000f);
+        boolean any = false;
+        for (Preload preload : preloads) {
+            int at = preload.next(device);
+            while (at < preload.getTotal() && (!any || System.nanoTime() < deadline)) {
+                shared.renderer.preload(preload.item(at), getEnvironmentLighting() > 0f);
+                at++;
+                any = true;
+            }
+            preload.advance(device, at);
+            if (at < preload.getTotal()) break; // the budget is spent; later ones wait their turn
+        }
+        for (Preload preload : preloads) {
+            if (preload.complete(renderers.keySet())) preloads.remove(preload);
+        }
+    }
+
     @Override
     public void init(GpuDevice device) {
         Shared shared = renderers.get(device);
@@ -396,6 +469,7 @@ public class Scene3D implements Viewport3D.Content {
         // Several viewports can show the scene in one frame; only the first runs the update.
         long frame = device.frameNumber();
         if (shared.updatedFrame != frame) {
+            if (!preloads.isEmpty()) runPreloads(device, shared);
             for (AnimationPlayer player : new ArrayList<>(animators)) player.update(delta);
             if (physics != null) physics.update(delta);
             if (updateHandler != null) updateHandler.update(this, delta);

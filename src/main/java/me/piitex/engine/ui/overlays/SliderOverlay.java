@@ -63,15 +63,15 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
 
     private boolean dragging;
 
-    private final Overridable<Color> trackColor = new Overridable<>(Color.LIGHT_GRAY);
-    private final Overridable<Color> fillColor = new Overridable<>(Color.GRAY);
-    private final Overridable<Color> thumbColor = new Overridable<>(Color.GRAY);
-    private final Overridable<Color> tickColor = new Overridable<>(Color.LIGHT_GRAY);
+    private final Overridable<Paint> trackColor = new Overridable<>(Color.LIGHT_GRAY);
+    private final Overridable<Paint> fillColor = new Overridable<>(Color.GRAY);
+    private final Overridable<Paint> thumbColor = new Overridable<>(Color.GRAY);
+    private final Overridable<Paint> tickColor = new Overridable<>(Color.LIGHT_GRAY);
     private final Overridable<Paint> labelColor = new Overridable<>(Color.BLACK);
     /**
      * Overrides {@link #getThumbColor()} while {@link #isDragging()}. Null, the default, leaves the thumb the same color throughout the drag.
      */
-    private Color thumbActiveColor;
+    private Paint thumbActiveColor;
 
     /**
      * Formats {@link #getValue()} into the text drawn above the thumb. Null, the default, draws no label at all. See {@link #setLabelFormatter}.
@@ -311,58 +311,58 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
 
     // --- Colors ----------------------------------------------------------------------------------
 
-    public Color getTrackColor() {
+    public Paint getTrackColor() {
         return trackColor.get();
     }
 
     /**
      * Pins the track color against every future theme switch. See {@link Overridable}.
      */
-    public void setTrackColor(Color trackColor) {
+    public void setTrackColor(Paint trackColor) {
         this.trackColor.set(trackColor);
     }
 
-    public Color getFillColor() {
+    public Paint getFillColor() {
         return fillColor.get();
     }
 
     /**
      * Pins the filled-progress color against every future theme switch. See {@link Overridable}.
      */
-    public void setFillColor(Color fillColor) {
+    public void setFillColor(Paint fillColor) {
         this.fillColor.set(fillColor);
     }
 
-    public Color getThumbColor() {
+    public Paint getThumbColor() {
         return thumbColor.get();
     }
 
     /**
      * Pins the thumb color against every future theme switch. See {@link Overridable}.
      */
-    public void setThumbColor(Color thumbColor) {
+    public void setThumbColor(Paint thumbColor) {
         this.thumbColor.set(thumbColor);
     }
 
     /**
      * See {@link #thumbActiveColor}.
      */
-    public Color getThumbActiveColor() {
+    public Paint getThumbActiveColor() {
         return thumbActiveColor;
     }
 
-    public void setThumbActiveColor(Color thumbActiveColor) {
+    public void setThumbActiveColor(Paint thumbActiveColor) {
         this.thumbActiveColor = thumbActiveColor;
     }
 
-    public Color getTickColor() {
+    public Paint getTickColor() {
         return tickColor.get();
     }
 
     /**
      * Pins the tick color against every future theme switch. See {@link Overridable}.
      */
-    public void setTickColor(Color tickColor) {
+    public void setTickColor(Paint tickColor) {
         this.tickColor.set(tickColor);
     }
 
@@ -591,7 +591,7 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         drawTicks(renderer, trackY);
         drawTickLabels(renderer, trackY);
 
-        Color thumbPaint = dragging && thumbActiveColor != null ? thumbActiveColor : thumbColor.get();
+        Paint thumbPaint = dragging && thumbActiveColor != null ? thumbActiveColor : thumbColor.get();
         renderer.drawCircle(thumbX, trackY, thumbRadius, thumbPaint);
 
         if (labelFormatter != null) {
@@ -681,6 +681,11 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
     @Override
     public void update(float delta) {
         super.update(delta);
+        AnimatedPaint.advanceIfAnimated(trackColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(fillColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(thumbColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(thumbActiveColor, delta);
+        AnimatedPaint.advanceIfAnimated(tickColor.get(), delta);
         if (labelColor.get() instanceof AnimatedPaint animated) {
             animated.advance(delta);
         }

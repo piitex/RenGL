@@ -1,5 +1,6 @@
 package me.piitex.engine.ui;
 
+import me.piitex.engine.utils.flags.GeneratedFragments;
 import me.piitex.engine.Window;
 
 /**
@@ -9,6 +10,7 @@ import me.piitex.engine.Window;
  * including empty space, clears focus), and forwards every {@code KEY}/{@code CHAR}
  * event to {@link Window#getFocusedElement()} for as long as it holds focus.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public interface Focusable {
 
     /**
@@ -38,4 +40,12 @@ public interface Focusable {
      * {@code mods}, a GLFW modifier bitmask of GLFW_MOD_SHIFT, CONTROL, ALT, and SUPER.
      */
     void onKeyPressed(int key, int action, int mods);
+
+    /**
+     * Whether the Tab key is this Element's to use, as a code editor uses it to indent, instead of moving focus to the
+     * next Element. False by default, which is what every other Focusable wants.
+     */
+    default boolean wantsTab() {
+        return false;
+    }
 }

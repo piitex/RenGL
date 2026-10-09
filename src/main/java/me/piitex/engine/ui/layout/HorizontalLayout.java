@@ -55,6 +55,7 @@ public class HorizontalLayout extends Layout {
 
     @Override
     protected void layoutChildren() {
+        shareSpace(true);
         double contentWidth = getContentWidth();
         double innerWidth = getWidth() - 2 * getPadding();
         double cursorX = getPadding() + Math.max(0, innerWidth - contentWidth) * getAlignment().horizontal();
@@ -66,5 +67,10 @@ public class HorizontalLayout extends Layout {
             child.setY(top + (innerHeight - child.getHeight()) * getAlignment().vertical());
             cursorX += child.getWidth() + getSpacing();
         }
+    }
+
+    @Override
+    protected void scaleSpacing(double sx, double sy) {
+        setSpacing((float) (getSpacing() * sx));
     }
 }

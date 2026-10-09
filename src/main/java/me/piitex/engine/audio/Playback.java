@@ -13,6 +13,7 @@ import java.util.Arrays;
 
 import static org.lwjgl.openal.AL10.*;
 import static org.lwjgl.openal.AL11.AL_SAMPLE_OFFSET;
+import static org.lwjgl.openal.AL11.AL_SEC_OFFSET;
 
 /**
  * One playing instance of a {@link Sound} or {@link Music}. You get one back from every {@code play} call and can
@@ -45,8 +46,11 @@ public final class Playback {
     private long loopStart, loopEnd; // stream loop region in sample frames; loopEnd 0 means the end of the file
     private long framePos;           // sample frame the stream has been read up to
     private final ArrayDeque<Integer> queuedFrames = new ArrayDeque<>(); // frames in each queued buffer, oldest first
+    private final ArrayDeque<Long> queuedStarts = new ArrayDeque<>(); // the file frame each queued buffer begins at
     private long processedFrames;    // frames in buffers the device has finished with
     private int lastFillFrames;
+    private long lastFillStart;
+    private int buffer;              // the OpenAL buffer of a loaded Sound
 
     private float volume = 1f, pitch = 1f, pan = 0f;
     private boolean positional;
@@ -123,6 +127,7 @@ public final class Playback {
             alSourcef(p.source, AL_PITCH, p.pitch);
             p.applyGain();
             if (stream == null) {
+                p.buffer = spec.buffer();
                 alSourcei(p.source, AL_BUFFER, spec.buffer());
                 alSourcei(p.source, AL_LOOPING, spec.loop() ? AL_TRUE : AL_FALSE);
             } else {
@@ -131,11 +136,7 @@ public final class Playback {
                 p.streamBuffers = new int[STREAM_BUFFERS];
                 for (int i = 0; i < STREAM_BUFFERS; i++) {
                     p.streamBuffers[i] = alGenBuffers();
-                    if (p.fill(p.streamBuffers[i])) {
-                        alSourceQueueBuffers(p.source, p.streamBuffers[i]);
-                        p.queuedFrames.add(p.lastFillFrames);
-                        p.queued++;
-                    }
+                    if (p.fill(p.streamBuffers[i])) p.queueFilled(p.streamBuffers[i]);
                 }
             }
             alSourcePlay(p.source);
@@ -301,6 +302,91 @@ public final class Playback {
     }
 
     /**
+     * Where this playback is in its sound, in seconds from the start of the file, ignoring {@link #pitch}. A looping
+     * playback reports its place in the current pass. It stops while paused, and is 0 once finished.
+     */
+    public double getPosition() {
+        synchronized (Audio.LOCK) {
+            if (finished) return 0;
+            if (stream == null) return Math.max(0, alGetSourcef(source, AL_SEC_OFFSET));
+            int offset = alGetSourcei(source, AL_SAMPLE_OFFSET);
+            if (alGetSourcei(source, AL_SOURCE_STATE) == AL_STOPPED) offset = Integer.MAX_VALUE;
+            long frame = framePos;
+            long passed = 0;
+            var frames = queuedFrames.iterator();
+            var starts = queuedStarts.iterator();
+            while (frames.hasNext() && starts.hasNext()) {
+                int length = frames.next();
+                long start = starts.next();
+                frame = start + Math.min(length, Math.max(0, offset - passed));
+                if (offset < passed + length) break;
+                passed += length;
+            }
+            if (looping && loopEnd > 0 && frame >= loopEnd) frame = loopStart + (frame - loopEnd);
+            return frame / (double) stream.sampleRate();
+        }
+    }
+
+    /**
+     * The length of the sound in seconds, or -1 if the file does not say (some streamed MP3s). For a looping playback this
+     * is one pass, not forever.
+     */
+    public double getDuration() {
+        synchronized (Audio.LOCK) {
+            if (stream != null) {
+                long total = stream.totalFrames();
+                return total > 0 ? total / (double) stream.sampleRate() : -1;
+            }
+            if (buffer == 0 || !Audio.isReady()) return -1;
+            int bytes = alGetBufferi(buffer, AL_SIZE);
+            int rate = alGetBufferi(buffer, AL_FREQUENCY);
+            return rate > 0 && channels > 0 ? bytes / (2.0 * channels) / rate : -1;
+        }
+    }
+
+    /**
+     * Jumps to {@code seconds} from the start of the sound, clamped to its length, and carries on from there. A paused
+     * playback stays paused at the new place. Seeking a streamed {@link Music} track flushes what was queued, so a sound
+     * of a sample-exact format (Ogg Vorbis, Opus, FLAC, WAV) lands on the frame; an MP3 lands close to it. A finished
+     * playback ignores it.
+     */
+    public Playback seek(double seconds) {
+        synchronized (Audio.LOCK) {
+            if (finished) return this;
+            double target = Math.max(0, seconds);
+            if (stream == null) {
+                double duration = getDuration();
+                if (duration > 0) target = Math.min(target, Math.max(0, duration - 0.001));
+                alSourcef(source, AL_SEC_OFFSET, (float) target);
+                return this;
+            }
+            long frame = (long) (target * stream.sampleRate());
+            long total = stream.totalFrames();
+            if (total > 0) frame = Math.min(frame, Math.max(0, total - 1));
+
+            alSourceStop(source);
+            for (int left = alGetSourcei(source, AL_BUFFERS_QUEUED); left > 0; left--) alSourceUnqueueBuffers(source);
+            queued = 0;
+            queuedFrames.clear();
+            queuedStarts.clear();
+            processedFrames = 0;
+            streamEnded = false;
+            stream.seek(frame);
+            framePos = frame;
+            for (int b : streamBuffers) {
+                if (!streamEnded && fill(b)) queueFilled(b);
+            }
+            if (queued == 0) {
+                finish();
+                return this;
+            }
+            alSourcePlay(source);
+            if (paused) alSourcePause(source);
+        }
+        return this;
+    }
+
+    /**
      * Pauses, keeping the position. Does nothing if already paused or finished.
      */
     public Playback pause() {
@@ -461,6 +547,16 @@ public final class Playback {
     }
 
     /**
+     * Queues a buffer {@link #fill} has just filled.
+     */
+    private void queueFilled(int buffer) {
+        alSourceQueueBuffers(source, buffer);
+        queuedFrames.add(lastFillFrames);
+        queuedStarts.add(lastFillStart);
+        queued++;
+    }
+
+    /**
      * Refills one stream buffer. Returns false, and marks the stream ended, if there was nothing left to read.
      */
     private boolean fill(int buffer) {
@@ -471,6 +567,7 @@ public final class Playback {
                 stream.seek(loopStart);
                 framePos = loopStart;
             }
+            if (n == 0) lastFillStart = framePos;
             int want = scratch.length - n;
             if (looping && loopEnd > 0) want = (int) Math.min(want, (loopEnd - framePos) * stream.channels());
             int r = stream.read(scratch, n, want);
@@ -481,6 +578,7 @@ public final class Playback {
             } else if (looping && !rewound) {
                 stream.seek(loopStart);
                 framePos = loopStart;
+                if (n == 0) lastFillStart = framePos;
                 rewound = true;
             } else {
                 break;
@@ -522,11 +620,8 @@ public final class Playback {
                 queued--;
                 Integer done = queuedFrames.poll();
                 if (done != null) processedFrames += done;
-                if (!streamEnded && fill(buffer)) {
-                    alSourceQueueBuffers(source, buffer);
-                    queuedFrames.add(lastFillFrames);
-                    queued++;
-                }
+                queuedStarts.poll();
+                if (!streamEnded && fill(buffer)) queueFilled(buffer);
             }
             if (queued <= 0) {
                 finish();

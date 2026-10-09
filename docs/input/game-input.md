@@ -64,6 +64,7 @@ isn't held.
 |---|---|
 | `isDown(action)` | True while the action is held by any of its bindings |
 | `isJustPressed(action)` | True if it was pressed. Holding a second binding while the first is down doesn't press it again |
+| `getPressCount(action)` | How many times it was pressed in that step or frame: 0 if not pressed, more than 1 for a wheel turned several notches |
 | `isJustReleased(action)` | True if it was let go, including by the context [stopping being active](#which-context-gets-a-press) |
 | `isRepeated(action)` | True if the OS repeated a held key of the action, as it does after a key is held for a moment. For menus, move on `isJustPressed(a) \|\| isRepeated(a)` |
 | `getHeldTime(action)` | Seconds held, as above |
@@ -91,7 +92,7 @@ the first. A chord's action is released when its key is, whatever happens to the
 
 **Wheel bindings** press and release their action at once, so they only show as just pressed and just released,
 never as held. Wheel travel adds up to whole notches before it counts, so a trackpad triggers them at about the
-rate of a wheel. Several notches in one frame or step count as one press; use `Input.getScrollY()` for the amount.
+rate of a wheel. Several notches in one frame or step are several presses: `isJustPressed` is still true once, and `getPressCount(action)` says how many.
 
 **Key codes are positions, not letters.** GLFW names keys by where they are on a US keyboard, so `GLFW_KEY_W` is
 the key above S on every layout, which keeps WASD in place on a French keyboard, where that key says Z.

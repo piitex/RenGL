@@ -32,6 +32,10 @@ import java.util.function.Consumer;
  * edges the item reorders as usual: at once once carried past the target's centre, or after a short pause if
  * it lingers before reaching it, so that approaching a target does not shove it aside.
  * Releasing a lifted item outside the grid reports {@link #onDropOutside}.
+ * <p>
+ * By default the items are a packed list: dropping one shifts the others along, so there are never gaps. With
+ * {@link #setFreePlacement free placement} on, the grid is instead a set of fixed slots, some of them empty, and
+ * an item can be dropped into any slot: an empty one moves it there, and an occupied one swaps the two.
  */
 public class ReorderableGrid extends ScrollContainer {
     private static final double DRAG_THRESHOLD = 6;
@@ -62,6 +66,10 @@ public class ReorderableGrid extends ScrollContainer {
     private float hoverTime;
     private Container armed;
 
+    private boolean freePlacement;
+    private int minSlots;
+    private int previewSlot = -1;
+
     private Container pressed;
     private boolean lifted;
     private int startIndex;
@@ -75,36 +83,112 @@ public class ReorderableGrid extends ScrollContainer {
     }
 
     /**
-     * Replaces the grid's items and lays them out immediately, in the order given.
+     * Replaces the grid's items and lays them out immediately, in the order given. With {@link #setFreePlacement
+     * free placement} on, each entry's position in the list is its slot, and a null entry is an empty slot.
+     * Without it, nulls are skipped.
      */
     public void setItems(List<? extends Container> newItems) {
-        for (Container item : items) removeElement(item);
+        for (Container item : items) if (item != null) removeElement(item);
         items.clear();
         pressed = null;
         lifted = false;
         armed = null;
         hoverTarget = null;
         outside = false;
+        previewSlot = -1;
 
         for (Container item : newItems) {
+            if (item == null && !freePlacement) continue;
             items.add(item);
-            addElement(item);
+            if (item != null) addElement(item);
         }
+        ensureSlots();
         for (int i = 0; i < items.size(); i++) {
+            if (items.get(i) == null) continue;
             items.get(i).setX(slotX(i));
             items.get(i).setY(slotY(i));
         }
     }
 
     /**
-     * The items in their current order, including a drag in progress.
+     * Whether items can be dropped into any slot, empty ones included. Off by default.
      */
-    public List<Container> getItems() {
-        return List.copyOf(items);
+    public boolean isFreePlacement() {
+        return freePlacement;
     }
 
     /**
-     * Called once when a drag ends with an item in a different position than it started, with the new order.
+     * Turns free placement on or off. On, the grid keeps a fixed set of slots: dropping a lifted item on an empty
+     * slot puts it there and leaves a gap behind, and dropping it on an occupied slot swaps the two items. Off,
+     * the default, items are a packed list and the others shift along to make room. The grid has at least enough
+     * slots to fill its visible area (more through {@link #setSlotCount}), always whole rows. Turning it on keeps
+     * the items in their current slots; turning it off packs them together, in slot order. Set it before
+     * {@link #setItems} if the list should contain empty slots.
+     */
+    public void setFreePlacement(boolean freePlacement) {
+        if (this.freePlacement == freePlacement || lifted) return;
+        this.freePlacement = freePlacement;
+        if (freePlacement) ensureSlots();
+        else items.removeIf(java.util.Objects::isNull);
+    }
+
+    /**
+     * The least number of slots a grid with free placement has, rounded up to whole rows. The default of 0 gives
+     * just enough to fill the visible area. Slots beyond that are added when {@link #setItems} gets a longer
+     * list. Has no effect without free placement.
+     */
+    public void setSlotCount(int slots) {
+        this.minSlots = Math.max(0, slots);
+        ensureSlots();
+    }
+
+    /**
+     * The slots of a grid with free placement, in order, with null for an empty one. Without free placement, the
+     * same as {@link #getItems()}. Unlike that, this list is not immutable-by-copy: it is a fresh list each call
+     * which may hold nulls.
+     */
+    public List<Container> getSlots() {
+        return new ArrayList<>(items);
+    }
+
+    /**
+     * The index of the slot {@code item} is in, or -1 if it is not in this grid.
+     */
+    public int slotOf(Container item) {
+        return item == null ? -1 : items.indexOf(item);
+    }
+
+    /**
+     * Pads the slot list with empty slots up to the visible area, {@link #setSlotCount} and whole rows.
+     */
+    private void ensureSlots() {
+        if (!freePlacement) return;
+        int columns = columns();
+        int visibleRows = (int) Math.ceil((getHeight() + gap) / (itemHeight + gap));
+        int wanted = Math.max(Math.max(minSlots, items.size()), columns * Math.max(1, visibleRows));
+        wanted = (wanted + columns - 1) / columns * columns;
+        while (items.size() < wanted) items.add(null);
+    }
+
+    @Override
+    public double getMaxScrollY() {
+        double max = super.getMaxScrollY();
+        if (!freePlacement || items.isEmpty()) return max;
+        int rows = (items.size() + columns() - 1) / columns();
+        return Math.max(max, rows * (itemHeight + gap) - gap - getHeight());
+    }
+
+    /**
+     * The items in their current order, including a drag in progress. Empty slots (see {@link #setFreePlacement})
+     * are left out; use {@link #getSlots()} to see them.
+     */
+    public List<Container> getItems() {
+        return items.stream().filter(java.util.Objects::nonNull).toList();
+    }
+
+    /**
+     * Called once when a drag ends with an item in a different position than it started, with the new order. With
+     * {@link #setFreePlacement free placement} the list is every slot in order, with null for an empty one.
      */
     public void onReorder(Consumer<List<Container>> listener) {
         this.reorderListener = listener;
@@ -234,6 +318,7 @@ public class ReorderableGrid extends ScrollContainer {
     private Container itemAt(double windowX, double windowY) {
         double x = windowX - getContentOriginX(), y = windowY - getContentOriginY();
         for (Container item : items) {
+            if (item == null) continue;
             if (x >= item.getX() && x < item.getX() + itemWidth && y >= item.getY() && y < item.getY() + itemHeight) {
                 return item;
             }
@@ -320,12 +405,22 @@ public class ReorderableGrid extends ScrollContainer {
         Container target = armed;
         disarm();
         setOutside(false);
+        if (freePlacement && (target != null || (dropOutsideListener != null && !withinBounds(x, y)))) previewSlot = -1;
         if (liftListener != null) liftListener.accept(item, false);
 
         if (target != null) {
             if (dropOntoListener != null) dropOntoListener.accept(item, target);
         } else if (dropOutsideListener != null && !withinBounds(x, y)) {
             dropOutsideListener.accept(item);
+        } else if (freePlacement) {
+            int slot = previewSlot;
+            previewSlot = -1;
+            if (slot >= 0 && slot != startIndex && startIndex >= 0 && startIndex < items.size()) {
+                // An empty slot just receives the item; an occupied one trades places with it.
+                items.set(startIndex, items.get(slot));
+                items.set(slot, item);
+                if (reorderListener != null) reorderListener.accept(getSlots());
+            }
         } else if (reorderListener != null && items.indexOf(item) != startIndex) {
             reorderListener.accept(List.copyOf(items));
         }
@@ -359,6 +454,10 @@ public class ReorderableGrid extends ScrollContainer {
         double centerX = x + itemWidth / 2, centerY = y + itemHeight / 2;
         int target = slotAt(centerX, centerY);
         int current = items.indexOf(pressed);
+        if (freePlacement) {
+            followFree(target, current, centerX, centerY, delta);
+            return;
+        }
         if (target == current) {
             disarm();
             return;
@@ -390,6 +489,37 @@ public class ReorderableGrid extends ScrollContainer {
 
         items.remove(current);
         items.add(target, pressed);
+    }
+
+    /**
+     * The free placement counterpart of the end of {@link #followPointer}: nothing else moves while an item is
+     * carried, the slot under it is only noted (and an occupant there eased toward the slot the item came from, to
+     * show the swap) until the item is dropped. Over a drop target's middle it arms the target instead.
+     */
+    private void followFree(int target, int current, double centerX, double centerY, float delta) {
+        previewSlot = -1;
+        if (target == current) {
+            disarm();
+            return;
+        }
+        Container occupant = items.get(target);
+        if (occupant != null && dropTargets != null && dropTargets.test(pressed, occupant)) {
+            boolean inner = insideInner(target, centerX, centerY);
+            if (hoverTarget != occupant || hoverInner != inner) {
+                disarm();
+                hoverTarget = occupant;
+                hoverInner = inner;
+                hoverTime = 0;
+            }
+            hoverTime += delta;
+            if (inner) {
+                if (hoverTime >= ARM_DELAY && armed == null) arm(occupant);
+                return;
+            }
+        } else {
+            disarm();
+        }
+        previewSlot = target;
     }
 
     /**
@@ -443,15 +573,18 @@ public class ReorderableGrid extends ScrollContainer {
             autoScroll(delta);
             followPointer(delta);
         }
+        ensureSlots();
 
         // Everything but the lifted item eases toward its slot: the ones it displaced slide aside, and a just
         // dropped item settles into place.
         double blend = 1 - Math.exp(-SLIDE_RATE * delta);
         for (int i = 0; i < items.size(); i++) {
             Container item = items.get(i);
-            if (lifted && item == pressed) continue;
-            item.setX(approach(item.getX(), slotX(i), blend));
-            item.setY(approach(item.getY(), slotY(i), blend));
+            if (item == null || (lifted && item == pressed)) continue;
+            // In free placement the item under the carried one makes room by drifting to the carried one's slot.
+            int slot = lifted && freePlacement && i == previewSlot ? startIndex : i;
+            item.setX(approach(item.getX(), slotX(slot), blend));
+            item.setY(approach(item.getY(), slotY(slot), blend));
         }
     }
 

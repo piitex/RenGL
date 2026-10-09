@@ -62,6 +62,30 @@ between bursts.
 | `cone(effect, x, y, count, directionDegrees, spreadDegrees)` | `count` particles in a cone around a direction (0 is right, 90 down), `spreadDegrees` wide in all: sparks spraying back from a hit |
 | `burst(effect, x, y, count, color)`, `cone(..., color)` | The same in another color, such as the color of whatever was hit |
 
+## Steady emitters: ParticleEmitter
+
+A burst is a number of particles at once. A `ParticleEmitter` emits a number a second for as long as it is on: a
+campfire's sparks, a rocket's smoke, a trail behind a projectile.
+
+```java nocompile
+ParticleEmitter smoke = new ParticleEmitter(particles, SMOKE).rate(40).cone(270, 30); // up, 30 degrees wide
+
+// fixedUpdate
+smoke.moveTo(rocket.x, rocket.y);
+smoke.update(step);      // emits this step's share, before the system moves everything on
+particles.update(step);
+```
+
+| Method | What it does |
+|---|---|
+| `rate(perSecond)` | How many a second. 20 by default. A fraction carries over to the next update, so 10 a second gives 10 in a second whatever the step |
+| `cone(direction, spread)`, `everyDirection()` | Throw them in a cone (0 is right, 90 down), or in every direction (the default) |
+| `color(color)`, `effect(effect)` | Another color than the recipe's own, or another recipe |
+| `moveTo(x, y)` | Moves the emitter. The next update's particles are spread along the way it went, so a fast mover leaves a smooth line, not clumps |
+| `setPosition(x, y)` | Puts it somewhere with no trail from where it was |
+| `setOn(boolean)` | Turns it on or off. While off it emits nothing |
+| `update(delta)` | Emits the share for `delta` seconds and returns how many. Call it before `particles.update(delta)` with the same step |
+
 ## One particle at a time
 
 `emit(region, x, y)` adds one particle, still and with every value at its default, and returns it so its setters

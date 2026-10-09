@@ -963,6 +963,21 @@ final class SceneRenderer {
 
     // ---- GPU objects -------------------------------------------------------------------------------------------
 
+    /**
+     * Uploads one mesh, texture or skybox now, as drawing it would.
+     */
+    void preload(Object item, boolean skyLight) {
+        switch (item) {
+            case Mesh mesh -> gpuMesh(mesh);
+            case TextureData texture -> gpuImage(texture);
+            case Skybox sky -> {
+                gpuSky(sky);
+                if (skyLight) skyIrradiance(sky);
+            }
+            default -> throw new IllegalArgumentException("Cannot preload " + item);
+        }
+    }
+
     private GpuMesh gpuMesh(Mesh mesh) {
         GpuMesh gpu = meshes.get(mesh);
         if (gpu == null) {

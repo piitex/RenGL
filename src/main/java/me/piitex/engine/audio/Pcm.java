@@ -39,6 +39,11 @@ record Pcm(short[] samples, int channels, int sampleRate) {
             }
 
             @Override
+            public long totalFrames() {
+                return frames();
+            }
+
+            @Override
             public void seek(long frame) {
                 pos = (int) Math.min(samples.length, Math.max(0, frame) * channels);
             }

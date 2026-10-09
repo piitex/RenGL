@@ -56,6 +56,33 @@ public interface Transition {
     }
 
     /**
+     * Whether the game is locked while this plays: the window ignores presses and the wheel, the scenes do not update
+     * and nothing is hovered, until it finishes. Off by default. A transition that returns true must be able to
+     * finish, or the window stays locked; {@link #finish} is how input ends one, and a looping transition should leave
+     * this false.
+     */
+    default boolean isLocking() {
+        return false;
+    }
+
+    /**
+     * Whether a key press or mouse click while this {@link #isLocking() locks} the game ends it early through
+     * {@link #finish}. Off by default.
+     */
+    default boolean isSkippable() {
+        return false;
+    }
+
+    /**
+     * Ends this transition now, as if its time were up: {@code target} is left in the final state and the completion
+     * callback fires, unlike {@link #stop()}, which leaves it where it is and fires nothing. Returns true if it was
+     * running and is now finished, false if it already was or this type does not support it, which is the default.
+     */
+    default boolean finish(Element target) {
+        return false;
+    }
+
+    /**
      * Whether this transition has run its course and should be removed from its Element after this frame's {@link #render}.
      */
     boolean isFinished();
