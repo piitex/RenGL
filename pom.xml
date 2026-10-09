@@ -694,11 +694,11 @@
             <artifactId>log4j-api</artifactId>
             <version>2.26.1</version>
         </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-            <version>2.26.1</version>
-        </dependency>
+        <!--
+          Deliberately API only. log4j-core resolves the machine hostname at startup
+          (InetAddress.getLocalHost), which blocks ~5s on hosts whose name does not resolve.
+          The API's built-in simple logger is used instead; see log4j2.simplelog.properties.
+        -->
         <!--
           Platform-independent Java API classes (org.jetbrains.skia.*): needed on every
           platform, unlike the native runtime, which is why this is unconditional rather
