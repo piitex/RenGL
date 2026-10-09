@@ -33,12 +33,15 @@ See `MenuDemo` in `me.piitex.examples.demo` for a runnable example.
 ```java
 new MenuItem("Save", () -> save()); // action
 MenuItem.check("Word wrap", false, on -> wrap(on)); // toggles a tick; callback gets the new state
+MenuItem.radioGroup(1, i -> setMode(i), "Day", "Dusk", "Night"); // a MenuItem[]: one ticked with a dot; choosing another moves it
 MenuItem.submenu("Create", itemA, itemB); // cascading submenu, any depth
 MenuItem.separator(); // divider line
 ```
 
 ```java
-item.setShortcut("Ctrl+S"); // text shown right-aligned. DISPLAY ONLY, it does not bind a key
+item.setShortcut("Ctrl+S"); // shown right-aligned, and binds the key while the item is in a MenuBarOverlay (see Shortcuts)
+item.setIcon(Feather.SAVE); // a small picture before the label, in the label's color
+item.setMnemonic('S'); // the letter that chooses it while its menu is open; underlined in the label
 item.setEnabled(false); // dimmed; ignores hover and clicks
 item.setChecked(true); // silent, no callback
 item.setLabel("Save as...");
@@ -70,6 +73,8 @@ Refresh state just before each show with `onOpen`:
 menu.onOpen(m -> pasteItem.setEnabled(!Clipboard.paste().isEmpty()));
 menu.onClose(() -> System.out.println("closed")); // any route: choice, outside click, Escape
 ```
+
+`add` takes one item; `addAll(items...)` takes several, such as a radio group.
 
 `getItems()` returns the live list. `onOpen` may also `clear()` and rebuild it.
 
@@ -113,7 +118,29 @@ bar.setTextColor(Color.WHITE); // pins the color against theme switches
 The bar is drawn from the theme's container tokens (background and border) and text color, and marks the open or
 hovered title with the theme's selection color. Place it at the top of the root container, as wide as the window.
 
-> **Do not call `onMouseClick` on the bar.** The constructor registers its own handler to open the menus.
+`onMouseClick` on the bar is safe to use: the bar's own handler, which opens the menus, is kept apart from it.
+
+### Shortcuts
+
+`setShortcut("Ctrl+S")` on an item of a `MenuBarOverlay` binds the key. Pressing it anywhere in the window chooses the
+item, as long as it is enabled and no popup or modal is open. The menu's `onOpen` runs first, so the item's state is
+current. `Ctrl`, `Cmd`, `Command`, `Meta` and `Super` all mean the command key (Control, or Command on a Mac), `Alt` and
+`Option` mean Alt, and `Shift` is Shift. The key is a letter, digit, punctuation mark, `F1` to `F12`, or a name:
+`Enter`, `Esc`, `Del`, `Backspace`, `Tab`, `Space`, `Ins`, `Home`, `End`, `PgUp`, `PgDn`, `Up`, `Down`, `Left`, `Right`.
+A label it cannot read is only shown.
+
+- A focused text field or text area keeps its own select all, copy, cut, paste, undo and redo (`Ctrl+A/C/V/X/Z/Y`); a menu
+  shortcut on those keys fires when nothing is being edited.
+- A disabled item still takes its key, so the press does not fall through to the game.
+- Shortcuts on a context menu or a stand-alone `PopupMenu` are labels only: only a menu bar listens for keys.
+- Under the macOS system menu bar the system handles shortcuts itself (see below).
+- Your own: `window.addShortcutHandler(handler)` offers every key combination to a `ShortcutHandler` the same way.
+
+### Opening from the keyboard
+
+**F10** opens the first menu with its first row highlighted. `bar.setMnemonic(index, 'F')` makes **Alt+F** open that
+menu, and underlines the letter in its title. While a menu is open, an item's mnemonic chooses it, or moves to the next
+row that shares the letter. Not used under the macOS system menu bar.
 
 ## Native menu bar on macOS
 
@@ -154,6 +181,8 @@ While a menu is open it takes every key press, including Tab.
 | Key | Effect |
 |---|---|
 | Up / Down | Move through the rows, skipping separators and disabled items, wrapping at the ends |
+| Home / End | Go to the first or last row |
+| A letter or digit | Choose the row with that [mnemonic](#menuitem), or move to the next one that shares it |
 | Right | Open the highlighted submenu. In a menu bar with no submenu to enter, switch to the next menu |
 | Left | Close the current submenu. In a menu bar at the top level, switch to the previous menu |
 | Enter / Space | Choose the highlighted row (or open its submenu) |
@@ -183,20 +212,21 @@ menu.setFontSize(16f); menu.setItemHeight(30f); menu.setMinWidth(200f);
 Pass null to a color setter to go back to the theme. Each takes any [`Paint`](../styling/colors-and-paints.md), so a panel or
 highlight can be a gradient. The menu bar's `setTextColor` is a paint too.
 
+A menu taller than the window fills the window's height and scrolls: with the wheel, or by stepping through the rows
+with the arrow keys. Small arrows at the top and bottom show there is more.
+
 ## Limitations
 
-- **Shortcuts are labels only** in the in-window menus. `setShortcut` draws text but registers no key binding. (In the
-  [macOS system menu bar](#native-menu-bar-on-macos) they are real key equivalents.)
-- **A menu taller than the window is clamped to the top edge but does not scroll.**
-- **No icons** in rows, and no radio-style groups. Use a check item per option.
-- **A menu bar has no Alt/F10 activation** or per-title mnemonics.
 - **One popup at a time.** Opening a dropdown list closes an open menu, and the reverse.
+- **Icons, radio dots and mnemonics are drawn by the in-window menus only.** The macOS system menu bar shows radio
+  items as ticks and leaves out icons and mnemonics.
+- **Alt alone does not activate the bar** (as on Windows). Use F10 or an Alt mnemonic.
 
 ## Method reference
 
 | Class | Methods |
 |---|---|
-| `MenuItem` | `new MenuItem(label, action)`, `check`, `submenu`, `separator`, `get/setLabel`, `get/setShortcut`, `is/setEnabled`, `is/setChecked`, `get/setAction`, `fire`, `getChildren`, `hasSubmenu`, `isSeparator`, `isCheckable` |
-| `PopupMenu` | `add`, `addSeparator`, `getItems`, `clear`, `show`, `showAtMouse`, `showBelow`, `close`, `isOpen`, `onOpen`, `onClose`, `get/setFontSize`, `get/setItemHeight`, `get/setMinWidth`, `setBackgroundColor`, `setHoverColor`, `setTextColor`, `setDisabledTextColor`, `setBorderColor` |
-| `MenuBarOverlay` | `addMenu`, `getMenus`, `open`, `closeMenus`, `getOpenIndex`, `get/setFontSize`, `get/setTextColor`, `is/setUseNativeMenuBar`, `isNative` |
+| `MenuItem` | `new MenuItem(label, action)`, `check`, `radioGroup`, `submenu`, `separator`, `get/setIcon`, `get/setMnemonic`, `isRadio`, `get/setLabel`, `get/setShortcut`, `is/setEnabled`, `is/setChecked`, `get/setAction`, `fire`, `getChildren`, `hasSubmenu`, `isSeparator`, `isCheckable` |
+| `PopupMenu` | `add`, `addAll`, `addSeparator`, `getItems`, `clear`, `show`, `showAtMouse`, `showBelow`, `close`, `isOpen`, `onOpen`, `onClose`, `get/setFontSize`, `get/setItemHeight`, `get/setMinWidth`, `setBackgroundColor`, `setHoverColor`, `setTextColor`, `setDisabledTextColor`, `setBorderColor` |
+| `MenuBarOverlay` | `addMenu`, `getMenus`, `open`, `closeMenus`, `getOpenIndex`, `get/setFontSize`, `get/setTextColor`, `is/setUseNativeMenuBar`, `isNative`, `get/setMnemonic`, `onShortcut` |
 | `Element` | `getContextMenu`, `setContextMenu` |

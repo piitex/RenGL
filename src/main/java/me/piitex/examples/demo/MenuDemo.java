@@ -5,6 +5,7 @@ import me.piitex.engine.Window;
 import me.piitex.engine.WindowOptions;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.containers.Container;
+import me.piitex.engine.ui.icons.Feather;
 import me.piitex.engine.ui.menu.MenuBarOverlay;
 import me.piitex.engine.ui.menu.MenuItem;
 import me.piitex.engine.ui.menu.PopupMenu;
@@ -24,6 +25,8 @@ import java.io.File;
  *       (Undo is disabled), View (check items and a theme switch). Hover across the titles while one is
  *       open to swap menus; Left/Right does the same from the keyboard.</li>
  *   <li><b>Right-click</b> the grey panel for a context menu, or the text below it (which has its own).</li>
+ *   <li><b>Keyboard:</b> Ctrl+S saves from anywhere (the File menu's shortcut is bound), F10 or Alt+F/E/V open a menu,
+ *       a letter chooses the underlined row. View has a radio group and a long list that scrolls.</li>
  *   <li><b>"More..." button</b> opens a plain popup menu under itself with {@link PopupMenu#showBelow}.</li>
  * </ul>
  * Whatever you pick shows in the status line.
@@ -53,6 +56,9 @@ public class MenuDemo {
         bar.addMenu("File", fileMenu(status));
         bar.addMenu("Edit", editMenu(status));
         bar.addMenu("View", viewMenu(status));
+        bar.setMnemonic(0, 'F'); // Alt+F opens File (in-window bar); F10 opens the first menu
+        bar.setMnemonic(1, 'E');
+        bar.setMnemonic(2, 'V');
         root.addElement(bar);
 
         // A themed panel with a context menu whose contents depend on state, refreshed on every open.
@@ -96,7 +102,9 @@ public class MenuDemo {
                         new MenuItem("draft.txt", () -> status.setText("Opened draft.txt"))));
 
         MenuItem save = new MenuItem("Save", () -> status.setText("Saved"));
-        save.setShortcut("Ctrl+S");
+        save.setShortcut("Ctrl+S"); // binds the key too: press it anywhere in the window
+        save.setIcon(Feather.SAVE);
+        save.setMnemonic('S');
         MenuItem open = new MenuItem("Open...", () -> status.setText("Open..."));
         open.setShortcut("Ctrl+O");
         MenuItem exit = new MenuItem("Exit", () -> System.exit(0));
@@ -124,11 +132,20 @@ public class MenuDemo {
             dark = !dark;
             ThemeManager.setCurrent(dark ? new DarkTheme() : new LightTheme());
         });
-        return new PopupMenu(
+        MenuItem[] many = new MenuItem[80];
+        for (int i = 0; i < many.length; i++) {
+            int n = i + 1;
+            many[i] = new MenuItem("Item " + n, () -> status.setText("Picked item " + n));
+        }
+        PopupMenu menu = new PopupMenu(
                 MenuItem.check("Show grid", true, on -> status.setText("Grid " + (on ? "on" : "off"))),
                 MenuItem.check("Word wrap", false, on -> status.setText("Word wrap " + (on ? "on" : "off"))),
-                MenuItem.separator(),
-                toggleTheme);
+                MenuItem.separator());
+        menu.addAll(MenuItem.radioGroup(1, i -> status.setText("Mode " + i), "Day", "Dusk", "Night"));
+        menu.addSeparator();
+        menu.add(MenuItem.submenu("Long list (scrolls)", many));
+        menu.add(toggleTheme);
+        return menu;
     }
 
     private static PopupMenu panelMenu(TextOverlay status) {

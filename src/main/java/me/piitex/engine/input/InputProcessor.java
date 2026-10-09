@@ -9,6 +9,8 @@ import me.piitex.engine.ui.PopupKeyListener;
 import me.piitex.engine.ui.scroll.Scrollable;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.events.MouseClickEvent;
+import me.piitex.engine.ui.overlays.TextAreaOverlay;
+import me.piitex.engine.ui.overlays.TextFieldOverlay;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -480,6 +482,12 @@ public class InputProcessor {
             return;
         }
 
+        // Shortcuts such as a menu's Ctrl+S, unless a text field is being edited and the keys are its own editing ones.
+        if (event.action == GLFW.GLFW_PRESS && window.getModal() == null && !editingKey(window, event)
+                && window.dispatchShortcut(event.buttonOrKey, event.mods)) {
+            return;
+        }
+
         if (usableFocus(window) instanceof Focusable focusable) {
             focusable.onKeyPressed(event.buttonOrKey, event.action, event.mods);
             return;
@@ -502,6 +510,21 @@ public class InputProcessor {
             return input.keyRepeated(event.buttonOrKey, consumed) || consumed;
         }
         return input.keyPressed(event.buttonOrKey, event.mods, consumed) || consumed;
+    }
+
+    /**
+     * Whether the key is one a focused text field uses to edit (select all, copy, cut, paste, undo, redo), which
+     * a shortcut does not take from it.
+     */
+    private boolean editingKey(Window window, InputEvent event) {
+        if (!(window.getFocusedElement() instanceof TextFieldOverlay) && !(window.getFocusedElement() instanceof TextAreaOverlay)) {
+            return false;
+        }
+        if ((event.mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) == 0) return false;
+        return switch (event.buttonOrKey) {
+            case GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_Z -> true;
+            default -> false;
+        };
     }
 
     /**

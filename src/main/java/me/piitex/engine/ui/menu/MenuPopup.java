@@ -6,9 +6,13 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.PopupKeyListener;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.LinearGradient;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.containers.Container;
+import me.piitex.engine.ui.image.IconCache;
+import me.piitex.engine.ui.scroll.Scrollable;
 import me.piitex.engine.ui.text.Font;
 import org.lwjgl.glfw.GLFW;
 
@@ -21,11 +25,15 @@ import java.util.List;
  * dropdown's list), and reports {@link #contains} for the union of its panels so the
  * window's outside-click dismissal treats a click on any submenu as "inside".
  */
-final class MenuPopup extends Container implements PopupKeyListener {
+final class MenuPopup extends Container implements PopupKeyListener, Scrollable {
     private static final float PAD_Y = 4f;         // panel top/bottom padding
     private static final float PAD_X = 4f;         // gap between panel edge and highlight
     private static final float TEXT_PAD = 10f;     // inside the highlight, before the label
     private static final float CHECK_COL = 20f;
+    private static final float ICON_COL = 24f;
+    private static final float ICON_SIZE = 16f;
+    private static final float WINDOW_EDGE = 4f;       // room kept between a scrolling menu and the window's edge
+    private static final float WHEEL_STEP = 40f;
     private static final float ARROW_COL = 18f;
     private static final float SHORTCUT_GAP = 28f;
     private static final float SEPARATOR_H = 9f;
@@ -37,7 +45,9 @@ final class MenuPopup extends Container implements PopupKeyListener {
         float x, y, w, h;
         float[] rowTop;   // relative to y
         float[] rowH;
-        boolean checkCol, shortcutCol, arrowCol;
+        boolean checkCol, iconCol, shortcutCol, arrowCol;
+        float contentH;   // all the rows; h is what shows of it, and scroll is how far down that starts
+        float scroll;
         float labelW, shortcutW;
         /**
          * The row whose submenu is open, or the keyboard-highlighted row; -1 for none.
@@ -57,7 +67,7 @@ final class MenuPopup extends Container implements PopupKeyListener {
          */
         int rowAt(double px, double py) {
             if (!contains(px, py)) return -1;
-            double local = py - y;
+            double local = py - y + scroll;
             for (int i = 0; i < rowTop.length; i++) {
                 if (local >= rowTop[i] && local < rowTop[i] + rowH[i]) return i;
             }
@@ -139,21 +149,25 @@ final class MenuPopup extends Container implements PopupKeyListener {
             if (item.isSeparator()) continue;
             panel.labelW = Math.max(panel.labelW, font.measureTextWidth(item.getLabel()));
             if (item.isCheckable()) panel.checkCol = true;
+            if (item.getIcon() != null) panel.iconCol = true;
             if (item.hasSubmenu()) panel.arrowCol = true;
             if (item.getShortcut() != null && !item.getShortcut().isEmpty()) {
                 panel.shortcutCol = true;
                 panel.shortcutW = Math.max(panel.shortcutW, font.measureTextWidth(item.getShortcut()));
             }
         }
-        panel.h = top + PAD_Y;
+        panel.contentH = top + PAD_Y;
         panel.w = Math.max(menu.getMinWidth(), 2 * PAD_X + 2 * TEXT_PAD
                 + (panel.checkCol ? CHECK_COL : 0f)
+                + (panel.iconCol ? ICON_COL : 0f)
                 + panel.labelW
                 + (panel.shortcutCol ? SHORTCUT_GAP + panel.shortcutW : 0f)
                 + (panel.arrowCol ? ARROW_COL : 0f));
 
         double winW = win.getWindowOptions().getWidth();
         double winH = win.getWindowOptions().getHeight();
+        // A menu taller than the window fills the window's height and scrolls.
+        panel.h = (float) Math.min(panel.contentH, Math.max(winH - 2 * WINDOW_EDGE, 2 * menu.getItemHeight()));
         panel.x = (float) Math.max(0, Math.min(x, winW - panel.w));
         panel.y = (float) Math.max(0, Math.min(y, winH - panel.h));
         return panel;
@@ -170,7 +184,7 @@ final class MenuPopup extends Container implements PopupKeyListener {
         if (!item.hasSubmenu()) return;
 
         double winW = win.getWindowOptions().getWidth();
-        double y = parent.y + parent.rowTop[row] - PAD_Y;
+        double y = parent.y + parent.rowTop[row] - parent.scroll - PAD_Y;
         Panel child = layout(item.getChildren(), parent.x + parent.w - 2, y);
         if (parent.x + parent.w - 2 + child.w > winW) {
             child.x = Math.max(0, parent.x - child.w + 2); // no room on the right, so flip to the left
@@ -224,6 +238,40 @@ final class MenuPopup extends Container implements PopupKeyListener {
         return -1;
     }
 
+    /**
+     * Scrolls panel {@code panel} just far enough to show row {@code row}.
+     */
+    private static void reveal(Panel panel, int row) {
+        if (row < 0 || panel.contentH <= panel.h) return;
+        float top = panel.rowTop[row] - (row == 0 ? PAD_Y : 0f); // the first row brings its padding with it
+        float bottom = panel.rowTop[row] + panel.rowH[row] + (row == panel.items.size() - 1 ? PAD_Y : 0f);
+        if (top < panel.scroll) panel.scroll = top;
+        else if (bottom > panel.scroll + panel.h) panel.scroll = bottom - panel.h;
+        panel.scroll = Math.clamp(panel.scroll, 0f, panel.contentH - panel.h);
+    }
+
+    @Override
+    public void onScroll(double deltaX, double deltaY) {
+        Panel panel = panelUnderPointer();
+        if (panel == null || panel.contentH <= panel.h) return;
+        panel.scroll = Math.clamp(panel.scroll - (float) deltaY * WHEEL_STEP, 0f, panel.contentH - panel.h);
+    }
+
+    @Override
+    public boolean canScroll(double deltaX, double deltaY) {
+        Panel panel = panelUnderPointer();
+        if (panel == null || panel.contentH <= panel.h) return false;
+        return deltaY > 0 ? panel.scroll > 0 : panel.scroll < panel.contentH - panel.h;
+    }
+
+    private Panel panelUnderPointer() {
+        double mx = MouseTracker.getX(), my = MouseTracker.getY();
+        for (int p = panels.size() - 1; p >= 0; p--) {
+            if (panels.get(p).contains(mx, my)) return panels.get(p);
+        }
+        return null;
+    }
+
     private void activate(int p, int row) {
         MenuItem item = panels.get(p).items.get(row);
         if (!selectable(item)) return;
@@ -268,8 +316,22 @@ final class MenuPopup extends Container implements PopupKeyListener {
         int depth = panels.size() - 1;
 
         switch (key) {
-            case GLFW.GLFW_KEY_DOWN -> last.active = step(last, last.active, 1);
-            case GLFW.GLFW_KEY_UP -> last.active = step(last, last.active, -1);
+            case GLFW.GLFW_KEY_DOWN -> {
+                last.active = step(last, last.active, 1);
+                reveal(last, last.active);
+            }
+            case GLFW.GLFW_KEY_UP -> {
+                last.active = step(last, last.active, -1);
+                reveal(last, last.active);
+            }
+            case GLFW.GLFW_KEY_HOME -> {
+                last.active = step(last, -1, 1);
+                reveal(last, last.active);
+            }
+            case GLFW.GLFW_KEY_END -> {
+                last.active = step(last, -1, -1);
+                reveal(last, last.active);
+            }
             case GLFW.GLFW_KEY_RIGHT -> {
                 MenuItem item = last.active >= 0 ? last.items.get(last.active) : null;
                 if (item != null && item.hasSubmenu() && item.isEnabled()) {
@@ -296,8 +358,37 @@ final class MenuPopup extends Container implements PopupKeyListener {
                 if (depth > 0) truncate(depth);
                 else close();
             }
-            default -> { /* Tab and everything else is swallowed while a menu is open */ }
+            default -> {
+                // A letter chooses the row it is the mnemonic of; Tab and everything else is swallowed.
+                if ((mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_SUPER)) == 0) chooseByMnemonic(last, depth, key);
+            }
         }
+    }
+
+    /**
+     * The row after the active one (wrapping) whose mnemonic is the letter or digit {@code key}: chosen at once if it
+     * is the only one, otherwise only highlighted, so a second press moves on to the next.
+     */
+    private void chooseByMnemonic(Panel panel, int depth, int key) {
+        char typed;
+        if (key >= GLFW.GLFW_KEY_A && key <= GLFW.GLFW_KEY_Z) typed = (char) ('a' + key - GLFW.GLFW_KEY_A);
+        else if (key >= GLFW.GLFW_KEY_0 && key <= GLFW.GLFW_KEY_9) typed = (char) ('0' + key - GLFW.GLFW_KEY_0);
+        else return;
+        int n = panel.items.size(), first = -1, count = 0;
+        for (int k = 1; k <= n; k++) {
+            int i = Math.floorMod(panel.active + k, n);
+            MenuItem item = panel.items.get(i);
+            if (!selectable(item) || item.getMnemonic() == 0 || Character.toLowerCase(item.getMnemonic()) != typed) continue;
+            if (first < 0) first = i;
+            count++;
+        }
+        if (first < 0) return;
+        panel.active = first;
+        reveal(panel, first);
+        MenuItem item = panel.items.get(first);
+        if (count > 1) return;
+        if (item.hasSubmenu()) openChild(depth, first, true);
+        else activate(depth, first);
     }
 
     /**
@@ -371,9 +462,12 @@ final class MenuPopup extends Container implements PopupKeyListener {
             int hover = !keyboardMode && mouseOn ? panel.rowAt(MouseTracker.getX(), MouseTracker.getY()) : -1;
             int shown = hover >= 0 ? hover : panel.active;
 
+            boolean scrolls = panel.contentH > panel.h;
+            if (scrolls) renderer.pushClip(panel.x, panel.y, panel.w, panel.h);
             for (int i = 0; i < panel.items.size(); i++) {
                 MenuItem item = panel.items.get(i);
-                float rowY = panel.y + panel.rowTop[i], rowH = panel.rowH[i];
+                float rowY = panel.y + panel.rowTop[i] - panel.scroll, rowH = panel.rowH[i];
+                if (rowY + rowH < panel.y || rowY > panel.y + panel.h) continue; // scrolled out of sight
                 if (item.isSeparator()) {
                     float ly = rowY + rowH / 2f;
                     renderer.drawLine(panel.x + PAD_X + 4f, ly, panel.x + panel.w - PAD_X - 4f, ly, menu.border(), 1f);
@@ -386,15 +480,31 @@ final class MenuPopup extends Container implements PopupKeyListener {
                 Paint color = enabled ? menu.text() : menu.disabledText();
                 float textX = panel.x + PAD_X + TEXT_PAD;
 
-                if (item.isCheckable() && item.isChecked()) {
+                if (item.isRadio() && item.isChecked()) {
+                    renderer.drawCircle(textX + 5f, rowY + rowH / 2f, 3.2f, color);
+                } else if (item.isCheckable() && item.isChecked()) {
                     float cx = textX + 6f, cy = rowY + rowH / 2f;
                     renderer.drawLine(cx - 4f, cy, cx - 1f, cy + 3.5f, color, 2f);
                     renderer.drawLine(cx - 1f, cy + 3.5f, cx + 5f, cy - 4f, color, 2f);
                 }
                 if (panel.checkCol) textX += CHECK_COL;
 
+                if (item.getIcon() != null) {
+                    int size = Math.round(ICON_SIZE);
+                    renderer.drawImage(IconCache.loadResource(item.getIcon().resourcePath(), size, size), textX,
+                            rowY + (rowH - size) / 2f, size, size, 0f, 1f, solid(color));
+                }
+                if (panel.iconCol) textX += ICON_COL;
+
                 float textH = FontMetricsCompat.of(font).getHeight();
-                renderer.drawText(item.getLabel(), textX, rowY + (rowH - textH) / 2f, font, color);
+                float textY = rowY + (rowH - textH) / 2f;
+                renderer.drawText(item.getLabel(), textX, textY, font, color);
+                int mnemonic = item.mnemonicIndex();
+                if (mnemonic >= 0) {
+                    float ux = textX + font.measureTextWidth(item.getLabel().substring(0, mnemonic));
+                    float uw = font.measureTextWidth(item.getLabel().substring(mnemonic, mnemonic + 1));
+                    renderer.drawLine(ux, textY + textH + 1f, ux + uw, textY + textH + 1f, color, 1f);
+                }
 
                 String shortcut = item.getShortcut();
                 if (shortcut != null && !shortcut.isEmpty()) {
@@ -409,9 +519,32 @@ final class MenuPopup extends Container implements PopupKeyListener {
                 }
             }
 
+            if (scrolls) {
+                renderer.popClip();
+                float cx = panel.x + panel.w / 2f;
+                Paint hint = menu.disabledText();
+                if (panel.scroll > 0) { // more above
+                    renderer.drawLine(cx - 4f, panel.y + 8f, cx, panel.y + 4f, hint, 1.6f);
+                    renderer.drawLine(cx, panel.y + 4f, cx + 4f, panel.y + 8f, hint, 1.6f);
+                }
+                if (panel.scroll < panel.contentH - panel.h) { // more below
+                    float by = panel.y + panel.h;
+                    renderer.drawLine(cx - 4f, by - 8f, cx, by - 4f, hint, 1.6f);
+                    renderer.drawLine(cx, by - 4f, cx + 4f, by - 8f, hint, 1.6f);
+                }
+            }
+
             if (thickness > 0) {
                 renderer.drawBorder(panel.x, panel.y, panel.w, panel.h, menu.border(), thickness, radius);
             }
         }
+    }
+
+    private static Color solid(Paint paint) {
+        return switch (AnimatedPaint.resolve(paint)) {
+            case Color c -> c;
+            case LinearGradient g -> g.getColors().get(0);
+            case null, default -> Color.BLACK;
+        };
     }
 }

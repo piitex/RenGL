@@ -104,8 +104,14 @@ Scrollbar colors follow the theme (`scrollThumb`, `scrollTrack`) unless you set 
 
 ## Gotchas
 
-- The scrollbar is drawn over the container's right/bottom edge and does **not** reserve a gutter. A child
-  that overlaps that strip wins clicks over the thumb, so leave the strip clear in your content sizing.
+- The scrollbar is drawn over the container's right/bottom edge and does **not** reserve a gutter: content that reaches
+  the edge is covered by the bar (the thumb still wins the click). Size content to `getContentWidth()` (and
+  `getContentHeight()` with horizontal scrolling) to keep that strip clear. They give the size less the bar's thickness and
+  margin whether or not the bar is showing yet, so nothing reflows when it appears:
+
+  ```java
+  rows.setWidth(scroll.getContentWidth());
+  ```
 - [`TextAreaOverlay`](../overlays/text-area-overlay.md) scrolls by itself and does not need a `ScrollContainer` around it.
 - A [`SpinnerOverlay`](../overlays/spinner-overlay.md) only reacts to the wheel when its field is focused, so scrolling past one inside a
   scroll container does not change its value by accident.

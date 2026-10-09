@@ -30,8 +30,8 @@ import java.util.function.IntConsumer;
  * <p>
  * Colors come from the active {@link Theme} at the moment the menu opens (the field
  * tokens the dropdown list uses, with {@link Theme#getSelection()} as the highlight);
- * the setters here pin a color instead. A menu taller than the window is clamped to the
- * top edge but does not scroll.
+ * the setters here pin a color instead. A menu taller than the window fills the window's height and scrolls, with the
+ * wheel or by stepping through it with the arrow keys.
  * <p>
  * A PopupMenu is a plain object rather than an Element, so one can be built, kept, and
  * shown as often as needed. Use {@link #onOpen} to refresh item state just before each
@@ -70,6 +70,14 @@ public class PopupMenu {
     }
 
     /**
+     * Adds every item, such as a {@link MenuItem#radioGroup radio group}.
+     */
+    public PopupMenu addAll(MenuItem... items) {
+        Collections.addAll(this.items, items);
+        return this;
+    }
+
+    /**
      * Shorthand for {@code add(new MenuItem(label, action))}.
      */
     public PopupMenu add(String label, Runnable action) {
@@ -96,6 +104,20 @@ public class PopupMenu {
      */
     public void onOpen(Consumer<PopupMenu> onOpen) {
         this.onOpen = onOpen;
+    }
+
+    /**
+     * Runs the {@link #onOpen} callback without showing the menu, so a shortcut can use an item's up-to-date state.
+     */
+    void refresh() {
+        if (onOpen != null) onOpen.accept(this);
+    }
+
+    /**
+     * Moves the keyboard highlight as the arrow keys do, for a menu opened from the keyboard.
+     */
+    void highlightFirst() {
+        if (popup != null) popup.onPopupKey(org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN, 0);
     }
 
     /**

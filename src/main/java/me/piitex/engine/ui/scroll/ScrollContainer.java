@@ -98,6 +98,26 @@ public class ScrollContainer extends Container implements Scrollable {
     }
 
     /**
+     * The width content can be given so the vertical scrollbar never covers it: the container's width less the bar's
+     * thickness and margin. It does not depend on whether there is anything to scroll yet, so content sized to it does
+     * not reflow when the bar appears. The full width if vertical scrolling or the scrollbar is off. Nothing is
+     * resized for you; use it where you size the children.
+     */
+    public double getContentWidth() {
+        if (!scrollbarVisible || !verticalScrollEnabled) return getWidth();
+        return Math.max(0, getWidth() - scrollBarStyle.getThickness() - 2 * scrollBarStyle.getMargin());
+    }
+
+    /**
+     * As {@link #getContentWidth()}, for the height and the horizontal scrollbar. The full height unless horizontal
+     * scrolling is on.
+     */
+    public double getContentHeight() {
+        if (!scrollbarVisible || !horizontalScrollEnabled) return getHeight();
+        return Math.max(0, getHeight() - scrollBarStyle.getThickness() - 2 * scrollBarStyle.getMargin());
+    }
+
+    /**
      * The colors, thickness, and corner radius used for both the vertical and horizontal scrollbar. Mutate it in place, or replace it wholesale. See {@link ScrollBarStyle}.
      */
     public ScrollBarStyle getScrollBarStyle() {

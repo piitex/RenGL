@@ -144,6 +144,6 @@ Each holds one listener. Setting it again replaces the previous one.
 ## Gotchas
 
 - All items share one size. Items of a different size overlap or leave gaps.
-- Scrolling by holding a lifted item near an edge is vertical only.
+- Holding a lifted item near the top or bottom edge scrolls the grid. The grid wraps to its width, so it never scrolls sideways.
 - The column count comes from the grid's width, so a grid resized narrower rewraps its items.
 - Only the left mouse button drags.
