@@ -9,7 +9,8 @@ import java.util.List;
  * <p>
  * Binding numbers are shared by every program: 0 is the frame block, 1 the joint matrices (skinned programs), 2 to 6
  * the material's textures (base colour, normal, metallic-roughness, occlusion, emissive), 7 the shadow map and 8 the
- * environment (the skybox, in programs that light from it).
+ * environment (the skybox, in programs that light from it). Programs that blend a mesh's blend shapes on the GPU also
+ * read 9, the shapes' offsets as a texture, and 10, the shapes in use and their weights.
  */
 final class SceneShaders {
     private SceneShaders() {
@@ -82,6 +83,50 @@ final class SceneShaders {
             ]; };
             """;
 
+    /**
+     * Most blend shapes one draw can mix on the GPU; a node with more shapes switched on is blended on the CPU.
+     */
+    static final int MAX_ACTIVE_MORPHS = 16;
+    /**
+     * Bytes of the morph block: one vec4 of facts, then a vec4 per shape in use.
+     */
+    static final int MORPH_BLOCK_SIZE = 16 * (1 + MAX_ACTIVE_MORPHS);
+
+    /**
+     * The blend shapes' offsets, two texels (position, then normal change) for each shape and vertex, a shape's vertices
+     * one after the other, laid out in rows of {@code morphInfo.z} texels. {@code morphInfo} is the number of shapes in
+     * use, the mesh's vertex count, the row width, and 1 when a shape changes normals; each of {@code morphSlots} is a
+     * shape's number and its weight.
+     */
+    private static final String MORPH_INPUTS = """
+            layout(set = 0, binding = 9) uniform sampler2D morphTexture;
+            layout(set = 0, binding = 10) uniform Morph { vec4 morphInfo; vec4 morphSlots[""" + MAX_ACTIVE_MORPHS + """
+            ]; };
+            """;
+
+    /**
+     * Declares {@code mPos} and {@code mNormal}, the vertex as the mesh has it with its blend shapes mixed in when the
+     * program has them. Skinning and the model matrix act on these.
+     */
+    private static String morphed(boolean morph) {
+        if (!morph) return """
+                vec3 mPos = aPos;
+                vec3 mNormal = aNormal;
+                """;
+        return """
+                vec3 mPos = aPos;
+                vec3 mNormal = aNormal;
+                int rowWidth = int(morphInfo.z);
+                for (int k = 0; k < int(morphInfo.x); k++) {
+                    int texel = (int(morphSlots[k].x) * int(morphInfo.y) + gl_VertexIndex) * 2;
+                    ivec2 at = ivec2(texel % rowWidth, texel / rowWidth);
+                    mPos += morphSlots[k].y * texelFetch(morphTexture, at, 0).xyz;
+                    if (morphInfo.w > 0.5) mNormal += morphSlots[k].y * texelFetch(morphTexture, at + ivec2(1, 0), 0).xyz;
+                }
+                if (morphInfo.w > 0.5 && dot(mNormal, mNormal) > 1e-16) mNormal = normalize(mNormal);
+                """;
+    }
+
     static final String FRAME_BLOCK = """
             struct ShadowView {
                 mat4 viewProj;
@@ -116,8 +161,8 @@ final class SceneShaders {
     /**
      * The scene's own vertex shader. {@code skinned} adds the joint blend, which replaces the instance's model matrix.
      */
-    static String vertex(boolean skinned, boolean uv2) {
-        return "#version 450\n" + INPUTS + (uv2 ? UV2_INPUT : "") + (skinned ? SKIN_INPUTS : "") + UV_TRANSFORM + FRAME_BLOCK + """
+    static String vertex(boolean skinned, boolean uv2, boolean morph) {
+        return "#version 450\n" + INPUTS + (uv2 ? UV2_INPUT : "") + (skinned ? SKIN_INPUTS : "") + (morph ? MORPH_INPUTS : "") + UV_TRANSFORM + FRAME_BLOCK + """
                 layout(location = 0) out vec3 vWorldPos;
                 layout(location = 1) out vec3 vNormal;
                 layout(location = 2) out vec2 vUv;
@@ -127,17 +172,17 @@ final class SceneShaders {
                 layout(location = 6) flat out vec4 vExtra2;
                 layout(location = 7) out vec2 vUv1;
                 void main() {
-                """ + (skinned ? """
+                """ + morphed(morph) + (skinned ? """
                     mat4 skin = aWeights.x * joints[int(aJoints.x)] + aWeights.y * joints[int(aJoints.y)]
                               + aWeights.z * joints[int(aJoints.z)] + aWeights.w * joints[int(aJoints.w)];
-                    vec4 world = skin * vec4(aPos, 1.0);
-                    vNormal = mat3(skin) * aNormal;
+                    vec4 world = skin * vec4(mPos, 1.0);
+                    vNormal = mat3(skin) * mNormal;
                 """ : """
                     mat4 model = mat4(iModel0, iModel1, iModel2, iModel3);
-                    vec4 world = model * vec4(aPos, 1.0);
+                    vec4 world = model * vec4(mPos, 1.0);
                     // The inverse transpose keeps normals square to the surface under stretching.
                     mat3 m3 = mat3(model);
-                    vNormal = (abs(determinant(m3)) < 1e-20 ? m3 : transpose(inverse(m3))) * aNormal;
+                    vNormal = (abs(determinant(m3)) < 1e-20 ? m3 : transpose(inverse(m3))) * mNormal;
                 """) + """
                     vWorldPos = world.xyz;
                     vUv = transformUv(aUv);
@@ -504,19 +549,19 @@ final class SceneShaders {
 
     // ---- shadow pass -----------------------------------------------------------------------------------------
 
-    static String shadowVertex(boolean skinned) {
-        return "#version 450\n" + INPUTS + (skinned ? SKIN_INPUTS : "") + UV_TRANSFORM + """
+    static String shadowVertex(boolean skinned, boolean morph) {
+        return "#version 450\n" + INPUTS + (skinned ? SKIN_INPUTS : "") + (morph ? MORPH_INPUTS : "") + UV_TRANSFORM + """
                 layout(set = 0, binding = 0) uniform ShadowFrame { mat4 lightViewProj; vec4 shadowMode; };
                 layout(location = 0) out vec2 vUv;
                 layout(location = 1) flat out vec4 vTint;
                 layout(location = 2) flat out vec4 vParams;
                 void main() {
-                """ + (skinned ? """
+                """ + morphed(morph) + (skinned ? """
                     mat4 skin = aWeights.x * joints[int(aJoints.x)] + aWeights.y * joints[int(aJoints.y)]
                               + aWeights.z * joints[int(aJoints.z)] + aWeights.w * joints[int(aJoints.w)];
-                    vec4 world = skin * vec4(aPos, 1.0);
+                    vec4 world = skin * vec4(mPos, 1.0);
                 """ : """
-                    vec4 world = mat4(iModel0, iModel1, iModel2, iModel3) * vec4(aPos, 1.0);
+                    vec4 world = mat4(iModel0, iModel1, iModel2, iModel3) * vec4(mPos, 1.0);
                 """) + """
                     vUv = transformUv(aUv);
                     vTint = iTint;

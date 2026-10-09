@@ -54,10 +54,12 @@ final class SceneRenderer {
     private static final int KEY_UV2 = 1 << 9;
     /** The mesh is line segments, not triangles. */
     private static final int KEY_LINES = 1 << 10;
+    /** The program blends the mesh's blend shapes on the GPU, from a texture of their offsets. */
+    private static final int KEY_MORPH = 1 << 11;
     /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
     private static final int KEY_ENV_MASK = 7;
     /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
-    private static final int KEY_VARIANT_SHIFT = 11;
+    private static final int KEY_VARIANT_SHIFT = 12;
 
     /**
      * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
@@ -106,6 +108,60 @@ final class SceneRenderer {
         }
     }
 
+    /**
+     * A mesh's blend shapes as a texture the vertex shader reads, so a node's weights are the only thing that changes from
+     * frame to frame: for each shape and vertex two texels, the position offset and the normal change, a shape's vertices
+     * one after the other in rows {@link #MORPH_ROW} texels wide. Half precision, which is plenty for an offset.
+     * {@code texture} is null for a mesh with too many shape-vertices for one (blended on the CPU instead).
+     */
+    private static final class GpuMorph {
+        final List<Mesh.MorphTarget> targets;
+        final GpuTexture texture;
+        final boolean[] normals;
+        final int vertexCount;
+        long lastUsed;
+
+        GpuMorph(GpuDevice device, Mesh mesh) {
+            targets = mesh.morphTargets();
+            vertexCount = mesh.vertexCount();
+            normals = new boolean[targets.size()];
+            long texels = 2L * vertexCount * targets.size();
+            long rows = (texels + MORPH_ROW - 1) / MORPH_ROW;
+            if (texels == 0 || rows > MORPH_MAX_ROWS) {
+                texture = null;
+                return;
+            }
+            int floats = (int) (rows * MORPH_ROW * 4);
+            java.nio.FloatBuffer data = MemoryUtil.memAllocFloat(floats);
+            try {
+                MemoryUtil.memSet(data, 0);
+                for (int t = 0; t < targets.size(); t++) {
+                    float[] p = targets.get(t).positions(), n = targets.get(t).normals();
+                    normals[t] = n != null;
+                    for (int i = 0; i < vertexCount; i++) {
+                        int at = (t * vertexCount + i) * 8;
+                        data.put(at, p[i * 3]).put(at + 1, p[i * 3 + 1]).put(at + 2, p[i * 3 + 2]);
+                        if (n != null) data.put(at + 4, n[i * 3]).put(at + 5, n[i * 3 + 1]).put(at + 6, n[i * 3 + 2]);
+                    }
+                }
+                texture = device.createHdrTexture(MORPH_ROW, (int) rows, data, false);
+            } finally {
+                MemoryUtil.memFree(data);
+            }
+        }
+
+        void close() {
+            if (texture != null) texture.close();
+        }
+    }
+
+    /** How many blend-shape draws were mixed on the GPU and how many vertex buffers were mixed on the CPU, for tests. */
+    static final java.util.concurrent.atomic.AtomicInteger GPU_MORPHS = new java.util.concurrent.atomic.AtomicInteger(),
+            CPU_MORPHS = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** Texels in a row of a morph texture, and the most rows one may have (with 2048 wide, 4 million texels: 64 MB). */
+    private static final int MORPH_ROW = 2048, MORPH_MAX_ROWS = 2048;
+
     private static final class GpuImage {
         final GpuTexture texture;
         long lastUsed;
@@ -124,6 +180,7 @@ final class SceneRenderer {
         GpuBuffer instances;
         long instanceCapacity;
         final List<GpuBuffer> joints = new ArrayList<>();
+        final List<GpuBuffer> morphBlocks = new ArrayList<>();
         final List<GpuBuffer> sortedIndices = new ArrayList<>();
         BloomPass bloom;
 
@@ -138,6 +195,7 @@ final class SceneRenderer {
             sky.close();
             if (instances != null) instances.close();
             for (GpuBuffer b : joints) b.close();
+            for (GpuBuffer b : morphBlocks) b.close();
             for (GpuBuffer b : sortedIndices) if (b != null) b.close();
             if (bloom != null) bloom.close();
         }
@@ -186,6 +244,8 @@ final class SceneRenderer {
         boolean isolated; // holds records out of view after those in view, so nothing may be merged in after it
         GpuBuffer indices; // a see-through node's triangles in this frame's order, or null for the mesh's own
         int joints = -1; // index into the render call's joint buffers, for a skinned group
+        int morph = -1; // index into the render call's morph blocks, for a group blended on the GPU
+        GpuTexture morphTexture;
     }
 
     private final GpuDevice device;
@@ -204,6 +264,9 @@ final class SceneRenderer {
     private final Map<Skybox, GpuImage> skies = new IdentityHashMap<>();
     private final Map<Skybox, float[]> skyLight = new IdentityHashMap<>();
     private final Map<Node3D, MorphedVertices> morphed = new IdentityHashMap<>();
+    private final Map<Mesh, GpuMorph> morphTextures = new IdentityHashMap<>();
+    private final Map<Resources, Integer> morphCounter = new IdentityHashMap<>();
+    private final ByteBuffer morphBlock = MemoryUtil.memAlloc(MORPH_BLOCK_SIZE).order(ByteOrder.nativeOrder());
     private final Map<Node3D, SkinReach> skinReach = new java.util.WeakHashMap<>();
     private final Map<Mesh, float[]> centroids = new IdentityHashMap<>();
     private final Map<Resources, Integer> sortedCounter = new IdentityHashMap<>();
@@ -246,20 +309,20 @@ final class SceneRenderer {
     private Pipeline pipeline(int key) {
         Pipeline existing = pipelines.get(key);
         if (existing != null) return existing;
-        boolean skinned = (key & KEY_SKINNED) != 0, uv2 = (key & KEY_UV2) != 0;
+        boolean skinned = (key & KEY_SKINNED) != 0, uv2 = (key & KEY_UV2) != 0, morph = (key & KEY_MORPH) != 0;
         // The vertex buffers after the mesh's own, at bindings 1 and up: the instance stream, then the skin, then the
         // second texture coordinates, whichever of those the geometry has.
         List<VertexLayout> extra = new ArrayList<>(List.of(instanceLayout));
         if (skinned) extra.add(skinLayout);
         PipelineDesc desc;
         if ((key & KEY_SHADOW) != 0) {
-            desc = new PipelineDesc(shadowVertex(skinned), SHADOW_FRAGMENT, meshLayout, true, false, false, false, extra);
+            desc = new PipelineDesc(shadowVertex(skinned, morph), SHADOW_FRAGMENT, meshLayout, true, false, false, false, extra);
         } else {
             boolean blend = (key & KEY_BLEND) != 0;
             if (uv2) extra.add(uv2Layout);
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
-            desc = new PipelineDesc(vertex(skinned, uv2), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
+            desc = new PipelineDesc(vertex(skinned, uv2, morph), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
                     variants.get(key >> KEY_VARIANT_SHIFT).falloffs()), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
                     .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
@@ -290,6 +353,7 @@ final class SceneRenderer {
         while (resourcePool.size() <= resourcesUsed) resourcePool.add(new Resources(device));
         Resources res = resourcePool.get(resourcesUsed++);
         jointCounter.remove(res);
+        morphCounter.remove(res);
         sortedCounter.remove(res);
 
         float aspect = (float) target.width() / Math.max(1, target.height());
@@ -376,7 +440,7 @@ final class SceneRenderer {
      * @param state        [0] the pipeline key in use, -1 for none
      */
     private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int fragmentBits, GpuBuffer shadowView) {
-        int key = shadowPass ? (group.key & KEY_SKINNED) | KEY_SHADOW : group.key | fragmentBits;
+        int key = shadowPass ? (group.key & (KEY_SKINNED | KEY_MORPH)) | KEY_SHADOW : group.key | fragmentBits;
         GpuMesh mesh = gpuMesh(group.mesh);
         if (key != state[0]) {
             pass.bindPipeline(pipeline(key));
@@ -385,6 +449,10 @@ final class SceneRenderer {
             lastMaterial[0] = null;
         }
         if (group.joints >= 0) pass.bindUniformBuffer(1, res.joints.get(group.joints));
+        if (group.morph >= 0) {
+            pass.bindUniformBuffer(10, res.morphBlocks.get(group.morph));
+            pass.bindTexture(9, group.morphTexture);
+        }
         Material material = group.material;
         if (material != lastMaterial[0]) {
             pass.bindTexture(2, material.getTexture() == null ? whiteTexture : gpuImage(material.getTexture()));
@@ -428,12 +496,13 @@ final class SceneRenderer {
             draw.cast = node.isCastShadow() && !draw.material.isBlend() && !lines;
             draw.receive = node.isReceiveShadow();
             draw.morph = node.activeMorph();
+            boolean gpuMorph = draw.morph != null && gpuMorph(mesh, draw.morph) != null;
             boolean skinned = node.getSkin() != null && mesh.isSkinned();
             if (node.getSkin() != null && !mesh.isSkinned()) {
                 log.warn("The node {} has a skin but its mesh has no skinning data; drawing it unskinned.", node.getName());
             }
             draw.key = (draw.material.isDoubleSided() ? 0 : KEY_CULL) | (draw.material.isBlend() ? KEY_BLEND : 0) | (draw.material.isAdditive() ? KEY_ADDITIVE : 0)
-                    | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0) | (mesh.hasUvs2() && usesSecondUvs(draw.material) ? KEY_UV2 : 0) | (lines ? KEY_LINES : 0);
+                    | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0) | (mesh.hasUvs2() && usesSecondUvs(draw.material) ? KEY_UV2 : 0) | (lines ? KEY_LINES : 0) | (gpuMorph ? KEY_MORPH : 0);
             // A skinned mesh is placed by its joints, so it is bounded by them, not by its node.
             float[] skinSphere = skinned ? skinSphere(node, mesh) : null;
             Instances instances = skinned ? null : node.getInstances();
@@ -689,7 +758,12 @@ final class SceneRenderer {
                 last.first = cursor[0];
                 last.isolated = hidden;
                 if (skinned) last.joints = writeJoints(res, draw.node.getSkin());
-                if (draw.morph != null) last.vertices = morphedBuffer(draw.node, draw.mesh, draw.morph);
+                if ((draw.key & KEY_MORPH) != 0) {
+                    last.morphTexture = morphTextures.get(draw.mesh).texture;
+                    last.morph = writeMorph(res, morphTextures.get(draw.mesh), draw.morph);
+                } else if (draw.morph != null) {
+                    last.vertices = morphedBuffer(draw.node, draw.mesh, draw.morph);
+                }
                 if (draw.sortTriangles) last.indices = sortedIndices(res, draw);
                 groups.add(last);
             }
@@ -1231,6 +1305,52 @@ final class SceneRenderer {
     }
 
     /**
+     * The mesh's blend shapes on the GPU, or null when they can't be blended there: too many shape-vertices for a texture,
+     * or more shapes switched on than {@link SceneShaders#MAX_ACTIVE_MORPHS}.
+     */
+    private GpuMorph gpuMorph(Mesh mesh, float[] weights) {
+        GpuMorph m = morphTextures.get(mesh);
+        if (m != null && m.targets != mesh.morphTargets()) {
+            m.close();
+            m = null;
+        }
+        if (m == null) {
+            m = new GpuMorph(device, mesh);
+            morphTextures.put(mesh, m);
+        }
+        m.lastUsed = frame;
+        if (m.texture == null) return null;
+        int active = 0;
+        for (int i = 0; i < weights.length && i < m.targets.size(); i++) if (weights[i] != 0f) active++;
+        return active <= MAX_ACTIVE_MORPHS ? m : null;
+    }
+
+    /**
+     * Writes the shapes a draw has switched on and their weights into the next morph block of the render call, as the
+     * joints are, and gives the block's number.
+     */
+    private int writeMorph(Resources res, GpuMorph m, float[] weights) {
+        int slot = morphCounter.getOrDefault(res, 0);
+        while (res.morphBlocks.size() <= slot) res.morphBlocks.add(device.createDynamicBuffer(BufferType.UNIFORM, MORPH_BLOCK_SIZE));
+        morphBlock.clear();
+        for (int i = 0; i < MORPH_BLOCK_SIZE / 4; i++) morphBlock.putFloat(0f);
+        int active = 0;
+        boolean normals = false;
+        for (int i = 0; i < weights.length && i < m.targets.size(); i++) {
+            if (weights[i] == 0f) continue;
+            morphBlock.putFloat(16 + active * 16, i).putFloat(20 + active * 16, weights[i]);
+            normals |= m.normals[i];
+            active++;
+        }
+        morphBlock.putFloat(0, active).putFloat(4, m.vertexCount).putFloat(8, MORPH_ROW).putFloat(12, normals ? 1f : 0f);
+        morphBlock.position(0).limit(MORPH_BLOCK_SIZE);
+        res.morphBlocks.get(slot).update(morphBlock);
+        morphCounter.merge(res, 1, Integer::sum);
+        GPU_MORPHS.incrementAndGet();
+        return slot;
+    }
+
+    /**
      * The node's vertices with its blend shapes mixed in at the weights, kept on the GPU until the weights change.
      */
     private GpuBuffer morphedBuffer(Node3D node, Mesh mesh, float[] weights) {
@@ -1246,6 +1366,7 @@ final class SceneRenderer {
         }
         float[] used = java.util.Arrays.copyOf(weights, mesh.morphTargets().size());
         if (m.weights == null || !java.util.Arrays.equals(m.weights, used)) {
+            CPU_MORPHS.incrementAndGet();
             float[] vertices = mesh.morph(used);
             int bytes = vertices.length * 4;
             if (morphScratch.capacity() < bytes) {
@@ -1318,6 +1439,13 @@ final class SceneRenderer {
                 it.remove();
             }
         }
+        for (Iterator<GpuMorph> it = morphTextures.values().iterator(); it.hasNext(); ) {
+            GpuMorph m = it.next();
+            if (frame - m.lastUsed > KEEP_FRAMES) {
+                m.close();
+                it.remove();
+            }
+        }
         for (Map<?, GpuImage> map : List.of(images, skies)) {
             for (Iterator<GpuImage> it = map.values().iterator(); it.hasNext(); ) {
                 GpuImage image = it.next();
@@ -1335,6 +1463,9 @@ final class SceneRenderer {
         for (GpuImage image : skies.values()) image.texture.close();
         for (MorphedVertices m : morphed.values()) m.buffer.close();
         morphed.clear();
+        for (GpuMorph m : morphTextures.values()) m.close();
+        morphTextures.clear();
+        MemoryUtil.memFree(morphBlock);
         MemoryUtil.memFree(morphScratch);
         for (Resources r : resourcePool) r.close();
         for (Pipeline pipeline : pipelines.values()) pipeline.close();

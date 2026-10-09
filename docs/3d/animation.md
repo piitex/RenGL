@@ -156,9 +156,15 @@ plane.setMorphTargets(List.of(new Mesh.MorphTarget("lift", lift, null)), null); 
 node.setMorphWeight(0, 0.5f);                        // half way up
 ```
 
-- The blending happens on the CPU, and the node gets its own copy of the mesh's vertices on the GPU, refilled only when
-  its weights change. That is cheap for the usual character head (tens of thousands of vertices); hundreds of thousands of
-  vertices that change every frame will show up in the frame time. A mesh whose weights are all zero costs nothing extra.
+- The blending happens on the GPU, in the vertex shader. The mesh's shapes are uploaded once, as a texture of offsets
+  (kept while the mesh is drawn), and every frame only the weights go up, so any number of nodes can share a mesh and
+  animate their weights for the price of a few floats each. A mesh whose weights are all zero costs nothing extra.
+- That works for up to 16 shapes with a non-zero weight at a time (a face rig has dozens of shapes but rarely more than a
+  handful switched on) and for meshes up to about two million shape-vertices (vertices times shapes; 64 MB of texture).
+  A node past either limit is blended on the CPU instead, into a copy of the mesh's vertices that is refilled only when its
+  weights change: the same picture, but a cost per vertex when the weights change every frame. The shapes' offsets are
+  stored in half precision on the GPU, which is plenty for a smile and not for a shape that moves a vertex by thousands of
+  units.
 - Morphing runs before [skinning](#skins), so a face can smile while the head turns.
 - A target may also change the normals; when it doesn't, the normals stay as authored.
 - The mesh's `bounds()` grow to hold the shapes at full weight, which keeps [culling](scenes.md#frustum-culling) and
@@ -189,8 +195,8 @@ player.play("spin");
 
 - Clips from files are sampled **linearly**: Assimp keeps only the values of a glTF cubic-spline track and drops its
   tangents, so those keys are used as plain keys. (Clips you build yourself are linear or step too.)
-- **Morph targets** are blended on the CPU, with no limit on how many shapes a mesh has but a cost per vertex for every
-  shape with a non-zero weight.
+- **Morph targets** are blended on the GPU for up to 16 shapes switched on at a time; past that (or past about two million
+  shape-vertices) the node falls back to blending on the CPU, which costs per vertex for every shape with a non-zero weight.
 - An animation changes the **local transforms** of the nodes it targets; a node animated by a clip and moved by your code
   in the same frame takes whichever came last.
 - Skinning is done on the GPU for drawing and shadows, and on the CPU for [picking](scenes.md#picking).
