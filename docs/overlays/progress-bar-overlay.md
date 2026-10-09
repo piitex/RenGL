@@ -64,7 +64,7 @@ bar.getStyling().setCornerRadius(5f); // ends round to this, capped at half the 
 bar.getStyling().setBackgroundColor(Color.DARK_GRAY); // the track
 ```
 
-The track uses the theme's scroll-track color, and the fill the scroll-thumb color.
+The track uses the theme's scroll-track color, and the fill the theme's [accent](../styling/theming.md#the-accent).
 
 ## Striped fill
 

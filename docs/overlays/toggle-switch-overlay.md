@@ -38,12 +38,11 @@ Enter flips it, and a focused switch draws a ring around the track.
 | Part | Theme token | Pin it with |
 |---|---|---|
 | Off track | `Theme.getFieldBorder()` | `setOffColor(Paint)` |
-| On track | `Theme.getSelection()` at full opacity | `setOnColor(Paint)` |
+| On track | `Theme.getAccent()` | `setOnColor(Paint)` |
 | Knob | White | `setKnobColor(Paint)` |
 
-The engine has no separate accent token, so the on color is derived from the selection color. It is a pale blue in the light
-theme and a stronger blue in the dark theme. Set `setOnColor` for a brand color. See [Theming](../styling/theming.md) for
-the pinned rule.
+The on color is the theme's [accent](../styling/theming.md#the-accent), so changing the accent restyles every toggle.
+Set `setOnColor` for one toggle of its own color. See [Theming](../styling/theming.md) for the pinned rule.
 
 ```java
 sw.setOnColor(new Color(0.20f, 0.70f, 0.35f, 1f));

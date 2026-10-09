@@ -17,6 +17,8 @@ public class DarkTheme extends BaseTheme {
         setPlaceholderText(new Color(0.55f, 0.55f, 0.58f, 1f));
         setCaret(Color.WHITE);
         setSelection(new Color(0.30f, 0.50f, 0.90f, 0.55f));
+        setAccent(new Color(0.30f, 0.50f, 0.90f, 1f));
+        setAccentTint(new Color(0.30f, 0.50f, 0.90f, 0.55f));
         setButtonBackground(new Color(0.25f, 0.25f, 0.27f, 1f));
         setButtonHoverBackground(new Color(0.32f, 0.32f, 0.35f, 1f));
         setButtonBorder(new Color(0.45f, 0.45f, 0.48f, 1f));

@@ -98,22 +98,44 @@ Every token is a getter on `Theme`. A widget picks the tokens it needs.
 
 | Token | Used for |
 |---|---|
-| `getText()` | Text and labels of themed widgets, checkmark and radio dot |
+| `getText()` | Text and labels of themed widgets |
 | `getFieldBackground()` | Text field/area, dropdown, checkbox and radio box background |
 | `getFieldHoverBackground()` | Same, while hovered |
 | `getFieldBorder()` | Same, border; also slider ticks |
 | `getPlaceholderText()` | Placeholder and prefix text, slider tick labels |
 | `getCaret()` | Text caret |
 | `getSelection()` | Text selection highlight, selected dropdown row |
+| `getAccent()` | The app's accent: the fill and thumb of a slider, a progress bar's fill, a checkbox's tick, a radio's dot, the on side of a toggle |
+| `getAccentTint()` | The accent as a faint wash: the selected row of a [`TreeView`](../containers/tree-view.md) and a [`TableView`](../containers/table-view.md) |
 | `getButtonBackground()` / `getButtonHoverBackground()` / `getButtonBorder()` | [`ButtonOverlay`](../overlays/button-overlay.md) |
 | `getContainerBackground()` ([`Paint`](colors-and-paints.md)) / `getContainerBorder()` | A container that called `useTheme()`; separator lines. The background may be a gradient |
 | `getContainerEffect()` | An [effect](backgrounds.md#backgrounds-in-files) behind a themed container, as settings (a `Map`), or `null` |
-| `getScrollThumb()` / `getScrollTrack()` | Scrollbars; slider and progress fill/track; split divider; spinner dots |
+| `getScrollThumb()` / `getScrollTrack()` | Scrollbars; slider and progress track; split divider; spinner dots |
 | `getWindowBackground()` ([`Paint`](colors-and-paints.md)) | The window backdrop. May be a gradient, a scrolling one or a rainbow |
 | `getWindowEffect()` | An [effect](backgrounds.md#backgrounds-in-files) drawn over the backdrop, as settings (a `Map`), or `null` |
 | `getCornerRadius()` | Box rounding for themed controls (default `6`) |
 | `getBorderThickness()` | Box border width for themed controls (default `1`) |
 | `getTooltipBackground()` / `getTooltipBorder()` / `getTooltipText()` ([`Paint`](colors-and-paints.md)) | Tooltip bubble. Each may be a gradient, a scrolling one or a rainbow |
+
+### The accent
+
+`getAccent()` is one place to set the color of everything that shows "on", "filled" or "chosen". Change it and the
+sliders, progress bars, check marks, radio dots, toggles and the selected row of a tree or a table all follow, unless
+one was given a color of its own with its setter (that one stays).
+
+```java
+BaseTheme brand = new DarkTheme();
+brand.setAccent(new Color(0.20f, 0.70f, 0.35f, 1f));      // slider fill, progress, tick, dot, toggle
+brand.setAccentTint(new Color(0.20f, 0.70f, 0.35f, 0.25f)); // the selected row
+ThemeManager.setCurrent(brand);
+```
+
+The light theme's accent is a medium blue and the dark theme's a lighter one; the crimson theme's is its red. A `Theme`
+written before the accent existed does not need to change: `getAccent()` and `getAccentTint()` are default methods that
+give the selection color, at full opacity for the accent.
+
+In a theme file they are `"accent"` and `"accentTint"`. To use the accent in a widget of your own, apply
+`theme.getAccent()` as its baseline in `applyTheme`, as the example below does.
 
 ## Making your own theme
 
@@ -221,7 +243,7 @@ public class Badge extends Overlay implements Themeable {
     @Override
     public void applyTheme(Theme theme) {
         getStyling().applyThemeBackgroundColor(theme.getButtonBackground()); // baseline, not pinned
-        accent.applyTheme(theme.getSelection()); // baseline, not pinned
+        accent.applyTheme(theme.getAccent()); // baseline, not pinned
     }
 
     @Override

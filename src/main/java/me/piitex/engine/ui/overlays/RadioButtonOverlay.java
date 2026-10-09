@@ -16,8 +16,7 @@ import me.piitex.engine.ui.theme.Themeable;
  * Element's own {@link me.piitex.engine.ui.color.Styling}, meaning the background,
  * hover, and border field tokens {@link CheckBoxOverlay}'s box also uses, rounded into
  * a full circle by the constructor. The inner dot is drawn on top while
- * {@link #isSelected()}, using {@link Theme#getText()}, the same token and contrast
- * pairing {@link CheckBoxOverlay}'s checkmark uses against that field background.
+ * {@link #isSelected()}, using {@link Theme#getAccent()}, as {@link CheckBoxOverlay}'s checkmark does.
  * <p>
  * Selection is exclusive only within a {@link RadioGroup}, so add every mutually
  * exclusive RadioButtonOverlay to the same group through {@link RadioGroup#add}. A
@@ -149,7 +148,7 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         getStyling().applyThemeHoverColor(theme.getFieldHoverBackground());
         getStyling().applyThemeBorderColor(theme.getFieldBorder());
         getStyling().applyThemeBorderThickness(theme.getBorderThickness());
-        dotColor.applyTheme(theme.getText());
+        dotColor.applyTheme(theme.getAccent());
     }
 
     @Override

@@ -16,6 +16,8 @@ public class CrimsonTheme extends BaseTheme {
         setPlaceholderText(new Color(0.55f, 0.40f, 0.42f, 1f));
         setCaret(new Color(1f, 0.25f, 0.30f, 1f));
         setSelection(new Color(0.86f, 0.08f, 0.24f, 0.55f));
+        setAccent(new Color(0.86f, 0.08f, 0.24f, 1f));
+        setAccentTint(new Color(0.86f, 0.08f, 0.24f, 0.55f));
         setButtonBackground(new Color(0.62f, 0.07f, 0.13f, 1f));
         setButtonHoverBackground(new Color(0.80f, 0.10f, 0.18f, 1f));
         setButtonBorder(new Color(0.95f, 0.22f, 0.28f, 1f));

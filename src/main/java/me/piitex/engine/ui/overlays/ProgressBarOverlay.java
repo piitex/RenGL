@@ -31,7 +31,7 @@ import me.piitex.engine.ui.theme.Themeable;
  *       {@link #getFillWidth()} to line itself up with the fill</li>
  * </ul>
  * The track is themed like {@link SliderOverlay}'s (scroll-track color) and the fill
- * like its fill (scroll-thumb color); the ends round to {@link #getStyling()}'s corner
+ * like its fill (the theme's accent); the ends round to {@link #getStyling()}'s corner
  * radius, capped at half the bar's height.
  */
 public class ProgressBarOverlay extends Overlay implements Themeable {
@@ -238,7 +238,7 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         getStyling().applyThemeBackgroundColor(theme.getScrollTrack());
         getStyling().applyThemeHoverColor(theme.getScrollTrack()); // same as the track: a bar has no hover state
         getStyling().applyThemeCornerRadius(theme.getCornerRadius());
-        fillColor.applyTheme(theme.getScrollThumb());
+        fillColor.applyTheme(theme.getAccent());
     }
 
     @Override

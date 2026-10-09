@@ -23,8 +23,7 @@ import java.util.function.Consumer;
  * across while the track color fades between its off and on colors.
  * <p>
  * Themed like the other controls: the off track uses {@link Theme#getFieldBorder()}, the
- * on track uses {@link Theme#getSelection()} at full opacity (the engine has no separate
- * accent token), and the knob is white. Pin any of them with {@link #setOffColor}, {@link
+ * on track uses {@link Theme#getAccent()}, and the knob is white. Pin any of them with {@link #setOffColor}, {@link
  * #setOnColor} and {@link #setKnobColor}. It is {@link Focusable} and a Tab stop; a focused
  * switch draws a ring around the track.
  * <p>
@@ -133,8 +132,7 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
     @Override
     public void applyTheme(Theme theme) {
         offColor.applyTheme(theme.getFieldBorder());
-        Color selection = theme.getSelection();
-        onColor.applyTheme(new Color(selection.getR(), selection.getG(), selection.getB(), 1f));
+        onColor.applyTheme(theme.getAccent());
     }
 
     @Override

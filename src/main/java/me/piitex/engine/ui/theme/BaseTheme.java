@@ -26,6 +26,8 @@ public class BaseTheme implements Theme {
     private Color placeholderText = Color.LIGHT_GRAY;
     private Color caret = Color.BLACK;
     private Color selection = new Color(0.60f, 0.78f, 1.0f, 0.55f);
+    private Color accent = new Color(0.16f, 0.46f, 0.92f, 1f);
+    private Color accentTint = new Color(0.60f, 0.78f, 1.0f, 0.55f);
 
     private Color buttonBackground = new Color(0.95f, 0.95f, 0.95f, 1f);
     private Color buttonHoverBackground = new Color(0.85f, 0.85f, 0.85f, 1f);
@@ -111,6 +113,24 @@ public class BaseTheme implements Theme {
 
     public void setSelection(Color selection) {
         this.selection = selection;
+    }
+
+    @Override
+    public Color getAccent() {
+        return accent;
+    }
+
+    public void setAccent(Color accent) {
+        this.accent = accent;
+    }
+
+    @Override
+    public Color getAccentTint() {
+        return accentTint;
+    }
+
+    public void setAccentTint(Color accentTint) {
+        this.accentTint = accentTint;
     }
 
     @Override
