@@ -54,6 +54,32 @@ class VideoAudioTest {
     }
 
     @Test
+    void aLoopWithSoundKeepsGoingWithoutStalling() throws Exception {
+        requireSilentDevice();
+        AviBuilder b = new AviBuilder(32, 32, 10, false).frames(10); // 1 s
+        b.tone(1.0);
+        player = VideoPlayer.open(b.write(dir, "loop.avi"));
+        player.setLooping(true);
+        int[] loops = {0};
+        player.onLoop(() -> loops[0]++);
+        long start = System.nanoTime();
+        int stalls = 0;
+        double lastPos = 0;
+        while (loops[0] < 2 && System.nanoTime() - start < 8_000_000_000L) {
+            player.update(1 / 60f);
+            if (player.isBuffering() && player.getFrame() != null && loops[0] > 0) stalls++;
+            assertTrue(player.getPosition() < 1.2, "a pass is a second long: " + player.getPosition());
+            lastPos = player.getPosition();
+            Thread.sleep(5);
+        }
+        assertEquals(2, loops[0], "two wraps in real time, position " + lastPos);
+        assertEquals(0, stalls);
+        double took = (System.nanoTime() - start) / 1e9;
+        assertTrue(took > 1.8 && took < 4.5, "two passes of sound take about two seconds, took " + took);
+        assertFalse(player.isFinished());
+    }
+
+    @Test
     void pauseStopsTheClockAndSeekRestartsTheSound() throws Exception {
         requireSilentDevice();
         AviBuilder b = new AviBuilder(32, 32, 10, false).frames(40); // 4 s

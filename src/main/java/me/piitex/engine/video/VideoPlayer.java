@@ -36,6 +36,9 @@ import java.util.function.Consumer;
  * clock instead, so the picture stays locked to the audio. Callbacks run inside {@link #update}. The control
  * methods and {@link #update} belong to the render thread.
  * <p>
+ * A looping video has no break at the wrap: the decode thread carries straight on from the end of the file into the
+ * start of the next pass, so the soundtrack and the pictures that follow are already queued when the last frame is shown.
+ * <p>
  * Close it with {@link #close()} when done: that stops the decode thread and releases the file.
  *
  * <h2>Formats</h2>
@@ -67,6 +70,8 @@ public final class VideoPlayer implements AutoCloseable {
     private double audioBase = Double.NaN; // media time of the first sample queued since the last seek
     private boolean eof, closed;
     private double seekRequest = -1;
+    private int loopsLeft;                  // passes still to queue after the one being decoded; -1 for forever
+    private final ArrayDeque<Double> wrapTimes = new ArrayDeque<>(); // timeline times at which a queued pass begins
     private int generation;
     private Throwable failure;
 
@@ -78,7 +83,8 @@ public final class VideoPlayer implements AutoCloseable {
     private final List<Consumer<Throwable>> errorListeners = new ArrayList<>();
     private double clock;
     private boolean playing = true, finished, needFirst = true, buffering, failureReported;
-    private int loopCount = 1, loopsLeft = 0;
+    private int loopCount = 1;
+    private double passStart;               // timeline time at which the pass being shown began
     private float speed = 1f, volume = 1f;
     private boolean muted;
     private AudioChannel channel = AudioChannel.SFX;
@@ -170,7 +176,7 @@ public final class VideoPlayer implements AutoCloseable {
         if (finished) {
             seek(0);
             finished = false;
-            loopsLeft = loopCount == 0 ? -1 : loopCount - 1;
+            resetLoops();
         }
         playing = true;
         if (playback != null) playback.resume();
@@ -190,7 +196,7 @@ public final class VideoPlayer implements AutoCloseable {
     public void stop() {
         playing = false;
         finished = false;
-        loopsLeft = loopCount == 0 ? -1 : loopCount - 1;
+        resetLoops();
         seek(0);
     }
 
@@ -227,12 +233,21 @@ public final class VideoPlayer implements AutoCloseable {
             lock.notifyAll();
         }
         clock = target;
+        passStart = 0;
         needFirst = true;
         buffering = false;
         stopAudio();
         if (finished && (info.duration() <= 0 || target < info.duration())) {
             finished = false;
-            loopsLeft = 0;
+            synchronized (lock) {
+                loopsLeft = 0;
+            }
+        }
+    }
+
+    private void resetLoops() {
+        synchronized (lock) {
+            loopsLeft = loopCount == 0 ? -1 : loopCount - 1;
         }
     }
 
@@ -244,14 +259,14 @@ public final class VideoPlayer implements AutoCloseable {
      * Seconds into the video.
      */
     public double getPosition() {
-        return clock;
+        return Math.max(0, clock - passStart);
     }
 
     /**
      * How far through the video playback is, 0 to 1; 0 when the length is unknown.
      */
     public float getProgress() {
-        return info.duration() > 0 ? (float) Math.min(1, clock / info.duration()) : 0f;
+        return info.duration() > 0 ? (float) Math.min(1, getPosition() / info.duration()) : 0f;
     }
 
     /**
@@ -260,7 +275,13 @@ public final class VideoPlayer implements AutoCloseable {
      */
     public void setLoopCount(int count) {
         loopCount = Math.max(0, count);
-        if (!finished) loopsLeft = loopCount == 0 ? -1 : loopCount - 1;
+        if (finished) return;
+        boolean queuedAhead;
+        synchronized (lock) {
+            loopsLeft = loopCount == 0 ? -1 : loopCount - 1;
+            queuedAhead = !wrapTimes.isEmpty();
+        }
+        if (queuedAhead) seek(getPosition()); // the decoder has already run on into another pass, which is now the wrong one
     }
 
     public int getLoopCount() {
@@ -365,6 +386,7 @@ public final class VideoPlayer implements AutoCloseable {
         reportFailure();
         startAudioIfReady();
         advanceClock(delta);
+        announceWraps();
         pickFrame();
         checkEnd();
     }
@@ -422,6 +444,20 @@ public final class VideoPlayer implements AutoCloseable {
         clock += delta * speed;
     }
 
+    /**
+     * Tells the loop listeners about each pass whose start the clock has now reached.
+     */
+    private void announceWraps() {
+        int reached = 0;
+        synchronized (lock) {
+            while (!wrapTimes.isEmpty() && clock >= wrapTimes.peek()) {
+                passStart = wrapTimes.poll();
+                reached++;
+            }
+        }
+        for (int i = 0; i < reached; i++) for (var l : List.copyOf(loopListeners)) l.run();
+    }
+
     private void pickFrame() {
         VideoFrame show = null;
         synchronized (lock) {
@@ -455,8 +491,12 @@ public final class VideoPlayer implements AutoCloseable {
         double frameTime = info.frameRate() > 0 ? 1 / info.frameRate() : 0;
         if (playback == null && clock < shownPts + frameTime - 1e-6) return;
 
-        if (loopsLeft != 0) {
+        boolean again;
+        synchronized (lock) { // the decoder wraps by itself; this is for a loop that was switched on after it had finished
+            again = loopsLeft != 0;
             if (loopsLeft > 0) loopsLeft--;
+        }
+        if (again) {
             seek(0);
             for (var l : List.copyOf(loopListeners)) l.run();
             return;
@@ -479,7 +519,7 @@ public final class VideoPlayer implements AutoCloseable {
      * Media time, in seconds, of the picture showing now.
      */
     public double getFrameTime() {
-        return Math.max(0, shownPts);
+        return Math.max(0, shownPts - passStart);
     }
 
     // ------------------------------------------------------------------ cleanup
@@ -532,6 +572,7 @@ public final class VideoPlayer implements AutoCloseable {
         audioOffset = 0;
         audioShorts = 0;
         audioBase = Double.NaN;
+        wrapTimes.clear();
     }
 
     private boolean wantsData() {
@@ -611,6 +652,10 @@ public final class VideoPlayer implements AutoCloseable {
         private final FrameDecoder videoDecoder;
         private final AudioTrackDecoder audioDecoder;
         private int brokenFrames;
+        private double offset;          // timeline time at which this pass's media time 0 falls
+        private long audioFramesQueued; // sample frames queued since the last seek, over every pass
+        private boolean produced;       // whether this pass has put anything in the queues
+        private double lastVideoPts;    // media time of the latest picture of this pass
 
         Decoding(Demuxer demuxer, FrameDecoder videoDecoder, AudioTrackDecoder audioDecoder) {
             this.demuxer = demuxer;
@@ -642,6 +687,10 @@ public final class VideoPlayer implements AutoCloseable {
                         if (audioDecoder != null) audioDecoder.flush();
                         floor = seekTo;
                         held = null;
+                        offset = 0;
+                        audioFramesQueued = 0;
+                        produced = false;
+                        lastVideoPts = seekTo;
                         continue;
                     }
                     Packet packet = readPacket();
@@ -650,9 +699,28 @@ public final class VideoPlayer implements AutoCloseable {
                             if (!offer(held, gen)) buffers.give(held.pixels());
                             held = null;
                         }
+                        double wrapAt = Double.NaN;
                         synchronized (lock) {
-                            if (gen == generation) eof = true;
+                            if (gen == generation) {
+                                if (loopsLeft != 0 && produced) {
+                                    if (loopsLeft > 0) loopsLeft--;
+                                    wrapAt = passEnd();
+                                    wrapTimes.add(wrapAt);
+                                } else {
+                                    eof = true;
+                                }
+                            }
                             lock.notifyAll();
+                        }
+                        if (!Double.isNaN(wrapAt)) { // carry straight on into the next pass
+                            demuxer.seek(0);
+                            videoDecoder.flush();
+                            if (audioDecoder != null) audioDecoder.flush();
+                            floor = 0;
+                            held = null;
+                            offset = wrapAt;
+                            produced = false;
+                            lastVideoPts = 0;
                         }
                         continue;
                     }
@@ -668,6 +736,7 @@ public final class VideoPlayer implements AutoCloseable {
                             if (!offer(held, gen)) buffers.give(held.pixels());
                             held = null;
                         }
+                        lastVideoPts = frame.pts();
                         if (!offer(frame, gen)) buffers.give(frame.pixels());
                     } else if (audioDecoder != null && packet.stream() == demuxer.audioStream()) {
                         decodeAudio(packet, floor, gen);
@@ -707,6 +776,17 @@ public final class VideoPlayer implements AutoCloseable {
             }
         }
 
+        /**
+         * Where on the timeline the pass being queued ends, which is where the next one starts. With a soundtrack that is
+         * the end of the sound queued so far, since the sound runs on without a break and the clock follows it; without
+         * one it is the length of the video.
+         */
+        private double passEnd() {
+            if (audioDecoder != null && !Double.isNaN(audioBase)) return audioBase + audioFramesQueued / (double) audioRate;
+            double frameTime = info.frameRate() > 0 ? 1 / info.frameRate() : 0;
+            return offset + Math.max(info.duration(), lastVideoPts + frameTime);
+        }
+
         private void decodeAudio(Packet packet, double floor, int gen) throws InterruptedException {
             short[] pcm;
             try {
@@ -728,9 +808,11 @@ public final class VideoPlayer implements AutoCloseable {
             if (pcm.length == 0) return;
             synchronized (lock) {
                 if (gen != generation) return;
-                if (Double.isNaN(audioBase)) audioBase = pts;
+                if (Double.isNaN(audioBase)) audioBase = pts + offset;
                 audioChunks.add(pcm);
                 audioShorts += pcm.length;
+                audioFramesQueued += pcm.length / ch;
+                produced = true;
             }
         }
 
@@ -739,6 +821,8 @@ public final class VideoPlayer implements AutoCloseable {
             synchronized (lock) {
                 while (!closed && gen == generation && frames.size() >= MAX_QUEUED * 2) lock.wait();
                 if (closed || gen != generation) return false;
+                produced = true;
+                if (offset != 0) frame = new VideoFrame(frame.width(), frame.height(), frame.pixels(), frame.pts() + offset);
                 frames.add(frame);
                 frameBytes += frame.pixels().length;
                 return true;

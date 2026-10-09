@@ -116,6 +116,13 @@ A video without sound (or with the audio device unavailable) runs on the time pa
 [animated GIF](../styling/images-and-icons.md), so it follows a scene's time scale. If the disk or CPU cannot keep up,
 late pictures are dropped to stay with the sound, and a silent video waits (`isBuffering()`).
 
+A looping video wraps without a break. The decode thread carries on from the end of the file into the next pass while the
+last second is still playing, so the soundtrack never stops and the first frame of the next pass is already waiting.
+`getPosition()` starts again from 0 as the new pass is reached, and `onLoop` fires at that moment. A seek still restarts
+the sound, because the old queue is no use at the new place: the picture and sound resume once the decoder has the first
+part ready. Turning looping off in the middle of a pass drops what was queued past the end and seeks to where it is, so
+that one call can leave a short gap.
+
 ## Using VideoPlayer without the overlay
 
 ```java

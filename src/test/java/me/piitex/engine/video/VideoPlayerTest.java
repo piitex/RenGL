@@ -152,6 +152,47 @@ class VideoPlayerTest {
     }
 
     @Test
+    void aLoopIsAlreadyQueuedWhenTheLastFrameShows() throws Exception {
+        VideoPlayer p = open(movie(5)); // 0.5 s
+        p.setLooping(true);
+        AtomicInteger loops = new AtomicInteger();
+        p.onLoop(loops::incrementAndGet);
+        assertTrue(pump(p, () -> Math.round(p.getFrameTime() * 10) == 4), "the last frame of the first pass");
+        assertEquals(0, loops.get());
+        assertTrue(p.queuedFrames() > 0, "the next pass was decoded before the first one ended, so there is no gap");
+        assertTrue(pump(p, () -> loops.get() == 1));
+        assertTrue(p.getPosition() < 0.2, "the position starts over with the new pass: " + p.getPosition());
+        assertFalse(p.isBuffering());
+    }
+
+    @Test
+    void aLoopNeverStopsToBuffer() throws Exception {
+        VideoPlayer p = open(movie(5));
+        p.setLooping(true);
+        AtomicInteger loops = new AtomicInteger(), stalls = new AtomicInteger();
+        p.onLoop(loops::incrementAndGet);
+        assertTrue(pump(p, () -> {
+            if (p.isBuffering() && p.getFrame() != null) stalls.incrementAndGet();
+            return loops.get() >= 4;
+        }));
+        assertEquals(0, stalls.get());
+        assertShows(p, (int) Math.round(p.getFrameTime() * 10));
+    }
+
+    @Test
+    void turningLoopingOffMidwayStopsAtTheEnd() throws Exception {
+        VideoPlayer p = open(movie(5));
+        p.setLooping(true);
+        AtomicInteger loops = new AtomicInteger(), finishes = new AtomicInteger();
+        p.onLoop(loops::incrementAndGet).onFinish(finishes::incrementAndGet);
+        assertTrue(pump(p, () -> loops.get() >= 1));
+        p.setLooping(false);
+        assertTrue(pump(p, p::isFinished));
+        assertEquals(1, finishes.get());
+        assertTrue(loops.get() <= 2, "no more than the pass already under way: " + loops.get());
+    }
+
+    @Test
     void stopReturnsToTheFirstFrame() throws Exception {
         VideoPlayer p = open(movie(20));
         assertTrue(pump(p, () -> p.getPosition() > 0.8));

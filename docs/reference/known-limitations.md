@@ -62,12 +62,16 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 ## Audio
 
-- **No sound cones, occlusion by walls, or reverb.**
+- **Occlusion is not worked out for you.** `Playback.occlusion(amount)` applies the amount you give it; nothing in the
+  engine ray-tests your walls.
+- **One reverb for the whole world,** switched by hand as the player changes room; it is not tied to the listener's
+  position, and it does not blend between two rooms.
 
 ## Video
 
 - **There is no Windows decoder for H.264, HEVC and AAC.** They play only on macOS, where the system decoder reads
   them. A Windows backend (Media Foundation) is not written yet.
-- **Looping and seeking restart the sound,** which can leave a brief gap.
+- **A seek restarts the sound,** which leaves a brief gap while the decoder fills the first part (about 25 ms at 1080p,
+  85 ms at 4K). Looping has no gap.
 - **Tested with files the engine's own test writer produces,** covering all three AVI index layouts, not yet with
   FFmpeg or camera output. If a real file fails to open or looks wrong, that is a bug to report.
