@@ -172,8 +172,10 @@ public final class Mesh {
      * Gives the mesh blend shapes ("morph targets"), which a node mixes with {@link Node3D#setMorphWeights}: each weight
      * adds that many times its shape's offsets to the vertices. Faces, cloth and anything else a skeleton can't do well.
      * Model files with morph targets set this up themselves, and {@link AnimationClip.Path#WEIGHTS} animates the
-     * weights. The vertices are blended on the CPU when the weights change, so keep the vertex count of a morphed mesh
-     * moderate (tens of thousands is fine). Morphing runs before skinning.
+     * weights. The shapes are blended in the vertex shader from a texture of their offsets (half precision), with up to
+     * 16 shapes switched on at a time; a node with more on, or a mesh with more than about two million shape-vertices
+     * (vertices times shapes), is blended on the CPU instead, which costs per vertex when its weights change. Morphing
+     * runs before skinning.
      * <p>
      * The mesh's {@link #bounds()} grows to hold the shapes at weight 1 so culling and picking don't cut a morphed mesh
      * off.

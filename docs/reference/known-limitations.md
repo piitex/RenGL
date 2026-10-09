@@ -29,8 +29,9 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   bright thing is out of reach.
 - **Shadows have a soft edge of the same width everywhere** ([`setShadowSoftness`](../3d/lighting.md#shadows) scales
   it), and every shadow-casting light is a pass over the casters.
-- **Morph targets are blended on the CPU,** so a mesh with very many vertices whose weights change every frame costs
-  frame time ([details](../3d/animation.md#morph-targets)).
+- **A node with more than 16 blend shapes switched on at once is blended on the CPU,** as is a mesh with more than about
+  two million shape-vertices, so those cost frame time when their weights change every frame
+  ([details](../3d/animation.md#morph-targets)).
 - **Frustum culling is by spheres** (a node, each copy of an [instanced](../3d/instancing.md) node, a skinned mesh's joints),
   so something just outside the view can still be drawn. There is no occlusion culling, so things hidden behind other
   things are still drawn.
