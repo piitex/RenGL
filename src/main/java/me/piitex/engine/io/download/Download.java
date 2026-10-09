@@ -6,6 +6,10 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.Authenticator;
+import java.net.InetSocketAddress;
+import java.net.PasswordAuthentication;
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,7 +25,11 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * One file being downloaded over HTTP(S) on a background thread, with everything a UI needs to show it: state,
@@ -37,6 +45,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * {@link #pause()} keeps the {@code .part} file and {@link #start()} continues it with an HTTP {@code Range}
  * request; a dropped connection is retried the same way, up to {@link #setMaxRetries}. If the server ignores
  * {@code Range} the file restarts from zero.
+ * <p>
+ * <b>Speed.</b> {@link #setMaxBytesPerSecond} caps the transfer (a {@link DownloadManager} can cap everything it owns
+ * together), {@link #setSegments} fetches a big file over several connections at once when the server allows it, and
+ * {@link #setProxy(String, int)} sends it through a proxy.
  * <pre>{@code
  * Download d = new Download(URI.create("https://example.com/backend.zip"), env.getDirectory("backend").resolve("backend.zip"));
  * d.setExpectedSha256("9f86d0...");
@@ -54,6 +66,18 @@ public class Download {
             .connectTimeout(Duration.ofSeconds(15))
             .build();
 
+    private static final Map<String, ProxySelector> PROXIES = new ConcurrentHashMap<>();
+    private static final Map<ClientKey, HttpClient> CLIENTS = new ConcurrentHashMap<>();
+    private static volatile ProxySelector defaultProxy;
+
+    /** What makes one {@link HttpClient} differ from another: the proxy and the login for it. */
+    private record ClientKey(ProxySelector proxy, String user, String password) {
+    }
+
+    /** A segment no smaller than this is worth a connection of its own. */
+    private static final long MIN_SEGMENT_BYTES = 256L * 1024;
+    private static final int MAX_SEGMENTS = 16;
+
     private static final long SAMPLE_NANOS = 250_000_000L;
     private static final long STALL_NANOS = 2_000_000_000L;
 
@@ -66,6 +90,11 @@ public class Download {
     private String displayName;
     private String expectedSha256;
     private int maxRetries = 3;
+    private int segments = 1;
+    private ProxySelector proxy;
+    private String proxyUser, proxyPassword;
+    private final Throttle own = new Throttle();
+    private volatile Throttle shared; // the manager's limit for all its downloads, if it has one
 
     private volatile DownloadState state = DownloadState.QUEUED;
     private volatile long downloaded;
@@ -76,7 +105,8 @@ public class Download {
 
     private volatile boolean stopRequested;
     private volatile boolean discardOnStop;
-    private volatile InputStream activeStream;
+    private final Set<InputStream> activeStreams = ConcurrentHashMap.newKeySet();
+    private long windowStart, windowBytes; // the speed sample being gathered, guarded by this
 
     /**
      * Downloads {@code url} to {@code target}; the parent folders are created when the transfer begins.
@@ -118,6 +148,71 @@ public class Download {
     public Download setMaxRetries(int maxRetries) {
         this.maxRetries = Math.max(0, maxRetries);
         return this;
+    }
+
+    /**
+     * Caps the transfer at about this many bytes per second, taking effect at once even mid-download; 0 or less
+     * removes the cap. With several {@linkplain #setSegments segments} the cap is for all of them together. A
+     * {@link DownloadManager} can also cap everything it owns; the slower of the two applies.
+     */
+    public Download setMaxBytesPerSecond(long bytesPerSecond) {
+        own.setRate(bytesPerSecond);
+        return this;
+    }
+
+    public long getMaxBytesPerSecond() {
+        return own.getRate();
+    }
+
+    /**
+     * Fetches the file over up to {@code segments} connections at once (1 to 16, default 1), each taking its own part of
+     * it, which is faster when a server limits a single connection. It only happens when the server answers {@code
+     * Range} requests and reports the file's size, and the file is big enough to give every connection at least 256
+     * KiB; otherwise the download quietly uses one connection. Pause and resume work as usual: each part keeps its own
+     * progress in a {@code .part.N} file next to the {@code .part}, and they are joined when all are done.
+     */
+    public Download setSegments(int segments) {
+        this.segments = Math.max(1, Math.min(MAX_SEGMENTS, segments));
+        return this;
+    }
+
+    public int getSegments() {
+        return segments;
+    }
+
+    /**
+     * Sends this download through a proxy, or back to the default if {@code selector} is null. Takes effect on the next
+     * attempt.
+     */
+    public Download setProxy(ProxySelector selector) {
+        this.proxy = selector;
+        return this;
+    }
+
+    /**
+     * Sends this download through the HTTP proxy at {@code host}:{@code port}.
+     */
+    public Download setProxy(String host, int port) {
+        this.proxy = PROXIES.computeIfAbsent(host + ":" + port, key -> ProxySelector.of(new InetSocketAddress(host, port)));
+        return this;
+    }
+
+    /**
+     * The login for a proxy that asks for one. Basic authentication to a proxy for an HTTPS address is switched off in
+     * Java unless the program is started with {@code -Djdk.http.auth.tunneling.disabledSchemes=""}.
+     */
+    public Download setProxyLogin(String user, String password) {
+        this.proxyUser = user;
+        this.proxyPassword = password;
+        return this;
+    }
+
+    /**
+     * The proxy every download uses unless it was given its own with {@link #setProxy}; null, the default, uses the
+     * JVM's own settings ({@code http.proxyHost}, {@code https.proxyHost}, ...).
+     */
+    public static void setDefaultProxy(ProxySelector selector) {
+        defaultProxy = selector;
     }
 
     /**
@@ -260,13 +355,23 @@ public class Download {
         if (!state.isActive()) return;
         discardOnStop = discard;
         stopRequested = true;
-        InputStream stream = activeStream;
-        if (stream != null) {
+        closeActiveStreams(); // unblocks a read stuck on a stalled connection
+    }
+
+    private void closeActiveStreams() {
+        for (InputStream stream : activeStreams) {
             try {
-                stream.close(); // unblocks a read stuck on a stalled connection
+                stream.close();
             } catch (IOException ignored) {
             }
         }
+    }
+
+    /**
+     * Package-private: the limit a {@link DownloadManager} sets for everything it owns.
+     */
+    void setSharedThrottle(Throttle throttle) {
+        this.shared = throttle;
     }
 
     /**
@@ -318,17 +423,47 @@ public class Download {
         }
     }
 
-    private void transfer() throws IOException, InterruptedException {
-        Files.createDirectories(target.toAbsolutePath().getParent());
+    private HttpClient client() {
+        ProxySelector selector = proxy != null ? proxy : defaultProxy;
+        if (selector == null && proxyUser == null) return CLIENT;
+        return CLIENTS.computeIfAbsent(new ClientKey(selector, proxyUser, proxyPassword), key -> {
+            HttpClient.Builder builder = HttpClient.newBuilder()
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .connectTimeout(Duration.ofSeconds(15));
+            if (key.proxy() != null) builder.proxy(key.proxy());
+            if (key.user() != null) {
+                builder.authenticator(new Authenticator() {
+                    @Override
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return getRequestorType() == RequestorType.PROXY
+                                ? new PasswordAuthentication(key.user(), key.password() == null ? new char[0] : key.password().toCharArray()) : null;
+                    }
+                });
+            }
+            return builder.build();
+        });
+    }
 
-        long existing = Files.exists(partFile) ? Files.size(partFile) : 0;
+    private HttpRequest.Builder request() {
         HttpRequest.Builder request = HttpRequest.newBuilder(url).GET().timeout(Duration.ofSeconds(30));
         synchronized (headers) {
             headers.forEach(request::header);
         }
+        return request;
+    }
+
+    private void transfer() throws IOException, InterruptedException {
+        Files.createDirectories(target.toAbsolutePath().getParent());
+        if (segments > 1 && transferSegmented()) return;
+        transferSingle();
+    }
+
+    private void transferSingle() throws IOException, InterruptedException {
+        long existing = Files.exists(partFile) ? Files.size(partFile) : 0;
+        HttpRequest.Builder request = request();
         if (existing > 0) request.header("Range", "bytes=" + existing + "-");
 
-        HttpResponse<InputStream> response = CLIENT.send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<InputStream> response = client().send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
         if (stopRequested) {
             response.body().close();
             throw new StopException();
@@ -353,45 +488,225 @@ public class Download {
             throw new IOException("HTTP " + code + " from " + url);
         }
 
-        downloaded = existing;
-        bytesPerSecond = 0;
-        lastSampleNanos = System.nanoTime();
-        setState(DownloadState.DOWNLOADING);
+        beginTransfer(existing);
 
         try (InputStream in = response.body();
              OutputStream out = Files.newOutputStream(partFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                      append ? StandardOpenOption.APPEND : StandardOpenOption.TRUNCATE_EXISTING)) {
-            activeStream = in;
-            byte[] buffer = new byte[64 * 1024];
-            long windowStart = System.nanoTime();
-            long windowBytes = 0;
-            int read;
-            while ((read = in.read(buffer)) >= 0) {
-                if (stopRequested) throw new StopException();
-                out.write(buffer, 0, read);
-                downloaded += read; // single writer: only this thread mutates it
-                windowBytes += read;
-
-                long now = System.nanoTime();
-                if (now - windowStart >= SAMPLE_NANOS) {
-                    double instant = windowBytes * 1_000_000_000.0 / (now - windowStart);
-                    bytesPerSecond = bytesPerSecond == 0 ? instant : bytesPerSecond * 0.7 + instant * 0.3;
-                    lastSampleNanos = now;
-                    windowStart = now;
-                    windowBytes = 0;
-                }
-            }
+            activeStreams.add(in);
+            pump(in, out, Long.MAX_VALUE);
         } catch (IOException e) {
             if (stopRequested) throw new StopException();
             throw e;
         } finally {
-            activeStream = null;
+            activeStreams.clear();
         }
 
         if (total > 0 && downloaded < total) {
             throw new IOException("Connection closed after " + downloaded + " of " + total + " bytes");
         }
         if (total < 0 || downloaded > total) total = downloaded; // chunked response: the real size is what arrived
+    }
+
+    /**
+     * Resets the speed measurement and moves to DOWNLOADING with {@code existing} bytes already on disk.
+     */
+    private void beginTransfer(long existing) {
+        synchronized (this) {
+            downloaded = existing;
+            bytesPerSecond = 0;
+            lastSampleNanos = System.nanoTime();
+            windowStart = lastSampleNanos;
+            windowBytes = 0;
+        }
+        setState(DownloadState.DOWNLOADING);
+    }
+
+    /**
+     * Copies up to {@code limit} bytes of {@code in} to {@code out}, counting them, waiting as the bandwidth limits say,
+     * and stopping if a pause or cancel is asked for. Returns how many it copied.
+     */
+    private long pump(InputStream in, OutputStream out, long limit) throws IOException, InterruptedException {
+        byte[] buffer = new byte[64 * 1024];
+        long copied = 0;
+        while (copied < limit) {
+            int want = (int) Math.min(buffer.length, limit - copied);
+            long cap = effectiveLimit();
+            if (cap > 0) want = (int) Math.min(want, Math.max(1024, cap / 10)); // small reads keep a slow limit smooth
+            int read = in.read(buffer, 0, want);
+            if (read < 0) break;
+            if (stopRequested) throw new StopException();
+            out.write(buffer, 0, read);
+            copied += read;
+            record(read);
+            pace(read);
+        }
+        return copied;
+    }
+
+    /**
+     * The tighter of this download's cap and the manager's, or 0 for none.
+     */
+    private long effectiveLimit() {
+        long mine = own.getRate();
+        Throttle manager = shared;
+        long theirs = manager == null ? 0 : manager.getRate();
+        if (mine <= 0) return theirs;
+        return theirs <= 0 ? mine : Math.min(mine, theirs);
+    }
+
+    /**
+     * Waits long enough that the bytes just read keep the transfer under its caps, in short sleeps so a pause or cancel
+     * is not kept waiting.
+     */
+    private void pace(int bytes) throws InterruptedException, StopException {
+        Throttle manager = shared;
+        long wait = Math.max(own.reserve(bytes), manager == null ? 0 : manager.reserve(bytes));
+        if (wait <= 0) return;
+        long deadline = System.nanoTime() + wait;
+        long left;
+        while ((left = deadline - System.nanoTime()) > 0) {
+            if (stopRequested) throw new StopException();
+            Thread.sleep(Math.min(50L, left / 1_000_000L + 1L));
+        }
+    }
+
+    /**
+     * Counts bytes that reached the disk, and refreshes the speed every quarter second. Called by every connection.
+     */
+    private synchronized void record(int bytes) {
+        downloaded += bytes;
+        windowBytes += bytes;
+        long now = System.nanoTime();
+        if (now - windowStart >= SAMPLE_NANOS) {
+            double instant = windowBytes * 1_000_000_000.0 / (now - windowStart);
+            bytesPerSecond = bytesPerSecond == 0 ? instant : bytesPerSecond * 0.7 + instant * 0.3;
+            lastSampleNanos = now;
+            windowStart = now;
+            windowBytes = 0;
+        }
+    }
+
+    // ---------------------------------------------------------------- segmented transfer
+
+    private Path segmentFile(int index) {
+        return index == 0 ? partFile : partFile.resolveSibling(partFile.getFileName() + "." + index);
+    }
+
+    /**
+     * The file's size if the server answers range requests, else -1.
+     */
+    private long probeSize() throws IOException, InterruptedException {
+        HttpResponse<Void> response = client().send(request().header("Range", "bytes=0-0").build(), HttpResponse.BodyHandlers.discarding());
+        if (response.statusCode() != 206) return -1;
+        return parseRangeTotal(response.headers().firstValue("Content-Range").orElse(null));
+    }
+
+    /**
+     * Downloads over several connections. Returns false, having done nothing, when the server or the file doesn't suit
+     * it, so the caller uses one connection.
+     */
+    private boolean transferSegmented() throws IOException, InterruptedException {
+        long size = probeSize();
+        if (stopRequested) throw new StopException();
+        int count = (int) Math.min(segments, size / MIN_SEGMENT_BYTES);
+        if (size <= 0 || count < 2) return false;
+
+        total = size;
+        long length = (size + count - 1) / count;
+        long[] from = new long[count], to = new long[count], have = new long[count];
+        long already = 0;
+        for (int i = 0; i < count; i++) {
+            from[i] = i * length;
+            to[i] = Math.min(size, (i + 1L) * length) - 1;
+            long room = to[i] - from[i] + 1;
+            Path file = segmentFile(i);
+            long onDisk = Files.exists(file) ? Files.size(file) : 0;
+            if (onDisk > room) { // from a run with another layout: keep what belongs to this part
+                try (var channel = java.nio.channels.FileChannel.open(file, StandardOpenOption.WRITE)) {
+                    channel.truncate(room);
+                }
+                onDisk = room;
+            }
+            have[i] = onDisk;
+            already += onDisk;
+        }
+        beginTransfer(already);
+
+        AtomicBoolean abort = new AtomicBoolean();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        List<Thread> threads = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            int index = i;
+            threads.add(Thread.ofVirtual().name("download-" + displayName + "-" + i).start(() -> {
+                try {
+                    fetchSegment(segmentFile(index), from[index], to[index], have[index], abort);
+                } catch (Throwable t) {
+                    failure.compareAndSet(null, t);
+                    abort.set(true);
+                    closeActiveStreams();
+                }
+            }));
+        }
+        try {
+            for (Thread thread : threads) thread.join();
+        } catch (InterruptedException e) {
+            abort.set(true);
+            closeActiveStreams();
+            throw e;
+        } finally {
+            activeStreams.clear();
+        }
+        if (stopRequested) throw new StopException();
+        Throwable error = failure.get();
+        if (error != null) {
+            if (error instanceof IOException io && !(error instanceof StopException)) throw io;
+            if (error instanceof StopException) throw new IOException("a connection was interrupted", error);
+            throw new IOException(error.toString(), error);
+        }
+
+        for (int i = 1; i < count; i++) { // join the parts onto the first
+            Path file = segmentFile(i);
+            try (var out = java.nio.channels.FileChannel.open(partFile, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+                 var in = java.nio.channels.FileChannel.open(file, StandardOpenOption.READ)) {
+                long moved = 0, partSize = in.size();
+                while (moved < partSize) moved += in.transferTo(moved, partSize - moved, out);
+            }
+            Files.delete(file);
+        }
+        if (Files.size(partFile) != size) throw new IOException("Joined parts are " + Files.size(partFile) + " bytes, not " + size);
+        return true;
+    }
+
+    /**
+     * Fetches bytes {@code from} + {@code have} to {@code to} (inclusive) into {@code file}, after what is already there.
+     */
+    private void fetchSegment(Path file, long from, long to, long have, AtomicBoolean abort) throws IOException, InterruptedException {
+        long start = from + have;
+        if (start > to) return; // this part was finished in an earlier run
+        HttpResponse<InputStream> response = client().send(request().header("Range", "bytes=" + start + "-" + to).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        if (abort.get() || stopRequested) {
+            response.body().close();
+            throw new StopException();
+        }
+        if (response.statusCode() != 206) {
+            response.body().close();
+            throw new IOException("HTTP " + response.statusCode() + " from " + url + " for the range " + start + "-" + to);
+        }
+        long wanted = to - start + 1;
+        InputStream in = response.body();
+        activeStreams.add(in);
+        try (in; OutputStream out = Files.newOutputStream(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
+            if (abort.get() || stopRequested) throw new StopException();
+            long copied = pump(in, out, wanted);
+            if (copied < wanted) throw new IOException("Connection closed after " + copied + " of " + wanted + " bytes of a part");
+        } catch (IOException e) {
+            if (stopRequested || abort.get() && !(e instanceof StopException)) throw new StopException();
+            throw e;
+        } finally {
+            activeStreams.remove(in);
+        }
     }
 
     private void verifyAndFinish() throws IOException, NoSuchAlgorithmException {
@@ -409,6 +724,7 @@ public class Download {
         } catch (IOException atomicUnsupported) {
             Files.move(partFile, target, StandardCopyOption.REPLACE_EXISTING);
         }
+        deleteSegmentFiles();
         setState(DownloadState.COMPLETED);
         for (DownloadListener listener : listeners) {
             try {
@@ -449,6 +765,20 @@ public class Download {
             Files.deleteIfExists(partFile);
         } catch (IOException e) {
             log.warn("Could not delete {}", partFile, e);
+        }
+        deleteSegmentFiles();
+    }
+
+    /**
+     * Removes the {@code .part.N} files of a segmented transfer, which a finished or cancelled download leaves behind.
+     */
+    private void deleteSegmentFiles() {
+        for (int i = 1; i < MAX_SEGMENTS; i++) {
+            try {
+                Files.deleteIfExists(segmentFile(i));
+            } catch (IOException e) {
+                log.warn("Could not delete {}", segmentFile(i), e);
+            }
         }
     }
 

@@ -19,6 +19,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class DownloadManager {
     private final List<Download> downloads = new CopyOnWriteArrayList<>();
     private volatile int maxConcurrent;
+    private final Throttle throttle = new Throttle();
 
     private final DownloadListener pump = new DownloadListener() {
         @Override
@@ -45,9 +46,23 @@ public class DownloadManager {
     }
 
     /**
+     * Caps the speed of everything the manager runs, all downloads together, at about this many bytes per second; 0 or
+     * less removes the cap. Takes effect at once. A download's own {@link Download#setMaxBytesPerSecond cap} still
+     * applies; the slower of the two wins.
+     */
+    public void setMaxBytesPerSecond(long bytesPerSecond) {
+        throttle.setRate(bytesPerSecond);
+    }
+
+    public long getMaxBytesPerSecond() {
+        return throttle.getRate();
+    }
+
+    /**
      * Queues {@code download} and starts it as soon as a slot is free.
      */
     public Download add(Download download) {
+        download.setSharedThrottle(throttle);
         download.markQueued();
         download.addListener(pump);
         downloads.add(download);

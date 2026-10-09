@@ -30,6 +30,47 @@ d.start();
 - `setExpectedSize(bytes)` gives a determinate bar when the server sends no `Content-Length`.
 - `setDisplayName(name)` sets the name the displays show. It defaults to the target's file name.
 
+### Speed limit
+
+```java
+d.setMaxBytesPerSecond(500_000);   // about 500 kB/s; 0 removes the cap
+manager.setMaxBytesPerSecond(2_000_000);   // everything the manager runs, together
+```
+
+The cap holds on average, not as a ceiling on every instant: a transfer that has been idle gets its first read at once.
+It takes effect immediately, even in the middle of a download, and a pause or cancel is never kept waiting by it. A
+download's own cap and its manager's both apply; the slower wins. With several segments the cap is for all of them
+together.
+
+### Segments
+
+```java
+d.setSegments(4);   // up to 16 connections, each fetching its own part of the file
+```
+
+Some servers limit each connection, and several at once can use the whole link. The download first asks the server for
+the first byte of the file with a `Range` request; if it answers `206` with the file's size, and the file is big enough to
+give every connection at least 256 KiB, the file is cut into equal parts fetched together. If not, it quietly uses one
+connection as before, so setting it is always safe.
+
+Each part keeps its progress in its own file (`backend.zip.part`, `backend.zip.part.1`, ...). `pause()` keeps them,
+`start()` carries on where each stopped, `cancel()` deletes them, and when all are complete they are joined into
+the `.part` and checked and moved as usual. A part that fails is retried the whole way a single connection would be
+(`setMaxRetries`); one that fails for good fails the download. A file you started with segments can be resumed with a
+different number, or with none: the first part is always a plain prefix of the file.
+
+### Proxy
+
+```java
+d.setProxy("proxy.corp.example", 8080);                 // this download
+d.setProxyLogin("user", "secret");                      // if the proxy asks
+Download.setDefaultProxy(ProxySelector.of(new InetSocketAddress("proxy.corp.example", 8080))); // all of them
+```
+
+By default a download uses the JVM's own proxy settings (`-Dhttps.proxyHost` and friends). `setProxy(ProxySelector)` takes
+any selector, such as one that picks by address. Basic login to a proxy for an HTTPS address is switched off by Java
+unless the program starts with `-Djdk.http.auth.tunneling.disabledSchemes=""`.
+
 Getters, all safe from any thread: `getState()`, `getProgress()` (0..1), `getDownloadedBytes()`,
 `getTotalBytes()` (-1 unknown), `isSizeKnown()`, `getBytesPerSecond()` (smoothed; 0 when stalled),
 `getEtaSeconds()` (-1 unknown), `getError()`.
@@ -121,5 +162,9 @@ label.setText(DownloadFormat.bytes(d.getDownloadedBytes()) + " of " + DownloadFo
 
 ## Limitations
 
-- HTTP(S) only, and every download is a single connection (no segmented/multi-part downloading).
-- No bandwidth limit, and no proxy configuration beyond the JVM's defaults.
+- HTTP(S) only. A download is a single connection unless you ask for [segments](#segments), and then only where the
+  server answers `Range` requests.
+- The bandwidth limit is an average. It paces reads, so a very low limit with a fast link looks stop-and-go in the
+  speed readout.
+- A proxy needing anything but Basic login (NTLM, Kerberos) is not set up by `setProxyLogin`; supply your own
+  `ProxySelector` and set the JVM's authenticator.
