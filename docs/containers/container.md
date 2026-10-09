@@ -21,7 +21,8 @@ Constructors: `Container(width, height)` (positioned at `0, 0`) and `Container(x
 
 ```java
 panel.addElement(label); // appended: index = last index + 1
-panel.addElement(background, 0); // explicit index: lower draws first
+panel.addElement(background, 0); // explicit index: lower draws first, and REPLACES what was at 0
+panel.insertElement(menuBar, 0); // at index 0 and the others move up one, so nothing is lost
 panel.addElements(title, field, button); // several at once, in order; also takes a List
 ```
 
@@ -31,7 +32,11 @@ panel.addElements(title, field, button); // several at once, in order; also take
   `getAbsoluteX()`/`getAbsoluteY()`. It makes no difference whether the container is positioned yet or moves later,
   or in which order you build the tree. A plain `Container` does not lay out its children; for that use a
   [Layout](../layouts/README.md). A top-level container's x/y are window coordinates.
-- Adding a child whose index is already taken **replaces** the existing child.
+- Adding a child whose index is already taken **replaces** the existing child. To put one at a position and keep the
+  rest, use `insertElement(child, index)`: the children from that index on move up by one. An index past the last child
+  adds it on top, a negative one puts it at the back, and in a [layout](../layouts/README.md) it takes that place in the
+  row or column. A [`SplitContainer`](split-container.md) and a [`TabContainer`](tab-container.md) have their own slots
+  and throw `UnsupportedOperationException`.
 - `getElements()` returns the live `ConcurrentSkipListMap<Integer, Element>`. `getParent()` returns the
   container this one was added to, or `null` for a top-level container.
 - `removeElement(Element)` and `removeElement(int index)` detach a child. The children after it move down one index,

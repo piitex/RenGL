@@ -343,6 +343,11 @@ public class TabContainer extends Layout {
         throw new UnsupportedOperationException("Use addTab");
     }
 
+    @Override
+    public void insertElement(Element element, int index) {
+        throw new UnsupportedOperationException("Use addTab");
+    }
+
     /**
      * Removing a tab's content removes the tab. The tab strip itself cannot be removed.
      */
@@ -869,21 +874,7 @@ public class TabContainer extends Layout {
          * {@code text}, cut short with an ellipsis if it is wider than {@code maxWidth}.
          */
         private static String fit(String text, org.jetbrains.skia.Font font, float maxWidth) {
-            if (maxWidth <= 0) return "";
-            if (font.measureTextWidth(text) <= maxWidth) return text;
-
-            String ellipsis = "…";
-            float budget = maxWidth - font.measureTextWidth(ellipsis);
-            if (budget <= 0) return "";
-
-            int low = 0, high = text.length();
-            while (low < high) {
-                int mid = (low + high + 1) >>> 1;
-                if (font.measureTextWidth(text.substring(0, mid)) <= budget) low = mid;
-                else high = mid - 1;
-            }
-            if (low > 0 && Character.isHighSurrogate(text.charAt(low - 1))) low--; // never split a pair
-            return text.substring(0, low).stripTrailing() + ellipsis;
+            return me.piitex.engine.ui.text.TextFit.ellipsize(text, font, maxWidth);
         }
     }
 }
