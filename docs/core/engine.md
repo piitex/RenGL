@@ -56,6 +56,25 @@ starts, because Finder's event for a double-clicked file arrives while the app i
 launch command's own words (`java -jar app.jar` reports `app.jar` as a file to open). Registering the file type with the
 OS is part of [packaging](../reference/packaging.md).
 
+## The system's light or dark setting
+
+`Engine.getSystemAppearance()` says whether the OS is set to light or dark (`SystemAppearance.Mode.LIGHT` or `DARK`), so
+the app can start in the look the user chose. `Engine.onSystemAppearanceChange(listener)` is called on the render thread
+when the user switches the setting while the app runs; it is not called for the appearance the app starts under.
+
+```java nocompile
+boolean dark = Engine.getSystemAppearance() == SystemAppearance.Mode.DARK;
+ThemeManager.setCurrent(dark ? new DarkTheme() : new LightTheme());
+Engine.onSystemAppearanceChange(mode ->
+        ThemeManager.setCurrent(mode == SystemAppearance.Mode.DARK ? new DarkTheme() : new LightTheme()));
+```
+
+It is read with `defaults read -g AppleInterfaceStyle` on macOS, the `AppsUseLightTheme` registry value on Windows and
+`gsettings` on Linux (GNOME's `color-scheme`, else a GTK theme with "dark" in its name); a setting that cannot be read
+is `LIGHT`. There is no change notification the three share, so a listener makes a background thread read it every two
+seconds. Without a listener `getSystemAppearance()` runs the command each call (tens of milliseconds): call it once.
+Only the macOS command was run; the Windows and Linux readings are checked against sample output.
+
 ## What the render thread does every frame
 In order: apply a pending resize, process input, advance an animated window background, run
 [`Scheduler`](scheduler.md) tasks and queued menu and file-dialog callbacks, run the [scenes'](../game/scenes.md)

@@ -16,6 +16,7 @@ import me.piitex.engine.input.FileDialog;
 import me.piitex.engine.input.InputProcessor;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.input.OpenFiles;
+import me.piitex.engine.input.SystemAppearance;
 import me.piitex.engine.scheduler.Scheduler;
 import me.piitex.engine.ui.background.Background;
 import me.piitex.engine.ui.containers.Container;
@@ -146,6 +147,31 @@ public class Engine {
      */
     public static void openFilesFromArguments(String[] args) {
         OpenFiles.fromArguments(args);
+    }
+
+    /**
+     * Whether the operating system is set to a light or a dark appearance right now: macOS "Appearance", Windows
+     * "Choose your mode" or the GNOME / GTK dark setting. {@link SystemAppearance.Mode#LIGHT} when it cannot be
+     * read. Use it to pick a theme at launch. It runs a short system command unless an
+     * {@link #onSystemAppearanceChange listener} is set, so call it once, not every frame. Static, so it works before
+     * the engine exists.
+     */
+    public static SystemAppearance.Mode getSystemAppearance() {
+        return SystemAppearance.get();
+    }
+
+    /**
+     * Calls {@code listener} with the new appearance on the render thread when the user switches the system between
+     * light and dark while the application runs. It is not called for the appearance the application starts under; read
+     * that with {@link #getSystemAppearance()}. The system is checked every couple of seconds, so a change arrives
+     * with that delay. Pass null to remove the listener. For example:
+     * <pre>{@code
+     * Engine.onSystemAppearanceChange(mode ->
+     *         ThemeManager.setCurrent(mode == SystemAppearance.Mode.DARK ? new DarkTheme() : new LightTheme()));
+     * }</pre>
+     */
+    public static void onSystemAppearanceChange(Consumer<SystemAppearance.Mode> listener) {
+        SystemAppearance.onChange(listener);
     }
 
     /**
@@ -548,6 +574,7 @@ public class Engine {
             NativeMenuBar.drainActions(); // callbacks of items chosen in the macOS system menu bar
             FileDialog.drainCallbacks();  // results of native open/save dialogs
             OpenFiles.drain();            // files the OS asked the application to open
+            SystemAppearance.drain();     // the user switched the system between light and dark
             Scheduler.update(delta);      // runLater callbacks, timers, and async results
 
             // Game time: every window's scenes take the fixed steps (as many as this frame covers), then their
