@@ -117,7 +117,7 @@ Engine ──drives──▶ Window ──holds──▶ Container ──holds�
 ## RenGL vs RenEngine
 
 RenEngine was built on JavaFX, which restricts a lot of styling to CSS. That frustration is why RenGL exists. RenGL
-trades JavaFX's heavier components (table views, for example) for full control over how everything looks, plus things
+trades some of JavaFX's heavier components for full control over how everything looks, plus things
 JavaFX doesn't offer: draggable, resizable and reorderable containers, animated backgrounds, and a game and 3D
 toolkit built on the same windows. The class structure (Window, Container, Layout, Element) will feel familiar if you
 used RenEngine, except that a layout is now a subclass of `Container` and there is no `Application` or `FXLoad` class.
