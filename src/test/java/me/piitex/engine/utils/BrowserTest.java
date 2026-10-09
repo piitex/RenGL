@@ -66,4 +66,22 @@ class BrowserTest {
         assertNull(Browser.openCommand(Platform.OTHER, file));
         assertNull(Browser.revealCommand(Platform.OTHER, file));
     }
+
+    @Test
+    void openingAsTextRefusesWhatIsNotAFile(@TempDir Path dir) {
+        assertFalse(Browser.openAsText(dir.resolve("missing.sh")));
+        assertFalse(Browser.openAsText(dir), "a folder is not a text file");
+        assertFalse(Browser.openAsText(null));
+    }
+
+    @Test
+    void textCommandsPerPlatform(@TempDir Path dir) throws IOException {
+        Path script = Files.writeString(dir.resolve("run it.sh"), "x");
+        assertArrayEquals(new String[]{"open", "-t", script.toString()}, Browser.textCommand(Platform.MACOS, script));
+        assertArrayEquals(new String[]{"notepad.exe", script.toString()}, Browser.textCommand(Platform.WINDOWS, script));
+        assertArrayEquals(new String[]{"gtk-launch", "org.gnome.TextEditor.desktop", script.toString()},
+                Browser.linuxTextCommand("org.gnome.TextEditor.desktop\n", script));
+        assertNull(Browser.linuxTextCommand("", script), "no default editor named");
+        assertNull(Browser.linuxTextCommand(null, script));
+    }
 }

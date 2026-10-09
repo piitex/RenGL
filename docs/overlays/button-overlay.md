@@ -37,11 +37,11 @@ button.onAction(() -> System.out.println("clicked"));
 Moving off before letting go cancels the click, and other mouse buttons do nothing. Only one action is held.
 Calling `onAction` again replaces it.
 
-> **Do not call `onMouseClick` on a button.** The constructor registers an internal click handler that fires
-> `onAction`. Replacing it silently breaks the button.
+`onMouseClick` is safe to use on a button: `onAction` is fired by a handler of its own, and your listener runs after it
+and does not replace it.
 
-If you need to know *which* mouse button, you cannot get it from `onAction`. Use a plain [`Element`](../core/element.md) or
-[`TextOverlay`](text-overlay.md) with its own `onMouseClick`, or handle it in a custom overlay.
+`onAction` does not give the click's position. For that, set `onMouseClick` on the button; it receives the event.
+To react to the other mouse buttons, use a plain [`Element`](../core/element.md).
 
 ## Look and theme
 

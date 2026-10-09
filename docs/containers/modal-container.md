@@ -166,6 +166,6 @@ box.addElement(no);
 - The panel is centered using `window.getWindowOptions()`, whose width and height follow the real window size.
 - The modal registers a click handler on itself that closes it when the press lands outside the panel. Presses
   on the panel, or on children without a click listener of their own, reach that handler too (clicks go up to
-  the nearest listener), but they never close the modal. Do not replace it with your own `onMouseClick`.
+  the nearest listener), but they never close the modal. Your own `onMouseClick` runs after it and does not replace it.
 - Under the hood `show` calls `Window.showModal`, and `close` calls `Window.closeModal` (after the close
   animation, if there is one). See [Window](../core/window.md#modals).

@@ -23,10 +23,8 @@ import me.piitex.engine.ui.theme.Themeable;
  * button not in any group selects itself in isolation when clicked, and only
  * {@link #setSelected setSelected(false)} deselects it afterward.
  * <p>
- * This class registers its own {@link #onMouseClick} handler to select itself. Calling
- * {@code onMouseClick(...)} afterward replaces that handler and stops the radio button
- * from selecting, the same trade-off {@link ButtonOverlay} and {@link CheckBoxOverlay}
- * document for their own click handlers. Use {@link RadioGroup#onChange} to react to
+ * This class selects itself on a click with a handler of its own, kept apart from
+ * {@link #onMouseClick}: yours runs after it and does not replace it. Use {@link RadioGroup#onChange} to react to
  * selection changes.
  */
 public class RadioButtonOverlay extends Overlay implements Themeable {
@@ -54,7 +52,7 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         // is for the square controls that use it: ButtonOverlay, TextFieldOverlay, and
         // a themed Container.
         getStyling().applyThemeCornerRadius((float) (size / 2));
-        onMouseClick(event -> select());
+        setBuiltInClickListener(event -> select());
         setClickOnRelease(true);
         ThemeManager.register(this);
     }

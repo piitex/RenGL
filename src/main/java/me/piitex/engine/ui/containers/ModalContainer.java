@@ -70,7 +70,7 @@ public class ModalContainer extends Container {
         addElement(content);
         // Presses on the panel or anything in it reach this listener too, since a click goes up to the nearest
         // listener above what was hit (see InputProcessor#handleMouseButton). Only the backdrop dismisses.
-        onMouseClick(event -> {
+        setBuiltInClickListener(event -> {
             if (dismissOnBackdropClick && !this.content.contains(event.getMouseX(), event.getMouseY())) close();
         });
     }

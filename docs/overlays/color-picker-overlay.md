@@ -81,8 +81,8 @@ picker.getStyling().setCornerRadius(8f);
 The background and border may be a [`Color`](../styling/colors-and-paints.md#color) or a gradient, on the box and the popup alike. The thin
 outlines inside the popup use the border color when it is a plain `Color`, and gray otherwise.
 
-> **Do not call `onMouseClick` on a picker.** The constructor registers an internal handler that opens the panel, and
-> replacing it breaks the widget. Use `onChange`.
+`onMouseClick` is safe to use on a picker: the click that opens the panel is handled apart from it, and your listener runs
+after. To react to a chosen color, use `onChange`.
 
 ## Method reference
 

@@ -38,6 +38,7 @@ Audio.play("sfx/explosion.ogg").volume(0.8f).pitch(0.7f).pan(-0.5f);
 | `stop()` | Stop immediately |
 | `stop(float seconds)` | Fade to silence over `seconds`, then stop |
 | `fadeTo(float volume, float seconds)` | Fade this playback's volume |
+| `fadeIn(float seconds)` | Drop to silence and fade up to the current volume (starts a moment late; see Gotchas) |
 | `onFinished(Runnable)` | Runs on the render thread when the playback ends, for any reason. One listener: calling it again replaces it |
 | `isPlaying()` | Audible: not paused and not finished |
 | `isPaused()`, `isFinished()` | State |
@@ -84,5 +85,7 @@ Audio.play("voice/intro.ogg", AudioChannel.VOICE)
 - **`volume` cancels a running fade.** Setting the volume by hand while `fadeTo` or `stop(seconds)` is running stops that fade
   (a `stop(seconds)` fade-out then no longer ends the playback).
 - **Fades are stepped about every 15 ms,** which is smooth for volume but not sample-accurate.
-- **A fade-in cannot be requested on an already running playback without a brief full-volume moment.** Use
-  `Music.play(fadeInSeconds)` or `Music.loop(fadeInSeconds)`, which start silent.
+- **A fade-in requested on an already running playback has a brief moment at the old volume first.** `playback.fadeIn(seconds)`
+  drops it to zero and fades it up to what it was, but the sound has started by then. To start silent, use
+  `Sound.play(volume, fadeInSeconds)`, `Sound.loop(fadeInSeconds)`, `Music.play(fadeInSeconds)` or
+  `Music.loop(fadeInSeconds)`.

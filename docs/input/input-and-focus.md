@@ -26,7 +26,7 @@ element.onMouseClick(event -> {
   calls `setPropagateClicks(true)`, which passes the press on to the next ancestor with a listener.
 - One listener per element. Setting another replaces it.
 - Widgets with their own click behavior (button, checkbox, radio, toggle switch, dropdown, color and date pickers,
-  menu bar, rich text area) install their handler themselves, so do not replace it. See [Element](../core/element.md#onmouseclick).
+  menu bar, rich text area, table and tree views) handle clicks themselves. That is kept apart from `onMouseClick`, so setting yours does not replace it and it runs after. See [Element](../core/element.md#onmouseclick).
 
 ```java
 import org.lwjgl.glfw.GLFW;

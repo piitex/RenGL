@@ -20,10 +20,8 @@ import java.util.function.Consumer;
  * {@link Theme#getFieldHoverBackground()}, and {@link Theme#getFieldBorder()}. The
  * checkmark drawn on top while {@link #isChecked()} uses {@link Theme#getAccent()}.
  * <p>
- * This class registers its own {@link #onMouseClick} handler to toggle state. Calling
- * {@code onMouseClick(...)} afterward replaces that handler and stops the checkbox from
- * toggling, the same trade-off {@link ButtonOverlay} documents for its own
- * {@code onAction}. Use {@link #onToggle} to react to state changes.
+ * This class toggles on a click with a handler of its own, kept apart from
+ * {@link #onMouseClick}: yours runs after it and does not replace it. Use {@link #onToggle} to react to state changes.
  */
 public class CheckBoxOverlay extends Overlay implements Themeable {
     private boolean checked;
@@ -53,7 +51,7 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
         setWidth(size);
         setHeight(size);
         setCursorMode(CursorMode.POINTER);
-        onMouseClick(event -> toggle());
+        setBuiltInClickListener(event -> toggle());
         setClickOnRelease(true);
         ThemeManager.register(this);
     }

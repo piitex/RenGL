@@ -149,8 +149,9 @@ characters, the same way [`TextFlowOverlay`](../overlays/text-flow-overlay.md) d
 
 ## Handling input
 
-- **Clicks:** `onMouseClick(...)`. Fine for a custom widget that is not going to be subclassed. Or override behavior
-  by registering it in your constructor.
+- **Clicks:** a widget that reacts to clicks itself registers that with `setBuiltInClickListener(...)` (protected), as
+  the built-in ones do. It is kept apart from `onMouseClick`, which belongs to whoever uses the widget, so setting one
+  does not remove the other. Plain `onMouseClick(...)` is fine for a widget nobody will configure.
 - **Hover:** read `isHovered()` in `render`.
 - **Cursor:** `setCursorMode(CursorMode.POINTER)`.
 - **Dragging, scrolling and keyboard:** implement [`Draggable`](../input/input-and-focus.md#dragging), [`Scrollable`](../input/input-and-focus.md#scrolling) and [`Focusable`](../input/input-and-focus.md#keyboard-focus). See
@@ -192,7 +193,7 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable {
         getStyling().applyThemeHoverColor(Color.TRANSPARENT);
         getStyling().applyThemeBorderThickness(0f);
 
-        onMouseClick(event -> toggle());
+        setBuiltInClickListener(event -> toggle());
         ThemeManager.register(this); // last: applies the current theme
     }
 
@@ -305,4 +306,4 @@ public class DiagonalLayout extends Layout {
 - [ ] Register with [`ThemeManager`](../styling/theming.md) at the end of the constructor if the widget is themed, and use [`Overridable`](../styling/theming.md#the-pinning-rule).
 - [ ] Keep value setters silent and let only user actions fire callbacks.
 - [ ] Give any native resource (a `Font`) a `dispose()` method.
-- [ ] Do not replace a built-in widget's click handler from a subclass. Extend behavior in overridable methods.
+- [ ] Register the widget's own click handling with `setBuiltInClickListener`, not `onMouseClick`, so a user's listener does not replace it.

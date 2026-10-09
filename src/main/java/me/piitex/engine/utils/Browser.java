@@ -20,7 +20,8 @@ import java.util.Set;
  * often comes from outside the application and handing it to the OS opener could launch a program.
  * <p>
  * {@link #open(Path)} and {@link #reveal(Path)} do the same for a file or folder on disk: open it with the
- * program the OS has for it, or show it selected in Finder / Explorer.
+ * program the OS has for it, or show it selected in Finder / Explorer. {@link #openAsText(Path)} opens a file in the
+ * text editor.
  */
 public final class Browser {
     private static final Logger log = LogManager.getLogger("Engine");
@@ -103,6 +104,64 @@ public final class Browser {
             return false;
         }
         return launch(revealCommand(Platform.getCurrent(), path.toAbsolutePath()), path.toString());
+    }
+
+    /**
+     * Opens a file in the system's text editor, for a file {@link #open(Path)} refuses because opening it would run it
+     * ({@code .sh}, {@code .bat}, {@code .js}, {@code .jar}) or one with no program of its own. It uses TextEdit on
+     * macOS ({@code open -t}), Notepad on Windows, and the default {@code text/plain} program on Linux (found with
+     * {@code xdg-mime}, started with {@code gtk-launch}). Nothing is ever run: the editor is given the file to read.
+     * Folders are refused.
+     *
+     * @return true if an editor was launched; false if the path does not exist, is a folder, or no editor was found
+     */
+    public static boolean openAsText(Path path) {
+        if (path == null || !Files.isRegularFile(path)) {
+            log.warn("Cannot open '{}' as text: it is not a file", path);
+            return false;
+        }
+        Path absolute = path.toAbsolutePath();
+        Platform platform = Platform.getCurrent();
+        String[] command = platform == Platform.LINUX
+                ? linuxTextCommand(defaultLinuxTextEditor(), absolute)
+                : textCommand(platform, absolute);
+        return launch(command, path.toString());
+    }
+
+    static String[] textCommand(Platform platform, Path path) {
+        String target = path.toString();
+        return switch (platform) {
+            case MACOS -> new String[]{"open", "-t", target};
+            case WINDOWS -> new String[]{"notepad.exe", target};
+            case LINUX, OTHER -> null;
+        };
+    }
+
+    /**
+     * The command that opens {@code path} in the program whose desktop entry is {@code desktopEntry}, or null if there
+     * is none (an empty answer from {@code xdg-mime}).
+     */
+    static String[] linuxTextCommand(String desktopEntry, Path path) {
+        if (desktopEntry == null || desktopEntry.isBlank()) return null;
+        return new String[]{"gtk-launch", desktopEntry.strip(), path.toString()};
+    }
+
+    private static String defaultLinuxTextEditor() {
+        try {
+            Process process = new ProcessBuilder("xdg-mime", "query", "default", "text/plain")
+                    .redirectErrorStream(true).start();
+            String answer = new String(process.getInputStream().readAllBytes()).strip();
+            if (!process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return null;
+            }
+            return answer;
+        } catch (IOException e) {
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
     }
 
     private static boolean launch(String[] command, String target) {

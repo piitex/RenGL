@@ -33,7 +33,7 @@ public class LinkOverlay extends TextOverlay {
         super(text, fontSize, textColor);
         this.url = url;
         setCursorMode(CursorMode.POINTER);
-        onMouseClick(event -> open());
+        setBuiltInClickListener(event -> open());
         setClickOnRelease(true);
     }
 

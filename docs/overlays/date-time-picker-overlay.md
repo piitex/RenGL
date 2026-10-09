@@ -31,11 +31,11 @@ box shows the placeholder.
 
 ```java
 LocalDate d = picker.getDate(); // or null
-LocalTime t = picker.getTime(); // or null; always to the minute
+LocalTime t = picker.getTime(); // or null; to the minute, or the second with setShowSeconds(true)
 LocalDateTime both = picker.getDateTime(); // null unless BOTH are set
 
 picker.setDate(LocalDate.of(2026, 9, 19)); // silent: onChange does NOT fire
-picker.setTime(LocalTime.of(14, 30)); // seconds are dropped
+picker.setTime(LocalTime.of(14, 30)); // seconds are dropped unless shown
 picker.setDateTime(LocalDateTime.now()); // null clears both
 
 picker.onChange(p -> ...); // user changes only; the callback receives the picker itself
@@ -53,7 +53,7 @@ status line.
 |---|---|
 | `«` `‹` `›` `»` | Previous year, previous month, next month, next year |
 | Day | Picks it. In `DATE` mode the panel then closes. Days from neighbouring months are dimmed but pickable |
-| Hour and minute arrows | Step the value. Hours wrap at midnight without changing the date. Minutes wrap within the hour |
+| Hour, minute and second arrows | Step the value. Hours wrap at midnight without changing the date. Minutes and seconds wrap within their hour and minute |
 | AM/PM | Adds or removes 12 hours (12-hour clock only) |
 | Mouse wheel | Over the clock, changes the column under the pointer. Over the calendar, changes the month |
 | Today / Now | Picks today, or the current time. In `DATE_TIME` mode it sets both |
@@ -69,6 +69,7 @@ picker.setMinDate(LocalDate.now()); // earlier days are dimmed and cannot be pic
 picker.setMaxDate(LocalDate.now().plusDays(30)); // likewise for later days; null removes a limit
 picker.setUse24Hour(false); // 12-hour clock with an AM/PM column. Default true
 picker.setMinuteStep(15); // the minute arrows move by this many minutes. Default 1, range 1 to 30
+picker.setShowSeconds(true); // adds a seconds column and shows seconds in the box. Default false
 picker.setClearable(true); // adds a Clear button. Default false
 picker.setFirstDayOfWeek(DayOfWeek.MONDAY); // default: the system locale's first day of the week
 picker.setPlaceholder("Pick a date");
@@ -80,6 +81,15 @@ picker.setTextColor(Color.WHITE); // pins the text color
 
 `setMode`, `setUse24Hour` and `setClearable` close an open panel so it can be rebuilt. Month and weekday names come from the
 default locale. Min and max limits are not applied to values you set from code, only to what the user can pick.
+
+## Typing a value
+
+With the closed box focused, type the value instead of opening the panel: text replaces what the box shows, with a caret,
+and **Enter** reads it. It is read with the formatters that show the value, so `2026-09-19` by default, `14:30` for a time, and
+both joined by a space for `DATE_TIME`. Backspace edits, Ctrl/Cmd+Backspace clears what was typed, Ctrl/Cmd+V pastes, and
+Escape throws it away. Leaving the box keeps text that reads as a value and drops anything else. Text that does not read
+as a value, or is outside the min and max dates, shows in red and is refused. A typed value fires `onChange` like a pick.
+Enter, Space or Down with nothing typed still opens the panel.
 
 ## Opening and closing from code
 
@@ -120,13 +130,12 @@ picker.getStyling().setCornerRadius(8f);
 The background, border and text colors may be a [`Color`](../styling/colors-and-paints.md#color) or a gradient, on the box and the popup
 alike. The soft highlight under the pointer is the selection paint at half strength.
 
-> **Do not call `onMouseClick` on a picker.** The constructor registers an internal handler that opens the panel, and
-> replacing it breaks the widget. Use `onChange`.
+`onMouseClick` is safe to use on a picker: the click that opens the panel is handled apart from it, and your listener runs
+after. To react to a chosen value, use `onChange`.
 
 ## Limitations
 
-- **No seconds, time zones or date ranges.** The time is to the minute and the value is a local date and time.
-- **No typing a date into the closed box.** Choose it in the panel.
+- **No time zones or date ranges.** The value is a local date and time.
 - **The calendar is always six rows**, so it does not change height between months.
 
 ## Method reference
@@ -135,5 +144,5 @@ alike. The soft highlight under the pointer is the selection paint at half stren
 |---|---|
 | Value | `getMode`, `setMode`, `get/setDate`, `get/setTime`, `get/setDateTime` (`getDateTime`, `setDateTime`), `getDisplayText`, `onChange` |
 | Limits | `get/setMinDate`, `get/setMaxDate` |
-| Options | `is/setUse24Hour`, `get/setMinuteStep`, `setClearable`, `setFirstDayOfWeek`, `setPlaceholder`, `setDateFormatter`, `setTimeFormatter`, `get/setFontSize`, `get/setTextColor` |
+| Options | `is/setUse24Hour`, `get/setMinuteStep`, `setClearable`, `is/setShowSeconds`, `setFirstDayOfWeek`, `setPlaceholder`, `setDateFormatter`, `setTimeFormatter`, `get/setFontSize`, `get/setTextColor` |
 | Panel | `isOpen`, `open`, `close`, `toggleOpen` |

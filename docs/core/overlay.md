@@ -72,8 +72,7 @@ when you sync UI to your model.
 
 **Built-in click handlers.** `ButtonOverlay`, [`CheckBoxOverlay`](../overlays/checkbox-overlay.md), [`RadioButtonOverlay`](../overlays/radio-button-overlay.md), [`DropdownOverlay`](../overlays/dropdown-overlay.md),
 [`ToggleSwitchOverlay`](../overlays/toggle-switch-overlay.md), [`ColorPickerOverlay`](../overlays/color-picker-overlay.md), [`DateTimePickerOverlay`](../overlays/date-time-picker-overlay.md),
-[`MenuBarOverlay`](../input/menus.md) and [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md) register their own `onMouseClick` handler. Do not replace it. Use the widget's
-own callback.
+[`MenuBarOverlay`](../input/menus.md) and [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md) handle clicks with a handler of their own that is kept apart from `onMouseClick`: setting yours does not replace it, and it runs after. The widget's own callback is still the usual way to react.
 
 **`dispose()`.** Widgets that own a native Skia `Font` (`TextOverlay` and its subclass `ButtonOverlay`,
 `TextFieldOverlay`, `TextAreaOverlay` and its subclass `RichTextAreaOverlay`, and [`SliderOverlay`](../overlays/slider-overlay.md)) have

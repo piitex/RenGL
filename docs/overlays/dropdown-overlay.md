@@ -109,8 +109,8 @@ dropdown.getScrollBarStyle().setThickness(6f);
 dropdown.getScrollBarStyle().setTrackColor(null); // thumb only
 ```
 
-> **Do not call `onMouseClick` on a dropdown.** The constructor registers an internal handler that toggles the
-> list, and replacing it breaks the widget.
+`onMouseClick` is safe to use on a dropdown: the click that toggles the list is handled apart from it, and your listener
+runs after.
 
 ## Method reference
 

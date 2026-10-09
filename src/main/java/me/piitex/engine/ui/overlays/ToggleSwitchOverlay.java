@@ -27,9 +27,8 @@ import java.util.function.Consumer;
  * #setOnColor} and {@link #setKnobColor}. It is {@link Focusable} and a Tab stop; a focused
  * switch draws a ring around the track.
  * <p>
- * This overlay registers its own {@link #onMouseClick} handler to toggle. Replacing that
- * handler stops the switch from toggling, so use {@link #onToggle} to react to changes,
- * as with {@link CheckBoxOverlay}.
+ * This overlay toggles on a click with a handler of its own, kept apart from {@link #onMouseClick}:
+ * yours runs after it and does not replace it. Use {@link #onToggle} to react to changes, as with {@link CheckBoxOverlay}.
  */
 public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable {
     private static final float ANIMATION_SECONDS = 0.16f;
@@ -67,7 +66,7 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
         getStyling().applyThemeHoverColor(Color.TRANSPARENT);
         getStyling().applyThemeBorderThickness(0f);
-        onMouseClick(event -> toggle());
+        setBuiltInClickListener(event -> toggle());
         setClickOnRelease(true);
         ThemeManager.register(this);
     }

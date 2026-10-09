@@ -32,7 +32,9 @@ middle of gameplay. It can be done on a worker thread with [`Scheduler.async`](.
 |---|---|
 | `play()` | Once, at full volume |
 | `play(float volume)` | Once, at the given volume |
+| `play(float volume, float fadeInSeconds)` | Once, starting silent and fading up to `volume` |
 | `loop()` | Repeats until you stop the returned [`Playback`](playback.md) |
+| `loop(float fadeInSeconds)` | Repeats, starting silent and fading in |
 | `playAt(x, y)` / `playAt(x, y, z)` / `playAt(x, y, z, volume)` | Plays once at a position in the world |
 | `loopAt(x, y, z)` | Repeats at a position in the world |
 | `channel(AudioChannel)` | Sets the channel it plays on (default `SFX`). Returns the sound, so it chains onto `load` |

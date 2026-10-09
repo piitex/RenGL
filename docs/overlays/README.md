@@ -59,7 +59,7 @@ theme system. A plain [`Container`](../containers/container.md) does too, once y
 [Input and focus](../input/input-and-focus.md).
 
 **Which widgets have their own click handler?** [`ButtonOverlay`](button-overlay.md), [`CheckBoxOverlay`](checkbox-overlay.md), [`RadioButtonOverlay`](radio-button-overlay.md),
-`DropdownOverlay`, `ToggleSwitchOverlay`, `ColorPickerOverlay`, `DateTimePickerOverlay` and [`RichTextAreaOverlay`](rich-text-area-overlay.md). Do not call `onMouseClick` on them. Use their own callbacks.
+`DropdownOverlay`, `ToggleSwitchOverlay`, `ColorPickerOverlay`, `DateTimePickerOverlay` and [`RichTextAreaOverlay`](rich-text-area-overlay.md). They keep that handler apart from `onMouseClick`, so setting your own does not replace it; the widget's own callback is the usual way to react.
 
 **Which widgets need `dispose()`?** Those that own a native `Font`: [`TextOverlay`](text-overlay.md), `ButtonOverlay`,
 `TextFieldOverlay`, `TextAreaOverlay`, `RichTextAreaOverlay` and [`SliderOverlay`](slider-overlay.md). Call it when permanently

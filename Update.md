@@ -42,11 +42,9 @@ what is left says why.
   removed), and tables and quotes read as paragraphs. A README previewed in OpenZip loses its emphasis. A block has one
   `TextStyle`, so this needs runs of styled text inside a `FormattedBlock`, and clickable links (through
   `Browser.open`, which only takes http/https/mailto) if links are to work.
-- **Open a file in the system's text editor.** `Browser.open(Path)` refuses `.sh`, `.bat`, `.js` and `.jar`
-  because opening them runs them, which also stops a text editor from being asked for them. OpenZip runs
-  `open -t` (macOS), `notepad.exe` (Windows) and `gtk-launch <default text/plain entry>` (Linux) itself; a
-  `Browser.openAsText(Path)` that does this would let every RenGL app do it the same way. Only the commands are unit
-  tested here; none was started.
+- **Done: open a file in the system's text editor.** `Browser.openAsText(Path)` ([browser.md](docs/reference/browser.md#files-and-folders)):
+  `open -t` (macOS), `notepad.exe` (Windows), `gtk-launch` with the `text/plain` default from `xdg-mime` (Linux). Only the
+  commands are unit tested here; none was started.
 
 ### Found while redoing OpenZip's UI (to CCA's standard)
 

@@ -450,6 +450,24 @@ public final class Playback {
     }
 
     /**
+     * Drops the volume to zero and fades it back up to what it was over {@code seconds}. The playback has already
+     * started, so a very short moment at the old volume can be heard first; to start silent, use
+     * {@link Sound#play(float, float)}, {@link Sound#loop(float)} or {@link Music#play(float)}.
+     */
+    public Playback fadeIn(float seconds) {
+        synchronized (Audio.LOCK) {
+            if (finished) return this;
+            float target = fading && !stopWhenFaded ? fadeTarget : volume;
+            if (seconds <= 0f) return volume(target);
+            volume = 0f;
+            applyGain();
+            startFade(target, seconds);
+            stopWhenFaded = false;
+        }
+        return this;
+    }
+
+    /**
      * Runs {@code action} on the render thread once this playback ends for any reason, including {@link #stop()}. Replaces any earlier listener.
      */
     public Playback onFinished(Runnable action) {

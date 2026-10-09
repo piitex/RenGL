@@ -176,7 +176,7 @@ element.onMouseClick(event -> {
 });
 ```
 
-- A `TableView`, `TreeView` or `RichTextAreaOverlay` handles right-clicks itself; that is kept, and your listener runs after it.
+- Widgets that react to clicks themselves (buttons, check boxes, radio buttons, toggle switches, dropdowns, pickers, links, the menu bar, `TableView`, `TreeView`, `RichTextAreaOverlay`, modals) keep that apart from this listener. Yours runs after theirs and does not replace it.
 - Fires on **press**, not on release, for **any** mouse button. Check `getButton()` if you only want the
   left button.
 - `setClickOnRelease(true)` makes it fire the way a button does: when the **left** button is released, and only

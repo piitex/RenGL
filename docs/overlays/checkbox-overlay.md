@@ -33,8 +33,7 @@ box.onToggle(checked -> System.out.println(checked)); // fired with the new stat
 
 `onToggle` holds one listener. Calling it again replaces it.
 
-> **Do not call `onMouseClick` on a checkbox.** The constructor registers an internal click handler that
-> toggles the state, and replacing it breaks the widget.
+`onMouseClick` is safe to use on a checkbox: the toggle is handled apart from it, and your listener runs after.
 
 ## Look
 
