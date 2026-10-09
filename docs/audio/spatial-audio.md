@@ -128,10 +128,81 @@ siren.velocity(vx, vy, vz);
 It only acts when a velocity is set, so it costs nothing otherwise. In a pixel-based game either leave velocities
 unset, set the factor to 0, or set the speed of sound to a pixel value such as 34330.
 
+## Cones
+
+A sound that faces somewhere, such as a speaker, a siren or a person shouting, is louder in front than behind. Give
+the playback a direction and a cone:
+
+```java
+Playback horn = Sound.load("sfx/horn.ogg").loopAt(x, y, z)
+        .direction(0, 0, -1)       // which way it faces
+        .cone(60f, 200f, 0.2f);    // full volume inside 60 degrees, 20% outside 200, fading between
+```
+
+| Method | Meaning |
+|---|---|
+| `direction(x, y, z)` / `direction(x, y)` | The way it faces, as a vector. Its length doesn't matter. The zero vector, the default, sounds the same all round |
+| `cone(inner, outer, outerGain)` | Whole-cone widths in degrees (360 is all round) and the volume outside the outer cone, 0 to 1 |
+
+The cone does nothing until a direction is set, and only a positioned playback has one. Update the direction as the
+thing turns, as you do the position.
+
+## Occlusion
+
+`playback.occlusion(amount)` muffles a sound as if something solid stood between it and the listener: 0 is a clear
+path, 1 is behind a thick wall, where it is quiet and dull.
+
+```java
+boolean blocked = world.raycastBlocked(listenerPos, growlPos);   // your own line-of-sight test
+growl.occlusion(blocked ? 0.8f : 0f);
+```
+
+The engine has no idea what your walls are, so you decide the amount, from a ray test or from the room the two are
+in, and set it when it changes. It cuts the volume and the high frequencies of the direct sound, and dulls the
+sound's [reverb](#reverb) less than that, since a room still rings behind a wall.
+
+## Reverb
+
+A world reverb gives every sound the echo of a room:
+
+```java
+Audio.setReverb(Reverb.cave());        // from now on, sounds in the world ring like a cave
+Audio.setReverb(null);                 // dry again
+```
+
+| Preset | Sound |
+|---|---|
+| `Reverb.room()` | A medium room, the effect's own default |
+| `Reverb.bathroom()` | Hard and bright, ringing quickly |
+| `Reverb.hall()` | A big hall with a long, smooth tail |
+| `Reverb.cave()` | Stone all round: a long, dark echo |
+| `Reverb.outdoors()` | Open space: a thin, quiet tail |
+| `Reverb.padded()` | A dead room: the tail dies almost at once |
+
+Adjust a preset with its setters, which chain: `Reverb.cave().decayTime(5f).gain(0.5f)`. They are `density`,
+`diffusion`, `gain`, `gainHF`, `decayTime`, `decayHFRatio`, `reflections(gain, delay)`, `late(gain, delay)`,
+`airAbsorption` and `roomRolloff`, each clamped to the range OpenAL allows. A `Reverb` is a plain value: changing one
+after it was set does nothing until it is set again.
+
+There is **one** reverb at a time for the whole world, so moving between rooms means calling `setReverb` with another
+preset. Each playback chooses how much of itself goes in:
+
+```java
+growl.reverb(0.5f);   // half as wet
+ui.reverb(0f);        // dry
+```
+
+By default a positioned playback sends everything and a flat or panned one (interface sounds, music) sends nothing, so
+the menu doesn't echo. `Audio.isReverbSupported()` says whether the sound system has the effects extension; OpenAL
+Soft, which the engine ships, does. Without it `setReverb` and `occlusion` do nothing.
+
 ## Gotchas
 
 - **Mono files position best.** A stereo file is placed as a stereo pair around the point.
 - **Only the listener and positioned playbacks use these units.** Panned and flat playbacks never fade with distance.
 - **Positions are not tracked for you.** A playback stays where you last put it. Update it as the thing moves.
+- **Occlusion is not worked out for you.** Nothing in the engine knows where your walls are; `occlusion` only applies
+  the amount you give it.
+- **One reverb for the world.** It is not tied to the listener's position. Switch it as the player changes room.
 - **`hearIn2D` turns the listener** to face the plane with y down the screen. Calling `setOrientation` afterwards
   undoes that, so a 2D game shouldn't need to.

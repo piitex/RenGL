@@ -7,6 +7,7 @@ import org.lwjgl.openal.AL;
 import org.lwjgl.openal.ALC;
 import org.lwjgl.openal.ALCCapabilities;
 import org.lwjgl.openal.ALUtil;
+import org.lwjgl.openal.EXTEfx;
 import org.lwjgl.openal.SOFTReopenDevice;
 
 import java.nio.ByteBuffer;
@@ -82,6 +83,10 @@ public final class Audio {
     private static ALCCapabilities alcCaps;
     private static String lastDefaultDevice; // the system default as last seen, to notice it changing
     private static long lastDeviceCheck;
+
+    // Reverb: one effect in one auxiliary slot, shared by every playback that sends to it. Zero until first used.
+    private static Reverb reverb;
+    private static int reverbEffect, reverbSlot;
 
     private Audio() {
 
@@ -326,6 +331,85 @@ public final class Audio {
     }
 
     /**
+     * Gives every sound in the world a room: the {@link Reverb} is added to each playback in proportion to its own
+     * {@linkplain Playback#reverb(float) reverb amount}. By default a positioned playback sends all of its sound to the
+     * reverb and a flat or panned one (interface sounds, music) sends none. Pass null to turn it off. Playbacks already
+     * playing pick it up at once.
+     * <p>
+     * Needs the sound system's effects extension (OpenAL Soft has it); without it this does nothing and
+     * {@link #isReverbSupported()} is false.
+     */
+    public static void setReverb(Reverb reverb) {
+        synchronized (LOCK) {
+            Audio.reverb = reverb;
+            if (!ensureInit()) return;
+            applyReverb();
+        }
+    }
+
+    /**
+     * Puts the current reverb into the OpenAL effect. Call with {@link #LOCK} held and the device open.
+     */
+    private static void applyReverb() {
+        {
+            if (!hasEfx()) return;
+            if (reverb == null) {
+                if (reverbSlot != 0) EXTEfx.alAuxiliaryEffectSloti(reverbSlot, EXTEfx.AL_EFFECTSLOT_EFFECT, EXTEfx.AL_EFFECT_NULL);
+            } else {
+                if (reverbSlot == 0) {
+                    reverbEffect = EXTEfx.alGenEffects();
+                    reverbSlot = EXTEfx.alGenAuxiliaryEffectSlots();
+                    EXTEfx.alEffecti(reverbEffect, EXTEfx.AL_EFFECT_TYPE, EXTEfx.AL_EFFECT_REVERB);
+                }
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_DENSITY, reverb.density);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_DIFFUSION, reverb.diffusion);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_GAIN, reverb.gain);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_GAINHF, reverb.gainHF);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_DECAY_TIME, reverb.decayTime);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_DECAY_HFRATIO, reverb.decayHFRatio);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_REFLECTIONS_GAIN, reverb.reflectionsGain);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_REFLECTIONS_DELAY, reverb.reflectionsDelay);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_LATE_REVERB_GAIN, reverb.lateGain);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_LATE_REVERB_DELAY, reverb.lateDelay);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_AIR_ABSORPTION_GAINHF, reverb.airAbsorptionGainHF);
+                EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_REVERB_ROOM_ROLLOFF_FACTOR, reverb.roomRolloff);
+                EXTEfx.alEffecti(reverbEffect, EXTEfx.AL_REVERB_DECAY_HFLIMIT, reverb.decayHFLimit ? 1 : 0);
+                EXTEfx.alAuxiliaryEffectSloti(reverbSlot, EXTEfx.AL_EFFECTSLOT_EFFECT, reverbEffect);
+            }
+            for (Playback p : active) p.applyEffects();
+        }
+    }
+
+    /**
+     * The reverb last passed to {@link #setReverb}, or null.
+     */
+    public static Reverb getReverb() {
+        synchronized (LOCK) {
+            return reverb;
+        }
+    }
+
+    /**
+     * Whether the sound system has the effects extension that {@link #setReverb} and {@link Playback#occlusion} need.
+     */
+    public static boolean isReverbSupported() {
+        synchronized (LOCK) {
+            return ensureInit() && hasEfx();
+        }
+    }
+
+    static boolean hasEfx() {
+        return available && alcCaps != null && alcCaps.ALC_EXT_EFX;
+    }
+
+    /**
+     * The auxiliary slot the reverb lives in, or 0 when no reverb is set. Call with {@link #LOCK} held.
+     */
+    static int reverbSlot() {
+        return reverb != null && hasEfx() ? reverbSlot : 0;
+    }
+
+    /**
      * Sets the volume of one channel, 0 to 1. Applies to playbacks already running.
      */
     public static void setVolume(AudioChannel channel, float volume) {
@@ -508,6 +592,7 @@ public final class Audio {
             Thread t = thread;
             thread = null;
             if (t != null) t.interrupt();
+            reverbEffect = reverbSlot = 0; // they go with the context
             if (available) {
                 alcMakeContextCurrent(NULL);
                 alcDestroyContext(context);
@@ -588,6 +673,7 @@ public final class Audio {
                 thread = new Thread(Audio::run, "Audio-Thread");
                 thread.setDaemon(true);
                 thread.start();
+                if (reverb != null) applyReverb();
                 openDevice = deviceName();
                 lastDefaultDevice = alcCaps.ALC_ENUMERATE_ALL_EXT ? alcGetString(NULL, org.lwjgl.openal.ALC11.ALC_DEFAULT_ALL_DEVICES_SPECIFIER) : null;
                 lastDeviceCheck = System.nanoTime();
