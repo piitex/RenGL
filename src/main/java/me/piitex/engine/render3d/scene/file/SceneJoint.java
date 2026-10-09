@@ -16,8 +16,8 @@ public final class SceneJoint {
     final JointKind kind;
     String name = "", bodyA = "", bodyB = "";
     Vec3 anchor = Vec3.ZERO, anchorB = Vec3.ZERO, axis = Vec3.UP;
-    boolean limited, motor, rope, collideConnected;
-    float lower, upper, motorSpeed, motorStrength = 100f;
+    boolean limited, swingLimited, motor, rope, collideConnected;
+    float lower, upper, swing = 45f, motorSpeed, motorStrength = 100f;
     float length, springFrequency, springDamping = 0.5f, breakForce;
 
     public SceneJoint(JointKind kind) {
@@ -28,6 +28,9 @@ public final class SceneJoint {
         } else if (kind == JointKind.SLIDER) {
             lower = -1f;
             upper = 1f;
+        } else if (kind == JointKind.BALL) {
+            lower = -45f;
+            upper = 45f;
         }
     }
 

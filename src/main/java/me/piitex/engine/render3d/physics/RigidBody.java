@@ -734,8 +734,32 @@ public final class RigidBody {
         // Grow by how far the body could move this step, so contacts are found before it gets there.
         float speed = (float) Math.sqrt(vx * vx + vy * vy + vz * vz);
         if (type == BodyType.DYNAMIC && !sleeping) speed += gravity.length() * Math.abs(gravityScale) * dt;
+        // A spinning body's far end moves faster than its middle: the end of a long stick turning fast covers its length
+        // in a step. The margin is how far anything on the body can get.
+        float spin = (float) Math.sqrt(wx * wx + wy * wy + wz * wz);
+        if (spin > 0.5f) speed += spin * reach();
         speculative = Math.min(margin + speed * dt, 4f);
         updateCollisionShapes(speculative);
+    }
+
+    /**
+     * The farthest any point of the body's shapes is from its centre of mass, a little over (taken from their boxes).
+     */
+    private float reach() {
+        float far = 0f;
+        Vec3 centre = getLocalCenterOfMass();
+        for (BodyShape shape : scaledShapes) {
+            Shape s = shape.shape();
+            if (s instanceof PlaneShape) continue;
+            Bounds box = s.bounds();
+            for (int corner = 0; corner < 8; corner++) {
+                Vec3 point = new Vec3((corner & 1) == 0 ? box.min().x() : box.max().x(),
+                        (corner & 2) == 0 ? box.min().y() : box.max().y(),
+                        (corner & 4) == 0 ? box.min().z() : box.max().z());
+                far = Math.max(far, shape.offset().add(shape.rotation().rotate(point)).sub(centre).length());
+            }
+        }
+        return far;
     }
 
     void updateCollisionShapes(float margin) {

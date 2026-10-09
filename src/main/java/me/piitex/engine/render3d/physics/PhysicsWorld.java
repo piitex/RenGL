@@ -71,6 +71,7 @@ public final class PhysicsWorld {
     private int nextId;
     private int velocityIterations = 10;
     private int positionIterations = 4;
+    private int substeps = 1;
     private boolean sleeping = true;
     private int[] islands = new int[0];
 
@@ -407,6 +408,22 @@ public final class PhysicsWorld {
         return this;
     }
 
+    public int getSubsteps() {
+        return substeps;
+    }
+
+    /**
+     * Cuts every step into this many smaller ones (1 by default), each with its own collision detection and solving. The
+     * small steps are what tall stacks and heavy loads on light chains need: with a step a quarter as long, bodies move
+     * a quarter as far between two looks at them, so the solver's passes have much less to correct. It costs about as
+     * much more as there are substeps, so try 2 to 4 before raising the solver passes. Forces and the
+     * {@link StepHandler} still work on the whole step; events come once per whole step.
+     */
+    public PhysicsWorld setSubsteps(int substeps) {
+        this.substeps = Math.clamp(substeps, 1, 32);
+        return this;
+    }
+
     public int getPositionIterations() {
         return positionIterations;
     }
@@ -500,6 +517,28 @@ public final class PhysicsWorld {
         for (RigidBody body : active) body.savePrevious();
         if (stepHandler != null) stepHandler.step(this, dt);
         for (CharacterController character : List.copyOf(characters)) character.step(dt);
+        List<Joint> broken = null;
+        float h = dt / substeps;
+        for (int sub = 0; sub < substeps; sub++) {
+            List<Joint> snapped = substep(active, h, sub == substeps - 1);
+            if (snapped != null) {
+                if (broken == null) broken = new ArrayList<>();
+                broken.addAll(snapped);
+            }
+        }
+        time += dt;
+        stepCount++;
+        fireEvents();
+        if (broken != null) for (Joint joint : broken) joint.fireBreak();
+    }
+
+    /**
+     * One pass of collision detection, solving and integration over {@code dt} seconds, which is the whole step unless
+     * it was cut into substeps.
+     *
+     * @return the joints that broke in it, or null
+     */
+    private List<Joint> substep(RigidBody[] active, float dt, boolean last) {
         collide(dt);
         updateSleep(dt);
         for (RigidBody body : active) {
@@ -528,7 +567,7 @@ public final class PhysicsWorld {
         if (broken != null) holding.removeAll(broken);
         for (RigidBody body : active) {
             if (body.getWorld() == this) body.integratePosition(dt);
-            body.clearForces();
+            if (last) body.clearForces();
         }
         // The velocities kept the joints from coming apart, as far as a straight-line step can; turning moved the
         // anchors a little anyway, so pull them back together now, before anything sees the drift. Joints are few and
@@ -538,11 +577,8 @@ public final class PhysicsWorld {
             for (Joint joint : holding) done &= joint.solvePosition();
             if (done) break;
         }
-        for (RigidBody body : bodies) if (!body.settled()) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries
-        time += dt;
-        stepCount++;
-        fireEvents();
-        if (broken != null) for (Joint joint : broken) joint.fireBreak();
+        if (last) for (RigidBody body : bodies) if (!body.settled()) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries
+        return broken;
     }
 
     /**

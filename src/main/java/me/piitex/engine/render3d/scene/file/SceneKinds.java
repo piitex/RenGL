@@ -471,6 +471,10 @@ public final class SceneKinds {
         prop(NODE, "colliderHeight", "Height", Float.class, collider, n -> seen(n).height, (n, x, b) -> body(n).height = f(x))
                 .omitWhen(2f).range(0.002, 1000).step(0.1).when(n -> colliderIs(n, ColliderKind.CAPSULE))
                 .tip("From the bottom of the capsule to its top, along Y");
+        prop(NODE, "colliderWeld", "Weld", Float.class, collider, n -> seen(n).weld, (n, x, b) -> body(n).weld = f(x))
+                .omitWhen(0f).range(0, 0.5).step(0.001).when(n -> colliderIs(n, ColliderKind.MESH, ColliderKind.AUTO))
+                .tip("Joins corners of its triangles this close together, in metres, so pieces that only nearly meet have no gap to catch on. "
+                        + "0 joins only corners at exactly the same place");
         prop(NODE, "colliderOffset", "Offset", Vec3.class, collider, n -> seen(n).offset, (n, x, b) -> body(n).offset = v(x))
                 .omitWhen(Vec3.ZERO).step(0.1).when(n -> colliderIs(n, ColliderKind.BOX, ColliderKind.SPHERE, ColliderKind.CAPSULE))
                 .tip("How far the shape's middle is from the node's origin, before the node's scale");
@@ -515,6 +519,9 @@ public final class SceneKinds {
         prop(WORLD, "velocityIterations", "Solver Passes", Integer.class, physics, s -> ScenePhysics.world(s).velocityIterations,
                 (s, x, b) -> ScenePhysics.world(s).velocityIterations = ((Number) x).intValue()).omitWhen(10).range(1, 100)
                 .tip("How many passes the solver makes each step: more holds tall stacks and long chains better, and costs more");
+        prop(WORLD, "substeps", "Substeps", Integer.class, physics, s -> ScenePhysics.world(s).substeps,
+                (s, x, b) -> ScenePhysics.world(s).substeps = ((Number) x).intValue()).omitWhen(1).range(1, 32)
+                .tip("Cuts each step into this many smaller ones. 4 holds a tall stack or a heavy load on a light chain; it costs about 4 times as much");
 
         for (JointKind kind : JointKind.values()) {
             List<SceneProperty<SceneJoint>> list = new ArrayList<>();
@@ -544,6 +551,20 @@ public final class SceneKinds {
                 prop(list, "anchor", "Point", Vec3.class, where, j -> j.anchor, (j, x, b) -> j.anchor = v(x)).step(0.1)
                         .tip(hinge ? "The point it turns around, in the world" : slider ? "The point its slide is measured from, in the world"
                                 : "The point it is pinned at, in the world");
+            }
+            if (kind == JointKind.BALL) {
+                prop(list, "axis", "Axis", Vec3.class, where, j -> j.axis, (j, x, b) -> j.axis = v(x)).omitWhen(Vec3.UP).step(0.1)
+                        .tip("The direction of the limb that hangs from the joint, in the world: what the cone and the twist are measured around");
+                prop(list, "swingLimited", "Limit Swing", Boolean.class, limits, j -> j.swingLimited, (j, x, b) -> j.swingLimited = (Boolean) x)
+                        .omitWhen(false).tip("Keeps the limb inside a cone around its axis, as a shoulder or a hip does");
+                prop(list, "swing", "Swing", Float.class, limits, j -> j.swing, (j, x, b) -> j.swing = f(x)).omitWhen(45f)
+                        .range(0, 180).step(1).when(j -> j.swingLimited).tip("How far the limb leans from its axis, in degrees");
+                prop(list, "limited", "Limit Twist", Boolean.class, limits, j -> j.limited, (j, x, b) -> j.limited = (Boolean) x).omitWhen(false)
+                        .tip("Stops the limb turning around its own length past two angles");
+                prop(list, "lower", "Twist Lower", Float.class, limits, j -> j.lower, (j, x, b) -> j.lower = f(x)).omitWhen(-45f)
+                        .range(-180, 180).step(1).when(j -> j.limited).tip("The furthest it twists one way, in degrees from where it starts");
+                prop(list, "upper", "Twist Upper", Float.class, limits, j -> j.upper, (j, x, b) -> j.upper = f(x)).omitWhen(45f)
+                        .range(-180, 180).step(1).when(j -> j.limited).tip("The furthest it twists the other way, in degrees from where it starts");
             }
             if (hinge || slider) {
                 String unit = hinge ? "degrees" : "metres", speed = hinge ? "degrees a second" : "metres a second";

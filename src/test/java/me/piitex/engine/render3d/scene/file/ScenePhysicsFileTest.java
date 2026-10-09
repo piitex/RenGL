@@ -7,6 +7,7 @@ import me.piitex.engine.render3d.physics.BoxShape;
 import me.piitex.engine.render3d.physics.CapsuleShape;
 import me.piitex.engine.render3d.physics.CharacterController;
 import me.piitex.engine.render3d.physics.ConvexHullShape;
+import me.piitex.engine.render3d.physics.BallJoint;
 import me.piitex.engine.render3d.physics.DistanceJoint;
 import me.piitex.engine.render3d.physics.HingeJoint;
 import me.piitex.engine.render3d.physics.MeshShape;
@@ -35,7 +36,7 @@ class ScenePhysicsFileTest {
     private static final String SCENE = """
             {
               "format": 1,
-              "world": { "gravity": [0, -5, 0] },
+              "world": { "gravity": [0, -5, 0], "substeps": 3 },
               "nodes": [
                 { "name": "Floor", "shape": "PLANE", "width": 20, "depth": 20, "body": "STATIC", "friction": 0.8 },
                 { "name": "Crate", "shape": "CUBE", "position": [0, 3, 0], "body": "DYNAMIC", "mass": 20, "bounce": 0.2, "linearDamping": 0.1 },
@@ -53,6 +54,8 @@ class ScenePhysicsFileTest {
                 { "type": "DISTANCE", "name": "Lamp rope", "bodyA": "Lamp", "anchor": [6, 3.2, 4], "anchorB": [6, 5, 4], "rope": true },
                 { "type": "SLIDER", "name": "Rail", "bodyA": "Ball", "anchor": [3, 0.25, 0], "axis": [1, 0, 0], "motor": true,
                   "motorSpeed": 1, "motorStrength": 50 },
+                { "type": "BALL", "name": "Shoulder", "bodyA": "Lamp", "anchor": [6, 3, 4], "axis": [1, 0, 0], "swingLimited": true,
+                  "swing": 30, "limited": true, "lower": -20, "upper": 50 },
                 { "type": "BALL", "name": "Ghost", "bodyA": "Nobody", "anchor": [0, 0, 0] }
               ]
             }
@@ -76,7 +79,7 @@ class ScenePhysicsFileTest {
         String first = Scene3DFile.toJson(Scene3DFile.parse(SCENE, temp, false));
         String second = Scene3DFile.toJson(Scene3DFile.parse(first, temp, false));
         assertEquals(first, second);
-        for (String expected : List.of("\"gravity\"", "\"body\": \"CHARACTER\"", "\"colliderOffset\"", "\"characterMass\"", "\"trigger\": true",
+        for (String expected : List.of("\"gravity\"", "\"substeps\": 3","\"body\": \"CHARACTER\"", "\"colliderOffset\"", "\"characterMass\"", "\"trigger\": true",
                 "\"joints\"", "\"type\": \"SLIDER\"", "\"motorStrength\"", "\"rope\": true", "\"Ghost\"")) {
             assertTrue(first.contains(expected), expected + " in " + first);
         }
@@ -157,9 +160,10 @@ class ScenePhysicsFileTest {
         Scene3D scene = Scene3DFile.parse(SCENE, temp, true);
         PhysicsWorld world = scene.getPhysics();
         // The joint naming a node that isn't there is left out, and the scene still loads.
-        assertEquals(3, world.joints().size());
+        assertEquals(3, world.getSubsteps());
+        assertEquals(4, world.joints().size());
         assertNull(Scene3DFile.findJoint(scene, "Ghost"));
-        assertEquals(4, Scene3DFile.joints(scene).size(), "but kept in the scene, so saving doesn't lose it");
+        assertEquals(5, Scene3DFile.joints(scene).size(), "but kept in the scene, so saving doesn't lose it");
 
         HingeJoint hinge = (HingeJoint) Scene3DFile.findJoint(scene, "Door hinge");
         assertSame(Scene3DFile.findBody(scene, "Door"), hinge.getBodyA());
@@ -172,6 +176,14 @@ class ScenePhysicsFileTest {
         DistanceJoint rope = (DistanceJoint) Scene3DFile.findJoint(scene, "Lamp rope");
         assertEquals(0f, rope.getMinLength(), 1e-6f);
         assertEquals(1.8f, rope.getMaxLength(), 1e-5f);
+
+        BallJoint shoulder = (BallJoint) Scene3DFile.findJoint(scene, "Shoulder");
+        assertTrue(shoulder.hasSwingLimit());
+        assertEquals((float) Math.toRadians(30), shoulder.getSwingLimit(), 1e-6f);
+        assertTrue(shoulder.hasTwistLimit());
+        assertEquals((float) Math.toRadians(-20), shoulder.getLowerTwistLimit(), 1e-6f);
+        assertEquals((float) Math.toRadians(50), shoulder.getUpperTwistLimit(), 1e-6f);
+        assertEquals(new Vec3(1, 0, 0), shoulder.getAxis());
 
         SliderJoint rail = (SliderJoint) Scene3DFile.findJoint(scene, "Rail");
         assertTrue(rail.hasMotor());
@@ -201,7 +213,7 @@ class ScenePhysicsFileTest {
         PhysicsWorld one = Scene3DFile.buildPhysics(scene), two = Scene3DFile.buildPhysics(scene);
         assertNotSame(one, two);
         assertEquals(8, one.bodies().size());
-        assertEquals(3, two.joints().size());
+        assertEquals(4, two.joints().size());
         // A scene with no bodies runs without a world.
         Scene3D plain = Scene3DFile.parse("{\"nodes\": [{\"name\": \"Box\", \"shape\": \"CUBE\"}]}", temp, true);
         assertNull(plain.getPhysics());

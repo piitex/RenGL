@@ -57,7 +57,7 @@ final class PolytopeCollision {
      * one point between the two edges. {@code triangle} is set when {@code b} is a mesh triangle.
      */
     static void polytopes(Polytope a, Polytope b, float margin, Manifold out, MeshTriangle triangle) {
-        float faceA = Float.NEGATIVE_INFINITY, faceB = Float.NEGATIVE_INFINITY, edge = Float.NEGATIVE_INFINITY;
+        float faceA = Float.NEGATIVE_INFINITY, faceB = Float.NEGATIVE_INFINITY;
         int fa = 0, fb = 0;
         for (int f = 0; f < a.normals.length; f++) {
             float s = b.min(a.normals[f]) - a.offsets[f];
@@ -75,26 +75,11 @@ final class PolytopeCollision {
                 fb = f;
             }
         }
-        Vec3 edgeNormal = null;
-        int da = -1, db = -1;
-        for (int i = 0; i < a.directions.length; i++) {
-            for (int j = 0; j < b.directions.length; j++) {
-                Vec3 axis = a.directions[i].cross(b.directions[j]);
-                float length = axis.length();
-                if (length < 1e-3f) continue; // parallel edges: the face axes already cover this
-                axis = axis.mul(1f / length);
-                float aMin = a.min(axis), aMax = a.max(axis), bMin = b.min(axis), bMax = b.max(axis);
-                float ahead = bMin - aMax, behind = aMin - bMax;
-                float s = Math.max(ahead, behind);
-                if (s > margin) return;
-                if (s > edge) {
-                    edge = s;
-                    edgeNormal = ahead >= behind ? axis : axis.negate();
-                    da = i;
-                    db = j;
-                }
-            }
-        }
+        EdgeAxis best = new EdgeAxis();
+        if (!edgeAxes(a, b, margin, best)) return;
+        float edge = best.separation;
+        Vec3 edgeNormal = best.normal;
+        int da = best.directionA, db = best.directionB;
 
         // Faces give steadier contacts, so an edge or the second polytope's face has to be clearly better to win.
         boolean useB = clearlyBetter(faceB, faceA, BIAS);
@@ -117,6 +102,88 @@ final class PolytopeCollision {
             clip(a, fa, b, margin, out);
             out.normal = a.normals[fa];
         }
+    }
+
+    /**
+     * With at least this many pairs of edges, only the pairs that can be an edge of the gap between the polytopes are
+     * tried (the Gauss map test below), not every pair. Two hulls of a few hundred corners have hundreds of thousands of
+     * pairs and a handful hundred that matter.
+     */
+    static int prunePairs = 600;
+
+    /**
+     * The edge axis with the widest gap found by {@link #edgeAxes}.
+     */
+    private static final class EdgeAxis {
+        float separation = Float.NEGATIVE_INFINITY;
+        Vec3 normal;
+        int directionA = -1, directionB = -1;
+
+        void consider(Polytope a, Polytope b, Vec3 axis, int da, int db, float margin, boolean[] apart) {
+            float aMin = a.min(axis), aMax = a.max(axis), bMin = b.min(axis), bMax = b.max(axis);
+            float ahead = bMin - aMax, behind = aMin - bMax;
+            float s = Math.max(ahead, behind);
+            if (s > margin) {
+                apart[0] = true;
+                return;
+            }
+            if (s > separation) {
+                separation = s;
+                normal = ahead >= behind ? axis : axis.negate();
+                directionA = da;
+                directionB = db;
+            }
+        }
+    }
+
+    /**
+     * Finds the crossing of an edge of each polytope that holds them furthest apart (or least overlapping).
+     *
+     * @return false if one of those axes separates them by more than the margin: no contact
+     */
+    private static boolean edgeAxes(Polytope a, Polytope b, float margin, EdgeAxis best) {
+        boolean[] apart = {false};
+        int edgesA = a.edges.length / 2, edgesB = b.edges.length / 2;
+        if (a.edgeFaces == null || b.edgeFaces == null || edgesA * edgesB < prunePairs) {
+            for (int i = 0; i < a.directions.length; i++) {
+                for (int j = 0; j < b.directions.length; j++) {
+                    Vec3 axis = a.directions[i].cross(b.directions[j]);
+                    float length = axis.length();
+                    if (length < 1e-3f) continue; // parallel edges: the face axes already cover this
+                    best.consider(a, b, axis.mul(1f / length), i, j, margin, apart);
+                    if (apart[0]) return false;
+                }
+            }
+            return true;
+        }
+        for (int i = 0; i < edgesA; i++) {
+            Vec3 a1 = a.normals[a.edgeFaces[i * 2]], a2 = a.normals[a.edgeFaces[i * 2 + 1]];
+            Vec3 aCross = a2.cross(a1);
+            Vec3 dirA = a.vertices[a.edges[i * 2 + 1]].sub(a.vertices[a.edges[i * 2]]);
+            for (int j = 0; j < edgesB; j++) {
+                // Seen from B, the faces turn the other way round.
+                Vec3 c = b.normals[b.edgeFaces[j * 2]].negate(), d = b.normals[b.edgeFaces[j * 2 + 1]].negate();
+                if (!minkowskiFace(a1, a2, aCross, c, d, d.cross(c))) continue;
+                Vec3 axis = dirA.cross(b.vertices[b.edges[j * 2 + 1]].sub(b.vertices[b.edges[j * 2]]));
+                float length = axis.length();
+                if (length < 1e-3f * dirA.length() * b.vertices[b.edges[j * 2 + 1]].sub(b.vertices[b.edges[j * 2]]).length()) continue;
+                best.consider(a, b, axis.mul(1f / length), a.edgeDirection[i], b.edgeDirection[j], margin, apart);
+                if (apart[0]) return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Whether the arcs a-b and c-d, between unit normals on the sphere, cross: then the two edges whose faces they are
+     * make a face of the shape of all differences between the polytopes' points, and only those edge pairs can give
+     * the axis that separates two polytopes (Gregorius, 2013). {@code bxa} and {@code dxc} are the planes the arcs lie
+     * in. The tests are loosened a hair, since an arc just touching the other is as good as crossing.
+     */
+    private static boolean minkowskiFace(Vec3 a, Vec3 b, Vec3 bxa, Vec3 c, Vec3 d, Vec3 dxc) {
+        float cba = c.dot(bxa), dba = d.dot(bxa), adc = a.dot(dxc), bdc = b.dot(dxc);
+        final float tolerance = 1e-7f;
+        return cba * dba < tolerance && adc * bdc < tolerance && cba * bdc > -tolerance;
     }
 
     private static Vec3 middle(Polytope p) {

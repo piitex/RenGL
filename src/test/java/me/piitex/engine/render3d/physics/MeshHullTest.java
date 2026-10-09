@@ -381,6 +381,78 @@ class MeshHullTest {
         body.setType(BodyType.KINEMATIC);
     }
 
+    /**
+     * The flat grid as loose triangles, each corner off by up to {@code jitter} in each direction, the way separate pieces
+     * or a sloppy export meet.
+     */
+    private static float[][] looseTriangles(int cells, float size, float jitter) {
+        MeshShape source = flatGrid(cells, size);
+        float[] positions = new float[source.triangleCount() * 9];
+        int[] indices = new int[source.triangleCount() * 3];
+        java.util.Random random = new java.util.Random(7);
+        for (int t = 0; t < source.triangleCount(); t++) {
+            for (int k = 0; k < 3; k++) {
+                Vec3 c = source.corner(t, k);
+                int o = (t * 3 + k) * 3;
+                positions[o] = c.x() + (random.nextFloat() * 2f - 1f) * jitter;
+                positions[o + 1] = c.y() + (random.nextFloat() * 2f - 1f) * jitter;
+                positions[o + 2] = c.z() + (random.nextFloat() * 2f - 1f) * jitter;
+                indices[t * 3 + k] = t * 3 + k;
+            }
+        }
+        for (int i = 0; i < indices.length; i++) indices[i] = i;
+        float[] idx = new float[indices.length];
+        for (int i = 0; i < idx.length; i++) idx[i] = indices[i];
+        return new float[][]{positions, idx};
+    }
+
+    private static int[] seamsAndRealEdges(MeshShape mesh) {
+        int seams = 0, real = 0;
+        for (int t = 0; t < mesh.triangleCount(); t++) {
+            for (int e = 0; e < 3; e++) {
+                if ((mesh.realEdges(t) & 1 << e) != 0) real++;
+                else seams++;
+            }
+        }
+        return new int[]{seams, real};
+    }
+
+    @Test
+    void nearlyEqualCornersAreWeldedWithADistance() {
+        float[][] loose = looseTriangles(4, 1f, 0.0004f);
+        int[] indices = new int[loose[1].length];
+        for (int i = 0; i < indices.length; i++) indices[i] = (int) loose[1][i];
+
+        int[] exact = seamsAndRealEdges(new MeshShape(loose[0], indices));
+        assertEquals(0, exact[0], "off by a hair, no two corners are the same, so every edge is a border");
+
+        MeshShape welded = new MeshShape(loose[0], indices, 0.002f);
+        int[] joined = seamsAndRealEdges(welded);
+        assertEquals(80, joined[0], "the inside edges are seams again");
+        assertEquals(16, joined[1], "and the border is the only real edge");
+        assertEquals(32, welded.triangleCount());
+
+        // A distance below the gaps joins nothing; a distance of 0 is the exact weld.
+        assertEquals(0, seamsAndRealEdges(new MeshShape(loose[0], indices, 0.00001f))[0]);
+        assertEquals(0, seamsAndRealEdges(new MeshShape(loose[0], indices, 0f))[0]);
+        assertThrows(IllegalArgumentException.class, () -> new MeshShape(loose[0], indices, -1f));
+    }
+
+    @Test
+    void aBoxSlidesAcrossLoosePiecesOnceTheyAreWelded() {
+        float[][] loose = looseTriangles(24, 0.5f, 0.0004f);
+        int[] indices = new int[loose[1].length];
+        for (int i = 0; i < indices.length; i++) indices[i] = (int) loose[1][i];
+        Vec3 heading = new Vec3(4f, 0, 3f);
+        PhysicsWorld world = onMesh(new MeshShape(loose[0], indices, 0.002f));
+        RigidBody crate = new RigidBody(BodyType.DYNAMIC).addShape(BoxShape.ofSize(1, 1, 1)).setPosition(-2f, 0.5f, -1.5f).setVelocity(heading);
+        world.add(crate);
+        for (int i = 0; i < 180; i++) world.step(DT);
+        Vec3 travelled = crate.getPosition().sub(new Vec3(-2f, 0.5f, -1.5f));
+        assertEquals(25f / (2f * 0.5f * G), travelled.length(), 25f / (2f * 0.5f * G) * 0.06f);
+        assertEquals(1f, Math.abs(crate.getRotation().w()), 3e-3f, "didn't trip on a gap");
+    }
+
     @Test
     void boxSlidesAcrossSeamsAsOnAPlane() {
         float expected = 25f / (2f * 0.5f * G); // v² / (2 µ g), as on a plane
