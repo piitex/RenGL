@@ -1,7 +1,8 @@
-package me.piitex.cca.crypto;
+package me.piitex.engine.io;
 
-import me.piitex.cca.App;
 import me.piitex.engine.ui.overlays.ImageOverlay;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.skia.Image;
 
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.util.Map;
 public final class ProtectedImages {
     private static final byte[] MAGIC = "CCAI1".getBytes(StandardCharsets.US_ASCII);
     private static final int MAX_CACHED = 64;
+    private static final Logger log = LogManager.getLogger(ProtectedImages.class);
 
     private record Cached(long modified, long size, Image image) {
     }
@@ -66,8 +68,8 @@ public final class ProtectedImages {
     }
 
     // The image file's bytes, decrypted if they were encrypted.
-    public static byte[] read(Path file) throws IOException {
-        return read(FileCrypter.forEnvironment(App.environment), file);
+    public static byte[] read(AppEnvironment environment, Path file) throws IOException {
+        return read(FileCrypter.forEnvironment(environment), file);
     }
 
     private static byte[] read(FileCrypter crypter, Path file) throws IOException {
@@ -77,7 +79,7 @@ public final class ProtectedImages {
     }
 
     // One decoded picture per file, since the hubs draw every card again on each render. Null if it can't be read.
-    public static Image load(Path file) {
+    public static Image load(AppEnvironment environment, Path file) {
         Path key = file.toAbsolutePath().normalize();
         if (!Files.isRegularFile(key)) return null;
         try {
@@ -87,21 +89,21 @@ public final class ProtectedImages {
                 Cached cached = CACHE.get(key);
                 if (cached != null && cached.modified() == modified && cached.size() == size) return cached.image();
             }
-            Image image = Image.Companion.makeFromEncoded(read(key));
+            Image image = Image.Companion.makeFromEncoded(read(environment, key));
             if (image == null) return null;
             synchronized (CACHE) {
                 CACHE.put(key, new Cached(modified, size, image));
             }
             return image;
         } catch (IOException | RuntimeException e) {
-            App.logger.warn("Could not read an icon", e);
+            log.warn("Could not read an icon", e);
             return null;
         }
     }
 
     // The picture sized to the box, or null if the file isn't a readable image.
-    public static ImageOverlay overlay(Path file, double width, double height) {
-        Image image = load(file);
+    public static ImageOverlay overlay(AppEnvironment environment, Path file, double width, double height) {
+        Image image = load(environment, file);
         return image == null ? null : ImageOverlay.of(image, width, height);
     }
 

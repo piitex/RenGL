@@ -3,7 +3,9 @@ package me.piitex.engine.ui.menu;
 import me.piitex.engine.Window;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.Element;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
 
@@ -40,11 +42,11 @@ public class PopupMenu {
     private float fontSize = 15f;
     private float itemHeight = 28f;
     private float minWidth = 160f;
-    private Color backgroundColor;
-    private Color hoverColor;
-    private Color textColor;
-    private Color disabledTextColor;
-    private Color borderColor;
+    private Paint backgroundColor;
+    private Paint hoverColor;
+    private Paint textColor;
+    private Paint disabledTextColor;
+    private Paint borderColor;
     private Consumer<PopupMenu> onOpen;
     private Runnable onClose;
 
@@ -132,46 +134,55 @@ public class PopupMenu {
     /**
      * Pins the panel background instead of following the theme; null goes back to the theme.
      */
-    public void setBackgroundColor(Color color) {
+    public void setBackgroundColor(Paint color) {
         this.backgroundColor = color;
     }
 
     /**
      * Pins the highlight behind the hovered/active row; null goes back to the theme.
      */
-    public void setHoverColor(Color color) {
+    public void setHoverColor(Paint color) {
         this.hoverColor = color;
     }
 
-    public void setTextColor(Color color) {
+    public void setTextColor(Paint color) {
         this.textColor = color;
     }
 
-    public void setDisabledTextColor(Color color) {
+    public void setDisabledTextColor(Paint color) {
         this.disabledTextColor = color;
     }
 
-    public void setBorderColor(Color color) {
+    public void setBorderColor(Paint color) {
         this.borderColor = color;
     }
 
-    Color background() {
+    /**
+     * Moves the animated paints on; the open popup calls it every frame.
+     */
+    void advance(float delta) {
+        for (Paint paint : new Paint[]{backgroundColor, hoverColor, textColor, disabledTextColor, borderColor}) {
+            AnimatedPaint.advanceIfAnimated(paint, delta);
+        }
+    }
+
+    Paint background() {
         return backgroundColor != null ? backgroundColor : ThemeManager.getCurrent().getFieldBackground();
     }
 
-    Color highlight() {
+    Paint highlight() {
         return hoverColor != null ? hoverColor : ThemeManager.getCurrent().getSelection();
     }
 
-    Color text() {
+    Paint text() {
         return textColor != null ? textColor : ThemeManager.getCurrent().getText();
     }
 
-    Color disabledText() {
+    Paint disabledText() {
         return disabledTextColor != null ? disabledTextColor : ThemeManager.getCurrent().getPlaceholderText();
     }
 
-    Color border() {
+    Paint border() {
         return borderColor != null ? borderColor : ThemeManager.getCurrent().getFieldBorder();
     }
 

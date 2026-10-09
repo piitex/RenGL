@@ -1,8 +1,12 @@
 package me.piitex.engine.ui.animation;
 
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.GradientUtil;
+import me.piitex.engine.ui.color.LinearGradient;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.overlays.LoadingSpinnerOverlay;
 
 /**
@@ -48,7 +52,10 @@ public class SpinTransition implements Transition {
         float cy = (float) (spinner.getY() + spinner.getHeight() / 2);
         float dotMax = size * 0.09f;
         float ring = size / 2f - dotMax;
-        Color base = spinner.getColor();
+        Paint paint = AnimatedPaint.resolve(spinner.getColor());
+        float[] axis = paint instanceof LinearGradient gradient
+                ? GradientUtil.axis(gradient, (float) spinner.getX(), (float) spinner.getY(),
+                (float) (spinner.getX() + spinner.getWidth()), (float) (spinner.getY() + spinner.getHeight())) : null;
 
         // Head position in dot units, advancing continuously so motion is smooth
         // rather than stepping dot to dot.
@@ -58,9 +65,19 @@ public class SpinTransition implements Transition {
             float strength = 1f - behind;
             strength *= strength;
             double angle = -Math.PI / 2 + i * 2 * Math.PI / DOTS;
+            float dotX = cx + (float) Math.cos(angle) * ring, dotY = cy + (float) Math.sin(angle) * ring;
+            Color base;
+            if (paint instanceof Color solid) {
+                base = solid;
+            } else if (axis != null) {
+                float ax = axis[2] - axis[0], ay = axis[3] - axis[1];
+                float length = ax * ax + ay * ay;
+                base = ((LinearGradient) paint).colorAt(length > 0f ? ((dotX - axis[0]) * ax + (dotY - axis[1]) * ay) / length : 0f);
+            } else {
+                return; // a paint kind the spinner can't sample
+            }
             Color c = new Color(base.getR(), base.getG(), base.getB(), base.getA() * (0.15f + 0.85f * strength));
-            renderer.drawCircle(cx + (float) Math.cos(angle) * ring, cy + (float) Math.sin(angle) * ring,
-                    dotMax * (0.45f + 0.55f * strength), c);
+            renderer.drawCircle(dotX, dotY, dotMax * (0.45f + 0.55f * strength), c);
         }
     }
 

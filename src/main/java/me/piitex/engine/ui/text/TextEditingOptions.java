@@ -1,5 +1,7 @@
 package me.piitex.engine.ui.text;
 
+import me.piitex.engine.utils.flags.GeneratedFragments;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.theme.Overridable;
@@ -15,6 +17,7 @@ import me.piitex.engine.ui.theme.Overridable;
  * to keep the text color, caret style, and the rest themed identically across all of
  * them, with one edit updating every overlay that holds it.
  */
+@GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public class TextEditingOptions {
 
     /**
@@ -45,12 +48,15 @@ public class TextEditingOptions {
     private boolean readOnly = false;
     private boolean undoEnabled = true;
     private int undoLimit = 200;
+    private int indentSize = 0;
+    private boolean autoIndent = false;
+    private boolean autoCloseBrackets = false;
 
     private final Overridable<Paint> textColor = new Overridable<>(Color.BLACK);
     private String placeholder = "";
     private final Overridable<Paint> placeholderColor = new Overridable<>(Color.LIGHT_GRAY);
 
-    private final Overridable<Color> caretColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> caretColor = new Overridable<>(Color.BLACK);
     private CaretShape caretShape = CaretShape.LINE;
     /**
      * Logical-point width for {@link CaretShape#LINE}, or thickness for {@link CaretShape#UNDERSCORE}. Ignored by {@link CaretShape#BLOCK}, which always spans the full glyph width.
@@ -61,7 +67,7 @@ public class TextEditingOptions {
      */
     private float caretHeightRatio = 1f;
 
-    private final Overridable<Color> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
+    private final Overridable<Paint> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
 
     /**
      * Whether the user is blocked from changing the text. A read-only overlay still takes focus, shows a caret,
@@ -98,6 +104,46 @@ public class TextEditingOptions {
 
     public void setUndoLimit(int undoLimit) {
         this.undoLimit = Math.max(1, undoLimit);
+    }
+
+    /**
+     * How many spaces one level of indentation is, for code. Above 0, the Tab key in a text area indents to the next
+     * multiple of it (or every selected line) and Shift+Tab takes one level off, instead of Tab moving focus to the next
+     * element. 0 by default, which leaves Tab for moving focus.
+     */
+    public int getIndentSize() {
+        return indentSize;
+    }
+
+    public void setIndentSize(int indentSize) {
+        this.indentSize = Math.max(0, Math.min(16, indentSize));
+    }
+
+    /**
+     * Whether Enter in a text area starts the new line at the indentation of the one before it, one level more after an
+     * opening brace, and typing a closing brace on a line of only spaces takes one level off. False by default.
+     */
+    public boolean isAutoIndent() {
+        return autoIndent;
+    }
+
+    public void setAutoIndent(boolean autoIndent) {
+        this.autoIndent = autoIndent;
+    }
+
+    /**
+     * Whether typing an opening bracket, "(", "[" or "{", or a quote, in a text area also puts the closing one after it, with the
+     * caret between. Typing the closing one when it is the next character goes over it instead of adding another, and
+     * Backspace between an empty pair takes out both. Java's syntax is followed: nothing is added or skipped inside a string or
+     * a comment, and a quote after a letter is an apostrophe. Enter after a call whose ";" is next leaves the ";" on the line.
+     * False by default. See {@code TextAreaOverlay#setParenCloser} to change what is added.
+     */
+    public boolean isAutoCloseBrackets() {
+        return autoCloseBrackets;
+    }
+
+    public void setAutoCloseBrackets(boolean autoCloseBrackets) {
+        this.autoCloseBrackets = autoCloseBrackets;
     }
 
     /**
@@ -188,18 +234,24 @@ public class TextEditingOptions {
         this.placeholderColor.applyTheme(placeholderColor);
     }
 
-    public Color getCaretColor() {
+    /** Advances an {@link AnimatedPaint} caret or selection color. The field or area that owns this calls it every frame. */
+    public void advance(float delta) {
+        AnimatedPaint.advanceIfAnimated(caretColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(selectionColor.get(), delta);
+    }
+
+    public Paint getCaretColor() {
         return caretColor.get();
     }
 
-    public void setCaretColor(Color caretColor) {
+    public void setCaretColor(Paint caretColor) {
         this.caretColor.set(caretColor);
     }
 
     /**
      * Theme-facing counterpart to {@link #setCaretColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
      */
-    public void applyThemeCaretColor(Color caretColor) {
+    public void applyThemeCaretColor(Paint caretColor) {
         this.caretColor.applyTheme(caretColor);
     }
 
@@ -227,18 +279,18 @@ public class TextEditingOptions {
         this.caretHeightRatio = Math.max(0f, Math.min(1f, caretHeightRatio));
     }
 
-    public Color getSelectionColor() {
+    public Paint getSelectionColor() {
         return selectionColor.get();
     }
 
-    public void setSelectionColor(Color selectionColor) {
+    public void setSelectionColor(Paint selectionColor) {
         this.selectionColor.set(selectionColor);
     }
 
     /**
      * Theme-facing counterpart to {@link #setSelectionColor}. It is a no-op once that setter has pinned this property. See {@link Overridable}.
      */
-    public void applyThemeSelectionColor(Color selectionColor) {
+    public void applyThemeSelectionColor(Paint selectionColor) {
         this.selectionColor.applyTheme(selectionColor);
     }
 

@@ -25,6 +25,7 @@ first time something draws 3D, and closed with the window.
 | [Viewport3D](viewport-3d.md) | The element that shows 3D in a rectangle of the UI: its `Content`, input, resolution and lifetime |
 | [Background3D](background-3d.md) | 3D behind the whole window, with the UI over it: `window.setBackground(...)` |
 | [Scenes](scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material` (classic and PBR), `Light`, `Camera`, `TextureData`, `OrbitControls`, picking and the math types: a ready-made scene to put in a viewport |
+| [Scene files](scene-files.md) | `Scene3DFile`: a scene built in the editor, saved as JSON and loaded by the game |
 | [Lighting](lighting.md) | How lights add up, **shadows**, and the **skybox** |
 | [Models](models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files, and what carries over |
 | [Animation](animation.md) | Clips, `AnimationPlayer`, and skinned meshes that bend with a skeleton |
@@ -108,7 +109,7 @@ window.setBackground(new Background3D(window, scene));
   plain Java data and can be built on any thread, but changing a scene that is being drawn is a render-thread job, for
   example from its [update handler](scenes.md#the-update-handler) or from [`Scheduler.runLater`](../core/scheduler.md).
 - **GPU work is lazy.** Meshes and textures upload the first time they are drawn, and are freed when they have not
-  been drawn for a while (600 frames), so building a scene never needs the GPU.
+  been drawn for a while (600 frames), so building a scene never needs the GPU. [`Scene3D.preload`](scenes.md#preloading) uploads them a few per frame ahead of time.
 
 ## Running the demos
 

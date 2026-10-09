@@ -56,6 +56,7 @@ public class VerticalLayout extends Layout {
 
     @Override
     protected void layoutChildren() {
+        shareSpace(false);
         double contentHeight = getContentHeight();
         double innerHeight = getHeight() - 2 * getPadding();
         double cursorY = getPadding() + Math.max(0, innerHeight - contentHeight) * getAlignment().vertical();
@@ -67,5 +68,10 @@ public class VerticalLayout extends Layout {
             child.setY(cursorY);
             cursorY += child.getHeight() + getSpacing();
         }
+    }
+
+    @Override
+    protected void scaleSpacing(double sx, double sy) {
+        setSpacing((float) (getSpacing() * sy));
     }
 }

@@ -34,8 +34,8 @@ panel.addElements(title, field, button); // several at once, in order; also take
 - Adding a child whose index is already taken **replaces** the existing child.
 - `getElements()` returns the live `ConcurrentSkipListMap<Integer, Element>`. `getParent()` returns the
   container this one was added to, or `null` for a top-level container.
-- `removeElement(Element)` and `removeElement(int index)` detach a child. Remaining children keep their indices, so
-  gaps are left in the key space. Use `child.setEnabled(false)` to hide a child without removing it.
+- `removeElement(Element)` and `removeElement(int index)` detach a child. The children after it move down one index,
+  so the indices stay `0..n-1` ([`SplitContainer`](split-container.md) keeps its fixed slots). Use `child.setEnabled(false)` to hide a child without removing it.
 
 ```java
 Container card = new Container(40, 40, 260, 120);
@@ -60,6 +60,11 @@ Children draw in ascending index order, so later children appear on top and rece
 panel.addElement(bottom, 0);
 panel.addElement(top, 1); // draws over `bottom` and wins hit-testing where they overlap
 ```
+
+A container that shows nothing and listens for nothing is transparent to the mouse where it is empty, so a
+full-window root with no background, border, click listener, context menu, cursor, tooltip or drag does not take
+presses, hovers or wheel turns meant for what is drawn below it. Give it any of those, or a background that is not fully
+transparent, and it takes the pointer over its whole area. `isPointerPassthrough(x, y)` reports which it is.
 
 `bringToFront()` moves a container to the last slot among its siblings. Dragging a draggable container calls it
 automatically, so the panel you pick up comes to the front. It does nothing inside a `VerticalLayout`,
@@ -103,7 +108,9 @@ panel.setDraggable(true);
   ancestor. A child that is itself `Draggable` and wants the drag (a text field, a slider, a scroll container's
   thumb, another draggable container) keeps it.
 - **Controls keep their presses.** A child with a click listener, such as a button, a checkbox or a clickable
-  row, gets its click and the panel does not move. Labels and icons inside that control count as part of it.
+  row, gets its click and the panel does not move. Labels and icons inside that control count as part of it. A
+  clickable title bar that should also move the panel calls `setDragsContainer(true)` (see
+  [dragging](../input/input-and-focus.md#dragging)).
 - The container comes to the front when the drag starts.
 - By default a draggable container cannot be dragged past the window's edges. Each edge is enforced
   independently, so it slides along an edge instead of sticking.
@@ -166,5 +173,5 @@ You normally do not call these. The engine does.
 | Bounds | `setDragBounds`, `setDragBoundsToParent`, `setDragBoundsToWindow`, `clearDragBounds` |
 | Collision | `addCollideable`, `removeCollideable`, `clearCollideables`, `getCollideables` |
 | Clipping | `setClipping`, `isClipping` |
-| Theming | `useTheme`, `applyTheme` |
+| Theming | `useTheme()`, `useTheme(boolean)`, `isUsingTheme()`, `applyTheme` |
 | Internal | `setWindow` (called by `Window.addContainer`) |

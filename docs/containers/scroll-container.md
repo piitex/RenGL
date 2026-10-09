@@ -30,7 +30,7 @@ resize children.
 
 Two consequences:
 
-1. **Only direct children count.** The range comes from each direct child's own bounds. A
+1. **A child counts as its bounds, plus what a non-clipping container shows past them.** A
    [`VerticalLayout`](../layouts/vertical-layout.md) placed in a scroll container counts as one child, so
    let it [size to its content](../layouts/README.md#sizing-to-content) and the range follows the rows as
    they are added or removed:
@@ -47,6 +47,8 @@ Two consequences:
    ```
 
    A layout left at a fixed size counts as that size, and rows past its bottom edge are clipped by the layout itself.
+   Turn its clipping off with `setClipping(false)` and the rows past its edge count toward the range instead, and can be
+   pointed at and clicked there.
 
 2. Content that starts away from the container's top-left (padding, a header) is handled correctly. The range
    is measured from the actual last edge.
@@ -90,8 +92,8 @@ style.setThumbActiveColor(Color.GRAY); // while being dragged
 One `ScrollBarStyle` covers both bars. Assign a different instance with `setScrollBarStyle(...)` to restyle.
 On a container with a corner radius, each bar is shortened at both ends just enough to stay inside the rounded
 corners, so a small margin never lets the bar poke past the curve.
-Scrollbar colors follow the theme (`scrollThumb`, `scrollTrack`) unless you set them. Colors are plain
-[`Color`](../styling/colors-and-paints.md#color), not [`Paint`](../styling/colors-and-paints.md), so a gradient scrollbar is not supported.
+Scrollbar colors follow the theme (`scrollThumb`, `scrollTrack`) unless you set them. Each is a
+[`Paint`](../styling/colors-and-paints.md), so the track and thumb can be a gradient or a scrolling one.
 
 ## Interaction with other features
 

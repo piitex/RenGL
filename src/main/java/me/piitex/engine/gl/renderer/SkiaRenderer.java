@@ -1,5 +1,6 @@
 package me.piitex.engine.gl.renderer;
 
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.color.Color;
@@ -162,6 +163,7 @@ public abstract class SkiaRenderer implements Renderer {
         FontMetricsCompat metrics = FontMetricsCompat.of(font);
         float baselineY = y - metrics.getAscent();
 
+        color = AnimatedPaint.resolve(color);
         try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
             paint.setAntiAlias(true);
 

@@ -12,6 +12,20 @@ import me.piitex.engine.ui.theme.Overridable;
  * {@code setXxx}, and {@link #followTheme()} undoes them all.
  */
 public class Styling {
+    /**
+     * A paint that is safe to give one element or window when it came from a theme that gives it to many: a
+     * {@link ScrollingGradient} is copied, as its scroll position is state and every element that uses one advances it, so
+     * sharing it would make them scroll in step and faster the more there are. Anything else is shared as it is, as a
+     * {@link Color} and a {@link RainbowColor} (which reads a clock) have no such state.
+     */
+    public static Paint ownCopy(Paint paint) {
+        if (paint instanceof ScrollingGradient scrolling) {
+            return new ScrollingGradient(scrolling.getColors(), scrolling.getAngle(), scrolling.getSpeed());
+        }
+        return paint;
+    }
+
+
     private final Overridable<Paint> borderColor = new Overridable<>(Color.TRANSPARENT);
     private final Overridable<Paint> backgroundColor = new Overridable<>(Color.TRANSPARENT);
     private final Overridable<Paint> hoverColor = new Overridable<>(Color.TRANSPARENT);
@@ -85,6 +99,11 @@ public class Styling {
     public void setHoverFollowsBackground(boolean follows) {
         this.hoverFollowsBackground = follows;
         this.themeHoverFollowsBackground = follows;
+    }
+
+    /** Whether the hover color is the background itself. See {@link #setHoverFollowsBackground}. */
+    public boolean isHoverFollowsBackground() {
+        return hoverFollowsBackground;
     }
 
     /**

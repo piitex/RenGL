@@ -1,6 +1,6 @@
-package me.piitex.engine.io;
+package me.piitex.engine.config;
 
-import me.piitex.engine.config.Config;
+import me.piitex.engine.io.FileCrypter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

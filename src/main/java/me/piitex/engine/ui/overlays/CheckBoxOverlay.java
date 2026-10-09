@@ -2,7 +2,9 @@ package me.piitex.engine.ui.overlays;
 
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
@@ -28,7 +30,7 @@ import java.util.function.Consumer;
 public class CheckBoxOverlay extends Overlay implements Themeable {
     private boolean checked;
     private float checkThickness = 2.5f;
-    private final Overridable<Color> checkColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> checkColor = new Overridable<>(Color.BLACK);
     private Consumer<Boolean> onToggle;
 
     /**
@@ -100,14 +102,14 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
         this.checkThickness = checkThickness;
     }
 
-    public Color getCheckColor() {
+    public Paint getCheckColor() {
         return checkColor.get();
     }
 
     /**
      * Pins the checkmark color against every future theme switch. See {@link Overridable}.
      */
-    public void setCheckColor(Color checkColor) {
+    public void setCheckColor(Paint checkColor) {
         this.checkColor.set(checkColor);
     }
 
@@ -117,6 +119,12 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
      * baseline. It skips whichever property {@link #setCheckColor} or
      * {@link #getStyling()}'s own setters have already pinned. See {@link Overridable}.
      */
+    @Override
+    public void update(float delta) {
+        super.update(delta);
+        AnimatedPaint.advanceIfAnimated(checkColor.get(), delta);
+    }
+
     @Override
     public void applyTheme(Theme theme) {
         getStyling().applyThemeBackgroundColor(theme.getFieldBackground());
@@ -155,7 +163,7 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
         float y = (float) getY();
         float w = (float) getWidth();
         float h = (float) getHeight();
-        Color color = checkColor.get();
+        Paint color = checkColor.get();
 
         float x1 = x + w * 0.20f, y1 = y + h * 0.52f;
         float x2 = x + w * 0.42f, y2 = y + h * 0.74f;

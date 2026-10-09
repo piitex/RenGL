@@ -40,8 +40,9 @@ A file the reader can't use throws an `IllegalArgumentException` that names the 
 
 ### Export settings
 
-- **Rotation off.** Packers can turn pictures sideways to fit more in. Rotated frames aren't supported, and loading
-  them fails with a message saying so.
+- **Rotation** is fine. Packers can turn pictures 90 degrees clockwise to fit more in; the reader marks those regions
+  `isRotated()` and they draw upright, with the same size and offsets as an unturned one. Build one yourself with the
+  `TextureRegion` constructor that takes `rotated`, giving the upright size.
 - **Trimming** is fine and saves space.
 - For pixel art, call `setSmooth(false)` on the atlas's texture after loading:
   `atlas.get("any").getTexture().setSmooth(false)`.

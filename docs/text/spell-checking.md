@@ -31,16 +31,21 @@ Hunspell `en_US` dictionary (derived from SCOWL, its license is bundled next to 
 ### The pipeline
 
 1. You edit the text.
-2. After **400 ms** with no further edits (`RichTextAreaOverlay.CHECK_DEBOUNCE_MS`), the whole text is handed to
-   the checker on a single shared background thread (`rengl-text-checker`). The UI never waits for it.
+2. After **400 ms** with no further edits (`RichTextAreaOverlay.CHECK_DEBOUNCE_MS`), the text is handed to
+   the checker on a single shared background thread (`rengl-text-checker`). The UI never waits for it. A checker
+   that [works word by word](#writing-your-own-checker) (the bundled one does) gets only the words that changed,
+   widened to whole words; the underlines everywhere else are kept and moved to follow the text. Any other checker
+   gets the whole text.
 3. When it finishes, the result is stored together with the exact text it was computed for.
 4. Each frame, the overlay draws an underline only where the word under it still matches what was checked. After
    an edit shifts things around, the affected underlines disappear until the next check completes rather than
    landing on the wrong word.
 5. **Right-click** a flagged word to open a popup with up to 6 suggestions. The suggestions are computed at that
-   moment. Choosing one replaces the word and puts the caret after it.
+   moment. Choosing one replaces the word and puts the caret after it. Below them are **Add to dictionary**, when the
+   checker can learn words (the bundled one can), and **Ignore**, which leaves that word alone in this box.
 
-Underline colors: **red** for `Kind.SPELLING`, **blue** for `Kind.GRAMMAR`. They are not configurable.
+Underline colors: **red** for `Kind.SPELLING`, **blue** for `Kind.GRAMMAR`, changed with `setSpellingColor` and
+`setGrammarColor` on the overlay. The popup of corrections shows the issue's `message` above them when it has one.
 
 ## What the Hunspell checker checks
 
@@ -69,28 +74,28 @@ checker.addWord("Skiko");
 area.setChecker(checker);
 ```
 
-`addWord` is **in-memory only**. Persist your own list and reload it at startup:
+Words added this way last until the program ends. To keep them between runs, give the checker a file:
 
 ```java
-Path file = Path.of("user-dictionary.txt");
-if (Files.exists(file)) {
-    for (String word : Files.readAllLines(file)) {
-        checker.addWord(word);
-    }
-}
+HunspellChecker checker = HunspellChecker.english().useDictionaryFile(Path.of("user-dictionary.txt"));
 ```
 
-New words take effect at the **next check**, which only happens when the text changes. To recheck immediately after
-adding a word, hand the same checker back to the overlay. That clears the current underlines and schedules a fresh
-check:
+The words already in the file (one per line) are loaded now, and every word added afterwards, by `addWord` or by the
+popup's "Add to dictionary", is appended to it. The file is created with the first word. A file that cannot be written
+is logged and the word still holds for this run. `getWords()` lists the dictionary and `removeWord(word)` takes a word
+back out, of the file too.
+
+The popup's "Add to dictionary" row does this for you and takes the underline off at once. When you call `addWord` from
+your own code, new words take effect at the **next check**, which only happens when the text changes. To recheck
+immediately, hand the same checker back to the overlay. That clears the current underlines and schedules a fresh check:
 
 ```java
 checker.addWord("Skiko");
 area.setChecker(checker); // underlines briefly clear, then reappear minus "Skiko"
 ```
 
-The right-click popup has no "Add to dictionary" row. To build one, call `addWord` and re-apply the checker as shown
-above, for example from a button next to the text area.
+"Ignore" is per box and not saved: `area.ignoreWord("Skiko")` does the same from code, and `area.clearIgnoredWords()`
+flags them again from the next check.
 
 ## Other languages
 
@@ -132,6 +137,10 @@ public interface TextChecker {
     default List<String> suggest(String text, TextIssue issue) { // optional; empty by default
         return List.of();
     }
+
+    default boolean checksFragments() { return false; } // true: check() may get just the edited words
+    default boolean canAddWords() { return false; }     // true: the popup offers "Add to dictionary"
+    default void addWord(String word) { }               // what that row calls
 }
 
 public record TextIssue(int start, int end, Kind kind, String message) {
@@ -141,8 +150,11 @@ public record TextIssue(int start, int end, Kind kind, String message) {
 
 Rules for implementations:
 
-- `check` is always called with the **whole text**, on a **background thread**. It may be slow, but it must be safe
-  to call off the render thread.
+- `check` is called with the **whole text**, on a **background thread**, unless `checksFragments()` returns true. It
+  may be slow, but it must be safe to call off the render thread.
+- Return true from `checksFragments()` only if each issue depends on nothing but the words around it (a spell
+  checker). After an edit `check` then gets just the edited words, widened to whole whitespace-separated words, and
+  the issues are shifted back into place. A grammar checker that reads whole sentences leaves it false.
 - **One thread is shared by every overlay in the process.** A very slow checker delays checks for all of them.
 - `[start, end)` are indexes into the text string (like `String.substring`). Issues may be returned in any order.
 - Never return `null`. Return an empty list for "no issues".
@@ -150,7 +162,8 @@ Rules for implementations:
   UI. It will not tell you it failed either, so log inside your own `try`.
 - `suggest` is called on the **render thread**, when the user right-clicks. Keep it fast. It may run at the same time
   as `check` on the background thread, so synchronize any shared state (`HunspellChecker` does).
-- `TextIssue.message()` is not shown anywhere yet. It is available for your own use.
+- `TextIssue.message()` is shown above the corrections in the popup.
+- Override `canAddWords()` and `addWord` if your checker can learn words, and the popup offers "Add to dictionary".
 
 ### Example: a repeated-word (grammar) checker
 
@@ -270,6 +283,8 @@ All underlines vanish and no further checks are scheduled.
 | `RichTextAreaOverlay.CHECK_DEBOUNCE_MS` | `400` |
 | `HunspellChecker.english()` | The bundled en_US checker. Throws `IOException` if the resources are missing |
 | `HunspellChecker.fromStreams(aff, dic)` | Any Hunspell dictionary pair |
-| `HunspellChecker.addWord(String)` | Add to the (in-memory) user dictionary |
+| `HunspellChecker.addWord(String)` / `removeWord(String)` / `getWords()` | The user dictionary |
+| `HunspellChecker.useDictionaryFile(Path)` | Load the user dictionary from a file and keep it there |
+| `RichTextAreaOverlay.ignoreWord(String)` / `clearIgnoredWords()` | Leave a word alone in one box |
 | `TextChecker.check(String)` / `suggest(String, TextIssue)` | The interface to implement |
 | `TextIssue(start, end, kind, message)` | An issue; `Kind` is `SPELLING` or `GRAMMAR` |

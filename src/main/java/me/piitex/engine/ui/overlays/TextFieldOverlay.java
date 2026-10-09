@@ -22,6 +22,7 @@ import org.jetbrains.skia.Typeface;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 /**
@@ -99,6 +100,7 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
 
     private Consumer<String> onTextChangedConsumer;
     private Consumer<String> onSubmitConsumer;
+    private BiPredicate<Integer, Integer> keyFilter;
     private Consumer<Boolean> onFocusChangedConsumer;
 
     public TextFieldOverlay(double width, double height) {
@@ -283,19 +285,19 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         options.setPlaceholderColor(placeholderColor);
     }
 
-    public Color getCaretColor() {
+    public Paint getCaretColor() {
         return options.getCaretColor();
     }
 
-    public void setCaretColor(Color caretColor) {
+    public void setCaretColor(Paint caretColor) {
         options.setCaretColor(caretColor);
     }
 
-    public Color getSelectionColor() {
+    public Paint getSelectionColor() {
         return options.getSelectionColor();
     }
 
-    public void setSelectionColor(Color selectionColor) {
+    public void setSelectionColor(Paint selectionColor) {
         options.setSelectionColor(selectionColor);
     }
 
@@ -490,6 +492,15 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     }
 
     /**
+     * Offers every key press, and repeat, to {@code filter} before the field handles it, with the {@code GLFW_KEY_*} code
+     * and the modifier bits. A filter that returns true has used the key, and the field ignores it, such as Escape to close
+     * the box the field is in. Pass null to stop. See {@link TextAreaOverlay#setKeyFilter}.
+     */
+    public void setKeyFilter(BiPredicate<Integer, Integer> filter) {
+        this.keyFilter = filter;
+    }
+
+    /**
      * Registers a callback fired with the current text when Enter/Return is pressed while focused. Only one listener is held at a time.
      */
     public void onSubmit(Consumer<String> consumer) {
@@ -532,6 +543,7 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     @Override
     public void onKeyPressed(int key, int action, int mods) {
         if (action == GLFW.GLFW_RELEASE) return; // act on press + auto-repeat only
+        if (keyFilter != null && keyFilter.test(key, mods)) return;
 
         boolean shift = options.isSelectionEnabled() && (mods & GLFW.GLFW_MOD_SHIFT) != 0;
         // Ctrl on Windows and Linux, Cmd on macOS. Either is accepted rather than
@@ -990,7 +1002,7 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
      * Draws the caret per {@link TextEditingOptions#getCaretShape()} at the cursor's current position.
      */
     private void drawCaret(Renderer renderer, org.jetbrains.skia.Font font, String content, int clampedCursor, float innerX, float innerY, float textHeight, float cursorX) {
-        Color caretColor = options.getCaretColor();
+        Paint caretColor = options.getCaretColor();
         if (caretColor == null) return;
 
         float x = innerX + cursorX - scrollOffset;
@@ -1029,6 +1041,7 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     @Override
     public void update(float delta) {
         super.update(delta); // advances Styling's background/border/hover paints
+        options.advance(delta);
         if (options.getTextColor() instanceof AnimatedPaint animated) {
             animated.advance(delta);
         }

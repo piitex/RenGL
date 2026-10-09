@@ -89,7 +89,8 @@ That is all that is needed. How it behaves:
 - **Debounced.** The text is sent to the checker `RichTextAreaOverlay.CHECK_DEBOUNCE_MS` (400 ms) after the
   last change, on a background thread. It never blocks the UI, and a word you are still typing is not
   flagged mid-word.
-- **Underlines.** Each issue gets a squiggly underline: **red** for spelling, **blue** for grammar.
+- **Underlines.** Each issue gets a squiggly underline: **red** for spelling, **blue** for grammar (`setSpellingColor` and `setGrammarColor` change them). The corrections popup
+  shows the issue's message above the choices.
 - **Stale results are hidden.** An underline is only drawn while the word under it is still exactly the
   text that was checked. After an edit shifts text around, affected underlines disappear until the next
   check finishes rather than landing on the wrong word.

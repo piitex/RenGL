@@ -255,6 +255,16 @@ public final class InputContext {
     }
 
     /**
+     * How many times the action was pressed since the last step (in a fixed step) or during this frame (anywhere
+     * else). It is 0 when {@link #isJustPressed} is false. It differs from 1 for a {@link Binding#wheel wheel} turned
+     * several notches at once, which presses the action once per notch.
+     */
+    public int getPressCount(String action) {
+        Action a = get(action);
+        return input == null ? 0 : a.state.pressCount(input.frame);
+    }
+
+    /**
      * True if the action was let go since the last step (in a fixed step) or during this frame (anywhere else),
      * including by this context stopping being active. A quick tap can be just pressed and just released at once.
      */

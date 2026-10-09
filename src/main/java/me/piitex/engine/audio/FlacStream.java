@@ -110,7 +110,7 @@ final class FlacStream implements PcmStream {
             setBytePosition(blockStart + length);
         } while (!last && !atEnd());
         if (!haveInfo) throw new IllegalArgumentException("FLAC file has no stream info: " + name);
-        if (channels > 2) throw AudioDecoder.tooManyChannels(name, channels);
+        if (channels > Downmix.MAX_CHANNELS) throw AudioDecoder.tooManyChannels(name, channels);
         if (bitsPerSample > 24)
             throw new IllegalArgumentException(name + " is " + bitsPerSample + "-bit FLAC; up to 24-bit is supported");
         audioStart = bytePosition();

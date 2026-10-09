@@ -41,7 +41,33 @@ entered, is `getTop()`, and is running. Only the picture takes time to catch up.
 - Transitions run on **real time**, so they play out while game time is paused or slowed down.
 - Any other change to the stack while a transition plays finishes it first, as `finishTransition()` does. The
   outgoing scenes get `onExit` right away and the new change starts from a settled screen. Call `finishTransition()`
-  yourself to let the player skip a long transition.
+  yourself to end a long transition from code.
+
+## Locking the game and skipping
+
+By default the scenes keep running and taking input while a transition plays. For a cutscene, a level intro or a
+title card, lock them instead:
+
+```java
+scenes.set(new Level(), SceneTransition.fadeThrough(Color.BLACK, 3f).lock());               // frozen until it is over
+scenes.set(new Level(), SceneTransition.fadeThrough(Color.BLACK, 3f).lock().skippable());   // ...unless the player presses a key or clicks
+```
+
+While a locking transition plays:
+
+- No scene gets `fixedUpdate`, `update`, its timers or a key press, so the incoming scene does not start until the
+  transition is over. Window-level containers and the `Scheduler` keep running, so the picture is animated.
+- The window ignores key presses and repeats, typed characters, mouse button presses, the wheel and hover. Key and
+  button **releases** still get through, so nothing is left stuck down.
+- With `skippable()`, a fresh key press or mouse button press (not a held key's repeat, and not the wheel) ends it as
+  `finishTransition()` does. That press is used up skipping; it does not also reach the game.
+- `finishTransition()` ends it from code whether or not it is skippable, and any other change to the stack does too.
+
+Locking is **off by default**. The same two switches exist on [element transitions](../animation/transitions.md#locking-the-game),
+and `window.isInputLocked()` covers both kinds.
+
+`scenes.isInputLocked()` says whether a locking scene transition is playing. The settings belong to the transition
+instance, so a `SceneTransition` kept in a field applies them to every change that uses it.
 
 ## Base, outgoing and incoming scenes
 

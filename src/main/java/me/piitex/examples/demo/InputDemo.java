@@ -48,7 +48,6 @@ import static org.lwjgl.glfw.GLFW.*;
  *       and in the menu alike.</li>
  * </ul>
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class InputDemo {
     private static final Logger log = LogManager.getLogger("InputDemo");
     private static final Path CONFIG = Path.of("saves", "input-demo.cfg");

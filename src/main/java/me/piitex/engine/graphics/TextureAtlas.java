@@ -33,7 +33,8 @@ import java.util.Set;
  *   <li>Aseprite's tags ({@code meta.frameTags}) become animations under the tag's name, with each frame's
  *       {@code duration}, and forward, reverse and ping-pong directions. A tag set to repeat once plays
  *       {@link Animation.PlayMode#ONCE}; any other loops.</li>
- *   <li>Rotated frames aren't supported: turn rotation off in the packer.</li>
+ *   <li>Frames the packer turned sideways ({@code "rotated": true}, 90 degrees clockwise) are read as rotated regions
+ *       and draw upright.</li>
  * </ul>
  * <b>Building one.</b> Any other format, or a grid sheet, is a few lines: create an empty atlas and {@link #add} regions,
  * from {@link TextureRegion#split} or from a loader of your own.
@@ -203,9 +204,7 @@ public final class TextureAtlas {
 
     private static void readFrame(TextureAtlas atlas, Texture texture, String name, Map<String, Object> entry,
                                   List<String> order, List<Float> durations) {
-        if (Boolean.TRUE.equals(entry.get("rotated"))) {
-            throw new IllegalArgumentException("frame '" + name + "' is rotated, which isn't supported: turn rotation off in the packer");
-        }
+        boolean rotated = Boolean.TRUE.equals(entry.get("rotated"));
         Map<String, Object> frame = map(entry.get("frame"), "frame '" + name + "'");
         int x = integer(frame, "x"), y = integer(frame, "y"), w = integer(frame, "w"), h = integer(frame, "h");
         int offsetX = 0, offsetY = 0, frameWidth = w, frameHeight = h;
@@ -217,7 +216,7 @@ public final class TextureAtlas {
             frameWidth = integer(full, "w");
             frameHeight = integer(full, "h");
         }
-        atlas.add(name, new TextureRegion(texture, x, y, w, h, offsetX, offsetY, frameWidth, frameHeight));
+        atlas.add(name, new TextureRegion(texture, x, y, w, h, offsetX, offsetY, frameWidth, frameHeight, rotated));
         order.add(name);
         Object duration = entry.get("duration"); // milliseconds, in Aseprite exports
         durations.add(duration instanceof Double ms && ms > 0 ? (float) (ms / 1000.0) : 0.1f);

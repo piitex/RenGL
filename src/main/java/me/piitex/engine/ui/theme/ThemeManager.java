@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.Supplier;
 
 /**
  * The global theme registry, following the same static-utility shape as {@link Font},
@@ -52,6 +53,28 @@ public final class ThemeManager {
         for (Themeable themeable : snapshot) {
             themeable.applyTheme(current);
         }
+    }
+
+    /**
+     * Runs {@code build} with {@code theme} as the current one, then puts the previous theme back. Elements made inside
+     * it are styled with {@code theme}, so a tool that shows an app in its own look beside its own, such as an editor's
+     * preview window, can. Elements that already exist are left as they are, and the registry is not re-applied.
+     */
+    public static <T> T using(Theme theme, Supplier<T> build) {
+        Theme previous = current;
+        current = theme == null ? new LightTheme() : theme;
+        try {
+            return build.get();
+        } finally {
+            current = previous;
+        }
+    }
+
+    /**
+     * Stops {@link #setCurrent} reaching {@code themeable}. What it already took from a theme stays as it is.
+     */
+    public static void unregister(Themeable themeable) {
+        if (themeable != null) registry.remove(themeable);
     }
 
     /**

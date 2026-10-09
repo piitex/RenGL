@@ -63,7 +63,6 @@ import static org.lwjgl.glfw.GLFW.*;
  *       mouse.</li>
  * </ul>
  */
-@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class SpriteDemo {
 
     static void main() {

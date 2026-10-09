@@ -21,6 +21,7 @@ Every widget in RenGL is an [`Overlay`](../core/overlay.md) (an [`Element`](../c
 | Widget | What it is |
 |---|---|
 | [`ButtonOverlay`](button-overlay.md) | A clickable, themed button with a centered label |
+| [`LinkOverlay`](link-overlay.md) | Underlined text that opens a web address in the default browser |
 | [`CheckBoxOverlay`](checkbox-overlay.md) | A square box that toggles between checked and unchecked |
 | [`RadioButtonOverlay`](radio-button-overlay.md) + [`RadioGroup`](radio-button-overlay.md#radiogroup) | Mutually exclusive circular selectors |
 | [`DropdownOverlay<T>`](dropdown-overlay.md) | A closed box that opens a floating list of choices |

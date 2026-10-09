@@ -8,12 +8,14 @@ import me.piitex.engine.scheduler.Scheduler;
 import me.piitex.engine.input.Input;
 import me.piitex.engine.input.InputManager;
 import me.piitex.engine.ui.background.Background;
+import me.piitex.engine.ui.background.BackgroundKinds;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.containers.ModalContainer;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.color.Styling;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
@@ -43,17 +45,17 @@ import me.piitex.engine.utils.flags.GeneratedFragments;
  * themed property in this engine: the theme is only a baseline, and an explicit call
  * pins the background so later theme switches leave it alone. See {@link Overridable}.
  */
-@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class Window implements Themeable {
     private final WindowOptions windowOptions;
     private final ConcurrentSkipListMap<Integer, Container> containers = new ConcurrentSkipListMap<>();
     private final InputManager inputManager = new InputManager();
     private final SceneManager sceneManager = new SceneManager(this);
     private final Input input = new Input(this);
-    private GLFWindow glfWindow;
+    private volatile GLFWindow glfWindow;
     private Element focusedElement;
     private final Overridable<Paint> backgroundColor = new Overridable<>(Color.WHITE);
-    private Background background;
+    private final Overridable<Background> background = new Overridable<>(null);
+    private Background themeEffect; // the one the theme made, kept so a later theme change can update it instead of starting over
     private Container popup;
     private Runnable popupDismissListener;
     private Element popupAnchor;
@@ -61,9 +63,10 @@ public class Window implements Themeable {
     private double popupShiftX, popupShiftY;   // how far the popup has been moved since then
     private int popupSide;                     // 1: shown below the anchor, -1: above it, 0: neither
     private double popupGap;                   // space between the anchor and the popup on that side
-    private ModalContainer modal;
+    private final List<Element> lockingElements = new ArrayList<>(); // enabled Elements with a locking transition, as of the last frame
+    private final List<ModalContainer> modals = new ArrayList<>(); // bottom to top; the last one is the active modal
     private volatile boolean hidden;
-    private volatile boolean minimized, maximized;
+    private volatile boolean minimized;
     private volatile boolean focused, cursorLocked;
     private volatile Runnable closeListener;
     private volatile Runnable minimizeListener, maximizeListener, restoreListener;
@@ -79,6 +82,7 @@ public class Window implements Themeable {
 
     public Window(WindowOptions windowOptions) {
         this.windowOptions = windowOptions;
+        windowOptions.bind(this);
         ThemeManager.register(this);
     }
 
@@ -113,9 +117,22 @@ public class Window implements Themeable {
      */
     public void setStyle(WindowStyle style) {
         windowOptions.setStyle(style);
-        if (glfWindow != null) {
+    }
+
+    void pushRenderer() {
+        Engine engine = Engine.getRunning();
+        if (engine != null) engine.changeRenderer(this);
+    }
+
+    void pushStyle() {
+        GLFWindow g = glfWindow;
+        if (g != null) {
             WindowStyle applied = windowOptions.getStyle();
-            glfWindow.runOnMainThread(() -> glfWindow.applyStyle(applied));
+            boolean maximized = windowOptions.isMaximized();
+            g.runOnMainThread(() -> {
+                g.applyStyle(applied);
+                if (maximized) g.applyMaximized(true); // changing the frame can drop the OS's maximized state
+            });
         }
     }
 
@@ -128,8 +145,13 @@ public class Window implements Themeable {
      */
     public void setAlwaysOnTop(boolean alwaysOnTop) {
         windowOptions.setAlwaysOnTop(alwaysOnTop);
-        if (glfWindow != null) {
-            glfWindow.runOnMainThread(() -> glfWindow.applyAlwaysOnTop(alwaysOnTop));
+    }
+
+    void pushAlwaysOnTop() {
+        GLFWindow g = glfWindow;
+        if (g != null) {
+            boolean onTop = windowOptions.isAlwaysOnTop();
+            g.runOnMainThread(() -> g.applyAlwaysOnTop(onTop));
         }
     }
 
@@ -142,9 +164,11 @@ public class Window implements Themeable {
      */
     public void setSize(int width, int height) {
         windowOptions.setDimensions(width, height);
-        if (glfWindow != null) {
-            glfWindow.runOnMainThread(() -> glfWindow.applySize(width, height));
-        }
+    }
+
+    void pushSize(int width, int height) {
+        GLFWindow g = glfWindow;
+        if (g != null) g.runOnMainThread(() -> g.applySize(width, height));
     }
 
     /**
@@ -161,8 +185,13 @@ public class Window implements Themeable {
      */
     public void setTitle(String title) {
         windowOptions.setTitle(title);
-        if (glfWindow != null) {
-            glfWindow.runOnMainThread(() -> glfWindow.applyTitle(title));
+    }
+
+    void pushTitle() {
+        GLFWindow g = glfWindow;
+        if (g != null) {
+            String title = windowOptions.getTitle();
+            g.runOnMainThread(() -> g.applyTitle(title));
         }
     }
 
@@ -172,9 +201,19 @@ public class Window implements Themeable {
      */
     public void setIcon(Image icon) {
         windowOptions.setIcon(icon);
-        if (glfWindow != null) {
-            glfWindow.runOnMainThread(() -> glfWindow.applyIcon(icon));
+    }
+
+    void pushIcon() {
+        GLFWindow g = glfWindow;
+        if (g != null) {
+            Image icon = windowOptions.getIcon();
+            if (icon != null) g.runOnMainThread(() -> g.applyIcon(icon));
         }
+    }
+
+    void pushIconPath(String path) {
+        GLFWindow g = glfWindow;
+        if (g != null && windowOptions.getIcon() == null) g.runOnMainThread(() -> g.applyIcon(path));
     }
 
     /**
@@ -182,21 +221,36 @@ public class Window implements Themeable {
      */
     public void setResizable(boolean resizable) {
         windowOptions.setResizable(resizable);
-        if (glfWindow != null) {
-            glfWindow.runOnMainThread(() -> glfWindow.applyResizable(resizable));
+    }
+
+    void pushResizable() {
+        GLFWindow g = glfWindow;
+        if (g != null) {
+            boolean resizable = windowOptions.isResizable();
+            g.runOnMainThread(() -> g.applyResizable(resizable));
         }
     }
 
     /**
      * Enters or leaves fullscreen. Follows the current {@link WindowStyle}: {@code BORDERLESS} gives borderless
-     * fullscreen (no display mode switch), {@code STANDARD} takes the monitor exclusively. Leaving restores the
+     * fullscreen (no display mode switch), {@code STANDARD} takes the monitor exclusively (on macOS both give a frameless
+     * window the size of the screen). Leaving restores the
      * position and size from before. Safe from any thread.
      */
     public void setFullscreen(boolean fullscreen) {
         windowOptions.setFullscreen(fullscreen);
-        if (glfWindow != null) {
+    }
+
+    void pushFullscreen() {
+        GLFWindow g = glfWindow;
+        if (g != null) {
+            boolean fullscreen = windowOptions.isFullscreen();
             boolean borderless = windowOptions.getStyle() == WindowStyle.BORDERLESS;
-            glfWindow.runOnMainThread(() -> glfWindow.applyFullscreen(fullscreen, borderless));
+            boolean maximized = windowOptions.isMaximized();
+            g.runOnMainThread(() -> {
+                g.applyFullscreen(fullscreen, borderless);
+                if (!fullscreen && maximized) g.applyMaximized(true); // a maximize asked for during fullscreen, or lost to it
+            });
         }
     }
 
@@ -238,8 +292,13 @@ public class Window implements Themeable {
      */
     public void setCursorVisible(boolean visible) {
         windowOptions.setShowCursor(visible);
-        if (glfWindow != null) {
-            glfWindow.runOnMainThread(() -> glfWindow.applyCursorMode(visible, cursorLocked));
+    }
+
+    void pushCursorVisible() {
+        GLFWindow g = glfWindow;
+        if (g != null) {
+            boolean visible = windowOptions.isShowCursor();
+            g.runOnMainThread(() -> g.applyCursorMode(visible, cursorLocked));
         }
     }
 
@@ -352,7 +411,7 @@ public class Window implements Themeable {
      * Maximizes the window. Does nothing if it isn't resizable. Safe from any thread.
      */
     public void maximize() {
-        if (glfWindow != null) glfWindow.runOnMainThread(glfWindow::applyMaximize);
+        setMaximized(true);
     }
 
     /**
@@ -374,7 +433,15 @@ public class Window implements Themeable {
      * state, if it isn't resizable, or (for {@code false}) while it is minimized. Safe from any thread.
      */
     public void setMaximized(boolean maximized) {
-        if (glfWindow != null) glfWindow.runOnMainThread(() -> glfWindow.applyMaximized(maximized));
+        windowOptions.setMaximized(maximized);
+    }
+
+    void pushMaximized() {
+        GLFWindow g = glfWindow;
+        if (g != null) {
+            boolean maximized = windowOptions.isMaximized();
+            g.runOnMainThread(() -> g.applyMaximized(maximized));
+        }
     }
 
     /**
@@ -502,7 +569,7 @@ public class Window implements Themeable {
     }
 
     public boolean isMaximized() {
-        return maximized;
+        return windowOptions.isMaximized();
     }
 
     /**
@@ -517,7 +584,8 @@ public class Window implements Themeable {
      * Main thread, from the GLFW callback. See {@link #notifyMinimized}.
      */
     private void notifyMaximized(boolean nowMaximized) {
-        maximized = nowMaximized;
+        // Entering fullscreen un-maximizes the OS window, but the request survives it.
+        if (!windowOptions.isFullscreen()) windowOptions.syncMaximized(nowMaximized);
         fire(nowMaximized ? maximizeListener : restoreListener);
     }
 
@@ -624,6 +692,7 @@ public class Window implements Themeable {
      */
     public void followThemeBackground() {
         backgroundColor.clearExplicit();
+        background.clearExplicit();
         applyTheme(ThemeManager.getCurrent());
     }
 
@@ -638,17 +707,18 @@ public class Window implements Themeable {
      * size instead of a single Element's. Null, the default, draws nothing extra.
      */
     public Background getBackground() {
-        return background;
+        return background.get();
     }
 
     /**
-     * Sets the window's attached background effect. Pass null to remove it. Unlike
-     * {@link #setBackgroundColor}, this is independent of theming: it is drawn as-is on
-     * top of whatever {@link #getBackgroundColor()} resolves to, every frame, and is not
-     * affected by {@link ThemeManager#setCurrent}.
+     * Sets the window's attached background effect. Pass null to remove it. It is drawn
+     * as-is on top of whatever {@link #getBackgroundColor()} resolves to, every frame.
+     * Like {@link #setBackgroundColor} it pins the effect, so the one a theme asks for,
+     * see {@link Theme#getWindowEffect()}, no longer replaces it; {@link #followThemeBackground()}
+     * unpins it.
      */
     public void setBackground(Background background) {
-        this.background = background;
+        this.background.set(background);
     }
 
     /**
@@ -657,7 +727,17 @@ public class Window implements Themeable {
     @Override
     public void applyTheme(Theme theme) {
         Paint windowBackground = theme.getWindowBackground();
-        backgroundColor.applyTheme(windowBackground == null ? Color.WHITE : windowBackground);
+        backgroundColor.applyTheme(windowBackground == null ? Color.WHITE : Styling.ownCopy(windowBackground));
+        Background made = null;
+        if (theme.getWindowEffect() != null) {
+            try {
+                made = BackgroundKinds.apply(themeEffect, theme.getWindowEffect(), theme.assetBase());
+            } catch (IllegalArgumentException e) {
+                made = null; // a theme with a bad effect gives none, rather than breaking the window
+            }
+        }
+        themeEffect = made;
+        background.applyTheme(made);
     }
 
     public ConcurrentSkipListMap<Integer, Container> getContainers() {
@@ -869,36 +949,108 @@ public class Window implements Themeable {
     }
 
     /**
-     * Shows {@code modal} above everything, closing any open popup or previous modal
-     * first, and clears keyboard focus. Tab traversal is then limited to the modal; see
-     * {@link #focusNext()}. This is normally called through
-     * {@link ModalContainer#show(Window)}.
+     * Shows {@code modal} above everything, including any modal that is already open, and clears
+     * keyboard focus. Modals stack: the new one becomes the active modal ({@link #getModal()}),
+     * takes the keyboard and Tab traversal, and closing it reveals the one beneath. Any open popup
+     * is closed first. Showing a modal that is already open moves it back to the top. This is
+     * normally called through {@link ModalContainer#show(Window)}.
      */
     public void showModal(ModalContainer modal) {
         closePopup();
-        closeModal();
         requestFocus(null);
-        this.modal = modal;
+        if (modals.remove(modal)) removeContainer(modal);
+        modals.add(modal);
         addContainer(modal);
     }
 
     /**
-     * Closes the current modal, if any, and clears focus.
+     * Closes the active (topmost) modal, if any, and clears focus. The modal beneath it, if there is
+     * one, becomes active again.
      */
     public void closeModal() {
-        if (modal == null) return;
-        ModalContainer closing = modal;
-        modal = null;
-        removeContainer(closing);
-        requestFocus(null);
-        closing.notifyClosed();
+        if (!modals.isEmpty()) closeModal(modals.getLast());
     }
 
     /**
-     * The currently shown modal, or null.
+     * Closes {@code modal} wherever it is in the stack, and clears focus. A no-op if it is not
+     * showing in this window.
+     */
+    public void closeModal(ModalContainer modal) {
+        if (!modals.remove(modal)) return;
+        removeContainer(modal);
+        requestFocus(null);
+        modal.notifyClosed();
+    }
+
+    /**
+     * Closes every open modal, topmost first.
+     */
+    public void closeAllModals() {
+        while (!modals.isEmpty()) closeModal();
+    }
+
+    /**
+     * True while a locking transition is playing, a {@link me.piitex.engine.game.SceneTransition#lock scene} one or an
+     * {@link me.piitex.engine.ui.animation.Transition#isLocking() Element} one: the scenes are frozen, nothing is hovered and the window ignores
+     * presses and the wheel. A key press or click ends the {@link me.piitex.engine.ui.animation.Transition#isSkippable() skippable} ones. An
+     * Element's transition is noticed on the frame after it starts.
+     */
+    public boolean isInputLocked() {
+        return sceneManager.isInputLocked() || !lockingElements.isEmpty();
+    }
+
+    /**
+     * Render thread, called by the input processor for a key press or repeat, a mouse button press, a character or a
+     * wheel turn. Returns true if the game is {@link #isInputLocked() locked}, so the event must go no further. A
+     * press ({@code skip} true, so not a wheel turn, a character or a key repeat) first ends the locking transitions
+     * that are skippable.
+     */
+    public boolean swallowInput(boolean skip) {
+        if (sceneManager.swallowInput(skip)) return true;
+        if (lockingElements.isEmpty()) return false;
+        if (skip) {
+            for (Element element : List.copyOf(lockingElements)) element.skipLockingTransitions();
+            refreshTransitionLock();
+        }
+        return true;
+    }
+
+    /**
+     * Called by the engine once a frame, after the update pass: looks through the enabled Elements for ones with a
+     * running locking transition, which {@link #isInputLocked()} then reports until the next frame or a skip.
+     */
+    public void refreshTransitionLock() {
+        lockingElements.clear();
+        for (Container container : containers.values()) collectLocking(container);
+    }
+
+    private void collectLocking(Element element) {
+        if (!element.isEnabled()) return;
+        if (element.hasLockingTransition()) lockingElements.add(element);
+        if (element instanceof Container container) {
+            for (Element child : container.getElements().values()) collectLocking(child);
+        }
+    }
+
+    /**
+     * The active modal: the topmost one, or null if none is open.
      */
     public ModalContainer getModal() {
-        return modal;
+        return modals.isEmpty() ? null : modals.getLast();
+    }
+
+    /**
+     * Every open modal, bottom to top. A copy.
+     */
+    public List<ModalContainer> getModals() {
+        return List.copyOf(modals);
+    }
+
+    /**
+     * Whether {@code modal} is open in this window, at any depth in the stack.
+     */
+    public boolean isShowingModal(ModalContainer modal) {
+        return modals.contains(modal);
     }
 
     /**
@@ -974,8 +1126,9 @@ public class Window implements Themeable {
      */
     private List<Element> collectFocusTraversalOrder() {
         List<Element> stops = new ArrayList<>();
+        ModalContainer modal = getModal();
         if (modal != null) {
-            collectFocusTraversalOrder(modal, stops); // a modal traps Tab
+            collectFocusTraversalOrder(modal, stops); // the active modal traps Tab
         } else {
             for (Container container : containers.values()) {
                 collectFocusTraversalOrder(container, stops);

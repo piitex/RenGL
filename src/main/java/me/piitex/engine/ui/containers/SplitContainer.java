@@ -145,6 +145,14 @@ public class SplitContainer extends Layout {
     }
 
     /**
+     * The two panes and the divider sit in fixed slots, so removing one never renumbers the others.
+     */
+    @Override
+    protected boolean keepsIndices() {
+        return true;
+    }
+
+    /**
      * Removing a pane empties its side. The divider cannot be removed.
      */
     @Override

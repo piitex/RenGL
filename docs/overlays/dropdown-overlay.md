@@ -64,7 +64,7 @@ lang.onSelect(l -> System.out.println("code = " + l.code()));
 dropdown.setPlaceholder("Pick one..."); // shown while nothing is selected
 dropdown.setMaxVisibleRows(6); // rows before the list scrolls (default 8)
 dropdown.setFontSize(16f);
-dropdown.setTextColor(Color.BLUE); // pins the text color
+dropdown.setTextColor(Color.BLUE); // pins the text color; any paint, so a gradient works
 ```
 
 If there is not enough room below, the list opens **upward**.

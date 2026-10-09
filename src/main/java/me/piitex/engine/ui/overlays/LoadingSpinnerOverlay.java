@@ -2,6 +2,7 @@ package me.piitex.engine.ui.overlays;
 
 import me.piitex.engine.ui.animation.SpinTransition;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
@@ -16,12 +17,12 @@ import me.piitex.engine.ui.theme.Themeable;
  * <p>
  * The spinner has no track or box of its own (it draws nothing but the dots) and is
  * colored like {@link ProgressBarOverlay}'s fill; {@link #setColor} pins it against
- * theme switches. It is sized by its width and height, drawing in the smaller of the two.
+ * theme switches. The color may be a gradient, which then runs across the whole spinner. It is sized by its width and height, drawing in the smaller of the two.
  */
 public class LoadingSpinnerOverlay extends Overlay implements Themeable {
     private static final float PERIOD_SECONDS = 1f;
 
-    private final Overridable<Color> color = new Overridable<>(Color.GRAY);
+    private final Overridable<Paint> color = new Overridable<>(Color.GRAY);
     private SpinTransition activeSpin;
 
     /**
@@ -65,14 +66,14 @@ public class LoadingSpinnerOverlay extends Overlay implements Themeable {
         }
     }
 
-    public Color getColor() {
+    public Paint getColor() {
         return color.get();
     }
 
     /**
      * Pins the dot color against every future theme switch. See {@link Overridable}.
      */
-    public void setColor(Color color) {
+    public void setColor(Paint color) {
         this.color.set(color);
     }
 

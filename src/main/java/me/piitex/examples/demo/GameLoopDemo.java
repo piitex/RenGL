@@ -39,7 +39,6 @@ import static org.lwjgl.glfw.GLFW.*;
  *       Main menu slides back to the menu.</li>
  * </ul>
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class GameLoopDemo {
 
     static void main() {

@@ -43,6 +43,7 @@ Each holds one listener. Calling it again replaces the previous one.
 |---|---|
 | `onTextChanged(Consumer<String>)` | On each user edit (typing, paste, cut, backspace, delete) with the new text |
 | `onSubmit(Consumer<String>)` | When **Enter** is pressed while focused, with the current text |
+| `setKeyFilter(BiPredicate<Integer, Integer>)` | Offered each key press first, with the `GLFW_KEY_*` code and the modifier bits; return true for a key you used, such as Escape to close the box the field is in |
 | `onFocusChanged(Consumer<Boolean>)` | With `true`/`false` when the field gains or loses focus |
 
 `onMouseClick` is free for your own use here. Selection uses the drag interface, not the click listener.

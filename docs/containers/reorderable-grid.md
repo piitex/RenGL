@@ -48,6 +48,28 @@ int slot = grid.slotIndexAt(mouseX, mouseY); // slot under a window point, or -1
   `setItems` with the new order.
 - The grid only reports a new order. **Persisting it is up to you.**
 
+## Free placement
+
+By default the items are a packed list: drop one and the others shift along, so there are never gaps. Turn on free
+placement and the grid becomes a set of fixed **slots**, some empty, and an item can go in whichever slot the user
+likes.
+
+```java
+grid.setFreePlacement(true);
+grid.setSlotCount(24);               // at least 24 slots, in whole rows. Default: enough to fill the visible area
+grid.setItems(Arrays.asList(sword, null, null, shield)); // a list index is a slot, null is an empty slot
+grid.onReorder(slots -> save(slots)); // every slot in order, null for an empty one
+```
+
+- Dropping on an **empty slot** moves the item there and leaves a gap behind.
+- Dropping on an **occupied slot** swaps the two items. The item under the carried one drifts to the carried one's
+  old slot while you hover, so the swap shows before you let go. Nothing else moves while an item is carried.
+- `getSlots()` lists every slot with `null` for empty ones, `getItems()` only the items, and `slotOf(item)` is an
+  item's slot.
+- Drop targets, `onDropOnto` and `onDropOutside` work as they do without free placement.
+- Set it before `setItems` if the list passed in has empty slots. Turning it off packs the items together in slot
+  order. The grid scrolls over every slot, empty ones included.
+
 ## Clicks and drags
 
 A press that never moves is a click, reported through `onItemClick`. It fires on **release**, not on press as
@@ -107,7 +129,7 @@ grid.onFollow((item, x, y) -> ghost.setPosition(x, y));
 
 | Method | Fires |
 |---|---|
-| `onReorder(Consumer<List<Container>>)` | Once, when a drag ends with the item in a different slot. Receives the new order |
+| `onReorder(Consumer<List<Container>>)` | Once, when a drag ends with the item in a different slot. Receives the new order (with free placement, every slot, `null` for empty) |
 | `onItemClick(Consumer<Container>)` | An item was pressed and released without being dragged |
 | `onLift(BiConsumer<Container, Boolean>)` | `true` when an item is picked up, `false` when it is dropped |
 | `setDropTargets(BiPredicate<Container, Container>)` | Asked with (lifted item, candidate) whether the candidate accepts the drop |

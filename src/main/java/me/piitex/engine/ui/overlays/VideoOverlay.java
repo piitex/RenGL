@@ -23,8 +23,9 @@ import java.io.File;
  * background is black, like a video player's; change it through {@link #getStyling()}. Fading the element uses
  * the normal element {@link #setOpacity opacity}.
  * <p>
- * An overlay owns its decode thread and the open file. Call {@link #dispose()} when you remove it, as it also
- * silences the soundtrack; letting the overlay go without disposing it leaves both running until the JVM exits.
+ * An overlay owns its decode thread and the open file. Removing it from its container pauses it, but only
+ * {@link #dispose()} frees the thread and the file; letting the overlay go without disposing it leaves both until the
+ * JVM exits.
  * See {@link VideoPlayer} for the supported formats.
  */
 public class VideoOverlay extends Overlay {
@@ -140,6 +141,15 @@ public class VideoOverlay extends Overlay {
      */
     public void dispose() {
         player.close();
+    }
+
+    /**
+     * Pauses the video when its element is removed, so it doesn't play on unseen. Add it back and call
+     * {@link #play()} to carry on, or {@link #dispose()} it to free it.
+     */
+    @Override
+    public void onRemoved() {
+        player.pause();
     }
 
     @Override

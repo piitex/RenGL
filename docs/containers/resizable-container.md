@@ -23,21 +23,27 @@ window.addContainer(panel);
 
 | Feature | Details |
 |---|---|
-| [Follows the window](#following-the-window) | A top-level container keeps its share of the window as the window resizes |
+| [Follows the window](#following-the-window) | A container keeps its share of the window as the window resizes |
 | [Min and max size](#min-and-max-size) | Clamps the size, however it is driven |
 | [Scales children](#children-and-fonts) | Positions, sizes and font sizes scale with the container |
 | [Resizes by dragging](#resizing-by-dragging) | Grab the corners (or any edges) with the matching cursor |
 
 ## Following the window
 
-A **top-level** `ResizableContainer` (added with `Window.addContainer`) tracks the window size
-**proportionally**. A container covering half the window's width keeps covering half, and its position scales the
-same way. It measures from its size when the first frame runs.
+A `ResizableContainer` that is not inside another one tracks the window size **proportionally**. A container
+covering half the window's width keeps covering half, and its position scales the same way. It measures from the
+window size it was built for: the size the window was asked for (`WindowOptions.getDesignWidth()`/`getDesignHeight()`)
+when the container exists as the window opens, so a window that opens maximized, or shrunk to fit the screen, scales
+it up straight away. A container added later measures from the window's size at that moment.
 
 - Turn this off with `setResizeWithWindow(false)`, then drive it yourself with `resizeTo(width, height)`.
-- A `ResizableContainer` **nested** in another container never follows the window. If its parent is a
-  `ResizableContainer`, the parent scales it as one of its children.
+- One nested in a plain container follows the window the same way, with its position in the parent's coordinates.
+  In a layout only its size follows, since the layout places it.
+- One below another `ResizableContainer` never follows the window itself: the outer one scales it as one of its
+  children.
 - After a drag, `resizeTo`, or a min/max change, following restarts from the new size.
+- When min or max holds the size, the container keeps its middle on the place it would have had, so it grows or
+  shrinks around that spot instead of sliding off it.
 
 ## Min and max size
 
@@ -63,7 +69,9 @@ as the container. Text scales too, by the **smaller** of the width and height fa
 - The font scale is the container's current size divided by its size before its first resize. Shrinking then
   growing back restores the original font size.
 - If you change an element's font size yourself, the new size becomes its baseline at the current scale.
-- A [layout](../layouts/README.md) child re-places its own children every frame, so for those only the sizes are scaled.
+- A [layout](../layouts/README.md) child re-places its own children every frame, so for those the sizes are scaled and
+  the layout's spacing and padding are scaled to match, each by the factor of the direction it works in (padding by
+  both).
 - Images scale as pictures, so a large enlargement looks soft. An `IconOverlay` re-renders its SVG at the new
   size once the resize settles, so icons stay sharp.
 

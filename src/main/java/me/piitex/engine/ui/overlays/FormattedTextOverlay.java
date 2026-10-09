@@ -1,6 +1,8 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.scroll.ScrollContainer;
 import me.piitex.engine.ui.text.FormattedBlock;
 import me.piitex.engine.ui.text.TextFormatPreset;
@@ -32,6 +34,7 @@ public class FormattedTextOverlay extends ScrollContainer {
     private final TextFormatPreset preset;
     private String source = "";
     private final List<TextFlowOverlay> blocks = new ArrayList<>();
+    private final List<Element> added = new ArrayList<>(); // the blocks and the list markers, to take away when it is built again
 
     public FormattedTextOverlay(double width, double height, TextFormatPreset preset) {
         super(width, height);
@@ -86,22 +89,41 @@ public class FormattedTextOverlay extends ScrollContainer {
     }
 
     private double layoutBlocks(List<FormattedBlock> parsed, double width) {
-        for (TextFlowOverlay block : blocks) {
-            removeElement(block);
+        for (Element element : added) {
+            removeElement(element);
         }
+        added.clear();
         blocks.clear();
 
         double cursorY = 0;
         for (FormattedBlock block : parsed) {
             TextStyle style = block.style();
+            Paint color = style.color() != null ? style.color() : Color.BLACK;
             cursorY += block.spacingBefore();
 
-            TextFlowOverlay flow = new TextFlowOverlay(block.text(), width, style.fontSize(),
-                    style.color() != null ? style.color() : Color.BLACK);
+            double left = block.indent();
+            if (!block.marker().isEmpty()) {
+                TextOverlay marker = new TextOverlay(block.marker(), style.fontSize(), color);
+                marker.setBold(style.bold());
+                if (style.color() != null) marker.setTextColor(style.color()); // set on purpose, so a theme doesn't take it back
+                marker.setPosition(left, cursorY);
+                addElement(marker);
+                added.add(marker);
+                left += Math.max(style.fontSize() * 1.2, marker.getWidth() + 6);
+            }
+
+            TextFlowOverlay flow = new TextFlowOverlay(block.text(), Math.max(1, width - left), style.fontSize(), color);
             flow.setBold(style.bold());
             flow.setItalic(style.italic());
-            flow.setPosition(0, cursorY);
+            if (style.color() != null) flow.setTextColor(style.color()); // set on purpose, so a theme doesn't take it back
+            if (block.background() != null) {
+                flow.setPadding(8f);
+                flow.getStyling().setBackgroundColor(block.background());
+                flow.getStyling().setCornerRadius(4f);
+            }
+            flow.setPosition(left, cursorY);
             addElement(flow);
+            added.add(flow);
             blocks.add(flow);
 
             cursorY += flow.getHeight() + block.spacingAfter();

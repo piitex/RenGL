@@ -41,7 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class IconCache {
     private static final float OVERSAMPLE = 2f;
-    private static final Map<String, org.jetbrains.skia.Image> cache = new ConcurrentHashMap<>();
+    private static final me.piitex.engine.utils.WeightedCache<org.jetbrains.skia.Image> cache = new me.piitex.engine.utils.WeightedCache<>(64L << 20);
     private static final Map<String, byte[]> sources = new ConcurrentHashMap<>();
 
     private IconCache() {
@@ -52,7 +52,7 @@ public final class IconCache {
      */
     public static org.jetbrains.skia.Image load(File svgFile, int width, int height) {
         String key = "file:" + svgFile.getAbsolutePath() + "@" + width + "x" + height;
-        return cache.computeIfAbsent(key, k -> rasterizeFile(svgFile, width, height));
+        return cache.get(key, () -> rasterizeFile(svgFile, width, height), IconCache::bytes);
     }
 
     /**
@@ -65,7 +65,30 @@ public final class IconCache {
      */
     public static org.jetbrains.skia.Image loadResource(String resourcePath, int width, int height) {
         String key = "resource:" + resourcePath + "@" + width + "x" + height;
-        return cache.computeIfAbsent(key, k -> rasterizeResource(resourcePath, width, height));
+        return cache.get(key, () -> rasterizeResource(resourcePath, width, height), IconCache::bytes);
+    }
+
+    private static long bytes(org.jetbrains.skia.Image image) {
+        return 4L * image.getWidth() * image.getHeight();
+    }
+
+    /**
+     * How many bytes of rasterized icons the cache may hold before it drops the least recently used one. Default 64 MiB.
+     * A dropped icon is not closed, so one still on screen keeps drawing. 0 or less means no limit.
+     */
+    public static void setCacheLimit(long bytes) {
+        cache.setLimit(bytes);
+    }
+
+    public static long getCacheLimit() {
+        return cache.getLimit();
+    }
+
+    /**
+     * Drops every cached icon. Overlays still showing one keep it.
+     */
+    public static void clearCache() {
+        cache.clear();
     }
 
     /**

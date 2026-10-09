@@ -15,11 +15,15 @@ import me.piitex.engine.utils.flags.GeneratedFragments;
 final class PressState {
     boolean down;
     private long pressFrame = -1, pressTick = -1;
+    private int pressesInFrame, pressesInTick; // presses stamped with pressFrame and pressTick
     private long releaseFrame = -1, releaseTick = -1;
     private long repeatFrame = -1, repeatTick = -1;
     private double pressTime;
 
     void press(long frame) {
+        long tick = GameTime.getTicks();
+        pressesInFrame = pressFrame == frame ? pressesInFrame + 1 : 1;
+        pressesInTick = pressTick == tick ? pressesInTick + 1 : 1;
         down = true;
         pressFrame = frame;
         pressTick = GameTime.getTicks();
@@ -51,6 +55,14 @@ final class PressState {
         return GameTime.isInFixedStep() ? pressTick == GameTime.getTicks() : pressFrame == frame;
     }
 
+    /**
+     * How many times it was pressed in the current step or frame, as {@link #justPressed} counts them.
+     */
+    int pressCount(long frame) {
+        if (!justPressed(frame)) return 0;
+        return GameTime.isInFixedStep() ? pressesInTick : pressesInFrame;
+    }
+
     boolean justReleased(long frame) {
         return GameTime.isInFixedStep() ? releaseTick == GameTime.getTicks() : releaseFrame == frame;
     }
@@ -70,6 +82,7 @@ final class PressState {
 
     void clear() {
         down = false;
+        pressesInFrame = pressesInTick = 0;
         pressFrame = pressTick = releaseFrame = releaseTick = repeatFrame = repeatTick = -1;
     }
 }

@@ -52,6 +52,6 @@ root.addElement(row);
 
 - The layout keeps the size you gave it unless you call `setSizeToContent`. Otherwise children that total
   more width than the layout is wide run past its right edge and are clipped.
-- A child's size is never changed.
+- A child's size is never changed, unless it has a [weight](README.md#sharing-the-space-left-over) (a share of the width that is left) or a [relative size](../core/element.md#sizing-by-fraction).
 - Positions are recomputed every frame, so a child's `setPosition` is overwritten.
 - `SpinnerOverlay` is a `HorizontalLayout` subclass. See [SpinnerOverlay](../overlays/spinner-overlay.md).

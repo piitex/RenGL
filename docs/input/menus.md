@@ -144,7 +144,7 @@ Things to watch:
   it takes priority over `TextFieldOverlay`'s own clipboard handling. If you add Copy and Paste items, make
   their actions do the job (or leave those shortcuts off).
 - A shortcut with a named key (`"F5"`, `"Delete"`, `"Enter"`) has no native key equivalent. The item works by click only.
-- Only one native menu bar exists per app. If two `MenuBarOverlay`s are added, the first one that runs owns it.
+- Only one native menu bar exists per app, so with several windows the system menu bar shows the bar of the window that has the focus, and changes as the user clicks from one window to another. It keeps the last one shown while the app is in the background. Two `MenuBarOverlay`s in the same window: the first one that runs is shown.
 - The interop is in `me.piitex.engine.gl.NativeMenuBar` (the same Objective-C approach `MetalContext` uses).
 
 ## Keyboard
@@ -180,7 +180,8 @@ menu.setHoverColor(...); menu.setTextColor(...); menu.setDisabledTextColor(...);
 menu.setFontSize(16f); menu.setItemHeight(30f); menu.setMinWidth(200f);
 ```
 
-Pass null to a color setter to go back to the theme. Only plain [`Color`](../styling/colors-and-paints.md#color) values are accepted.
+Pass null to a color setter to go back to the theme. Each takes any [`Paint`](../styling/colors-and-paints.md), so a panel or
+highlight can be a gradient. The menu bar's `setTextColor` is a paint too.
 
 ## Limitations
 
@@ -189,7 +190,6 @@ Pass null to a color setter to go back to the theme. Only plain [`Color`](../sty
 - **A menu taller than the window is clamped to the top edge but does not scroll.**
 - **No icons** in rows, and no radio-style groups. Use a check item per option.
 - **A menu bar has no Alt/F10 activation** or per-title mnemonics.
-- **The window size used for edge-flipping is the creation-time size** (see [known limitations](../reference/known-limitations.md#window-and-engine)).
 - **One popup at a time.** Opening a dropdown list closes an open menu, and the reverse.
 
 ## Method reference

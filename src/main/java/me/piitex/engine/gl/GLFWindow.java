@@ -72,6 +72,7 @@ public class GLFWindow {
     private volatile Consumer<Boolean> iconifyHandler, maximizeHandler;
     private volatile java.util.function.BooleanSupplier closeRequestHandler;
     private boolean fullscreen; // main thread only
+    private boolean frameHiddenForFullscreen; // main thread only: fullscreen took the title bar off a STANDARD window
     private int windowedX, windowedY, windowedW, windowedH; // bounds to return to when leaving fullscreen
     private final ConcurrentLinkedQueue<Runnable> mainThreadTasks = new ConcurrentLinkedQueue<>();
     private final RenderAPI backend;
@@ -231,7 +232,7 @@ public class GLFWindow {
 
     /**
      * Applies the creation-time {@link WindowOptions} that GLFW owns: resizability, fullscreen, borderless,
-     * cursor visibility and the window icon. Vsync and max FPS are deliberately not handled here.
+     * maximized state, cursor visibility and the window icon. Vsync and max FPS are deliberately not handled here.
      * <p>
      * Interpretation of the two mode flags:
      * <ul>
@@ -255,6 +256,8 @@ public class GLFWindow {
         }
         if (options.isFullscreen()) {
             applyFullscreen(true, borderless);
+        } else if (options.isMaximized() && options.isResizable()) {
+            glfwMaximizeWindow(window);
         }
         if (!options.isShowCursor()) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN); // hidden, but still free-moving (not captured)
@@ -275,6 +278,10 @@ public class GLFWindow {
         if (!enable) {
             if (!fullscreen) return;
             fullscreen = false;
+            if (frameHiddenForFullscreen) {
+                frameHiddenForFullscreen = false;
+                if (!borderless) glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_TRUE);
+            }
             if (glfwGetWindowMonitor(window) != NULL) {
                 glfwSetWindowMonitor(window, NULL, windowedX, windowedY, windowedW, windowedH, GLFW_DONT_CARE);
             } else {
@@ -301,6 +308,13 @@ public class GLFWindow {
             windowedH = h.get(0);
         }
         fullscreen = true;
+        // macOS has no usable exclusive mode here: the monitor's video mode is in points, GLFW matches it against
+        // pixel modes and switches the display to another resolution. Cover the screen with a frameless window instead.
+        if (!borderless && MAC) {
+            borderless = true;
+            frameHiddenForFullscreen = true;
+            glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_FALSE);
+        }
         if (borderless) {
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 IntBuffer x = stack.mallocInt(1), y = stack.mallocInt(1);
@@ -470,6 +484,7 @@ public class GLFWindow {
      * MAIN THREAD ONLY. Adds or removes the OS frame (title bar, title and window controls) of the live window.
      */
     public void applyStyle(WindowStyle style) {
+        if (frameHiddenForFullscreen) return; // the frame comes back, or not, when fullscreen ends
         glfwSetWindowAttrib(window, GLFW_DECORATED, style == WindowStyle.STANDARD ? GLFW_TRUE : GLFW_FALSE);
     }
 
@@ -586,6 +601,7 @@ public class GLFWindow {
      * MAIN THREAD ONLY. Maximizes or un-maximizes; a no-op if already so. Never un-minimizes when asked to un-maximize.
      */
     public void applyMaximized(boolean maximized) {
+        if (fullscreen) return; // the request is kept in WindowOptions and applied when fullscreen ends
         boolean iconified = glfwGetWindowAttrib(window, GLFW_ICONIFIED) == GLFW_TRUE;
         boolean isMaximized = glfwGetWindowAttrib(window, GLFW_MAXIMIZED) == GLFW_TRUE;
         if (maximized && !isMaximized) {

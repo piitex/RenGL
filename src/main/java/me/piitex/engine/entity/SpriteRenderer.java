@@ -33,8 +33,8 @@ public class SpriteRenderer extends Component implements Bounded {
     public float pivotX = 0.5f;
     @Property(min = 0, max = 1, tooltip = "The point of the image at the entity's position, 0 to 1 down")
     public float pivotY = 0.5f;
-    @Property public boolean flipX;
-    @Property public boolean flipY;
+    @Property(tooltip = "Turn the image over from left to right") public boolean flipX;
+    @Property(tooltip = "Turn the image over from top to bottom") public boolean flipY;
 
     private final Sprite sprite = new Sprite();
     private TextureRef loaded;

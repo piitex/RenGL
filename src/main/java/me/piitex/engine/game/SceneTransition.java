@@ -45,6 +45,11 @@ import java.util.List;
  * }
  * }</pre>
  * A transition holds no state of its own between frames, so one instance can be used for any number of changes.
+ * <p>
+ * By default the scenes keep running and taking input while it plays. {@link #lock} freezes them and blocks input
+ * until it is over, as a cutscene or a level intro wants, and {@link #skippable} lets a key press or click end it
+ * early. {@link SceneManager#finishTransition()} ends it from code. These are settings of the instance, so a
+ * shared one applies them to every change that uses it: {@code SceneTransition.fade(2f).lock().skippable()}.
  */
 @GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public abstract class SceneTransition {
@@ -73,6 +78,8 @@ public abstract class SceneTransition {
 
     private final float duration;
     private final Easing easing;
+    private boolean locking;
+    private boolean skippable;
 
     /**
      * @param duration seconds of real time. A transition of 0 seconds or less changes the stack with no transition.
@@ -90,6 +97,49 @@ public abstract class SceneTransition {
 
     public Easing getEasing() {
         return easing;
+    }
+
+    /**
+     * Locks the game while this transition plays: no scene gets {@link Scene#fixedUpdate}, {@link Scene#update}, its
+     * timers or a key press, and the mouse, keyboard and scroll wheel do nothing in the window, until the transition
+     * ends. Key and button releases still get through, so nothing is left stuck down. Combine with {@link #skippable}
+     * to let the user cut it short. Returns this transition.
+     */
+    public SceneTransition lock() {
+        return lock(true);
+    }
+
+    public SceneTransition lock(boolean locking) {
+        this.locking = locking;
+        return this;
+    }
+
+    /**
+     * Whether the scenes are frozen and input blocked while this transition plays. Off by default.
+     */
+    public boolean isLocking() {
+        return locking;
+    }
+
+    /**
+     * Lets a key press or mouse click end this transition early, as {@link SceneManager#finishTransition()} does. The
+     * press only skips; it does not reach the scenes or the UI. Only meaningful for a {@link #lock locking} transition,
+     * since without the lock the input keeps working as usual and nothing is swallowed. Returns this transition.
+     */
+    public SceneTransition skippable() {
+        return skippable(true);
+    }
+
+    public SceneTransition skippable(boolean skippable) {
+        this.skippable = skippable;
+        return this;
+    }
+
+    /**
+     * Whether a key press or click ends this transition early. Off by default.
+     */
+    public boolean isSkippable() {
+        return skippable;
     }
 
     /**

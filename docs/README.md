@@ -41,11 +41,12 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [TreeView](containers/tree-view.md) | A tree of items, like an editor's hierarchy or a file browser |
 | **[Layouts](layouts/README.md)** | Automatic positioning |
 | [Layouts overview](layouts/README.md) | How automatic positioning works |
-| [VerticalLayout](layouts/vertical-layout.md) · [HorizontalLayout](layouts/horizontal-layout.md) · [GridLayout](layouts/grid-layout.md) · [StackLayout](layouts/stack-layout.md) · [SplitContainer](containers/split-container.md) · [TabContainer](containers/tab-container.md) | One page per layout |
+| [Layout files](containers/layout-files.md) | Load a screen designed in the editor from JSON |
+| [VerticalLayout](layouts/vertical-layout.md) · [HorizontalLayout](layouts/horizontal-layout.md) · [GridLayout](layouts/grid-layout.md) · [StackLayout](layouts/stack-layout.md) · [FlowLayout](layouts/flow-layout.md) · [DockLayout](layouts/dock-layout.md) · [SplitContainer](containers/split-container.md) · [TabContainer](containers/tab-container.md) | One page per layout |
 | **[Overlays](overlays/README.md)** (widgets) | Every widget, one page each |
 | [Overlay catalog](overlays/README.md) | Every widget at a glance |
 | Text | [TextOverlay](overlays/text-overlay.md) · [TextFlowOverlay](overlays/text-flow-overlay.md) · [TextFieldOverlay](overlays/text-field-overlay.md) · [TextAreaOverlay](overlays/text-area-overlay.md) · [RichTextAreaOverlay](overlays/rich-text-area-overlay.md) · [FormattedTextOverlay](overlays/formatted-text-overlay.md) |
-| Controls | [ButtonOverlay](overlays/button-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
+| Controls | [ButtonOverlay](overlays/button-overlay.md) · [LinkOverlay](overlays/link-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
 | Feedback | [ProgressBarOverlay](overlays/progress-bar-overlay.md) · [LoadingSpinnerOverlay](overlays/loading-spinner-overlay.md) · [SeparatorOverlay](overlays/separator-overlay.md) |
 | Images | [ImageOverlay](overlays/image-overlay.md) · [IconOverlay](overlays/icon-overlay.md) |
 | **[Game](game/README.md)** | Scenes and the game loop |
@@ -64,13 +65,14 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Texture atlases](graphics/atlases.md) | `TextureAtlas`: packed sprite sheets from TexturePacker, Aseprite and similar tools |
 | [Tile maps](graphics/tile-maps.md) | `TileMap`: levels from the Tiled map editor: drawing, collision shapes, objects and properties |
 | [Sprite animation](graphics/sprite-animation.md) | `Animation` and `AnimationPlayer`: frame animation, loop modes, frame events |
-| [Particles](graphics/particles.md) | `ParticleSystem` and `ParticleEffect`: bursts of sparks, smoke and debris |
+| [Particles](graphics/particles.md) | `ParticleSystem`, `ParticleEffect` and `ParticleEmitter`: sparks, smoke and debris, in bursts or a steady stream |
 | [Shaders and post effects](graphics/shaders.md) | `ShaderEffect`: SkSL shaders to fill shapes or post-process a scene or element |
 | [Debug drawing](graphics/debug-drawing.md) | `DebugDraw`: hit boxes, rays and labels drawn in world space |
 | **[3D](3d/README.md)** (optional) | Showing 3D with OpenGL or Vulkan inside the UI |
 | [Viewport3D](3d/viewport-3d.md) | The element that shows 3D in a rectangle of the UI: `Content`, input, resolution, lifetime |
 | [Background3D](3d/background-3d.md) | 3D behind the whole window, with the UI drawn over it |
 | [Scenes](3d/scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material` (classic and PBR), `Light`, `Camera`, `OrbitControls`, picking and the math types |
+| [Scene files](3d/scene-files.md) | `Scene3DFile`: a scene built in the editor, saved as JSON and loaded by the game |
 | [Lighting](3d/lighting.md) | How lights add up, shadows, and the skybox |
 | [Models](3d/models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files |
 | [Animation](3d/animation.md) | Clips, `AnimationPlayer` and skinned meshes |
@@ -82,6 +84,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Music](audio/music.md) | Streamed tracks, looping, crossfades |
 | [Playback](audio/playback.md) | Volume, pitch, pan, pause, fades and callbacks on a playing sound |
 | [3D audio](audio/spatial-audio.md) | Listener, positioned sounds, distance falloff, Doppler, and 2D hearing in one call |
+| **[Video](video/README.md)** | `VideoOverlay` and `VideoPlayer`: streamed playback of large files with synced sound |
 | **[Styling](styling/README.md)** | Colors, box styling, themes, backgrounds, fonts, images |
 | [Colors and paints](styling/colors-and-paints.md) | `Color`, `RainbowColor` (RGB cycling), gradients, animated paints |
 | [Styling](styling/styling.md) | Background, border, hover, and corner radius on every element |
@@ -103,6 +106,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | **[Reference](reference/README.md)** | Custom elements, utilities, known limitations |
 | [Writing custom elements](reference/custom-elements.md) | Subclassing [`Element`](core/element.md) / [`Overlay`](core/overlay.md) |
 | [Utilities](reference/utilities.md) | `FormID`, `AssetManager`, `FileUtil`, `ProcessUtil`, the AI-disclosure annotations |
+| [Browser](reference/browser.md) | Open a web address in the OS default browser with `Browser.open` |
 | [AppEnvironment](reference/app-environment.md) | Dev vs release file locations, chosen automatically |
 | [Downloads](reference/downloads.md) | Background HTTP downloads with progress, speed and ETA displays |
 | [Config](reference/config.md) | Settings files with flat and nested values |

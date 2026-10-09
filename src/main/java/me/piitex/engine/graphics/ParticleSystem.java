@@ -211,6 +211,15 @@ public final class ParticleSystem {
         return count;
     }
 
+    /**
+     * The {@code index}th living particle, oldest first, from 0 to {@link #getCount()} - 1: to read its place, or to
+     * change a particle after {@link #emit}. It is reused once it dies, so do not keep it.
+     */
+    public Particle getParticle(int index) {
+        if (index < 0 || index >= count) throw new IndexOutOfBoundsException("Particle " + index + " of " + count);
+        return alive[index];
+    }
+
     public int getMaxParticles() {
         return maxParticles;
     }

@@ -316,7 +316,8 @@ Run it with `-XstartOnFirstThread` on macOS. The same content works behind the w
 - On Vulkan, a frame that binds different resources very often keeps allocating descriptor sets; there is no hard
   ceiling, but thousands of draws with different textures cost CPU. Draw instances in one call instead.
 - Buffers and textures made in the middle of a Vulkan frame are uploaded with that frame's commands and don't stall it;
-  on OpenGL the driver decides. Creating very large ones in `init` is still kinder to the first frame.
+  on OpenGL the driver decides. Creating very large ones in `init` is still kinder to the first frame. A `Scene3D`
+  can [preload](scenes.md#preloading) its meshes and textures over several frames.
 - Both APIs are driven through one lowest-common-denominator interface, so there are no compute shaders, geometry
   shaders, or sampling a multisampled target in a shader (it is resolved first).
 

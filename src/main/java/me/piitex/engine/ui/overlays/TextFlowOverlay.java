@@ -200,6 +200,12 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
     }
 
     @Override
+    public void update(float delta) {
+        super.update(delta);
+        if (ready) scrollBarStyle.advance(delta);
+    }
+
+    @Override
     public void applyTheme(Theme theme) {
         super.applyTheme(theme);
         if (!ready) return; // TextOverlay's constructor registers us before our own fields exist
@@ -311,11 +317,11 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
     }
 
     private void drawScrollbar(Renderer renderer) {
-        Color track = scrollBarStyle.getTrackColor();
+        Paint track = scrollBarStyle.getTrackColor();
         if (track != null) {
             renderer.drawQuad((float) trackX(), (float) trackY(), scrollBarStyle.getThickness(), (float) trackHeight(), track, scrollBarStyle.getCornerRadius());
         }
-        Color thumb = draggingThumb ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
+        Paint thumb = draggingThumb ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
         if (thumb != null) {
             renderer.drawQuad((float) trackX(), (float) thumbY(), scrollBarStyle.getThickness(), (float) thumbLength(), thumb, scrollBarStyle.getCornerRadius());
         }

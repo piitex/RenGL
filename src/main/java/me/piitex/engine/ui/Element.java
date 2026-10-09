@@ -1,11 +1,13 @@
 package me.piitex.engine.ui;
 
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.animation.FadeTransition;
 import me.piitex.engine.ui.animation.Transition;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.Snapshot;
 import me.piitex.engine.graphics.ShaderEffect;
 import me.piitex.engine.ui.background.Background;
+import me.piitex.engine.ui.background.BackgroundKinds;
 import me.piitex.engine.ui.background.ConstellationBackground;
 import me.piitex.engine.ui.background.DotGridBackground;
 import me.piitex.engine.ui.color.*;
@@ -15,6 +17,7 @@ import me.piitex.engine.ui.events.ElementUpdateEvent;
 import me.piitex.engine.ui.events.MouseClickEvent;
 import me.piitex.engine.ui.layout.Layout;
 import me.piitex.engine.ui.text.TooltipManager;
+import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.utils.FormID;
 import me.piitex.engine.ui.menu.PopupMenu;
@@ -22,8 +25,10 @@ import me.piitex.engine.utils.FormIDRegistry;
 import me.piitex.engine.utils.Namespace;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -44,18 +49,23 @@ public class Element {
     private int suggestedDrawIndex;
     private int drawIndex;
     private boolean enabled = true;
-    private double x, y, z, width, height;
+    private double x, y, width, height;
     // Set by setAnchor; x and y then follow the container's size. See applyAnchor.
     private Anchor anchor, pivot;
     private double anchorOffsetX, anchorOffsetY, anchorMargin = -1;
+    // Set by setRelativeSize: width and height follow the container's size. NaN is off. See applyRelativeSize.
+    private double relativeWidth = Double.NaN, relativeHeight = Double.NaN, relativeInset;
+    private double layoutWeight;
     private boolean hovered;
     private Layout.Alignment textAlignment;
     private CursorMode cursorMode;
     private boolean focusTraversable = false;
     private int tabIndex = -1;
-    private Background background;
+    private final Overridable<Background> background = new Overridable<>(null);
+    private Background themeEffect; // the one a theme made, kept so a later theme change can update it instead of starting over
     private Styling styling = new Styling();
     private final List<Transition> transitions = new ArrayList<>();
+    private final Map<Transition, Runnable> transitionAfter = new java.util.IdentityHashMap<>();
     private float opacity = 1f;
     // Drawn scaled around scaleOriginX/Y, in the same space as x and y. NaN is the Element's center.
     private float scale = 1f;
@@ -73,6 +83,8 @@ public class Element {
     // Event handling
     private Consumer<MouseClickEvent> mouseClickListenerConsumer;
     private boolean clickOnRelease;
+    private boolean propagateClicks;
+    private boolean dragsContainer;
     private Consumer<ElementRenderEvent> elementRenderEventConsumer;
     private Consumer<ElementUpdateEvent> elementUpdateEventConsumer;
 
@@ -204,20 +216,6 @@ public class Element {
     }
 
     /**
-     * Unused by rendering and hit-testing, both of which are purely 2D. It is reserved for depth handling beyond the draw-index system above.
-     */
-    public double getZ() {
-        return z;
-    }
-
-    /**
-     * Sets the reserved depth value. See {@link #getZ()}.
-     */
-    public void setZ(double z) {
-        this.z = z;
-    }
-
-    /**
      * Convenience for setting x and y together in one call, e.g. when moving an Element as part of an animation.
      * Drops any {@link #setAnchor anchor}, as {@link #setX} does.
      */
@@ -299,12 +297,131 @@ public class Element {
     }
 
     /**
+     * Called when this element is taken out of the container it was in with {@link Container#removeElement}, and for
+     * every element inside a container that is removed. Does nothing by default. An element that keeps something
+     * running when it is not drawn, like a video, overrides it to hold that. It is not called when the whole window or
+     * a top-level container goes.
+     */
+    public void onRemoved() {
+    }
+
+    /**
+     * Sizes this element as a fraction of its container, with no {@code onResize} code:
+     * {@code panel.setRelativeSize(0.5, 1)} keeps a panel half as wide as its container and as tall as it. The
+     * fractions are of the container's box, or of a {@link Layout}'s area inside its padding. A negative or NaN
+     * fraction leaves that axis to {@link #setWidth} and {@link #setHeight}. While a fraction is set it wins over
+     * those, and over {@link me.piitex.engine.ui.containers.ResizableContainer} scaling. Position it with {@link #setAnchor}.
+     * <p>
+     * The size is worked out right away, again whenever the container is resized, and every frame. It has no effect
+     * on an element with no container. In a {@link Layout}, {@link #setLayoutWeight} wins along the layout's own
+     * axis, and a {@link me.piitex.engine.ui.layout.DockLayout} or {@link me.piitex.engine.ui.layout.GridLayout}
+     * still measures the fraction against the whole layout, not the child's edge or cell.
+     */
+    public void setRelativeSize(double widthFraction, double heightFraction) {
+        relativeWidth = widthFraction < 0 ? Double.NaN : widthFraction;
+        relativeHeight = heightFraction < 0 ? Double.NaN : heightFraction;
+        applyAnchor();
+    }
+
+    /**
+     * {@link #setRelativeSize} for the width alone.
+     */
+    public void setRelativeWidth(double fraction) {
+        relativeWidth = fraction < 0 ? Double.NaN : fraction;
+        applyAnchor();
+    }
+
+    /**
+     * {@link #setRelativeSize} for the height alone.
+     */
+    public void setRelativeHeight(double fraction) {
+        relativeHeight = fraction < 0 ? Double.NaN : fraction;
+        applyAnchor();
+    }
+
+    /**
+     * The fraction of its container's width this element is kept at, or NaN if its width is its own.
+     */
+    public double getRelativeWidth() {
+        return relativeWidth;
+    }
+
+    /**
+     * The fraction of its container's height this element is kept at, or NaN if its height is its own.
+     */
+    public double getRelativeHeight() {
+        return relativeHeight;
+    }
+
+    /**
+     * Points taken off each side of a {@link #setRelativeSize relative} size, so {@code setRelativeSize(1, 1)} with an
+     * inset of 8 leaves an 8 point border all round. 0 by default.
+     */
+    public void setRelativeInset(double inset) {
+        this.relativeInset = Math.max(0, inset);
+        applyAnchor();
+    }
+
+    public double getRelativeInset() {
+        return relativeInset;
+    }
+
+    /**
+     * Makes this element fill its container, {@code margin} points in from every edge: a relative size of 1 by 1 with
+     * that inset, centered. {@code fill(0)} covers it exactly.
+     */
+    public void fill(double margin) {
+        relativeWidth = 1;
+        relativeHeight = 1;
+        relativeInset = Math.max(0, margin);
+        anchor = Anchor.CENTER;
+        pivot = Anchor.CENTER;
+        anchorOffsetX = 0;
+        anchorOffsetY = 0;
+        applyAnchor();
+    }
+
+    /**
+     * Gives this element a share of the space a {@link me.piitex.engine.ui.layout.HorizontalLayout} or
+     * {@link me.piitex.engine.ui.layout.VerticalLayout} has left over along its own axis, after the children without a
+     * weight and the spacing. Two children weighing 1 and 2 share it a third and two thirds, whatever their own
+     * sizes were. 0, the default, keeps the element at its own size. It does nothing outside those two layouts, nor
+     * in one that {@link me.piitex.engine.ui.layout.Layout#setSizeToContent sizes itself to its content} along that axis, which
+     * would have no space left over.
+     */
+    public void setLayoutWeight(double weight) {
+        this.layoutWeight = Math.max(0, weight);
+        if (owner instanceof Layout layout) layout.relayout();
+    }
+
+    public double getLayoutWeight() {
+        return layoutWeight;
+    }
+
+    /**
+     * Sets the size a {@link #setRelativeSize relative} size works out to inside a box {@code boxWidth} by
+     * {@code boxHeight}. Does nothing for an axis with no fraction. The engine calls it, so there is rarely a reason to.
+     */
+    public void applyRelativeSize(double boxWidth, double boxHeight) {
+        if (!Double.isNaN(relativeWidth)) {
+            double w = Math.max(0, boxWidth * relativeWidth - 2 * relativeInset);
+            if (Math.abs(w - width) > 1e-6) setWidth(w);
+        }
+        if (!Double.isNaN(relativeHeight)) {
+            double h = Math.max(0, boxHeight * relativeHeight - 2 * relativeInset);
+            if (Math.abs(h - height) > 1e-6) setHeight(h);
+        }
+    }
+
+    /**
      * Moves an {@link #setAnchor anchored} element to where its anchor puts it in its container. Does nothing when it
      * is not anchored, has no container or is in a {@link Layout}. The engine calls it whenever that could change,
      * and every frame from the container's update, so there is rarely a need to call it.
      */
     public void applyAnchor() {
-        if (anchor == null || owner == null || owner instanceof Layout) return;
+        if (owner == null || owner instanceof Layout) return;
+        applyRelativeSize(owner.getWidth(), owner.getHeight());
+        if (anchor == null) return;
         double boxWidth = owner.getWidth(), boxHeight = owner.getHeight();
         double newX = boxWidth * anchor.x() - width * pivot.x() + anchorOffsetX;
         double newY = boxHeight * anchor.y() - height * pivot.y() + anchorOffsetY;
@@ -483,11 +600,56 @@ public class Element {
      * a full-size overlay Element as an actual child would do.
      */
     public Background getBackground() {
-        return background;
+        return background.get();
     }
 
+    /**
+     * Attaches {@code background}, or removes the effect with null. Like every explicit set it is pinned: a theme's
+     * effect, see {@link me.piitex.engine.ui.theme.Theme#getContainerEffect()}, doesn't replace it.
+     */
     public void setBackground(Background background) {
-        this.background = background;
+        this.background.set(background);
+    }
+
+    /**
+     * Theme-facing counterpart to {@link #setBackground}: a no-op once that has been called. See {@link Overridable}.
+     */
+    public void applyThemeBackground(Background background) {
+        this.background.applyTheme(background);
+    }
+
+    /**
+     * Whether {@link #setBackground} has been called, so a theme's effect no longer applies to this element.
+     */
+    public boolean isBackgroundSet() {
+        return background.isExplicit();
+    }
+
+    /**
+     * Undoes {@link #setBackground}: the effect is the theme's again, if it has one, or none.
+     */
+    public void resetBackground() {
+        background.clearExplicit();
+    }
+
+    /**
+     * Gives this element the effect a theme asks for, as a baseline that {@link #setBackground} overrides: {@code settings}
+     * as {@link me.piitex.engine.ui.background.BackgroundKinds} reads them, or none for null. The effect this made before
+     * is updated rather than replaced where it can be, so it doesn't start over each time the theme is applied.
+     *
+     * @param base the folder pictures are looked for in
+     */
+    public void applyThemeEffect(Map<String, Object> settings, Path base) {
+        Background made = null;
+        if (settings != null) {
+            try {
+                made = BackgroundKinds.apply(themeEffect, settings, base);
+            } catch (IllegalArgumentException e) {
+                made = null; // a theme with a bad effect gives none, rather than breaking every panel
+            }
+        }
+        themeEffect = made;
+        applyThemeBackground(made);
     }
 
     /**
@@ -533,7 +695,7 @@ public class Element {
         if (!enabled) return;
 
         // 1. Draw the background fill
-        Paint activePaint = hovered ? styling.getHoverColor() : styling.getBackgroundColor();
+        Paint activePaint = AnimatedPaint.resolve(hovered ? styling.getHoverColor() : styling.getBackgroundColor());
 
         if (activePaint instanceof Color) {
             renderer.drawQuad(
@@ -552,13 +714,14 @@ public class Element {
         // 2. Draw the attached Background effect, if any, above the flat fill and
         // below the border, so the border still frames it cleanly. See setBackground's
         // docs for why this is an attached effect rather than a child Element.
-        if (background != null) {
-            background.render(renderer, (float) x, (float) y, (float) width, (float) height);
+        Background effect = background.get();
+        if (effect != null) {
+            effect.render(renderer, (float) x, (float) y, (float) width, (float) height);
         }
 
         // 3. Draw the border outline on top
         if (styling.getBorderThickness() > 0) {
-            Paint borderPaint = styling.getBorderColor();
+            Paint borderPaint = AnimatedPaint.resolve(styling.getBorderColor());
 
             if (borderPaint instanceof Color) {
                 renderer.drawBorder(
@@ -639,8 +802,9 @@ public class Element {
         }
         advanceIfAnimated(styling.getTextHoverColor(), delta);
 
-        if (background != null) {
-            background.update(delta, (float) getAbsoluteX(), (float) getAbsoluteY(), (float) width, (float) height);
+        Background effect = background.get();
+        if (effect != null) {
+            effect.update(delta, (float) getAbsoluteX(), (float) getAbsoluteY(), (float) width, (float) height);
         }
 
         if (!transitions.isEmpty()) {
@@ -656,9 +820,11 @@ public class Element {
                 if (transition.isFinished()) {
                     // Already had its one final render() at its terminal state last frame, so drop it now.
                     transitions.remove(transition);
+                    transitionAfter.remove(transition); // ended by stop(), which fires nothing
                     continue;
                 }
                 transition.update(this, delta);
+                runAfter(transition);
             }
         }
 
@@ -829,10 +995,78 @@ public class Element {
     }
 
     /**
+     * As {@link #playTransition(Transition)}, then runs {@code after} once, on the frame the transition finishes:
+     * when it runs out or is ended early through {@link #finishTransitions()}, a skip, or {@link Transition#finish}. If the
+     * transition is already finished it runs at once. It does not run if the transition is {@link Transition#stop() stopped}, or if this Element is dropped before it
+     * finishes. This works for any {@link Transition}, so it is how to do something after one that was built without a
+     * completion callback, such as swapping scenes once an end transition has played:
+     * <pre>{@code
+     * container.playTransition(endTransition, () -> showNextScene());
+     * }</pre>
+     * {@code after} may play another transition, on this Element or another, which is how transitions are chained.
+     */
+    public void playTransition(Transition transition, Runnable after) {
+        if (transition == null || transition.isFinished()) {
+            if (after != null) after.run();
+            return;
+        }
+        if (after != null) transitionAfter.put(transition, after);
+        playTransition(transition);
+    }
+
+    /**
      * Whether this Element currently has at least one {@link Transition} running.
      */
     public boolean isTransitioning() {
         return !transitions.isEmpty();
+    }
+
+    /**
+     * Whether a running {@link Transition} {@link Transition#isLocking() locks} the game. The window checks this for
+     * every enabled Element once a frame.
+     */
+    public boolean hasLockingTransition() {
+        for (Transition transition : transitions) {
+            if (!transition.isFinished() && transition.isLocking()) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Ends every running transition now, leaving this Element in their final states and firing their completion
+     * callbacks; see {@link Transition#finish}. A transition that cannot be finished is left running. Returns whether
+     * any was finished.
+     */
+    public boolean finishTransitions() {
+        return finishTransitions(false);
+    }
+
+    /**
+     * As {@link #finishTransitions()}, but only those that lock the game and are {@link Transition#isSkippable()
+     * skippable}. This is what a key press or click does while the window is locked.
+     */
+    public boolean skipLockingTransitions() {
+        return finishTransitions(true);
+    }
+
+    private boolean finishTransitions(boolean onlySkippableLocks) {
+        boolean any = false;
+        // A snapshot, since a completion callback can play another transition on this Element.
+        for (Transition transition : new ArrayList<>(transitions)) {
+            if (transition.isFinished()) continue;
+            if (onlySkippableLocks && !(transition.isLocking() && transition.isSkippable())) continue;
+            if (transition.finish(this)) {
+                any = true;
+                runAfter(transition);
+            }
+        }
+        return any;
+    }
+
+    private void runAfter(Transition transition) {
+        if (!transition.isFinished()) return;
+        Runnable after = transitionAfter.remove(transition);
+        if (after != null) after.run();
     }
 
     /**
@@ -903,7 +1137,11 @@ public class Element {
      * Like {@link #playTransition}, but first drops any {@link FadeTransition} already running on this Element. Without that, a fade started while another is still in flight, such as a click mid-fade, would stack, and both would write to {@link #setOpacity} every frame instead of the new one taking over.
      */
     private void playFade(FadeTransition fade) {
-        transitions.removeIf(t -> t instanceof FadeTransition);
+        transitions.removeIf(t -> {
+            if (!(t instanceof FadeTransition)) return false;
+            transitionAfter.remove(t);
+            return true;
+        });
         setOpacity(fade.startOpacity());
         playTransition(fade);
     }
@@ -937,7 +1175,7 @@ public class Element {
 
     /**
      * Registers a callback invoked when this Element is pressed, with any mouse button, or, if it
-     * {@link #setClickOnRelease clicks on release}, when a left press on it is released over it. A press on a child that has no click listener of its own goes up to the nearest ancestor that has one, so this also fires for presses on the labels or icons inside this Element; only one listener runs per press. Only one listener is held at a time; calling this again replaces the previous listener rather than adding a second one.
+     * {@link #setClickOnRelease clicks on release}, when a left press on it is released over it. A press on a child that has no click listener of its own goes up to the nearest ancestor that has one, so this also fires for presses on the labels or icons inside this Element; only one listener runs per press unless the Element {@link #setPropagateClicks propagates clicks}. Only one listener is held at a time; calling this again replaces the previous listener rather than adding a second one.
      */
     public void onMouseClick(Consumer<MouseClickEvent> mouseClickListenerConsumer) {
         this.mouseClickListenerConsumer = mouseClickListenerConsumer;
@@ -961,6 +1199,42 @@ public class Element {
      */
     public void setClickOnRelease(boolean clickOnRelease) {
         this.clickOnRelease = clickOnRelease;
+    }
+
+    /**
+     * Whether a press that runs this Element's click listener goes on to the next ancestor with one. See
+     * {@link #setPropagateClicks}.
+     */
+    public boolean isPropagateClicks() {
+        return propagateClicks;
+    }
+
+    /**
+     * Lets a press reach this Element's container as well. Normally only one click listener runs per press: the
+     * topmost Element's, or the nearest ancestor's if it has none. With this on, after this Element's listener the press
+     * goes on up to the next ancestor that has a listener, and so on while each one propagates, so a clickable card
+     * and the button inside it both hear the click. Off by default.
+     */
+    public void setPropagateClicks(boolean propagateClicks) {
+        this.propagateClicks = propagateClicks;
+    }
+
+    /**
+     * Whether pressing and moving on this Element drags the container it sits in. See {@link #setDragsContainer}.
+     */
+    public boolean isDragsContainer() {
+        return dragsContainer;
+    }
+
+    /**
+     * Lets a clickable Element act as a handle for the {@link me.piitex.engine.ui.Draggable} container around it, such
+     * as a title bar with a click listener on a draggable panel. Normally an Element that listens for clicks keeps its
+     * press, so nothing above it is dragged. With this on, releasing the left button without moving is still a click
+     * (it fires on release, as with {@link #setClickOnRelease}), and moving the mouse a few points while it is held
+     * drags the container instead, and the click is dropped. Off by default.
+     */
+    public void setDragsContainer(boolean dragsContainer) {
+        this.dragsContainer = dragsContainer;
     }
 
     /**

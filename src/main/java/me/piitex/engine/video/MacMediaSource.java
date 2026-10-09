@@ -35,6 +35,7 @@ final class MacMediaSource implements Demuxer {
     private final int audioChannelsOut, audioRateOut;
     private Buffers buffers;
     private int frameWidth, frameHeight;
+    private int quarterTurns; // clockwise turns the file asks to show the picture with; a phone recording sideways
     private boolean closed;
 
     static boolean available() {
@@ -56,6 +57,13 @@ final class MacMediaSource implements Demuxer {
             MemorySegment size = ObjC.struct(ObjC.CGSIZE, a, videoTrack, "naturalSize");
             frameWidth = (int) Math.round(size.get(JAVA_DOUBLE, 0));
             frameHeight = (int) Math.round(size.get(JAVA_DOUBLE, 8));
+            MemorySegment shown = ObjC.struct(ObjC.CGAFFINE, a, videoTrack, "preferredTransform");
+            quarterTurns = Rotation.quarterTurns(shown.get(JAVA_DOUBLE, 0), shown.get(JAVA_DOUBLE, 8));
+            if ((quarterTurns & 1) == 1) {
+                int w = frameWidth;
+                frameWidth = frameHeight;
+                frameHeight = w;
+            }
             MemorySegment d = ObjC.struct(ObjC.CMTIME, a, asset, "duration");
             double seconds = ObjC.seconds(d);
             duration = Double.isNaN(seconds) || Double.isInfinite(seconds) ? 0 : seconds;
@@ -270,8 +278,9 @@ final class MacMediaSource implements Demuxer {
         try {
             int w = ObjC.pixelWidth(image), h = ObjC.pixelHeight(image);
             long stride = ObjC.pixelStride(image);
-            frameWidth = w;
-            frameHeight = h;
+            boolean sideways = (quarterTurns & 1) == 1;
+            frameWidth = sideways ? h : w;
+            frameHeight = sideways ? w : h;
             byte[] out = buffers != null ? buffers.take(w * h * 4) : new byte[w * h * 4];
             MemorySegment base = ObjC.pixelBase(image).reinterpret(stride * h);
             MemorySegment dst = MemorySegment.ofArray(out);
@@ -279,6 +288,12 @@ final class MacMediaSource implements Demuxer {
                 MemorySegment.copy(base, 0, dst, 0, (long) w * h * 4);
             } else {
                 for (int y = 0; y < h; y++) MemorySegment.copy(base, y * stride, dst, (long) y * w * 4, (long) w * 4);
+            }
+            if (quarterTurns != 0) {
+                byte[] turned = buffers != null ? buffers.take(w * h * 4) : new byte[w * h * 4];
+                Rotation.rotate(out, turned, w, h, quarterTurns);
+                if (buffers != null) buffers.give(out);
+                out = turned;
             }
             return new Packet(VIDEO, pts, true, out);
         } finally {

@@ -28,7 +28,6 @@ import java.io.File;
  *   <li>The arrow keys move the selection and open and close rows.</li>
  * </ul>
  */
-@GeneratedClass(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class TreeDemo {
 
     static void main() {

@@ -54,7 +54,7 @@ All coordinates are logical points, top-left origin.
 | `drawQuad(x, y, w, h, Color, cornerRadius)` | Filled (rounded) rectangle |
 | `drawBorder(x, y, w, h, Color, thickness, cornerRadius)` | Stroked outline |
 | `drawLine(x0, y0, x1, y1, Color, thickness)` | Line segment |
-| `drawPolyline(float[] points, pointCount, Color, thickness)` | Connected open line through packed `x0, y0, x1, y1, ...` points, with round joins and caps (no notches or doubled alpha at the joints) |
+| `drawPolyline(float[] points, pointCount, Color, thickness)` | Connected open line through packed `x0, y0, x1, y1, ...` points, with round joins and caps (no notches or doubled alpha at the joints). A `Paint` overload runs a gradient along the line's length |
 | `drawCircle(x, y, radius, Color)` | Filled circle centered at (x, y) |
 | `drawPolygon(float[] points, pointCount, Color)` | Filled shape through packed `x0, y0, x1, y1, ...` points, closed back to the first. Concave shapes work, and one that crosses itself (a star in one stroke) is filled solid |
 | `drawPolygonOutline(float[] points, pointCount, Color, thickness)` | Its closed outline, with sharp corners |
@@ -85,7 +85,7 @@ Rules:
   for `pushAlpha`/`popAlpha`, `pushTranslate`/`popTranslate`, `pushScale`/`popScale`, `pushTransform`/`popTransform` and `pushEffect`/`popEffect`. Pushes nest. An unmatched push corrupts the rest
   of the frame.
 - `drawQuad`/`drawBorder`/`drawLine`/`drawCircle` take a solid [`Color`](../styling/colors-and-paints.md#color). `drawText`, `drawGradient` and
-  `drawGradientBorder` take gradients. `drawQuad` and `drawBorder` also have overloads that take any `Paint` and pick
+  `drawGradientBorder` take gradients. `drawQuad`, `drawBorder`, `drawLine`, `drawCircle` and `drawPolyline` also have overloads that take any `Paint` and pick
   the right call, which is handy for drawing a styling color that may be either.
 
 ## Drawing text

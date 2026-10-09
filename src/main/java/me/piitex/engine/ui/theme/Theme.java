@@ -5,6 +5,9 @@ import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.overlays.ButtonOverlay;
 
+import java.nio.file.Path;
+import java.util.Map;
+
 /**
  * A named bundle of design tokens: the colors and geometry that {@link Themeable}
  * objects pull their chrome from instead of each hardcoding its own defaults. Those
@@ -78,8 +81,10 @@ public interface Theme {
      * into an opaque themed panel by default would break the common case of a Container
      * meant to stay transparent, such as a full-window root Container sitting in front
      * of {@link me.piitex.engine.Window#setBackgroundColor}.
+     * <p>
+     * It is a {@link Paint}, so panels can be a gradient. An implementation can still return a plain {@link Color}.
      */
-    Color getContainerBackground();
+    Paint getContainerBackground();
 
     Color getContainerBorder();
 
@@ -101,6 +106,33 @@ public interface Theme {
     Paint getWindowBackground();
 
     /**
+     * An effect drawn behind the window's contents, over {@link #getWindowBackground()}: a moving field of dots, a
+     * picture. It is the settings of one of the {@link me.piitex.engine.ui.background.BackgroundKinds kinds}, as that
+     * class writes them, so a theme can be a file, or null for none. A window makes its own background from them rather
+     * than sharing one, as an effect has state of its own, and a pinned
+     * {@link me.piitex.engine.Window#setBackground} is left alone.
+     */
+    default Map<String, Object> getWindowEffect() {
+        return null;
+    }
+
+    /**
+     * An effect drawn behind a themed {@link Container}'s own contents, in the same form as {@link #getWindowEffect()}.
+     * Each container makes its own.
+     */
+    default Map<String, Object> getContainerEffect() {
+        return null;
+    }
+
+    /**
+     * The folder the pictures an effect names are looked for in: the project's, for a theme loaded from a file. The
+     * working folder by default. This is not a setting, so it isn't a token of {@link ThemeFile}.
+     */
+    default Path assetBase() {
+        return Path.of("");
+    }
+
+    /**
      * Shared corner radius for every themed control's box.
      */
     float getCornerRadius();
@@ -113,9 +145,9 @@ public interface Theme {
     /**
      * Fill of the bubble {@link me.piitex.engine.ui.Element#getTooltip()} shows.
      */
-    Color getTooltipBackground();
+    Paint getTooltipBackground();
 
-    Color getTooltipBorder();
+    Paint getTooltipBorder();
 
-    Color getTooltipText();
+    Paint getTooltipText();
 }

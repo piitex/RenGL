@@ -3,6 +3,8 @@ package me.piitex.engine.ui.overlays;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.AnimatedPaint;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
@@ -29,7 +31,7 @@ public class SeparatorOverlay extends Overlay implements Themeable {
 
     private final Orientation orientation;
     private float thickness = 1f;
-    private final Overridable<Color> lineColor = new Overridable<>(Color.LIGHT_GRAY);
+    private final Overridable<Paint> lineColor = new Overridable<>(Color.LIGHT_GRAY);
 
     /**
      * A horizontal separator {@code length} points long, 1pt thick.
@@ -78,14 +80,14 @@ public class SeparatorOverlay extends Overlay implements Themeable {
         this.thickness = thickness;
     }
 
-    public Color getLineColor() {
+    public Paint getLineColor() {
         return lineColor.get();
     }
 
     /**
      * Pins the line color against every future theme switch. See {@link Overridable}.
      */
-    public void setLineColor(Color lineColor) {
+    public void setLineColor(Paint lineColor) {
         this.lineColor.set(lineColor);
     }
 
@@ -104,6 +106,12 @@ public class SeparatorOverlay extends Overlay implements Themeable {
     public void followTheme() {
         super.followTheme();
         lineColor.clearExplicit();
+    }
+
+    @Override
+    public void update(float delta) {
+        super.update(delta);
+        AnimatedPaint.advanceIfAnimated(lineColor.get(), delta);
     }
 
     @Override

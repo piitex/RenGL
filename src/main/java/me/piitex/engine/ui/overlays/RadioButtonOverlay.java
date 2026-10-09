@@ -2,7 +2,9 @@ package me.piitex.engine.ui.overlays;
 
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
@@ -31,7 +33,7 @@ import me.piitex.engine.ui.theme.Themeable;
 public class RadioButtonOverlay extends Overlay implements Themeable {
     private boolean selected;
     private RadioGroup group;
-    private final Overridable<Color> dotColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> dotColor = new Overridable<>(Color.BLACK);
 
     /**
      * An unselected 18x18 circle.
@@ -116,14 +118,14 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         this.group = group;
     }
 
-    public Color getDotColor() {
+    public Paint getDotColor() {
         return dotColor.get();
     }
 
     /**
      * Pins the inner dot color against every future theme switch. See {@link Overridable}.
      */
-    public void setDotColor(Color dotColor) {
+    public void setDotColor(Paint dotColor) {
         this.dotColor.set(dotColor);
     }
 
@@ -135,6 +137,12 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
      * radius, which is pinned at construction to keep this circular. See the
      * constructor.
      */
+    @Override
+    public void update(float delta) {
+        super.update(delta);
+        AnimatedPaint.advanceIfAnimated(dotColor.get(), delta);
+    }
+
     @Override
     public void applyTheme(Theme theme) {
         getStyling().applyThemeBackgroundColor(theme.getFieldBackground());

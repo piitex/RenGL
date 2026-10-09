@@ -11,7 +11,7 @@ import me.piitex.engine.ui.overlays.ProgressBarOverlay;
  * start value is read on the first frame it runs, not at construction, so it's safe
  * to queue right after another tween. Finishes itself, leaving the bar at the target.
  */
-public class ProgressTransition implements Transition {
+public class ProgressTransition extends LockableTransition<ProgressTransition> {
     private final double target;
     private final float durationSeconds;
     private final Easing easing;
@@ -77,6 +77,11 @@ public class ProgressTransition implements Transition {
     @Override
     public void render(Renderer renderer, Element element) {
         // Nothing to draw: the bar draws its own fill from the progress this updates.
+    }
+
+    @Override
+    protected void jumpToEnd() {
+        elapsed = durationSeconds;
     }
 
     @Override

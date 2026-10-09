@@ -33,8 +33,9 @@ There is no single `setSize` method. Use `setWidth`/`setHeight` or `setBounds`.
 | `setPosition(x, y)` | Sets x and y together |
 | `setBounds(x, y, w, h)` | Sets all four |
 | `setAnchor(anchor[, pivot], offsetX, offsetY)`, `setAnchorMargin(margin)` | Keeps it in place in its container as that resizes. See [Anchoring](#anchoring) |
+| `setRelativeSize(w, h)`, `setRelativeWidth(w)`, `setRelativeHeight(h)`, `setRelativeInset(points)`, `fill(margin)` | Keeps the size a fraction of its container's. See [Sizing by fraction](#sizing-by-fraction) |
+| `setLayoutWeight(weight)` | Takes a share of the space left in a row or column. See [Sharing space](../layouts/README.md#sharing-the-space-left-over) |
 | `contains(px, py)` | Whether a **window** point is inside this element. Used by hit-testing |
-| `getZ()/setZ()` | Reserved; not used by rendering or hit-testing |
 
 Some widgets compute their own size. [`TextOverlay`](../overlays/text-overlay.md) sizes itself to fit its text, and a [`Layout`](../layouts/README.md) sets its
 children's positions every frame, so a manual `setPosition` on a layout child is overwritten.
@@ -67,6 +68,32 @@ menu.setAnchorMargin(20);                          // but never closer than 20 p
   layout, which places its children itself.
 
 To keep a group of elements together, put them in a plain `Container` at fixed positions and anchor the container.
+
+### Sizing by fraction
+
+A relative size keeps an element's width and height a fraction of its container's, the way an anchor keeps its
+position. Together they cover a layout that follows the window with no `onResize` code.
+
+```java
+sidebar.setRelativeSize(0.25, 1);                   // a quarter of the width, the full height
+sidebar.setAnchor(Anchor.TOP_LEFT);
+content.setRelativeSize(0.75, 1);
+content.setAnchor(Anchor.TOP_RIGHT);
+
+overlay.fill(16);                                   // covers the container, 16 points in from every edge
+panel.setRelativeWidth(0.5);                        // the width alone; the height stays as set
+```
+
+- A fraction is of the container's box, or of a [layout's](../layouts/README.md) area inside its padding. A negative
+  fraction turns an axis back to its own size.
+- `setRelativeInset(points)` takes that much off each side, so `setRelativeSize(1, 1)` with an inset of 8 leaves an
+  8 point border. `fill(margin)` is that and a `CENTER` anchor in one call.
+- The size is worked out when the fraction is set, when the element is added, when either is resized, and every
+  frame. While a fraction is set it wins over `setWidth` and `setHeight`, and over the scaling a
+  [`ResizableContainer`](../containers/resizable-container.md) does to its children.
+- Like an anchor, it has no effect without a container. In a [`DockLayout`](../layouts/dock-layout.md) or
+  [`GridLayout`](../layouts/grid-layout.md) the fraction is of the whole layout, not of the child's edge or cell.
+- In a layout file the properties are `relativeWidth`, `relativeHeight` and `relativeInset`; 0 leaves the size alone.
 
 ## Enabled
 
@@ -137,7 +164,11 @@ element.onMouseClick(event -> {
 - The press goes to the **topmost** element under the cursor if it has a click listener. If it has none, the
   press goes up to the nearest container above it that does, so pressing the label or icon inside a clickable
   row counts as pressing the row. Only that one listener runs: once an element with a listener is found, the
-  containers above it are not called.
+  containers above it are not called. `setPropagateClicks(true)` on that element lets the press go on to the
+  next ancestor with a listener as well, so a clickable card and the button inside it both hear the click.
+- `setDragsContainer(true)` makes a clickable element a handle for the draggable container around it, such as a
+  title bar. A press that is released without moving still clicks (on release); moving the mouse a few points
+  while it is held drags the container instead and drops the click.
 - Several widgets install their own click handler ([`ButtonOverlay`](../overlays/button-overlay.md), [`CheckBoxOverlay`](../overlays/checkbox-overlay.md), [`DropdownOverlay`](../overlays/dropdown-overlay.md),
   [`RadioButtonOverlay`](../overlays/radio-button-overlay.md), [`ToggleSwitchOverlay`](../overlays/toggle-switch-overlay.md), [`ColorPickerOverlay`](../overlays/color-picker-overlay.md),
   [`DateTimePickerOverlay`](../overlays/date-time-picker-overlay.md), [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md), [`MenuBarOverlay`](../input/menus.md),
@@ -226,6 +257,10 @@ element.setBackground(new DotGridBackground());
 Attaches an animated or decorative effect drawn behind the element's own content without becoming a child
 (so a layout does not try to position it). See [Backgrounds](../styling/backgrounds.md).
 
+Like a color, an effect is a themed property: a [theme](../styling/theming.md) can give a panel one
+(`Theme.getContainerEffect()`), and `setBackground` **pins** it, so a theme change no longer replaces it.
+`resetBackground()` hands it back to the theme, and `isBackgroundSet()` says whether it is pinned.
+
 ## Opacity, fades and transitions
 
 ```java
@@ -245,7 +280,7 @@ boolean busy = element.isTransitioning();
 - `fadeOut` leaves the element fully transparent but still enabled. It still receives clicks. Disable it
   in the callback if it should stop interacting.
 
-See [Animation](../animation/transitions.md).
+See [Animation](../animation/transitions.md), including how a transition can [lock the game](../animation/transitions.md#locking-the-game) until it ends.
 
 ## Scale
 

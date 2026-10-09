@@ -1,6 +1,4 @@
-package me.piitex.cca.crypto;
-
-import me.piitex.engine.io.AppEnvironment;
+package me.piitex.engine.io;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;

@@ -4,6 +4,7 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 
 /**
  * A {@link Container} that clips its children to its own box and lets them be scrolled
@@ -126,9 +127,35 @@ public class ScrollContainer extends Container implements Scrollable {
         if (getElements().isEmpty()) return 0;
         double rightmostEdge = -Double.MAX_VALUE;
         for (Element child : getElements().values()) {
-            rightmostEdge = Math.max(rightmostEdge, child.getX() + child.getWidth());
+            rightmostEdge = Math.max(rightmostEdge, rightEdge(child));
         }
         return Math.max(0, rightmostEdge - getWidth());
+    }
+
+    /**
+     * The right edge of {@code element} in its parent's space, counting what it holds if it does not clip: a
+     * container with {@link Container#setClipping clipping} off shows its children past its own edge, so they extend
+     * the range. A clipping one, as {@link ScrollContainer} always is, ends at its own edge.
+     */
+    private static double rightEdge(Element element) {
+        double edge = element.getX() + element.getWidth();
+        if (element instanceof Container inner && !(inner instanceof ScrollContainer) && !inner.isClipping()) {
+            for (Element child : inner.getElements().values()) {
+                edge = Math.max(edge, element.getX() + rightEdge(child));
+            }
+        }
+        return edge;
+    }
+
+    /** As {@link #rightEdge}, for the bottom. */
+    private static double bottomEdge(Element element) {
+        double edge = element.getY() + element.getHeight();
+        if (element instanceof Container inner && !(inner instanceof ScrollContainer) && !inner.isClipping()) {
+            for (Element child : inner.getElements().values()) {
+                edge = Math.max(edge, element.getY() + bottomEdge(child));
+            }
+        }
+        return edge;
     }
 
     /**
@@ -138,7 +165,7 @@ public class ScrollContainer extends Container implements Scrollable {
         if (getElements().isEmpty()) return 0;
         double bottomEdge = -Double.MAX_VALUE;
         for (Element child : getElements().values()) {
-            bottomEdge = Math.max(bottomEdge, child.getY() + child.getHeight());
+            bottomEdge = Math.max(bottomEdge, bottomEdge(child));
         }
         return Math.max(0, bottomEdge - getHeight());
     }
@@ -422,14 +449,20 @@ public class ScrollContainer extends Container implements Scrollable {
     }
 
     private void drawBar(Renderer renderer, double tx, double ty, double tw, double th, double bx, double by, double bw, double bh, boolean active) {
-        Color track = scrollBarStyle.getTrackColor();
+        Paint track = scrollBarStyle.getTrackColor();
         if (track != null) {
             renderer.drawQuad((float) tx, (float) ty, (float) tw, (float) th, track, scrollBarStyle.getCornerRadius());
         }
-        Color thumb = active ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
+        Paint thumb = active ? scrollBarStyle.getThumbActiveColor() : scrollBarStyle.getThumbColor();
         if (thumb != null) {
             renderer.drawQuad((float) bx, (float) by, (float) bw, (float) bh, thumb, scrollBarStyle.getCornerRadius());
         }
+    }
+
+    @Override
+    public void update(float delta) {
+        super.update(delta);
+        scrollBarStyle.advance(delta);
     }
 
     @Override

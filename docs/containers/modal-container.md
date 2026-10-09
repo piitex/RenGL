@@ -55,8 +55,15 @@ It closes when:
 - the user clicks the backdrop (if `setDismissOnBackdropClick(true)`, the default),
 - the user presses Escape (if `setDismissOnEscape(true)`, the default).
 
-Only **one modal at a time**. Showing a second closes the first, and any open popup too. Showing a modal
-clears keyboard focus.
+Modals **stack**. Showing a second one while the first is open puts it on top, and only the top modal gets the
+keyboard, Tab traversal and Escape. Closing it reveals the first again, as it was left. Showing a modal also
+closes any open popup and clears keyboard focus. `window.getModal()` is the topmost, `window.getModals()` lists
+them bottom to top, and `window.closeAllModals()` closes the lot, topmost first.
+
+```java
+confirmDelete.show(window);  // opened from a button inside settings, which is still open underneath
+confirmDelete.close();       // back to settings
+```
 
 A dropdown opened from inside the modal still works. Its popup layers above the modal.
 
@@ -90,8 +97,8 @@ modal.setCloseAnimation((m, onFinished) -> {
 });
 ```
 
-Calling `close()` again while the animation runs does nothing. `closeImmediately()` (and `window.closeModal()`)
-skips it. The next `show` resets the opacity and scale an animation left behind.
+Calling `close()` again while the animation runs does nothing. `closeImmediately()` (and `window.closeModal()`, which
+closes the top modal) skips it. The next `show` resets the opacity and scale an animation left behind.
 
 ## Limiting the modal to part of the window
 
@@ -120,7 +127,7 @@ modal.onClose(() -> System.out.println("closed")); // fires on every close route
 
 | Method | Default |
 |---|---|
-| `setBackdropColor(Color)` | `Color(0, 0, 0, 0.55)` |
+| `setBackdropColor(Paint)` | `Color(0, 0, 0, 0.55)`; a gradient makes a vignette |
 | `setDismissOnBackdropClick(boolean)` | `true` |
 | `setDismissOnEscape(boolean)` | `true` |
 | `setFadeSeconds(float)` | `0.15` |

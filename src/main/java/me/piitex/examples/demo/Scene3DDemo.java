@@ -52,14 +52,13 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code Viewport3D} would draw nothing, and OpenGL elsewhere. Start it with {@code -Drengl.demo.api=VULKAN} (or
  * {@code OPENGL}) to choose.
  */
-@GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public class Scene3DDemo {
     private static final String MODEL_DIR = "src/main/resources/demo/3d/";
     private static final float SHOWCASE_SIZE = 2f; // a loaded model is scaled so its longest side is this long
 
     static void main() throws IOException {
         // -XstartOnFirstThread is required on macOS. To reduce console spam also add
-        // --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
+        // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Window window = new Window(new WindowOptions("3D Demo").setDimensions(1100, 700).setRenderer(chooseApi()));
         Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
@@ -79,8 +78,6 @@ public class Scene3DDemo {
         if (property != null) return RenderAPI.valueOf(property.toUpperCase());
         return System.getProperty("os.name").toLowerCase().contains("mac") ? RenderAPI.VULKAN : RenderAPI.OPENGL;
     }
-
-    // ---- UI -------------------------------------------------------------------------------------
 
     private static void buildUi(Container root, Showcase showcase) {
         TextOverlay title = new TextOverlay("3D viewport", 24f, Color.WHITE);

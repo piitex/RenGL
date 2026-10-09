@@ -61,4 +61,4 @@ root.addElement(settings);
 |---|---|
 | `getOrientation()` | `HORIZONTAL` or `VERTICAL` |
 | `getThickness()` / `setThickness(float)` | Line width |
-| `getLineColor()` / `setLineColor(Color)` | Line color; setting pins it |
+| `getLineColor()` / `setLineColor(Paint)` | Line color or gradient, along the line; setting pins it |

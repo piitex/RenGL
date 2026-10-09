@@ -6,7 +6,9 @@ import me.piitex.engine.gl.NativeMenuBar;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.overlays.Overlay;
 import me.piitex.engine.ui.text.Font;
 import me.piitex.engine.ui.theme.Overridable;
@@ -54,9 +56,9 @@ public class MenuBarOverlay extends Overlay implements Themeable {
     private boolean nativeSubmitted;
     private int openIndex = -1;
     private float fontSize = 15f;
-    private final Overridable<Color> textColor = new Overridable<>(Color.BLACK);
-    private final Overridable<Color> highlightColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
-    private final Overridable<Color> dividerColor = new Overridable<>(Color.LIGHT_GRAY);
+    private final Overridable<Paint> textColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> highlightColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
+    private final Overridable<Paint> dividerColor = new Overridable<>(Color.LIGHT_GRAY);
 
     private org.jetbrains.skia.Font font;
     private Typeface fontTypeface;
@@ -229,14 +231,14 @@ public class MenuBarOverlay extends Overlay implements Themeable {
         layoutDirty = true;
     }
 
-    public Color getTextColor() {
+    public Paint getTextColor() {
         return textColor.get();
     }
 
     /**
      * Pins the title color against theme switches. See {@link Overridable}.
      */
-    public void setTextColor(Color color) {
+    public void setTextColor(Paint color) {
         textColor.set(color);
     }
 
@@ -266,10 +268,13 @@ public class MenuBarOverlay extends Overlay implements Themeable {
     @Override
     public void update(float delta) {
         super.update(delta);
+        AnimatedPaint.advanceIfAnimated(textColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(highlightColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(dividerColor.get(), delta);
         if (isNative()) {
             closeMenus(); // an in-window menu left open by switching modes
             if (getWindow() != null) {
-                NativeMenuBar.submit(this, titles, menus);
+                NativeMenuBar.submit(this, getWindow().isFocused(), titles, menus);
                 nativeSubmitted = true;
             }
             return;

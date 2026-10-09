@@ -4,12 +4,15 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 
 /**
- * Snapshot-based undo/redo stack for an editable text Element.
+ * Undo/redo stack for an editable text Element.
  * <p>
  * The owning overlay calls {@link #record} with the state as it was <em>before</em> each edit, and
- * {@link #undo}/{@link #redo} with the state as it is <em>now</em>, getting back the state to restore.
- * Keeping whole snapshots (rather than diffs) is fine for a single-line field and keeps every edit
- * kind, whether typing, paste, cut, or delete, on the same path.
+ * {@link #undo}/{@link #redo} with the state as it is <em>now</em>, getting back the state to restore. Every edit kind,
+ * whether typing, paste, cut, or delete, goes through the same path.
+ * <p>
+ * Only the newest state in each stack is kept whole. Each older one is stored as the piece of text that differs from the
+ * state after it, so a step costs about the size of the edit rather than of the whole document, and a long undo history of
+ * a very large text stays small.
  * <p>
  * Runs of the same kind of small edit (typing, backspacing, forward-deleting) collapse into one undo
  * step while they stay within {@link #COALESCE_WINDOW_NANOS} of each other and nothing has called
@@ -38,8 +41,70 @@ public final class TextUndoHistory {
     public record Snapshot(String text, int cursorIndex, int selectionAnchor) {
     }
 
-    private final Deque<Snapshot> undoStack = new ArrayDeque<>();
-    private final Deque<Snapshot> redoStack = new ArrayDeque<>();
+    /**
+     * A stack of snapshots, newest on top. Only the top is whole; each one below is the part of its text that is not
+     * shared with the snapshot above it (the text before and after the change stays in that snapshot).
+     */
+    private static final class PatchStack {
+        private record Patch(int prefix, int suffix, String middle, int cursorIndex, int selectionAnchor) {
+            /** Builds the snapshot this patch was made from, given the one that was above it. */
+            Snapshot apply(Snapshot newer) {
+                String text = newer.text();
+                return new Snapshot(text.substring(0, prefix) + middle + text.substring(text.length() - suffix),
+                        cursorIndex, selectionAnchor);
+            }
+
+            static Patch between(Snapshot older, Snapshot newer) {
+                String a = older.text(), b = newer.text();
+                int shortest = Math.min(a.length(), b.length());
+                int prefix = 0;
+                while (prefix < shortest && a.charAt(prefix) == b.charAt(prefix)) prefix++;
+                int suffix = 0;
+                while (suffix < shortest - prefix && a.charAt(a.length() - 1 - suffix) == b.charAt(b.length() - 1 - suffix)) suffix++;
+                return new Patch(prefix, suffix, a.substring(prefix, a.length() - suffix), older.cursorIndex(), older.selectionAnchor());
+            }
+        }
+
+        private Snapshot top;
+        private final Deque<Patch> below = new ArrayDeque<>();
+
+        void push(Snapshot snapshot) {
+            if (top != null) below.push(Patch.between(top, snapshot));
+            top = snapshot;
+        }
+
+        Snapshot pop() {
+            Snapshot result = top;
+            top = below.isEmpty() ? null : below.pop().apply(result);
+            return result;
+        }
+
+        boolean isEmpty() {
+            return top == null;
+        }
+
+        int size() {
+            return top == null ? 0 : 1 + below.size();
+        }
+
+        void trimTo(int limit) {
+            while (size() > limit && !below.isEmpty()) below.removeLast();
+        }
+
+        void clear() {
+            top = null;
+            below.clear();
+        }
+
+        long storedChars() {
+            long total = top == null ? 0 : top.text().length();
+            for (Patch patch : below) total += patch.middle().length();
+            return total;
+        }
+    }
+
+    private final PatchStack undoStack = new PatchStack();
+    private final PatchStack redoStack = new PatchStack();
     private int limit = 200;
 
     private EditKind lastKind = null;
@@ -60,9 +125,7 @@ public final class TextUndoHistory {
         if (merge) return;
 
         undoStack.push(before);
-        while (undoStack.size() > limit) {
-            undoStack.removeLast();
-        }
+        undoStack.trimTo(limit);
     }
 
     /**
@@ -91,11 +154,19 @@ public final class TextUndoHistory {
     }
 
     /**
+     * How many characters the stored steps hold in all, to see that the history stays small.
+     */
+    long storedChars() {
+        return undoStack.storedChars() + redoStack.storedChars();
+    }
+
+    /**
      * Re-applies the last undone edit, saving {@code current} for {@link #undo}. Null if there's nothing to redo.
      */
     public Snapshot redo(Snapshot current) {
         if (redoStack.isEmpty()) return null;
         undoStack.push(current);
+        undoStack.trimTo(limit);
         seal();
         return redoStack.pop();
     }
@@ -118,8 +189,6 @@ public final class TextUndoHistory {
 
     public void setLimit(int limit) {
         this.limit = Math.max(1, limit);
-        while (undoStack.size() > this.limit) {
-            undoStack.removeLast();
-        }
+        undoStack.trimTo(this.limit);
     }
 }

@@ -36,7 +36,6 @@ import java.io.File;
  * Like {@link Scene3DDemo} it asks for Vulkan on macOS and OpenGL elsewhere; {@code -Drengl.demo.api=VULKAN|OPENGL}
  * overrides that.
  */
-@GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public class Background3DDemo {
     static void main() {
         // -XstartOnFirstThread is required on macOS.
@@ -83,11 +82,15 @@ public class Background3DDemo {
 
         Node3D cube = new Node3D("cube", Mesh.cube(1.2f), new Material(new Color(0.25f, 0.6f, 0.95f, 1f)).setSpecular(0.5f));
         cube.setPosition(-1.4f, 0.6f, 0f);
+        cube.setCastShadow(true);
+        cube.setReceiveShadow(true);
         scene.add(cube);
 
         Node3D sphere = new Node3D("sphere", Mesh.sphere(0.75f, 48, 24),
                 new Material(new Color(0.95f, 0.35f, 0.3f, 1f)).setSpecular(0.8f).setShininess(64));
         sphere.setPosition(1.5f, 0.75f, 0.3f);
+        sphere.setReceiveShadow(true);
+        sphere.setCastShadow(true);
         scene.add(sphere);
 
         orbit.setTarget(new Vec3(0, 0.7f, 0)).setDistance(7f).setAngles(0.5f, 0.35f);

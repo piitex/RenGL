@@ -113,8 +113,9 @@ style.setMaxTabWidth(160f);
 | `indicatorColor` | Selected-tab bar and focus outline | theme selection, solid |
 | `dividerColor` | Line between strip and content | theme container border |
 
-Colors follow the theme until you set them explicitly, which pins them (see [theming](../styling/theming.md)). They are plain
-`Color`s, not `Paint`s.
+Colors follow the theme until you set them explicitly, which pins them (see [theming](../styling/theming.md)). Each is a
+[`Paint`](../styling/colors-and-paints.md), so a tab, its title or the indicator can be a gradient. A disabled tab's
+title is drawn at 40% opacity.
 
 ## Notes
 

@@ -90,15 +90,14 @@ public class Sprite {
         if (region == null || !visible || opacity <= 0f || color == null || color.getA() <= 0f) return false;
         writeCorners(positions, positionOffset);
         float left = region.getX(), top = region.getY();
-        float right = left + region.getWidth(), bottom = top + region.getHeight();
-        texCoords[texOffset] = left;
-        texCoords[texOffset + 1] = top;
-        texCoords[texOffset + 2] = right;
-        texCoords[texOffset + 3] = top;
-        texCoords[texOffset + 4] = right;
-        texCoords[texOffset + 5] = bottom;
-        texCoords[texOffset + 6] = left;
-        texCoords[texOffset + 7] = bottom;
+        boolean turned = region.isRotated();
+        float right = left + (turned ? region.getHeight() : region.getWidth());
+        float bottom = top + (turned ? region.getWidth() : region.getHeight());
+        // The corners of the upright picture, in order. Stored turned 90 degrees clockwise, its top left is at the
+        // top right of the rectangle on the texture, and each corner after it moves one step round.
+        float[] u = {left, top, right, top, right, bottom, left, bottom};
+        int shift = turned ? 2 : 0; // in coordinate pairs times two: start at the rectangle's top right
+        for (int i = 0; i < 8; i++) texCoords[texOffset + i] = u[(i + shift) % 8];
         return true;
     }
 

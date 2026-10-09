@@ -11,6 +11,9 @@ Window window = new Window(new WindowOptions("My App")
         .setRenderer(RenderAPI.VULKAN));
 ```
 
+You can also change it while the window is open, with `window.getWindowOptions().setRenderer(...)`. The engine then
+closes the OS window and opens it again on the new API; see [Switching the renderer](window.md#switching-the-renderer).
+
 Most programs never set it. The default, `AUTO`, picks what each platform does best, and nothing else in the API
 changes with the choice: the same containers, overlays and [`Renderer`](../reference/custom-elements.md#the-renderer)
 calls draw the same on all of them.

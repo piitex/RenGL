@@ -6,6 +6,9 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.color.LinearGradient;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.image.IconAsset;
 import me.piitex.engine.ui.image.IconCache;
 import me.piitex.engine.ui.overlays.TextFieldOverlay;
@@ -105,14 +108,13 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private float fontSize = 15f;
     private float iconSize = 14f;
     private float rowCornerRadius;
-    private final Overridable<Color> textColor = new Overridable<>(Color.BLACK);
-    private final Overridable<Color> dimTextColor = new Overridable<>(Color.GRAY);
-    private final Overridable<Color> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
+    private final Overridable<Paint> textColor = new Overridable<>(Color.BLACK);
+    private final Overridable<Paint> dimTextColor = new Overridable<>(Color.GRAY);
+    private final Overridable<Paint> selectionColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
 
     private org.jetbrains.skia.Font font;
     private Typeface fontTypeface;
     // Derived colors, remade only when the colors they come from change.
-    private Color hoverFrom, hoverColor, blurFrom, blurColor, markerColor;
     private boolean focused;
 
     // A press on a row, which becomes a drag once the pointer moves far enough.
@@ -745,6 +747,9 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     @Override
     public void update(float delta) {
         super.update(delta);
+        AnimatedPaint.advanceIfAnimated(textColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(dimTextColor.get(), delta);
+        AnimatedPaint.advanceIfAnimated(selectionColor.get(), delta);
         if (draggingRow) {
             double top = getAbsoluteY(), bottom = top + getHeight(), push = 0;
             if (lastY < top + AUTO_SCROLL_EDGE) {
@@ -896,24 +901,36 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         setFontSize(sizes[0]);
     }
 
+    public Paint getTextColor() {
+        return textColor.get();
+    }
+
+    public Paint getDimTextColor() {
+        return dimTextColor.get();
+    }
+
+    public Paint getSelectionColor() {
+        return selectionColor.get();
+    }
+
     /**
      * Pins the text color against theme switches.
      */
-    public void setTextColor(Color color) {
+    public void setTextColor(Paint color) {
         textColor.set(color);
     }
 
     /**
      * Pins the color of {@link #setDimmed dimmed} items.
      */
-    public void setDimTextColor(Color color) {
+    public void setDimTextColor(Paint color) {
         dimTextColor.set(color);
     }
 
     /**
      * Pins the selected row's color. The drop marker uses it too, fully opaque.
      */
-    public void setSelectionColor(Color color) {
+    public void setSelectionColor(Paint color) {
         selectionColor.set(color);
     }
 
@@ -974,19 +991,11 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         float scroll = (float) getScrollOffsetY();
         org.jetbrains.skia.Font f = getFont();
         float textH = FontMetricsCompat.of(f).getHeight();
-        Color text = textColor.get();
-        Color selection = selectionColor.get();
-        if (text != hoverFrom) {
-            hoverFrom = text;
-            hoverColor = text.withAlpha(0.07f);
-        }
-        if (selection != blurFrom) {
-            blurFrom = selection;
-            blurColor = selection.withOpacity(0.6f);
-            markerColor = selection.withAlpha(1f);
-        }
-        Color hover = hoverColor;
-        Color marker = markerColor;
+        Paint text = textColor.get();
+        Paint selection = selectionColor.get();
+        // The selection is translucent so the row's text shows through; the drop marker wants it solid.
+        Paint marker = AnimatedPaint.resolve(selection) instanceof Color c ? c.withAlpha(1f) : selection;
+        Color iconTint = solid(text);
 
         int hoverRow = -1;
         double mx = MouseTracker.getX(), my = MouseTracker.getY();
@@ -1000,9 +1009,13 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
             if (rowY >= y + h) break;
             Row<T> row = rows.get(i);
             if (Objects.equals(row.item, selected)) {
-                renderer.drawQuad(x, rowY, w, rowHeight, focused ? selection : blurColor, rowCornerRadius);
+                if (!focused) renderer.pushAlpha(0.6f);
+                renderer.drawQuad(x, rowY, w, rowHeight, selection, rowCornerRadius);
+                if (!focused) renderer.popAlpha();
             } else if (i == hoverRow) {
-                renderer.drawQuad(x, rowY, w, rowHeight, hover, rowCornerRadius);
+                renderer.pushAlpha(0.07f);
+                renderer.drawQuad(x, rowY, w, rowHeight, text, rowCornerRadius);
+                renderer.popAlpha();
             }
             if (i == dropRow && dropMode == DropMode.INTO) {
                 renderer.drawBorder(x + 1, rowY + 1, w - 2, rowHeight - 2, marker, 2f, 3f);
@@ -1016,10 +1029,10 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
                 int size = Math.round(iconSize);
                 Color tint = iconColorProvider == null ? null : iconColorProvider.apply(row.item);
                 renderer.drawImage(IconCache.loadResource(icon.resourcePath(), size, size), x + iconX(row),
-                        rowY + (rowHeight - size) / 2f, size, size, 0f, dim ? 0.45f : 1f, tint == null ? text : tint);
+                        rowY + (rowHeight - size) / 2f, size, size, 0f, dim ? 0.45f : 1f, tint == null ? iconTint : tint);
             }
             if (!Objects.equals(row.item, renaming)) {
-                Color color = dim ? dimTextColor.get() : text;
+                Paint color = dim ? dimTextColor.get() : text;
                 renderer.drawText(labelProvider.apply(row.item), x + labelX(row), rowY + (rowHeight - textH) / 2f, f, color);
             }
         }
@@ -1034,7 +1047,18 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         }
     }
 
-    private static void drawArrow(Renderer renderer, float cx, float cy, boolean open, Color color) {
+    /**
+     * The color to tint a monochrome icon with: the paint itself, or a gradient's first stop.
+     */
+    private static Color solid(Paint paint) {
+        return switch (AnimatedPaint.resolve(paint)) {
+            case Color c -> c;
+            case LinearGradient g -> g.getColors().get(0);
+            case null, default -> Color.BLACK;
+        };
+    }
+
+    private static void drawArrow(Renderer renderer, float cx, float cy, boolean open, Paint color) {
         float r = 3.5f;
         if (open) {
             renderer.drawLine(cx - r, cy - r / 2f, cx, cy + r / 2f, color, 1.5f);

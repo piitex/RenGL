@@ -5,6 +5,8 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.animation.Easing;
 import me.piitex.engine.ui.animation.ScaleTransition;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.color.Paint;
+import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.theme.Theme;
 
 /**
@@ -26,12 +28,14 @@ import me.piitex.engine.ui.theme.Theme;
  * stays centered through window resizes. If the panel is draggable ({@link
  * Container#setDraggable}), it keeps the offset it is dragged to from the centre.
  * <p>
- * Only one modal is shown at a time: showing a second closes the first. A dropdown
- * opened from inside the modal still works, since its popup layers above the modal.
+ * Modals stack: showing a second one while the first is open puts it on top, and it alone
+ * receives the keyboard, Tab traversal and Escape. Closing it reveals the first again, still
+ * as it was left. {@link Window#getModal()} is the topmost. A dropdown opened from inside a
+ * modal still works, since its popup layers above every modal.
  */
 public class ModalContainer extends Container {
     private final Container content;
-    private Color backdropColor = new Color(0f, 0f, 0f, 0.55f);
+    private Paint backdropColor = new Color(0f, 0f, 0f, 0.55f);
     private boolean dismissOnBackdropClick = true;
     private boolean dismissOnEscape = true;
     private float fadeSeconds = 0.15f;
@@ -78,14 +82,14 @@ public class ModalContainer extends Container {
         return content;
     }
 
-    public Color getBackdropColor() {
+    public Paint getBackdropColor() {
         return backdropColor;
     }
 
     /**
-     * The color drawn over the whole window behind the panel. Default 55% black.
+     * The paint drawn over the whole window behind the panel: a color, or a gradient for a vignette. Default 55% black.
      */
-    public void setBackdropColor(Color backdropColor) {
+    public void setBackdropColor(Paint backdropColor) {
         this.backdropColor = backdropColor;
     }
 
@@ -169,7 +173,7 @@ public class ModalContainer extends Container {
 
     public boolean isShowing() {
         Window window = getWindow();
-        return window != null && window.getModal() == this;
+        return window != null && window.isShowingModal(this);
     }
 
     /**
@@ -205,9 +209,7 @@ public class ModalContainer extends Container {
      */
     public void closeImmediately() {
         Window window = getWindow();
-        if (window != null && window.getModal() == this) {
-            window.closeModal();
-        }
+        if (window != null) window.closeModal(this);
     }
 
     /**
@@ -236,6 +238,7 @@ public class ModalContainer extends Container {
     public void update(float delta) {
         Window window = getWindow();
         if (window != null) fitToWindow(window);
+        AnimatedPaint.advanceIfAnimated(backdropColor, delta);
         super.update(delta);
     }
 

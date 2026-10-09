@@ -9,6 +9,7 @@ import org.jetbrains.skia.Shader;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
+import java.util.List;
 
 public class GradientUtil {
     private static final MethodHandle MAKE_LINEAR;
@@ -48,8 +49,23 @@ public class GradientUtil {
     }
 
     /**
+     * Where a gradient's line starts and ends for the box (x0, y0) to (x1, y1): {x0, y0, x1, y1} of the line. For a
+     * gradient with no angle it is the box's own corners, top left to bottom right. With one it runs through the box's
+     * center in that direction, as long as the box is across in that direction, so the first color reaches exactly the
+     * edge or corner at one end and the last the one opposite it.
+     */
+    public static float[] axis(LinearGradient gradient, float x0, float y0, float x1, float y1) {
+        if (!gradient.hasAngle()) return new float[]{x0, y0, x1, y1};
+        double radians = Math.toRadians(gradient.getAngle());
+        float dx = (float) Math.cos(radians), dy = (float) Math.sin(radians);
+        float cx = (x0 + x1) / 2f, cy = (y0 + y1) / 2f;
+        float half = (Math.abs((x1 - x0) * dx) + Math.abs((y1 - y0) * dy)) / 2f;
+        return new float[]{cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half};
+    }
+
+    /**
      * Builds a Skia linear-gradient Shader from a LinearGradient (or ScrollingGradient)
-     * spanning (x0,y0) to (x1,y1). Centralizing this means the scrolling logic below
+     * spanning (x0,y0) to (x1,y1), or along the line {@link #axis} makes of that box if the gradient has an angle. Centralizing this means the scrolling logic below
      * only has to exist in one place instead of being duplicated across every draw
      * call site that might paint with a gradient.
      * <p>
@@ -58,11 +74,10 @@ public class GradientUtil {
      * <p>
      * For a ScrollingGradient, both endpoints are shifted along the gradient's own
      * axis by the current offset, and the tile mode switches to MIRROR instead of
-     * CLAMP. MIRROR is used rather than REPEAT because this is a two-stop gradient:
-     * REPEAT would produce a visible hard seam every time the ramp wraps, with the end
-     * color snapping straight back to the start color, while MIRROR bounces smoothly
-     * back and forth with no seam. Adding more color stops and wanting a hard repeating
-     * cycle instead would mean changing that one line.
+     * CLAMP. MIRROR is used rather than REPEAT because REPEAT would produce a visible
+     * hard seam every time the ramp wraps, with the last color snapping straight back to
+     * the first, while MIRROR bounces smoothly back and forth with no seam. Wanting a
+     * hard repeating cycle instead would mean changing that one line.
      * <p>
      * Seamless looping is handled entirely in here, not by the caller: MIRROR's true
      * visual period is 2x the span length (forward once, then reflected once), so the
@@ -75,13 +90,18 @@ public class GradientUtil {
      * real period, and causes a hard visual jump once every wrapDistance/speed seconds.
      */
     public static Shader buildShader(LinearGradient gradient, float x0, float y0, float x1, float y1) {
-        Color start = gradient.getStartColor();
-        Color end = gradient.getEndColor();
+        List<Color> stops = gradient.getColors();
+        Color4f[] colorArray = new Color4f[stops.size()];
+        for (int i = 0; i < colorArray.length; i++) {
+            Color color = stops.get(i);
+            colorArray[i] = new Color4f(color.getR(), color.getG(), color.getB(), color.getA());
+        }
 
-        Color4f c1 = new Color4f(start.getR(), start.getG(), start.getB(), start.getA());
-        Color4f c2 = new Color4f(end.getR(), end.getG(), end.getB(), end.getA());
-        Color4f[] colorArray = new Color4f[]{c1, c2};
-
+        float[] line = axis(gradient, x0, y0, x1, y1);
+        x0 = line[0];
+        y0 = line[1];
+        x1 = line[2];
+        y1 = line[3];
         float ox0 = x0, oy0 = y0, ox1 = x1, oy1 = y1;
         FilterTileMode tileMode = FilterTileMode.CLAMP;
 

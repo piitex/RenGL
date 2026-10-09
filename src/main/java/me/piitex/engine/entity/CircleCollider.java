@@ -11,7 +11,7 @@ import me.piitex.engine.utils.flags.GeneratedClass;
  * circle.
  */
 public class CircleCollider extends Collider {
-    @Property(min = 0) public float radius = 16f;
+    @Property(min = 0, tooltip = "The distance from the middle of the circle to its edge") public float radius = 16f;
 
     public CircleCollider() {
     }

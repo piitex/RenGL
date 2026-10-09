@@ -248,5 +248,6 @@ subscribes in `onEnter` needs no clean-up.
   Once removed, it can be pushed again.
 - An exception thrown by `onEnter`, `onExit`, `onPause`, `onResume`, `onKey` or `onResize` is logged and the stack
   change still completes.
-- A full-window scene on top takes every click, including over its empty areas, so the elements of a scene below it
-  cannot be clicked. See [Known limitations](../reference/known-limitations.md#containers-and-layouts).
+- A scene on top lets a click through wherever its root container is [empty and transparent](../containers/container.md#draw-order),
+  so the elements of a scene below it can be clicked. Give its root a background (a dim, say) and it takes every
+  click over its whole area instead.

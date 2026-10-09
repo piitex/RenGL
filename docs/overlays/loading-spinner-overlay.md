@@ -42,7 +42,8 @@ change.
 spinner.setColor(Color.BLUE); // pins the dot color
 ```
 
-By default the dots use the theme's scroll-thumb color. Setting a color pins it against theme switches.
+By default the dots use the theme's scroll-thumb color. Setting a color pins it against theme switches. The color may be a
+[`Paint`](../styling/colors-and-paints.md): a gradient runs across the whole spinner, each dot taking the color at its place.
 
 ## Example: toggle while loading
 
@@ -85,4 +86,4 @@ a button.
 | Method | Description |
 |---|---|
 | `isSpinning()` / `setSpinning(boolean)` | Start or stop the animation |
-| `getColor()` / `setColor(Color)` | Dot color; setting pins it |
+| `getColor()` / `setColor(Paint)` | Dot color or gradient; setting pins it |

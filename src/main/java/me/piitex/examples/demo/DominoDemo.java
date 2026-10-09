@@ -45,7 +45,6 @@ import java.util.List;
  * {@link PhysicsWorld#update} itself so it can feed in a quarter of the frame time for slow motion.
  * Like the 3D demo it asks for Vulkan on macOS and OpenGL elsewhere; {@code -Drengl.demo.api=OPENGL} chooses.
  */
-@GeneratedFragments(prompter = "piitex", model = "Claude Opus 5.5", reviewed = false)
 public class DominoDemo {
     private static final float THICK = 0.12f, HEIGHT = 1.2f, WIDE = 0.6f, GAP = 0.6f;
     private static final Mesh DOMINO = Mesh.cube(1f);

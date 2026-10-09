@@ -79,4 +79,5 @@ The full version, with cancel and error handling, is `FileDialogDemo`.
 ## Limitations
 
 See [known limitations](../reference/known-limitations.md#file-dialogs). The main ones: Linux needs GTK 3 or the
-desktop portal, and there is no dialog title or in-engine file browser.
+desktop portal, a dialog blocks the main loop until it closes, and there is no dialog title, parent-window option or
+in-engine file browser.

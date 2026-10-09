@@ -66,6 +66,7 @@ public class Engine {
 
     private final List<Host> hosts = new CopyOnWriteArrayList<>();
     private final Queue<Window> toOpen = new ConcurrentLinkedQueue<>();
+    private final Queue<Window> toSwap = new ConcurrentLinkedQueue<>(); // windows whose graphics API was changed while open
     private volatile Host primary;
     private volatile Window pacingWindow; // null: the first window paces
     private volatile boolean running = true;
@@ -89,6 +90,7 @@ public class Engine {
         final GLFWindow glfWindow;
         final long handle;
         final RenderAPI backend;
+        final RenderAPI requested;       // what WindowOptions asked for when the window was created
         final InputProcessor inputProcessor = new InputProcessor();
         MetalContext metalContext;   // Metal only; created on the main thread, closed there after the renderer is released
         VulkanContext vulkanContext; // Vulkan only; same lifetime, but closed before the GLFW window is destroyed
@@ -101,12 +103,15 @@ public class Engine {
         Boolean appliedVsync;            // render thread; null until first applied
         volatile boolean closeRequested; // main thread -> render thread: stop drawing and release the renderer
         volatile boolean released;       // render thread -> main thread: the renderer is gone, destroy the window
+        volatile boolean swapping;       // closeRequested is only to rebuild the window for another graphics API: it stays "open"
+        int swapX, swapY;                // main thread: where the window was when it was torn down for a swap
 
         Host(Window window, GLFWindow glfWindow, long handle) {
             this.window = window;
             this.glfWindow = glfWindow;
             this.handle = handle;
             this.backend = glfWindow.getRenderAPI();
+            this.requested = window.getWindowOptions().getRenderer();
         }
     }
 
@@ -160,7 +165,9 @@ public class Engine {
         Thread renderThread = new Thread(this::renderLoop, "Render-Thread");
         renderThread.start();
 
-        while (running && !glfwWindowShouldClose(main.handle)) {
+        while (running && !glfwWindowShouldClose(primary.handle)) {
+            Window swap;
+            while ((swap = toSwap.poll()) != null) beginSwap(swap);
             Window next;
             while ((next = toOpen.poll()) != null) {
                 try {
@@ -180,7 +187,8 @@ public class Engine {
             glfwPollEvents();
             for (Host host : hosts) {
                 host.glfWindow.runMainThreadTasks();
-                if (host == main) continue;
+                if (host.swapping && glfwWindowShouldClose(host.handle)) host.swapping = false; // closed meanwhile: a plain close
+                if (host == primary && !host.swapping) continue;
                 if (!host.closeRequested && glfwWindowShouldClose(host.handle)) host.closeRequested = true;
                 if (host.released) destroyHost(host);
             }
@@ -202,6 +210,7 @@ public class Engine {
         }
         // Cleanup may take a while; don't leave frozen windows on screen. Other windows close before the first.
         for (Host host : hosts) host.glfWindow.applyHide();
+        main = primary; // the first window may have been rebuilt for another graphics API
         for (Host host : hosts) {
             if (host != main) host.window.notifyClosing();
         }
@@ -221,9 +230,72 @@ public class Engine {
         if (window == null) throw new IllegalArgumentException("window must not be null");
         if (started && !running) throw new IllegalStateException("The engine has stopped");
         for (Host host : hosts) {
-            if (host.window == window && !host.closeRequested) return;
+            if (host.window == window && (!host.closeRequested || host.swapping)) return;
         }
         if (!toOpen.contains(window)) toOpen.add(window);
+    }
+
+    /**
+     * Called when an open window's {@link WindowOptions#setRenderer graphics API} was changed. A window is made for
+     * one API, so the engine closes its OS window and opens it again with the new one; the {@link Window} itself, its
+     * containers and scenes stay as they are and no close listener runs. Safe from any thread. A window that is not
+     * open just uses the new API when it opens.
+     *
+     * @throws IllegalStateException when the API is OpenGL on macOS (see {@link RenderAPI#resolve})
+     */
+    void changeRenderer(Window window) {
+        for (Host host : hosts) {
+            if (host.window != window) continue;
+            if (host.closeRequested && !host.swapping) return; // closing anyway; it opens with the new API next time
+            RenderAPI.resolve(window.getWindowOptions().getRenderer()); // throws here, on the caller's thread
+            toSwap.add(window);
+            return;
+        }
+    }
+
+    /**
+     * Main thread. Starts rebuilding a window for its new graphics API: the render thread releases the old renderer,
+     * then {@link #destroyHost} makes the new window.
+     */
+    private void beginSwap(Window window) {
+        for (Host host : hosts) {
+            if (host.window != window || host.closeRequested) continue;
+            RenderAPI wanted = window.getWindowOptions().getRenderer();
+            if (wanted == host.requested || RenderAPI.resolve(wanted) == host.backend) return;
+            log.info("Switching \"{}\" from {} to {}", window.getWindowOptions().getTitle(), host.backend, wanted);
+            host.swapping = true;
+            host.closeRequested = true;
+            return;
+        }
+    }
+
+    /**
+     * Main thread. Opens the window again after its old OS window was destroyed for a graphics API change, where the
+     * old one was. If the new API can't start, the old one is restored.
+     */
+    private void recreate(Host old) {
+        Window window = old.window;
+        Host next;
+        try {
+            next = createHost(window);
+        } catch (RuntimeException e) {
+            log.error("Could not switch \"{}\" to {}; going back to {}", window.getWindowOptions().getTitle(),
+                    window.getWindowOptions().getRenderer(), old.requested, e);
+            window.getWindowOptions().restoreRenderer(old.requested);
+            try {
+                next = createHost(window);
+            } catch (RuntimeException again) {
+                if (old == primary) running = false;
+                log.error("Could not reopen \"{}\"", window.getWindowOptions().getTitle(), again);
+                if (old == primary) throw again;
+                return;
+            }
+        }
+        if (!window.getWindowOptions().isFullscreen()) next.glfWindow.applyPosition(old.swapX, old.swapY);
+        if (old == primary) {
+            primary = next;
+            Clipboard.attach(next.handle);
+        }
     }
 
     /**
@@ -265,7 +337,7 @@ public class Engine {
     public List<Window> getWindows() {
         List<Window> windows = new ArrayList<>();
         for (Host host : hosts) {
-            if (!host.closeRequested) windows.add(host.window);
+            if (!host.closeRequested || host.swapping) windows.add(host.window);
         }
         return windows;
     }
@@ -300,7 +372,9 @@ public class Engine {
             log.warn("Window opened at {}x{} instead of the requested {}x{} (adjusted by the OS).",
                     host.logicalW, host.logicalH, options.getWidth(), options.getHeight());
         }
-        options.setDimensions(host.logicalW, host.logicalH);
+        options.markOpened();
+        boolean openedAtOtherSize = host.logicalW != options.getWidth() || host.logicalH != options.getHeight();
+        options.syncDimensions(host.logicalW, host.logicalH);
 
         switch (host.backend) {
             case METAL -> host.metalContext = new MetalContext(windowHandle);
@@ -321,7 +395,7 @@ public class Engine {
         glfwSetWindowSizeCallback(windowHandle, (w, newW, newH) -> {
             host.logicalW = newW;
             host.logicalH = newH;
-            options.setDimensions(newW, newH); // keep WindowOptions in step with the real size (mouse clamping, modal centering, etc.)
+            options.syncDimensions(newW, newH); // keep WindowOptions in step with the real size (mouse clamping, modal centering, etc.)
             host.sizeDirty = true;
             window.notifyResized(newW, newH);
         });
@@ -340,6 +414,9 @@ public class Engine {
             host.sizeDirty = true;
         });
 
+        // A window that opened maximized (or shrunk to fit) never gets a size callback for it, so tell the listeners.
+        if (openedAtOtherSize) window.notifyResized(host.logicalW, host.logicalH);
+
         hosts.add(host);
         return host;
     }
@@ -351,11 +428,21 @@ public class Engine {
     private void destroyHost(Host host) {
         hosts.remove(host);
         host.glfWindow.applyHide();
-        host.window.notifyClosing();
+        if (host.swapping) {
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                IntBuffer x = stack.mallocInt(1), y = stack.mallocInt(1);
+                glfwGetWindowPos(host.handle, x, y);
+                host.swapX = x.get(0);
+                host.swapY = y.get(0);
+            }
+        } else {
+            host.window.notifyClosing();
+        }
         CursorManager.detach(host.handle);
         if (host.vulkanContext != null) host.vulkanContext.close(); // its surface belongs to the GLFW window
         host.glfWindow.destroy();
         if (host.metalContext != null) host.metalContext.close();
+        if (host.swapping) recreate(host);
     }
 
     private void renderLoop() {
@@ -484,6 +571,8 @@ public class Engine {
             }
         }
 
+        window.refreshTransitionLock(); // after the update pass, so a transition started this frame already locks
+
         window.followPopupAnchor(); // after the update pass, so layouts have placed the anchor
 
         TooltipManager.update(window, delta);
@@ -495,7 +584,7 @@ public class Engine {
         // color, so it is drawn as a full-window quad first thing after begin().
         // An opaque black clear goes underneath it so no pixel is left undefined at
         // the very edges before that quad covers the whole canvas.
-        Paint background = window.getBackgroundColor();
+        Paint background = AnimatedPaint.resolve(window.getBackgroundColor());
         if (background instanceof Color solid) {
             renderer.clear(solid.getR(), solid.getG(), solid.getB(), solid.getA());
         } else {

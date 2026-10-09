@@ -48,7 +48,7 @@ When the user resizes the OS window, the engine recreates its drawing surface an
 window's contents are **not** re-laid-out automatically. A [`ResizableContainer`](../containers/resizable-container.md)
 follows the window on its own; for anything else, resize it yourself from
 [`window.onResize`](window.md#resize-event). [`WindowOptions`](window.md#windowoptions)' `getWidth()`/`getHeight()`
-always hold the current size. See [Known limitations](../reference/known-limitations.md).
+always hold the current size.
 
 ## Several windows
 One engine can drive any number of windows. The first is the one given to `start`; open more with
@@ -66,6 +66,9 @@ game.open(); // opens on the next pass of the main loop and shows once its first
   Closing the first window closes every other window too and ends the engine; `start` then returns.
 - **Reopening.** A closed window can be opened again with `open()`. Its containers and scenes are where they were
   left.
+- **Changing the graphics API.** `WindowOptions.setRenderer` on an open window makes the engine close and reopen its OS
+  window on the new API, the first window included. `onClose` does not run and `start` does not return. See
+  [Switching the renderer](window.md#switching-the-renderer).
 - **One render thread.** Every window is updated and drawn on the same render thread, one after another each frame,
   so a slow window slows the others.
 - **One game clock.** [Game time](../game/game-time.md) is shared: pausing it or changing its time scale affects the

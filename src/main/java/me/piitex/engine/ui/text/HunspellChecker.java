@@ -3,14 +3,21 @@ package me.piitex.engine.ui.text;
 import org.apache.lucene.analysis.hunspell.Dictionary;
 import org.apache.lucene.analysis.hunspell.Hunspell;
 import org.apache.lucene.store.ByteBuffersDirectory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,9 +30,11 @@ import java.util.regex.Pattern;
  * <p>
  * Tokens that are not prose words are skipped: URLs, e-mail addresses, anything
  * containing a digit, and all-caps acronyms, along with anything in the user dictionary
- * (see {@link #addWord}).
+ * (see {@link #addWord}), which {@link #useDictionaryFile} keeps in a file between runs.
  */
 public class HunspellChecker implements TextChecker {
+    private static final Logger log = LogManager.getLogger("Text");
+
     /**
      * A run of letters, allowing apostrophes inside a word ("don't", "it's").
      */
@@ -33,6 +42,7 @@ public class HunspellChecker implements TextChecker {
 
     private final Hunspell hunspell;
     private final Set<String> userWords = ConcurrentHashMap.newKeySet();
+    private volatile Path dictionaryFile;
 
     private HunspellChecker(Hunspell hunspell) {
         this.hunspell = hunspell;
@@ -64,9 +74,78 @@ public class HunspellChecker implements TextChecker {
 
     /**
      * Stops flagging {@code word}, matched case-insensitively, such as a name the user chose "Add to dictionary" on.
+     * If a {@link #useDictionaryFile dictionary file} is set, the word is appended to it. A file that cannot be
+     * written is logged, and the word still holds until the program ends.
      */
+    @Override
     public void addWord(String word) {
-        userWords.add(word.toLowerCase(Locale.ROOT));
+        String key = word.trim().toLowerCase(Locale.ROOT);
+        if (key.isEmpty() || !userWords.add(key)) return;
+        Path file = dictionaryFile;
+        if (file == null) return;
+        try {
+            Files.writeString(file, key + System.lineSeparator(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            log.warn("Could not save \"{}\" to the dictionary {}: {}", key, file, e.getMessage());
+        }
+    }
+
+    @Override
+    public boolean canAddWords() {
+        return true;
+    }
+
+    /**
+     * Word by word, so after an edit only the words that changed are checked again.
+     */
+    @Override
+    public boolean checksFragments() {
+        return true;
+    }
+
+    /**
+     * Takes {@code word} back out of the user dictionary, and out of the {@link #useDictionaryFile dictionary file}
+     * too if there is one, so it is flagged again from the next check.
+     */
+    public void removeWord(String word) {
+        if (!userWords.remove(word.trim().toLowerCase(Locale.ROOT))) return;
+        save();
+    }
+
+    /**
+     * Every word in the user dictionary, lowercase, sorted.
+     */
+    public Set<String> getWords() {
+        return new TreeSet<>(userWords);
+    }
+
+    /**
+     * Keeps the user dictionary in {@code file}, one word per line, so the words added with {@link #addWord} (including
+     * the list's "Add to dictionary") are still there next run. Reads the words already in the file now, if it exists,
+     * and from then on appends each new word to it. The file is created on the first word added.
+     *
+     * @throws IOException if an existing file cannot be read
+     */
+    public HunspellChecker useDictionaryFile(Path file) throws IOException {
+        if (Files.exists(file)) {
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                String key = line.trim().toLowerCase(Locale.ROOT);
+                if (!key.isEmpty()) userWords.add(key);
+            }
+        }
+        dictionaryFile = file;
+        return this;
+    }
+
+    private void save() {
+        Path file = dictionaryFile;
+        if (file == null) return;
+        try {
+            Files.write(file, getWords(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.warn("Could not save the dictionary {}: {}", file, e.getMessage());
+        }
     }
 
     @Override
