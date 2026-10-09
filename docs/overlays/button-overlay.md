@@ -10,6 +10,7 @@
 - Its default look is an opaque, themed box (background, hover color, border, corner radius).
 - The mouse cursor becomes a **pointer** on hover.
 - It has an `onAction` callback.
+- It can show an **icon** beside its label, be **disabled** (visible but faded), and **shorten** a label that is too long.
 
 ```java
 ButtonOverlay submit = new ButtonOverlay("Submit", 150, 36);
@@ -72,23 +73,47 @@ button.setFontSize(18f);
 Unlike a plain [`TextOverlay`](text-overlay.md), changing the text does **not** resize a button. Its box is whatever width and
 height you gave it, and the label is re-centered.
 
-## Disabling
+## An icon beside the label
 
 ```java
-button.setEnabled(false); // hides it and removes it from hit-testing
+ButtonOverlay add = new ButtonOverlay("Add files", 140, 36);
+add.setIcon(Feather.PLUS);            // any IconAsset; the icon and label are centered as a pair
+add.setIconAfterText(true);           // for a chevron that says a menu opens
+add.setIconSize(18);                  // points; the default is 1.25 times the font size
+add.setIconGap(8);                    // between icon and label; default 6
+
+ButtonOverlay trash = new ButtonOverlay("", 36, 36);
+trash.setIcon(Feather.TRASH_2);       // no label: the icon alone, centered
 ```
 
-There is no "greyed out but visible" state built in. If you want one, style it yourself and ignore clicks
-in your `onAction`:
+The icon is drawn in the label's color, so it follows the theme and `setTextColor`, and it fades with a disabled
+button. It is part of the button: a click on it is a click on the button, so there is only one `onAction` to set.
+`setIcon(null)` takes it away. `hasIcon()` and `getIconSize()` read it back.
+
+## Disabled
 
 ```java
-boolean[] busy = {false};
-button.onAction(() -> {
-    if (busy[0]) return;
-    busy[0] = true;
-    button.setText("Working...");
-});
+button.setDisabled(true);
+button.setTooltip("Choose a folder first"); // still shows, so it can say why
+button.onDisabledClick(() -> status.setText("Choose a folder first."));
 ```
+
+A disabled button stays on screen, drawn faded (45% by default; `setDisabledOpacity(float)` changes it), with no hover
+color and the "not allowed" cursor. A click does not fire `onAction`; it runs `onDisabledClick` if there is one, so the
+click can explain why nothing happened. Fading is a layer of its own, separate from `setOpacity`, so a fade-in and a
+disabled button combine.
+
+This is not `setEnabled(false)`, which hides the button and removes it from hit-testing altogether.
+
+## A label that does not fit
+
+```java
+button.setEllipsize(true);        // "quarterly-report-final-version-2.xlsx" becomes "quarterly-re…"
+button.setEllipsizeMiddle(true);  // or "quarterl….xlsx", keeping the start and the end
+```
+
+The label is shortened to fit the box, minus a small margin and the icon. `getText()` still returns the whole string.
+See [`TextOverlay`](text-overlay.md#text-that-does-not-fit).
 
 ## Example: a row of buttons
 
@@ -112,5 +137,11 @@ root.addElement(actions);
 | Method | Description |
 |---|---|
 | `onAction(Runnable)` | Click callback; replaces any previous one |
+| `setDisabled(boolean)` / `isDisabled()` | Faded, no hover, "not allowed" cursor, no `onAction` |
+| `onDisabledClick(Runnable)` | What a click does while disabled |
+| `setDisabledOpacity(float)` / `getDisabledOpacity()` | How much of itself a disabled button draws (default `0.45`) |
+| `setIcon(IconAsset)` / `hasIcon()` | An icon beside the label, in the label's color; `null` removes it |
+| `setIconSize(double)` / `getIconSize()` | Icon width and height; `0` follows the font size |
+| `setIconGap(double)`, `setIconAfterText(boolean)` | Space between icon and label; icon after the label |
 | Inherited from [`TextOverlay`](text-overlay.md) | `getText/setText`, `getFontSize/setFontSize`, `setFontFile`, `getTextColor/setTextColor`, `dispose` |
 | Inherited from [`Element`](../core/element.md) | `getStyling`, `setTooltip`, `setEnabled`, `fadeIn/fadeOut`, ... |
