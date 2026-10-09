@@ -1099,6 +1099,7 @@ public class Window implements Themeable {
      * if {@code element} already holds focus.
      */
     public void requestFocus(Element element) {
+        if (element != null && element.isEffectivelyDisabled()) element = null; // a disabled Element cannot take the keyboard
         if (focusedElement == element) return;
 
         if (focusedElement instanceof Focusable focusable) {
@@ -1163,9 +1164,9 @@ public class Window implements Themeable {
     }
 
     private void collectFocusTraversalOrder(Container container, List<Element> out) {
-        if (!container.isEnabled()) return;
+        if (!container.isEnabled() || container.isDisabled()) return;
         for (Element child : container.getElements().values()) {
-            if (!child.isEnabled()) continue;
+            if (!child.isEnabled() || child.isDisabled()) continue;
             if (child.isFocusTraversable() && child instanceof Focusable) {
                 out.add(child);
             }

@@ -146,8 +146,8 @@ root.addElement(transcript);
 
 ## Gotchas
 
-- Do not replace the click listener with `onMouseClick(...)`. The overlay registers its own to open the
-  suggestion popup on right-click, and replacing it disables that.
+- `onMouseClick(...)` is safe to use. The overlay's own right-click handler, which opens the suggestion popup, is kept
+  apart and runs first.
 - `setText(...)` is silent (it fires no `onTextChanged`), but the checker still notices the new text on the
   next frame and re-checks it.
 - Suggestions are computed when you right-click, not in the background, so a very slow custom checker would

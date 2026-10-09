@@ -101,8 +101,31 @@ panel.setRelativeWidth(0.5);                        // the width alone; the heig
 element.setEnabled(false); // invisible, no updates, ignored by hit-testing and Tab order
 ```
 
-A disabled element is fully inert. To take a child out of its container entirely, use
+A `setEnabled(false)` element is fully inert. To take a child out of its container entirely, use
 `Container.removeElement`.
+
+## Disabled
+
+`setEnabled(false)` hides an element. To show one that cannot be used right now, use `setDisabled(true)`. It works on
+every element, from a check box to a whole panel:
+
+```java
+saveButton.setDisabled(true);
+saveButton.setTooltip("Choose a folder first"); // still shows, so it can say why
+saveButton.onDisabledClick(() -> status.setText("Choose a folder first."));
+
+form.setDisabled(true); // everything inside the form is disabled too
+```
+
+A disabled element stays on screen, drawn faded (45% by default; `setDisabledOpacity(float)` changes it) and without
+its hover color, with the "not allowed" cursor. It takes no clicks, drags or keyboard focus, and Tab skips it. A click
+on it runs `onDisabledClick` if there is one, on release like a button's click; on a child of a disabled container
+that has no handler of its own, the container's handler runs. Fading is a layer of its own, separate from `setOpacity`,
+so a fade-in and a disabled element combine. `isDisabled()` is this element's own flag, `isEffectivelyDisabled()` also
+counts a disabled container above it.
+
+Disabling does not stop code: `onAction`, `setText` and the like still work if you call them. Wheel scrolling over a
+disabled scroll container still scrolls it.
 
 ## Styling
 
@@ -153,6 +176,7 @@ element.onMouseClick(event -> {
 });
 ```
 
+- A `TableView`, `TreeView` or `RichTextAreaOverlay` handles right-clicks itself; that is kept, and your listener runs after it.
 - Fires on **press**, not on release, for **any** mouse button. Check `getButton()` if you only want the
   left button.
 - `setClickOnRelease(true)` makes it fire the way a button does: when the **left** button is released, and only
@@ -346,7 +370,7 @@ system. In practice you control order with `Container.addElement(element, index)
 | Group | Methods |
 |---|---|
 | Geometry | `getX/Y/Width/Height`, `setX/Y/Width/Height`, `setPosition`, `setBounds`, `contains`, `setAnchor`, `getAnchor`, `getPivot`, `setAnchorMargin`, `getAnchorMargin`, `applyAnchor` |
-| State | `isEnabled/setEnabled`, `isHovered`, `getOpacity/setOpacity`, `getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin`, `getEffect/setEffect` |
+| State | `isEnabled/setEnabled`, `isDisabled/setDisabled/isEffectivelyDisabled`, `onDisabledClick`, `getDisabledOpacity/setDisabledOpacity`, `isHovered`, `getOpacity/setOpacity`, `getScale/setScale`, `setScaleOrigin`, `clearScaleOrigin`, `getEffect/setEffect` |
 | Look | `getStyling/setStyling`, `followTheme`, `getBackground/setBackground`, `getCursorMode/setCursorMode`, `getTextAlignment/setTextAlignment` |
 | Focus | `isFocusTraversable/setFocusTraversable`, `getTabIndex/setTabIndex` |
 | Tooltip | `getTooltip/setTooltip`, `getTooltipDelay/setTooltipDelay`, `getTooltipTheme/setTooltipTheme` |

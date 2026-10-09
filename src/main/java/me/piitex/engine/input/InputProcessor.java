@@ -32,6 +32,11 @@ public class InputProcessor {
      */
     private final List<Element> clickTargets = new ArrayList<>();
     /**
+     * The disabled Element a left press landed on, whose {@link Element#onDisabledClick} runs if the release lands on
+     * it too, or null.
+     */
+    private Element disabledTarget;
+    /**
      * The Draggable a press on a drag-through Element will start dragging once the mouse has moved
      * {@link #DRAG_THRESHOLD} points, or null. See {@link Element#setDragsContainer}.
      */
@@ -165,11 +170,11 @@ public class InputProcessor {
                 }
             } else {
                 boolean hovered = child == hit;
-                child.setHovered(hovered);
+                child.setHovered(hovered && !child.isEffectivelyDisabled());
                 if (hovered) onPath = true;
             }
         }
-        container.setHovered(onPath);
+        container.setHovered(onPath && !container.isEffectivelyDisabled());
         return onPath;
     }
 
@@ -218,8 +223,11 @@ public class InputProcessor {
             pendingDrag = null;
             List<Element> targets = List.copyOf(clickTargets);
             clickTargets.clear();
+            Element disabled = disabledTarget;
+            disabledTarget = null;
+            if (disabled != null && isUnderPointer(window, disabled)) disabled.fireDisabledClick();
             for (Element target : targets) {
-                if (target.getMouseClickListenerConsumer() != null && isUnderPointer(window, target)) {
+                if (target.getMouseClickListenerConsumer() != null && !target.isEffectivelyDisabled() && isUnderPointer(window, target)) {
                     target.getMouseClickListenerConsumer().accept(new MouseClickEvent(absoluteMouseX, absoluteMouseY, event.buttonOrKey, event.action));
                 }
             }
@@ -231,6 +239,7 @@ public class InputProcessor {
         }
         if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) { // a press whose release was never seen
             clickTargets.clear();
+            disabledTarget = null;
             pendingDrag = null;
         }
 
@@ -254,6 +263,13 @@ public class InputProcessor {
 
             hitElement = findTopmostHit(container, absoluteMouseX, absoluteMouseY);
             if (hitElement == null) continue;
+            // A disabled Element, or anything inside a disabled container, takes the press and does nothing with it:
+            // no click, no focus, no drag. A left press may still end as a click on its disabled handler.
+            Element disabler = hitElement.getDisablingElement();
+            if (disabler != null) {
+                if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) disabledTarget = disabler;
+                return;
+            }
             // The click goes to the nearest Element at or above the hit one that listens for it, so pressing on the
             // label or icon inside a clickable row or button counts as pressing the row or button.
             boolean left = event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT;
@@ -437,7 +453,7 @@ public class InputProcessor {
         }
 
         if (event.buttonOrKey == GLFW.GLFW_KEY_TAB && event.action != GLFW.GLFW_RELEASE) {
-            if (window.getFocusedElement() instanceof Focusable focusable && focusable.wantsTab()
+            if (usableFocus(window) instanceof Focusable focusable && focusable.wantsTab()
                     && window.getPopup() == null && window.getModal() == null) {
                 focusable.onKeyPressed(event.buttonOrKey, event.action, event.mods);
                 return;
@@ -464,7 +480,7 @@ public class InputProcessor {
             return;
         }
 
-        if (window.getFocusedElement() instanceof Focusable focusable) {
+        if (usableFocus(window) instanceof Focusable focusable) {
             focusable.onKeyPressed(event.buttonOrKey, event.action, event.mods);
             return;
         }
@@ -488,9 +504,21 @@ public class InputProcessor {
         return input.keyPressed(event.buttonOrKey, event.mods, consumed) || consumed;
     }
 
+    /**
+     * The focused Element, or null if nothing has focus. One that was disabled while it held focus loses it here.
+     */
+    private Element usableFocus(Window window) {
+        Element focused = window.getFocusedElement();
+        if (focused != null && focused.isEffectivelyDisabled()) {
+            window.requestFocus(null);
+            return null;
+        }
+        return focused;
+    }
+
     private void handleChar(Window window, InputEvent event) {
         if (window.getInput().swallowsChars()) return; // the key that typed it was just bound in a controls menu
-        if (window.getFocusedElement() instanceof Focusable focusable) {
+        if (usableFocus(window) instanceof Focusable focusable) {
             focusable.onCharTyped(event.buttonOrKey);
         } else {
             window.getInput().charTyped(event.buttonOrKey);

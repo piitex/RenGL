@@ -78,12 +78,15 @@ file, Resume continues it, Cancel deletes it and offers Retry:
 DownloadBarContainer card = new DownloadBarContainer(download, 380);
 card.getFormat().setShowEta(false); // choose which parts the status line shows
 card.setShowControls(false); // hide the buttons
+card.setIconButtons(true); // pause, play, retry and cross icons instead of the words
 card.setManager(manager); // if managed: Resume/Retry go back through the queue
 card.getBar().getStyling().setCornerRadius(5f);
 card.setActiveColor(Color.BLUE); // fill while downloading, under the stripes (default green); any paint
 card.setStripeColor(Color.WHITE); // stripe color (default light gray)
 card.setDoneColor(Color.GREEN); card.setFailedColor(Color.RED); card.setPausedColor(Color.ORANGE);
 ```
+
+A file name too long for the card ends with an ellipsis in the middle, so its extension stays.
 
 `setStripeStyle(style)` swaps in a shared [`StripeStyle`](../overlays/progress-bar-overlay.md) so several cards stripe
 in step. `setPadding` and `setSpacing` resize the card's rows.
@@ -119,7 +122,4 @@ label.setText(DownloadFormat.bytes(d.getDownloadedBytes()) + " of " + DownloadFo
 ## Limitations
 
 - HTTP(S) only, and every download is a single connection (no segmented/multi-part downloading).
-- Long file names are not truncated; choose a width that fits.
-- The card buttons are text buttons; they are exposed (`getPauseButton()`, `getCancelButton()`) for restyling, but
-  there is no icon variant yet.
 - No bandwidth limit, and no proxy configuration beyond the JVM's defaults.

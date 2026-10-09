@@ -15,6 +15,7 @@ import me.piitex.engine.ui.overlays.TextFieldOverlay;
 import me.piitex.engine.ui.scroll.ScrollContainer;
 import me.piitex.engine.ui.text.Font;
 import me.piitex.engine.ui.text.FontScalable;
+import me.piitex.engine.ui.text.TextFit;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
 import me.piitex.engine.ui.theme.ThemeManager;
@@ -51,8 +52,8 @@ import java.util.function.Predicate;
  * callbacks make the change.
  * <p>
  * It follows the theme like a {@link Container} that {@link #useTheme() uses the theme}, with the theme's text and
- * selection colors for the rows. It registers its own {@link #onMouseClick} handler, which selects the row under a
- * right-click before a {@link #setContextMenu context menu} opens, so do not replace it.
+ * selection colors for the rows. It selects the row under a
+ * right-click before a {@link #setContextMenu context menu} opens, and before any {@link #onMouseClick} handler you set.
  */
 public class TreeView<T> extends ScrollContainer implements Focusable, FontScalable {
     private static final long DOUBLE_CLICK_NANOS = 400_000_000L;
@@ -97,6 +98,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private T pendingCollapse;                          // a press on a selected row in a multi-selection: it becomes the only one if released without dragging
     private final Set<T> checked = new LinkedHashSet<>();
     private boolean checkBoxes, cascadeChecks;
+    private boolean ellipsize = true;
     private BiConsumer<T, Boolean> onCheck;
     private Consumer<List<T>> onSelectionChange;
 
@@ -150,7 +152,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         super(width, height);
         this.children = Objects.requireNonNull(children, "children");
         setFocusTraversable(true);
-        onMouseClick(event -> {
+        setBuiltInClickListener(event -> {
             if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) return;
             int index = rowAt(event.getMouseY());
             T item = index >= 0 ? rows.get(index).item : null;
@@ -1186,6 +1188,18 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         if (renaming != null) placeRenameField();
     }
 
+    public boolean isEllipsize() {
+        return ellipsize;
+    }
+
+    /**
+     * Whether a row's text that reaches the tree's right edge is ended with an ellipsis ({@code …}). On by default;
+     * off lets the edge cut it.
+     */
+    public void setEllipsize(boolean ellipsize) {
+        this.ellipsize = ellipsize;
+    }
+
     public float getRowCornerRadius() {
         return rowCornerRadius;
     }
@@ -1357,7 +1371,9 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
             }
             if (!Objects.equals(row.item, renaming)) {
                 Paint color = dim ? dimTextColor.get() : text;
-                renderer.drawText(labelProvider.apply(row.item), x + labelX(row), rowY + (rowHeight - textH) / 2f, f, color);
+                String label = labelProvider.apply(row.item);
+                if (ellipsize && label != null) label = TextFit.ellipsize(label, f, w - labelX(row) - PADDING);
+                renderer.drawText(label, x + labelX(row), rowY + (rowHeight - textH) / 2f, f, color);
             }
         }
 

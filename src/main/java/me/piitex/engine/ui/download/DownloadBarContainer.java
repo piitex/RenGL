@@ -6,6 +6,8 @@ import me.piitex.engine.io.download.DownloadState;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.color.StripeStyle;
+import me.piitex.engine.ui.icons.Feather;
+import me.piitex.engine.ui.image.IconAsset;
 import me.piitex.engine.ui.layout.HorizontalLayout;
 import me.piitex.engine.ui.layout.Layout;
 import me.piitex.engine.ui.layout.VerticalLayout;
@@ -35,14 +37,14 @@ import me.piitex.engine.ui.overlays.TextOverlay;
  * <p>
  * <b>Controls.</b> <i>Pause</i> becomes <i>Resume</i> while paused and <i>Retry</i> after a failure or cancel, and
  * <i>Cancel</i> discards the partial file. Both vanish once the download completes. Switch them off with
- * {@link #setShowControls}. If the download belongs to a {@link DownloadManager}, pass it to {@link #setManager} so
+ * {@link #setShowControls}, or show icons instead of the words with {@link #setIconButtons}. If the download belongs to a {@link DownloadManager}, pass it to {@link #setManager} so
  * resuming respects the manager's concurrency limit ({@link DownloadListContainer} does this for its cards).
  * <p>
  * The card reads the download once per frame in {@link #update}, so it needs no wiring. Its height follows its
  * content; only the {@code width} is yours to choose.
  */
 public class DownloadBarContainer extends VerticalLayout {
-    private static final double BUTTON_WIDTH = 58;
+    private static final double BUTTON_WIDTH = 58, ICON_BUTTON_WIDTH = 26;
 
     private enum Look {WAITING, DOWNLOADING, DONE, FAILED, PAUSED}
 
@@ -57,6 +59,8 @@ public class DownloadBarContainer extends VerticalLayout {
     private final ButtonOverlay cancelButton;
     private DownloadManager manager;
     private boolean showControls = true;
+    private boolean iconButtons;
+    private IconAsset pauseIcon;
 
     private final Paint themedFill;
     private Paint activeColor = new Color(0.20f, 0.70f, 0.30f, 1f);
@@ -75,6 +79,7 @@ public class DownloadBarContainer extends VerticalLayout {
         useTheme(); // a themed panel; a bare Container is transparent, so the card would have no panel behind its text
 
         nameText = new TextOverlay(download.getDisplayName(), 14f, Color.BLACK);
+        nameText.setEllipsizeMiddle(true);
         statsText = new TextOverlay("", 12f, Color.GRAY);
         titleRow = row(20);
         titleRow.setSpacing(10f);
@@ -116,12 +121,21 @@ public class DownloadBarContainer extends VerticalLayout {
         double inner = getWidth() - 2 * getPadding();
         titleRow.setWidth(inner);
         barRow.setWidth(inner);
-        double buttons = showControls ? 2 * (BUTTON_WIDTH + barRow.getSpacing()) : 0;
+        double buttons = showControls ? 2 * (buttonWidth() + barRow.getSpacing()) : 0;
         bar.setWidth(Math.max(20, inner - buttons));
+
+        fitName();
 
         double titleHeight = Math.max(20, Math.max(nameText.getHeight(), statsText.getHeight()));
         titleRow.setHeight(titleHeight);
         setHeight(2 * getPadding() + getSpacing() + titleHeight + barRow.getHeight());
+    }
+
+    /** The file name gives way to the status text, ending with an ellipsis in the middle so its extension stays. */
+    private void fitName() {
+        double room = getWidth() - 2 * getPadding() - statsText.getWidth() - titleRow.getSpacing();
+        double max = Math.max(40, room);
+        if (nameText.getMaxWidth() != max) nameText.setMaxWidth(max);
     }
 
     @Override
@@ -169,6 +183,38 @@ public class DownloadBarContainer extends VerticalLayout {
      */
     public void setManager(DownloadManager manager) {
         this.manager = manager;
+    }
+
+    /**
+     * Whether the buttons show icons (pause, play, retry and a cross) instead of the words. Default false. The buttons
+     * are narrower, and still {@link #getPauseButton() exposed} for restyling.
+     */
+    public void setIconButtons(boolean iconButtons) {
+        if (iconButtons == this.iconButtons) return;
+        this.iconButtons = iconButtons;
+        double width = buttonWidth();
+        pauseButton.setWidth(width);
+        cancelButton.setWidth(width);
+        if (iconButtons) {
+            cancelButton.setText("");
+            cancelButton.setIcon(Feather.X);
+        } else {
+            cancelButton.setIcon(null);
+            cancelButton.setText("Cancel");
+            pauseButton.setIcon(null);
+            pauseIcon = null;
+            pauseButton.setText("Pause");
+        }
+        refresh();
+        fitLayout();
+    }
+
+    public boolean isIconButtons() {
+        return iconButtons;
+    }
+
+    private double buttonWidth() {
+        return iconButtons ? ICON_BUTTON_WIDTH : BUTTON_WIDTH;
     }
 
     public ButtonOverlay getPauseButton() {
@@ -275,6 +321,7 @@ public class DownloadBarContainer extends VerticalLayout {
         if (!status.equals(statsText.getText())) {
             boolean wasEmpty = statsText.getHeight() == 0;
             statsText.setText(status);
+            fitName();
             if (wasEmpty && titleRow != null) fitLayout(); // an empty text measures 0 tall until it has content
         }
 
@@ -293,7 +340,17 @@ public class DownloadBarContainer extends VerticalLayout {
             case FAILED, CANCELLED -> "Retry";
             default -> "Pause";
         };
-        if (!pauseLabel.equals(pauseButton.getText())) pauseButton.setText(pauseLabel);
+        if (iconButtons) {
+            IconAsset wantedIcon = switch (state) {
+                case PAUSED -> Feather.PLAY;
+                case FAILED, CANCELLED -> Feather.ROTATE_CW;
+                default -> Feather.PAUSE;
+            };
+            if (wantedIcon != pauseIcon) pauseButton.setIcon(pauseIcon = wantedIcon);
+            if (!pauseButton.getText().isEmpty()) pauseButton.setText("");
+        } else if (!pauseLabel.equals(pauseButton.getText())) {
+            pauseButton.setText(pauseLabel);
+        }
         pauseButton.setEnabled(state != DownloadState.COMPLETED && state != DownloadState.VERIFYING);
         cancelButton.setEnabled(!state.isFinished() && state != DownloadState.VERIFYING);
 

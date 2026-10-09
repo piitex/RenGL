@@ -234,6 +234,7 @@ tree.setRowHeight(22f); // default 24
 tree.setIndent(14f); // per level; the arrow takes the same width. Default 16
 tree.setFontSize(14f); // default 15
 tree.setIconSize(16f); // default 14
+tree.setEllipsize(false); // a row's text too long for the tree ends with … by default; off lets the edge cut it
 tree.setRowCornerRadius(4f); // rounds the selected and hovered rows. Default 0
 tree.setTextColor(Color.WHITE); tree.setDimTextColor(Color.GRAY); tree.setSelectionColor(...); // pin against the theme; any paint
 tree.dispose(); // frees the font
@@ -241,8 +242,8 @@ tree.dispose(); // frees the font
 
 ## Gotchas
 
-- **Do not call `onMouseClick` on the tree.** Its own handler selects the row under a right-click.
-- A row's text is cut off at the tree's right edge; the tree does not scroll sideways.
+- `onMouseClick` on the tree is safe to use: the tree's own right-click row selection runs first, then your handler.
+- A row's text that reaches the tree's right edge ends with an ellipsis (`setEllipsize(false)` cuts it instead); the tree does not scroll sideways.
 - Multi-select is off by default, so a tree that reads `getSelected()` behaves as before. A context menu that acts on
   `getSelected()` should read `getSelectedItems()` once multi-select is on.
 - Checked items outlive the model; see [Check boxes](#check-boxes).

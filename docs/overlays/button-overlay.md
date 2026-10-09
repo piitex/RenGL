@@ -101,7 +101,8 @@ button.onDisabledClick(() -> status.setText("Choose a folder first."));
 A disabled button stays on screen, drawn faded (45% by default; `setDisabledOpacity(float)` changes it), with no hover
 color and the "not allowed" cursor. A click does not fire `onAction`; it runs `onDisabledClick` if there is one, so the
 click can explain why nothing happened. Fading is a layer of its own, separate from `setOpacity`, so a fade-in and a
-disabled button combine.
+disabled button combine. Every element can be disabled this way, not only buttons: see
+[Disabled](../core/element.md#disabled).
 
 This is not `setEnabled(false)`, which hides the button and removes it from hit-testing altogether.
 
