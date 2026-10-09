@@ -23,9 +23,11 @@ import java.util.regex.Pattern;
  *   on a background.</li>
  *   <li>A line of three or more {@code -}, {@code *} or {@code _} ends the paragraph before it and draws nothing.</li>
  * </ul>
- * There is no inline styling: the marks of {@code **bold**}, {@code *italic*} and {@code `code`} are taken out and
- * what they wrap is left as plain text, and a link {@code [text](address)} shows as its text. Each block's whole text
- * draws in that one block's {@link TextStyle}. Tables, quotes and pictures are not understood and read as paragraphs.
+ * Inline marks style the text inside a block: {@code **bold**}, {@code *italic*} (or the {@code __} and {@code _}
+ * spellings), {@code ***both***}, {@code `code`} in the monospace font, and {@code [text](address)} as a link that
+ * opens on a click. They come out as {@link InlineRun}s on the block, drawn on top of the block's own
+ * {@link TextStyle}; a backslash takes a mark literally, and one that never closes stays as written. Tables, quotes and
+ * pictures are not understood and read as paragraphs.
  * <p>
  * Default sizes follow roughly the scale browsers use for h1..h6 against a 14pt body:
  * 28/24/20/17/15/14, each bold, with more space above a heading than between paragraphs.
@@ -39,10 +41,6 @@ public class MarkdownFormatPreset implements TextFormatPreset {
     private static final Pattern BULLET = Pattern.compile("^(\\s*)[-*+] +(.*\\S.*)$");
     private static final Pattern NUMBERED = Pattern.compile("^(\\s*)(\\d{1,4})[.)] +(.*\\S.*)$");
     private static final Pattern RULE = Pattern.compile("^\\s*([-*_])(\\s*\\1){2,}\\s*$");
-    private static final Pattern BOLD = Pattern.compile("\\*\\*(.+?)\\*\\*");
-    private static final Pattern ITALIC = Pattern.compile("(?<![*\\w])\\*(?!\\s)(.+?)(?<!\\s)\\*(?![*\\w])");
-    private static final Pattern CODE = Pattern.compile("`([^`]+)`");
-    private static final Pattern LINK = Pattern.compile("\\[([^\\]]+)]\\([^)]*\\)");
 
     private final Map<Integer, TextStyle> headingStyles = new HashMap<>();
     private TextStyle bodyStyle = TextStyle.of(14f);
@@ -146,9 +144,10 @@ public class MarkdownFormatPreset implements TextFormatPreset {
             int level = headingLevel(line);
             if (level > 0) {
                 parse.flushAll();
-                String text = inline(line.substring(level + 1).strip());
+                MarkdownInline.Parsed text = MarkdownInline.parse(line.substring(level + 1).strip());
                 TextStyle style = headingStyles.getOrDefault(level, bodyStyle);
-                parse.add(new FormattedBlock(text, style, blocks.isEmpty() ? 0f : headingSpacingBefore, headingSpacingAfter));
+                parse.add(new FormattedBlock(text.text(), style, blocks.isEmpty() ? 0f : headingSpacingBefore, headingSpacingAfter,
+                        0f, "", null, text.runs()));
                 parse.afterList = false;
                 continue;
             }
@@ -207,14 +206,16 @@ public class MarkdownFormatPreset implements TextFormatPreset {
         void flushItem() {
             if (item == null) return;
             float before = blocks.isEmpty() ? 0f : afterList ? listItemSpacing : paragraphSpacing;
-            add(new FormattedBlock(inline(item.toString()), bodyStyle, before, 0f, indent, marker, null));
+            MarkdownInline.Parsed text = MarkdownInline.parse(item.toString());
+            add(new FormattedBlock(text.text(), bodyStyle, before, 0f, indent, marker, null, text.runs()));
             afterList = true;
             item = null;
         }
 
         void flushParagraph() {
             if (paragraph.isEmpty()) return;
-            add(new FormattedBlock(inline(paragraph.toString()), bodyStyle, blocks.isEmpty() ? 0f : paragraphSpacing, 0f));
+            MarkdownInline.Parsed text = MarkdownInline.parse(paragraph.toString());
+            add(new FormattedBlock(text.text(), bodyStyle, blocks.isEmpty() ? 0f : paragraphSpacing, 0f, 0f, "", null, text.runs()));
             afterList = false;
             paragraph.setLength(0);
         }
@@ -238,10 +239,7 @@ public class MarkdownFormatPreset implements TextFormatPreset {
      * Takes the inline marks out of {@code text}: {@code **bold**}, {@code *italic*}, {@code `code`} and links keep what they wrap.
      */
     static String inline(String text) {
-        String result = BOLD.matcher(text).replaceAll("$1");
-        result = ITALIC.matcher(result).replaceAll("$1");
-        result = CODE.matcher(result).replaceAll("$1");
-        return LINK.matcher(result).replaceAll("$1");
+        return MarkdownInline.parse(text).text();
     }
 
     /**

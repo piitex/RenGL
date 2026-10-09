@@ -12,9 +12,16 @@ import me.piitex.engine.ui.theme.Theme;
 import org.jetbrains.skia.Font;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 
+import me.piitex.engine.input.MouseTracker;
+import me.piitex.engine.ui.CursorMode;
+import me.piitex.engine.ui.text.InlineRun;
+import me.piitex.engine.ui.theme.ThemeManager;
+import me.piitex.engine.utils.Browser;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Read-only text that flows within a fixed-width box: word-wrapped, optionally aligned,
@@ -37,11 +44,26 @@ import java.util.List;
  * <p>
  * {@code '\n'} in the text forces a line break. A single word wider than the box is
  * broken mid-word rather than overflowing.
+ * <p>
+ * {@link #setRuns} styles stretches of the text as bold, italic, code or a link, which wrap and align together with
+ * the plain text. A link opens through {@link #setLinkHandler}, by default in the system browser.
  */
 public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggable {
     private static final String ELLIPSIS = "…";
 
+    private static final float ITALIC_SKEW = -0.25f;
+    private static final int BOLD = 1, ITALIC = 2, CODE = 4;
+
     private final List<String> lines = new ArrayList<>();
+    private final List<Integer> lineStarts = new ArrayList<>(); // with runs: where each line begins in the text
+    private final List<Integer> lineSources = new ArrayList<>(); // with runs: how many of a line's characters are the text's own
+    private List<InlineRun> runs = List.of();
+    private byte[] flags = new byte[0];  // per character of the text: BOLD, ITALIC and CODE bits
+    private int[] linkOf = new int[0];   // per character: 1 + the index into hrefs, or 0 for none
+    private List<String> hrefs = List.of();
+    private final org.jetbrains.skia.Font[] runFonts = new org.jetbrains.skia.Font[8];
+    private org.jetbrains.skia.Font runBase;
+    private Consumer<String> linkHandler = Browser::open;
     private boolean ready; // TextOverlay's constructor calls updateComputedSize() before our fields exist
     private TextAlign textAlign = TextAlign.LEFT;
     private float lineSpacing = 2f;
@@ -77,6 +99,75 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         ready = true;
         applyTheme(me.piitex.engine.ui.theme.ThemeManager.getCurrent());
         updateComputedSize();
+    }
+
+    /**
+     * Sets the text and drops its {@link #setRuns runs}, which index into the old string.
+     */
+    @Override
+    public void setText(String text) {
+        if (ready && !runs.isEmpty()) clearRuns();
+        super.setText(text);
+    }
+
+    /**
+     * Styles stretches of the current text: each {@link InlineRun} is bold, italic, code, a link, or a mix. Indices
+     * past the end of the text are clipped. Call it after the text is set; setting the text again drops the runs. An
+     * empty list or null goes back to plain text.
+     */
+    public void setRuns(List<InlineRun> runs) {
+        String text = getText() == null ? "" : getText();
+        this.runs = runs == null ? List.of() : List.copyOf(runs);
+        flags = new byte[text.length()];
+        linkOf = new int[text.length()];
+        List<String> links = new ArrayList<>();
+        for (InlineRun run : this.runs) {
+            int from = Math.min(run.start(), text.length()), to = Math.min(run.end(), text.length());
+            int link = 0;
+            if (run.href() != null) {
+                links.add(run.href());
+                link = links.size();
+            }
+            int bits = (run.bold() ? BOLD : 0) | (run.italic() ? ITALIC : 0) | (run.code() ? CODE : 0);
+            for (int i = from; i < to; i++) {
+                flags[i] |= (byte) bits;
+                if (link != 0) linkOf[i] = link;
+            }
+        }
+        hrefs = links;
+        setBuiltInClickListener(links.isEmpty() ? null : event -> {
+            String href = hrefAt(toLocalX(event.getMouseX()), toLocalY(event.getMouseY()));
+            if (href != null && linkHandler != null) linkHandler.accept(href);
+        });
+        updateComputedSize();
+    }
+
+    private void clearRuns() {
+        runs = List.of();
+        flags = new byte[0];
+        linkOf = new int[0];
+        hrefs = List.of();
+        setBuiltInClickListener(null);
+    }
+
+    public List<InlineRun> getRuns() {
+        return runs;
+    }
+
+    /**
+     * What a click on a link run does with its address. The default opens it through {@link Browser#open(String)},
+     * which only accepts web and mail addresses. Null makes links do nothing.
+     */
+    public void setLinkHandler(Consumer<String> handler) {
+        this.linkHandler = handler;
+    }
+
+    @Override
+    public CursorMode getCursorMode() {
+        if (!isEffectivelyDisabled() && !hrefs.isEmpty() && hrefAt(toLocalX(MouseTracker.getX()), toLocalY(MouseTracker.getY())) != null) {
+            return CursorMode.POINTER;
+        }
+        return super.getCursorMode();
     }
 
     public TextAlign getTextAlign() {
@@ -273,13 +364,17 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
 
     private void layoutLines() {
         lines.clear();
+        lineStarts.clear();
+        lineSources.clear();
         String text = getText();
         if (text == null || text.isEmpty()) return;
 
         Font font = getOrBuildFont();
         float innerWidth = Math.max(1f, (float) getWidth() - 2 * padding - (reserveBar ? barWidth() : 0f));
 
-        lines.addAll(TextLayout.wrap(text, font, innerWidth));
+        boolean styled = flags.length == text.length() && hasStyle();
+        if (styled) wrapStyled(text, innerWidth);
+        else lines.addAll(TextLayout.wrap(text, font, innerWidth));
 
         if (maxLines > 0 && lines.size() > maxLines) {
             while (lines.size() > maxLines) lines.remove(lines.size() - 1);
@@ -288,7 +383,156 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
                 last = last.substring(0, last.length() - 1);
             }
             lines.set(maxLines - 1, last.stripTrailing() + ELLIPSIS);
+            if (styled) lineSources.set(maxLines - 1, last.stripTrailing().length());
         }
+    }
+
+    private boolean hasStyle() {
+        for (byte flag : flags) if (flag != 0) return true;
+        for (int link : linkOf) if (link != 0) return true;
+        return false;
+    }
+
+    /**
+     * Wraps like {@link TextLayout#wrap}, but measures each stretch in the font its run draws with, and remembers
+     * where in the text every line starts so the runs can be found again when drawing.
+     */
+    private void wrapStyled(String text, float maxWidth) {
+        int paragraph = 0;
+        while (paragraph <= text.length()) {
+            int end = text.indexOf('\n', paragraph);
+            if (end < 0) end = text.length();
+            wrapParagraphStyled(text, paragraph, end, maxWidth);
+            paragraph = end + 1;
+        }
+    }
+
+    private void wrapParagraphStyled(String text, int from, int to, float maxWidth) {
+        if (from == to) {
+            addLine(text, from, to);
+            return;
+        }
+        int lineStart = from, lineEnd = -1, wordStart = from;
+        while (wordStart <= to) {
+            int wordEnd = text.indexOf(' ', wordStart);
+            if (wordEnd < 0 || wordEnd > to) wordEnd = to;
+            if (spanWidth(text, lineStart, wordEnd) <= maxWidth) {
+                lineEnd = wordEnd;
+            } else {
+                if (lineEnd >= 0) {
+                    addLine(text, lineStart, lineEnd);
+                    lineStart = wordStart;
+                    lineEnd = -1;
+                }
+                while (spanWidth(text, lineStart, wordEnd) > maxWidth && wordEnd - lineStart > 1) {
+                    int cut = lineStart + 1;
+                    while (cut < wordEnd && spanWidth(text, lineStart, cut + 1) <= maxWidth) cut++;
+                    addLine(text, lineStart, cut);
+                    lineStart = cut;
+                }
+                lineEnd = wordEnd;
+            }
+            wordStart = wordEnd + 1;
+        }
+        addLine(text, lineStart, lineEnd < 0 ? to : lineEnd);
+    }
+
+    private void addLine(String text, int start, int end) {
+        lines.add(text.substring(start, end));
+        lineStarts.add(start);
+        lineSources.add(end - start);
+    }
+
+    private float spanWidth(String text, int start, int end) {
+        float width = 0f;
+        int i = start;
+        while (i < end) {
+            int flag = flags[i];
+            int j = i + 1;
+            while (j < end && flags[j] == flag) j++;
+            width += fontFor(flag).measureTextWidth(text.substring(i, j));
+            i = j;
+        }
+        return width;
+    }
+
+    /**
+     * The font for a combination of BOLD, ITALIC and CODE: the overlay's own for none, else one made from it.
+     */
+    private Font fontFor(int flag) {
+        Font base = getOrBuildFont();
+        if (flag == 0) return base;
+        if (base != runBase) {
+            closeRunFonts();
+            runBase = base;
+        }
+        Font font = runFonts[flag];
+        if (font == null) {
+            boolean code = (flag & CODE) != 0;
+            font = new Font(code ? me.piitex.engine.ui.text.Font.monospace() : base.getTypeface(), code ? base.getSize() * 0.92f : base.getSize());
+            font.setEmboldened(base.isEmboldened() || (flag & BOLD) != 0);
+            font.setSkewX((flag & ITALIC) != 0 ? ITALIC_SKEW : base.getSkewX());
+            runFonts[flag] = font;
+        }
+        return font;
+    }
+
+    private void closeRunFonts() {
+        for (int i = 0; i < runFonts.length; i++) {
+            if (runFonts[i] != null) runFonts[i].close();
+            runFonts[i] = null;
+        }
+    }
+
+    @Override
+    public void dispose() {
+        closeRunFonts();
+        runBase = null;
+        super.dispose();
+    }
+
+    /** One stretch of a line drawn in one style. */
+    private record Segment(float x, String text, int flag, int link, float width) {
+    }
+
+    /**
+     * A line cut into stretches of one style each, with the x each starts at. The line's own alignment is applied.
+     */
+    private List<Segment> segments(int line) {
+        String text = lines.get(line);
+        int start = lineStarts.get(line), source = lineSources.get(line);
+        float innerWidth = (float) getWidth() - 2 * padding - (reserveBar ? barWidth() : 0f);
+        List<Segment> out = new ArrayList<>();
+        float total = 0f;
+        int i = 0;
+        while (i < text.length()) {
+            int flag = i < source ? flags[start + i] : 0, link = i < source ? linkOf[start + i] : 0;
+            int j = i + 1;
+            while (j < text.length() && (j < source ? flags[start + j] : 0) == flag && (j < source ? linkOf[start + j] : 0) == link) j++;
+            String piece = text.substring(i, j);
+            float width = fontFor(flag).measureTextWidth(piece);
+            out.add(new Segment(total, piece, flag, link, width));
+            total += width;
+            i = j;
+        }
+        float x = (float) getX() + padding + (innerWidth - total) * textAlignH(textAlign.fraction());
+        List<Segment> placed = new ArrayList<>(out.size());
+        for (Segment segment : out) placed.add(new Segment(x + segment.x(), segment.text(), segment.flag(), segment.link(), segment.width()));
+        return placed;
+    }
+
+    /**
+     * The address of the link under a point in this element's own coordinate space, or null.
+     */
+    String hrefAt(double lx, double ly) {
+        if (lines.isEmpty() || lineStarts.size() != lines.size() || hrefs.isEmpty()) return null;
+        if (lx < getX() || lx > getX() + getWidth() || ly < getY() || ly > getY() + getHeight()) return null;
+        int line = (int) Math.floor((ly - getY() - padding + scrollOffsetY) / linePitch());
+        if (line < 0 || line >= lines.size()) return null;
+        for (Segment segment : segments(line)) {
+            if (segment.link() != 0 && lx >= segment.x() && lx < segment.x() + segment.width()) return hrefs.get(segment.link() - 1);
+        }
+        return null;
     }
 
     @Override
@@ -305,6 +549,10 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
             String line = lines.get(i);
             float y = (float) getY() + padding + i * pitch - scrollOffsetY;
             if (line.isEmpty() || y + pitch < getY() || y > getY() + getHeight()) continue;
+            if (lineStarts.size() == lines.size()) {
+                drawStyledLine(renderer, i, y);
+                continue;
+            }
             float x = (float) getX() + padding;
             float slack = innerWidth - font.measureTextWidth(line);
             float natural = textAlign.fraction();
@@ -314,6 +562,24 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         renderer.popClip();
 
         if (scrollable && scrollbarVisible) drawScrollbar(renderer);
+    }
+
+    private void drawStyledLine(Renderer renderer, int line, float y) {
+        Paint color = resolveTextColor(getTextColor());
+        float pitch = linePitch();
+        for (Segment segment : segments(line)) {
+            boolean code = (segment.flag() & CODE) != 0;
+            if (code) {
+                renderer.drawQuad(segment.x() - 1f, y, segment.width() + 2f, pitch - lineSpacing, new Color(0.5f, 0.5f, 0.5f, 0.2f), 3f);
+            }
+            Paint segmentColor = segment.link() != 0 ? ThemeManager.getCurrent().getAccent() : color;
+            Font font = fontFor(segment.flag());
+            renderer.drawText(segment.text(), segment.x(), y, font, segmentColor);
+            if (segment.link() != 0) {
+                float baseline = y - FontMetricsCompat.of(font).getAscent() + 2f;
+                renderer.drawLine(segment.x(), baseline, segment.x() + segment.width(), baseline, segmentColor, Math.max(1f, font.getSize() / 14f));
+            }
+        }
     }
 
     private void drawScrollbar(Renderer renderer) {

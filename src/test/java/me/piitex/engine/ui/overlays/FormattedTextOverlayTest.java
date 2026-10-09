@@ -2,6 +2,7 @@ package me.piitex.engine.ui.overlays;
 
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.text.BracketFormatPreset;
 import me.piitex.engine.ui.text.MarkdownFormatPreset;
 import me.piitex.engine.ui.text.TextStyle;
 import me.piitex.engine.ui.theme.DarkTheme;
@@ -81,5 +82,62 @@ class FormattedTextOverlayTest {
         overlay.setSource("");
         assertTrue(of(overlay, TextFlowOverlay.class).isEmpty());
         assertTrue(of(overlay, TextOverlay.class).isEmpty());
+    }
+
+    @Test
+    void changingTheWidthWrapsAgainWithoutParsing() {
+        int[] parses = {0};
+        MarkdownFormatPreset real = new MarkdownFormatPreset();
+        FormattedTextOverlay overlay = new FormattedTextOverlay(400, 300, source -> {
+            parses[0]++;
+            return real.parse(source);
+        });
+        overlay.setSource("word ".repeat(80));
+        assertEquals(1, parses[0]);
+        TextFlowOverlay text = of(overlay, TextFlowOverlay.class).getFirst();
+        double wide = text.getHeight();
+        overlay.setWidth(120);
+        assertEquals(1, parses[0], "no second parse");
+        assertSame(text, of(overlay, TextFlowOverlay.class).getFirst(), "the same block, wrapped again");
+        assertTrue(text.getHeight() > wide, "narrower is taller");
+        overlay.setWidth(400);
+        assertEquals(wide, text.getHeight(), 0.5);
+    }
+
+    @Test
+    void thePresetCanBeSwitchedAfterwards() {
+        FormattedTextOverlay overlay = make("# Title\n\ntext");
+        assertEquals("Title", of(overlay, TextFlowOverlay.class).getFirst().getText());
+        BracketFormatPreset bracket = new BracketFormatPreset();
+        overlay.setPreset(bracket);
+        assertSame(bracket, overlay.getPreset());
+        assertEquals("# Title", of(overlay, TextFlowOverlay.class).getFirst().getText(), "the same source, read the new way");
+        assertThrows(NullPointerException.class, () -> overlay.setPreset(null));
+    }
+
+    @Test
+    void inlineMarksReachTheBlocksAsRuns() {
+        FormattedTextOverlay overlay = make("a **bold** [link](https://example.com) word");
+        TextFlowOverlay text = of(overlay, TextFlowOverlay.class).getFirst();
+        assertEquals("a bold link word", text.getText());
+        assertEquals(2, text.getRuns().size());
+    }
+
+    @Test
+    void aClickOnALinkOpensItsAddressAndOneElsewhereDoesNot() {
+        FormattedTextOverlay overlay = make("go [here](https://example.com/a) now");
+        List<String> opened = new ArrayList<>();
+        overlay.setLinkHandler(opened::add);
+        TextFlowOverlay text = of(overlay, TextFlowOverlay.class).getFirst();
+        double here = text.getOrBuildFont().measureTextWidth("go ") + text.getX();
+        assertEquals("https://example.com/a", text.hrefAt(here + 3, text.getY() + 3));
+        assertNull(text.hrefAt(text.getX() + 1, text.getY() + 3), "'go' is not part of it");
+        assertNull(text.hrefAt(here + 3, text.getY() + 300), "nor is below the text");
+    }
+
+    @Test
+    void aBlockWithNoLinkDoesNotTakeClicks() {
+        FormattedTextOverlay overlay = make("a **bold** word");
+        assertNull(of(overlay, TextFlowOverlay.class).getFirst().getMouseClickListenerConsumer());
     }
 }
