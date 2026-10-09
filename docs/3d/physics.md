@@ -106,6 +106,7 @@ want crates you can push around easily, give them a smaller mass: what matters f
 | `setInterpolation(boolean)` | Places the nodes between the last two steps, for smooth motion at any frame rate (on) |
 | `setStepHandler(StepHandler)` | Runs before every step: the place for forces that act over time |
 | `setVelocityIterations(int)` / `setPositionIterations(int)` | How hard the solver works (10 and 4). 10 holds a stack of ten boxes; 20 holds fifteen. Joints get twice the position passes |
+| `setSubsteps(int)` | Cuts each step into smaller ones (1; up to 32), [below](#substeps) |
 | `setSleeping(boolean)` | Whether resting bodies may fall asleep (on) |
 | `addJoint(Joint)` / `removeJoint(Joint)` / `joints()` | The [joints](#joints). Add the bodies first |
 | `addCharacter(CharacterController)` / `removeCharacter(...)` / `characters()` | The [characters](#characters) |
@@ -120,6 +121,15 @@ The world always moves in steps of the same length, whatever the frame rate, so 
 a 144 Hz screen. A frame runs as many steps as fit in its time, usually zero, one or two. With interpolation on (the
 default), each node is then placed between the last two steps by how far the frame got into the next one. Nodes are
 therefore up to one step behind the bodies, which is invisible; read the body (`getPosition()`) for the exact place.
+
+### Substeps
+
+`setSubsteps(4)` runs each fixed step as four steps a quarter as long, each with its own collision detection and solving.
+Bodies then move a quarter as far between two looks at them, which is what a tall stack, a heavy weight on a light
+chain, and a thin stick spinning fast ask for. A stack of twenty boxes with a 200 kg one on top falls over with one
+step and stands with four; a 100 kg weight on six 0.5 kg chain links (200 to 1) stretches the chain by 0.6 m with one
+and by 0.01 m with eight. Try 2 to 4 before raising the solver's passes; it costs about as much more as there are
+substeps. Forces, the step handler and events still work on the whole step, so nothing else in a game changes.
 
 ## Bodies
 
@@ -201,7 +211,8 @@ world.add(new RigidBody(rock).addShape(ConvexHullShape.of(rock)).setDensity(2500
 
 Like a mesh, a hull stays where its points are rather than being centred on the body, and its mass is spread through
 its volume; `centerOfMass()` says where its middle is. Every corner costs a little in each contact test, so a hull of a
-few dozen corners is quicker than one of hundreds: build it from a low-detail version of the model when there is one.
+few dozen corners is quicker than one of a few hundred (two hulls of 200 corners take about 3 ms to test and two of 400
+about 5 ms; a hull of 30 takes 0.01 ms): build it from a low-detail version of the model when there is one.
 For an object with dents that matter (a chair, an L-shaped beam), give the body several hulls or boxes.
 
 ### Mass and inertia
@@ -364,6 +375,7 @@ world.addJoint(new DistanceJoint(bucket, handle, null, hook).setMinLength(0f)); 
 | Joint | What it does |
 |---|---|
 | `BallJoint(a, b, anchor)` | Pins the bodies together at a point; they turn freely around it. Chains, pendulums, hitches |
+| `BallJoint(a, b, anchor, axis)` | The same with an axis along the limb, for [limits](#cone-and-twist-limits): a shoulder, a hip or a neck |
 | `HingeJoint(a, b, anchor, axis)` | Turns around one axis only. Doors, wheels, levers. `setLimits(lower, upper)` in radians stops it, `setMotor(speed, maxTorque)` drives it; `getAngle()`, `getAngularSpeed()` |
 | `SliderJoint(a, b, anchor, axis)` | Slides along one axis without turning. Drawers, pistons, lifts. `setLimits` in metres, `setMotor(speed, maxForce)`; `getTranslation()`, `getSpeed()` |
 | `DistanceJoint(a, anchorA, b, anchorB)` | Keeps two points apart by a length: a rod by default, a rope with `setMinLength(0)`, a spring with `setSpring(frequency, damping)`, a bungee with both and `setMaxLength` |
@@ -372,6 +384,29 @@ world.addJoint(new DistanceJoint(bucket, handle, null, hook).setMinLength(0f)); 
 Anchors and axes are in world space and are read against where the bodies are when the joint is added, so add and place
 the bodies first. Angles and translations count from there: a hinge starts at angle 0. For a body held to the world,
 angles, speeds and the reaction force are that body's own.
+
+### Cone and twist limits
+
+A ball joint turns freely unless it is given limits, which make it a shoulder, a hip or a neck. Give it the direction of
+the limb (the joint's **axis**, pointing from the joint along body B) and two limits:
+
+```java nocompile
+BallJoint shoulder = new BallJoint(arm, torso, shoulderPoint, armDirection)
+        .setSwingLimit((float) Math.toRadians(80))                       // the arm leans at most 80 degrees from where it was
+        .setTwistLimit((float) Math.toRadians(-30), (float) Math.toRadians(45));  // and turns around its own length -30 to 45
+world.addJoint(shoulder);
+```
+
+| Method | Description |
+|---|---|
+| `setSwingLimit(radians)` | How far body B's axis may lean from body A's, in a cone around it (0 to pi) |
+| `setTwistLimit(lower, upper)` | How far B may turn around its axis, against where it started |
+| `clearLimits()` | Frees the joint again |
+| `getSwing()`, `getTwist()` | Where it is now |
+
+The stops act around the pivot, so a limb meets its limit without bouncing. An elbow or a knee is a hinge, not a ball
+joint with a narrow cone: use `HingeJoint` with limits. A ragdoll is bodies for the bones, ball joints with limits at the
+shoulders, hips and neck, and hinges with limits at the elbows and knees.
 
 Every joint has:
 
@@ -406,13 +441,15 @@ player.setWalkVelocity(forward.mul(ahead).add(right.mul(side)).mul(running ? 7f 
 if (input.isKeyJustPressed(GLFW_KEY_SPACE)) player.jump(5f);
 ```
 
-The node's origin is the character's feet and the capsule stands on it along +Y. Turn a child node (the model) to face
-where it walks rather than the node itself, which the character moves. The walk velocity keeps applying until changed,
-so set it every frame; only its X and Z count.
+The node's origin is the character's feet and the capsule stands on it along the node's own +Y axis, which is the world's
+unless you change it. Turn a child node (the model) to face where it walks rather than the node itself, which the
+character moves. The walk velocity keeps applying until changed, so set it every frame; only the part across up counts
+(X and Z, for the usual up).
 
 | Method | Description |
 |---|---|
 | `setWalkVelocity(Vec3)` | Where to walk, in metres per second |
+| `setUp(Vec3)` / `getUp()` | Which way is up for it, [below](#walking-on-a-wall) |
 | `jump(speed)` | Jumps if on the ground; returns whether it did. 5 m/s rises about 1.3 m |
 | `setVelocity(Vec3)` | A knock back: carries on in the air until it lands |
 | `setPosition(Vec3)` / `getPosition()` | Teleports the feet / where they are |
@@ -431,8 +468,26 @@ crate shoves it as an 80 kg character would: a 20 kg crate moves off almost at w
 moves. Standing on a loose body puts the character's weight on it, so a rope bridge sags and a seesaw tips. Platforms
 carry it, kinematic or dynamic, and jumping off one keeps the platform's speed.
 
-Inside it is a kinematic body, so rays and triggers find it and objects falling on it land on it. Nothing pushes it but
-its own walking and what it stands on; to knock it back, call `setVelocity` from a contact listener.
+Inside it is a kinematic body, so rays and triggers find it and objects falling on it land on it. A loose body that hits
+it knocks it sideways: what the kinematic body took from the collision, divided by the character's mass, becomes speed
+for the character, which fades in about an eighth of a second on the ground (and slowly in the air). A thrown crate pushes
+it back; a crate pressed against it by a steady force drives it along at a speed that falls as its mass rises. Landing on
+it, or standing under it, is not a knock. A mass of 0 takes no knocks (and pushes nothing).
+
+### Walking on a wall
+
+Up is wherever the character's node's +Y axis points. `player.setUp(direction)` turns the character by the shortest turn
+to stand along `direction`, keeping the way it faces:
+
+```java nocompile
+world.setGravity(new Vec3(9.81f, 0f, 0f));        // pulls towards +X
+player.setUp(new Vec3(-1f, 0f, 0f));              // so up is -X: it stands on a wall at x = 5
+```
+
+Everything is measured against up: the slope limit, steps, jumping and the walk velocity. Gravity pulls it by as much of
+the world's gravity as points opposite to up, so match the two, or scale the character's gravity. To walk round a small
+planet, call `setUp` each frame with the direction away from its centre (and set the gravity the same way, in a step
+handler). Turn the node itself and the character's up follows it.
 
 ## Scene files
 
@@ -481,14 +536,16 @@ bodies at the surface and keeps a fast ball from passing through a thin wall, wi
 ## Limits
 
 - Meshes can't move freely: a dynamic body needs hulls (or boxes, spheres and capsules) instead.
-- A mesh joins its corners only where they are at exactly the same place; a level whose pieces merely nearly meet keeps
-  real edges along the gaps, which a sliding box can catch on.
-- Joints have no cone or twist limits for a ball joint, so no ragdolls yet, and joined masses should stay within about
-  10 to 1 (see [Joints](#joints)).
-- A character stands along +Y, isn't turned by a turning platform (it is carried round, facing the same way), and isn't
-  pushed by bodies that hit it.
-- No continuous collision against spinning bodies: speculative contacts cover fast straight-line motion, not a long
-  thin stick spinning very fast.
+- A mesh joins its corners only where they are at exactly the same place unless you give it a weld distance
+  (`new MeshShape(positions, indices, 0.002f)`, `MeshShape.of(node, 0.002f)`, or the collider's Weld in a scene file);
+  a level whose pieces merely nearly meet keeps real edges along the gaps, which a sliding box can catch on, until welded.
+- Joined masses should stay within about 10 to 1 at one step; [substeps](#substeps) take that to 200 to 1 and more. The
+  solver is iterative, not direct: there is no exact solution for a tree of joints.
+- A character isn't turned by a turning platform (it is carried round, facing the same way).
+- Fast spinning bodies are covered by growing the contact margin by how far their far end travels in a step, which is
+  right for a stick hitting a wall or floor; a very long thin body spinning so fast that it turns a large angle in one
+  step and hits something sideways can still be missed. Substeps shrink the step.
+- A mesh can't be on a dynamic body, so mesh against mesh and mesh against plane are never tested: neither moves.
 - Gyroscopic effects are left out: a spinning body keeps its angular velocity rather than its angular momentum, which
   only differs for an unevenly shaped body spinning freely.
 - One thread.

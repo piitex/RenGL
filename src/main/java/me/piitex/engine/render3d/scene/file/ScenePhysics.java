@@ -51,7 +51,7 @@ final class ScenePhysics {
         BodyKind kind = BodyKind.NONE;
         ColliderKind collider = ColliderKind.AUTO;
         Vec3 size = Vec3.ONE, offset = Vec3.ZERO;
-        float radius = 0.5f, height = 2f;
+        float radius = 0.5f, height = 2f, weld;
         float mass = 1f, friction = PhysicsMaterial.DEFAULT.friction(), bounce = PhysicsMaterial.DEFAULT.restitution();
         float linearDamping = 0f, angularDamping = 0.05f, gravityScale = 1f;
         boolean trigger, canSleep = true;
@@ -67,6 +67,7 @@ final class ScenePhysics {
     static final class WorldInfo {
         Vec3 gravity = DEFAULT_GRAVITY;
         int velocityIterations = 10;
+        int substeps = 1;
     }
 
     /** What a build made, so a node's body and a joint can be found by name. */
@@ -113,7 +114,7 @@ final class ScenePhysics {
      */
     static PhysicsWorld build(Scene3D scene) {
         WorldInfo settings = world(scene);
-        PhysicsWorld world = new PhysicsWorld().setGravity(settings.gravity).setVelocityIterations(Math.max(1, settings.velocityIterations));
+        PhysicsWorld world = new PhysicsWorld().setGravity(settings.gravity).setVelocityIterations(Math.max(1, settings.velocityIterations)).setSubsteps(settings.substeps);
         Built built = new Built();
         addBodies(scene.root(), world, built);
         for (SceneJoint spec : joints(scene)) {
@@ -209,7 +210,7 @@ final class ScenePhysics {
                 List<float[]> parts = new ArrayList<>();
                 List<int[]> indices = new ArrayList<>();
                 drawn(node, meta, parts, indices);
-                body.addShape(merge(node, parts, indices));
+                body.addShape(merge(node, parts, indices, info.weld));
             }
             default -> throw new IllegalStateException();
         }
@@ -260,7 +261,7 @@ final class ScenePhysics {
         indices.add(mesh.indices());
     }
 
-    private static MeshShape merge(Node3D node, List<float[]> parts, List<int[]> indices) {
+    private static MeshShape merge(Node3D node, List<float[]> parts, List<int[]> indices, float weld) {
         int corners = 0, total = 0;
         for (int i = 0; i < parts.size(); i++) {
             corners += parts.get(i).length;
@@ -276,7 +277,7 @@ final class ScenePhysics {
             at += parts.get(i).length;
             base += parts.get(i).length / 3;
         }
-        return new MeshShape(positions, all);
+        return new MeshShape(positions, all, weld);
     }
 
     private static Joint joint(Scene3D scene, SceneJoint spec, Built built) {
@@ -294,7 +295,12 @@ final class ScenePhysics {
             }
         }
         Joint joint = switch (spec.kind) {
-            case BALL -> new BallJoint(a, b, spec.anchor);
+            case BALL -> {
+                BallJoint ball = new BallJoint(a, b, spec.anchor, spec.axis);
+                if (spec.swingLimited) ball.setSwingLimit((float) Math.toRadians(spec.swing));
+                if (spec.limited) ball.setTwistLimit((float) Math.toRadians(spec.lower), (float) Math.toRadians(spec.upper));
+                yield ball;
+            }
             case HINGE -> {
                 HingeJoint hinge = new HingeJoint(a, b, spec.anchor, spec.axis);
                 if (spec.limited) hinge.setLimits((float) Math.toRadians(spec.lower), (float) Math.toRadians(spec.upper));

@@ -43,7 +43,7 @@ from 0 to 1, or `"#RRGGBB"`; positions, directions and scales are `[x, y, z]`; e
 
 | Part | What it holds |
 |---|---|
-| `world` | The background color; the sky (`skyKind` `NONE`, `GRADIENT`, `PANORAMA` or `CUBE`, with its colors or pictures); ambient light and sky lighting; fog; the default size, distance, bias and softness of shadows; `gravity` and the solver's `velocityIterations` |
+| `world` | The background color; the sky (`skyKind` `NONE`, `GRADIENT`, `PANORAMA` or `CUBE`, with its colors or pictures); ambient light and sky lighting; fog; the default size, distance, bias and softness of shadows; `gravity`, the solver's `velocityIterations` and `substeps` |
 | `camera` | `position`, `target`, `fov` (degrees), `near`, `far` |
 | `lights` | A `type` of `DIRECTIONAL`, `POINT` or `SPOT`, a `name`, `color`, `intensity`, and what the type needs: a `direction`, a `position`, a `range`, a cone (`innerAngle`, `outerAngle`), a `falloff`, and `shadows` (`OFF`, `SCENE` for the scene's settings, or `LOW` to `ULTRA`) |
 | `nodes` | A tree. Each has a `name`, `position`, `rotation`, `scale`, `visible`, `pickable`, `castShadow` and `receiveShadow`, a `shape`, a `material` for shapes that draw something, `children`, and a `body` with its settings if physics moves it (see [Physics](#physics)) |
@@ -96,7 +96,7 @@ the game, pushing what is in its way) or `CHARACTER` (walked by the game, standi
 
 | Settings | For | What they are |
 |---|---|---|
-| `collider` | static, dynamic and kinematic | `AUTO` (the default) fits what the node draws: a cube's box, a sphere's ball, a plane's sheet as a 2 cm box under it, a model's own triangles if it stays put or a hull around them if it moves, and a box of `colliderSize` for a group. `BOX` (`colliderSize`, full lengths), `SPHERE` (`colliderRadius`), `CAPSULE` (`colliderRadius`, `colliderHeight`, standing along Y), each moved by `colliderOffset`; `HULL` and `MESH` from what the node draws |
+| `collider` | static, dynamic and kinematic | `AUTO` (the default) fits what the node draws: a cube's box, a sphere's ball, a plane's sheet as a 2 cm box under it, a model's own triangles if it stays put or a hull around them if it moves, and a box of `colliderSize` for a group. `BOX` (`colliderSize`, full lengths), `SPHERE` (`colliderRadius`), `CAPSULE` (`colliderRadius`, `colliderHeight`, standing along Y), each moved by `colliderOffset`; `HULL` and `MESH` from what the node draws; `colliderWeld` (metres) joins the corners of a mesh that lie that close, so pieces that only nearly meet have no gap |
 | `mass` (kg), `linearDamping`, `angularDamping`, `canSleep` | dynamic | |
 | `friction`, `bounce`, `trigger` | static, dynamic and kinematic | |
 | `gravityScale` | dynamic and characters | |
@@ -112,7 +112,8 @@ A joint names the nodes it joins by `bodyA` and `bodyB` (left out to hold `bodyA
 `limited` between `lower` and `upper` (degrees for a hinge, metres for a slider) and have a `motor` with `motorSpeed`
 (degrees or metres a second) and `motorStrength` (newton metres or newtons). A distance joint keeps its points as far
 apart as they start, or `length`; `rope` lets them come closer, and `springFrequency` with `springDamping` makes it a
-spring. Any joint can have `collideConnected` and a `breakForce`. A joint whose nodes aren't there, or have no body,
+spring. A ball joint has an `axis` along the limb and can limit its swing (`swingLimited`, `swing` in degrees: a cone around
+the axis) and its twist (`limited` with `lower` and `upper` degrees). Any joint can have `collideConnected` and a `breakForce`. A joint whose nodes aren't there, or have no body,
 is left out with a warning in the log, and kept in the file.
 
 Loading for an editor (`load(path, base, false)`) builds no world, so nothing falls while the scene is edited;

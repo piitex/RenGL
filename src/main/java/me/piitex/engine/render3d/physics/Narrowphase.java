@@ -371,9 +371,11 @@ final class Narrowphase {
 
         // Faces give steadier contacts, so an edge or the other box's face has to be clearly better to win.
         float scale = 0.01f * Math.min(Math.min(Math.min(ha.x(), ha.y()), ha.z()), Math.min(Math.min(hb.x(), hb.y()), hb.z()));
-        boolean useB = faceB > 0.95f * faceA + scale;
+        // (A margin of 5 % of the depth, either way round: when the boxes are still apart, 95 % of the gap is a smaller
+        // number than the gap, and an equal edge would have won every time and reduced a face to one point.)
+        boolean useB = faceB > faceA + 0.05f * Math.abs(faceA) + scale;
         float bestFace = useB ? faceB : faceA;
-        if (edge > 0.95f * bestFace + 2f * scale) {
+        if (edge > bestFace + 0.05f * Math.abs(bestFace) + 2f * scale) {
             boxEdges(ha, pa, a, edgeA, hb, pb, b, edgeB, edgeNormal, edge, out);
             return;
         }

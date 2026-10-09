@@ -19,12 +19,15 @@ import java.util.List;
  * player.setWalkVelocity(forward.mul(input.y()).add(right.mul(input.x())).mul(5f));
  * if (jumpPressed) player.jump(5f);
  * </pre>
- * The node's origin is at the character's feet, and the capsule stands on it along +Y; turn the node around Y to face
- * it any way. The character moves in the world's steps, as bodies do, and its node is placed the same way.
+ * The node's origin is at the character's feet, and the capsule stands on it along the node's own +Y axis, so "up" is
+ * wherever the node's +Y points: usually the world's, but {@link #setUp} tilts it, for a character walking on a wall, a
+ * ceiling or a small planet. Turn the node around that axis to face it any way. The character moves in the world's
+ * steps, as bodies do, and its node is placed the same way.
  * <p>
  * Inside, the character is a kinematic {@link #getBody() body}: rays and triggers find it, and objects falling on it
- * land on it, but nothing pushes it but its own walking and the platforms it stands on. Walking into a loose object
- * pushes the object as hard as the character's {@link #setMass mass} allows.
+ * land on it. Walking into a loose object pushes the object as hard as the character's {@link #setMass mass} allows,
+ * and a loose object that hits the character pushes it back the same way (a thrown crate knocks it aside; a heavy
+ * one knocks it further). Beside that, only its own walking and the platforms it stands on move it.
  */
 public final class CharacterController {
     /**
@@ -46,7 +49,11 @@ public final class CharacterController {
     private float mass = 80f;
     private float airAcceleration = Float.POSITIVE_INFINITY;
 
+    private static final float KNOCK_DECAY_GROUND = 8f, KNOCK_DECAY_AIR = 0.6f;
+
+    private Vec3 up = Vec3.UP;
     private Vec3 walk = Vec3.ZERO;
+    private Vec3 knock = Vec3.ZERO;
     private Vec3 velocity = Vec3.ZERO;
     private Vec3 inherited = Vec3.ZERO;
     private Vec3 actualVelocity = Vec3.ZERO;
@@ -93,12 +100,60 @@ public final class CharacterController {
     }
 
     /**
-     * How fast and which way the character should walk, in metres per second; only the X and Z parts count. It keeps
-     * walking that way until told otherwise, so set it every frame from the input, and to zero to stop.
+     * How fast and which way the character should walk, in metres per second; only the part across {@link #getUp up}
+     * counts (X and Z, for the usual up). It keeps walking that way until told otherwise, so set it every frame from
+     * the input, and to zero to stop.
      */
     public CharacterController setWalkVelocity(Vec3 velocity) {
-        walk = velocity == null ? Vec3.ZERO : new Vec3(velocity.x(), 0f, velocity.z());
+        walk = velocity == null ? Vec3.ZERO : across(velocity);
         return this;
+    }
+
+    /**
+     * Which way is up for the character: the node's +Y axis in the world, as of now.
+     */
+    public Vec3 getUp() {
+        return up;
+    }
+
+    /**
+     * Turns the character to stand along {@code direction}, by the shortest turn from where it stands, so the way it
+     * faces about its own axis stays. Gravity pulls it along the opposite of up only as far as the world's gravity points
+     * that way, so for a wall or a planet set the world's gravity, or the character's {@link #setGravityScale scale}, to
+     * match (and call this again as the ground curves away).
+     */
+    public CharacterController setUp(Vec3 direction) {
+        if (direction.lengthSquared() < 1e-12f) throw new IllegalArgumentException("The up direction has no direction");
+        Vec3 to = direction.normalized();
+        Vec3 from = body.getRotation().rotate(Vec3.UP);
+        Vec3 axis = from.cross(to);
+        float sin = axis.length(), cos = from.dot(to);
+        if (sin < 1e-6f && cos > 0f) return this;
+        if (sin < 1e-6f) axis = perpendicular(from); // upside down: any turn of a half turn will do
+        else axis = axis.mul(1f / sin);
+        body.setRotation(Quat.fromAxisAngle(axis, (float) Math.atan2(sin, cos)).mul(body.getRotation()));
+        up = body.getRotation().rotate(Vec3.UP);
+        leaveGround();
+        return this;
+    }
+
+    private static Vec3 perpendicular(Vec3 v) {
+        return (Math.abs(v.x()) < 0.6f ? Vec3.X : Vec3.UP).cross(v).normalized();
+    }
+
+    /**
+     * {@code v} without its part along up.
+     */
+    private Vec3 across(Vec3 v) {
+        return v.sub(up.mul(v.dot(up)));
+    }
+
+    /**
+     * Reads which way up is from the body's turn, exactly the world's up when the body is only turned around it.
+     */
+    private void readUp() {
+        Vec3 u = body.getRotation().rotate(Vec3.UP);
+        up = Math.abs(u.x()) < 1e-6f && Math.abs(u.z()) < 1e-6f && u.y() > 0f ? Vec3.UP : u.normalized();
     }
 
     /**
@@ -109,8 +164,8 @@ public final class CharacterController {
     public boolean jump(float speed) {
         if (!grounded) return false;
         leaveGround();
-        velocity = new Vec3(velocity.x(), speed + Math.max(0f, inherited.y()), velocity.z());
-        inherited = new Vec3(inherited.x(), 0f, inherited.z());
+        velocity = across(velocity).add(up.mul(speed + Math.max(0f, inherited.dot(up))));
+        inherited = across(inherited);
         return true;
     }
 
@@ -130,7 +185,7 @@ public final class CharacterController {
     public CharacterController setVelocity(Vec3 velocity) {
         this.velocity = velocity;
         inherited = Vec3.ZERO;
-        if (velocity.y() > 0f) leaveGround();
+        if (velocity.dot(up) > 0f) leaveGround();
         return this;
     }
 
@@ -163,7 +218,7 @@ public final class CharacterController {
      * Which way the ground under the character faces, or straight up when it isn't on the ground.
      */
     public Vec3 getGroundNormal() {
-        return grounded ? groundNormal : Vec3.UP;
+        return grounded ? groundNormal : up;
     }
 
     /**
@@ -278,29 +333,34 @@ public final class CharacterController {
      */
     void step(float dt) {
         Vec3 start = body.getPosition();
-        float gravity = world.getGravity().y() * gravityScale;
+        readUp();
+        // Gravity's pull along the way down: negative, as for the usual up.
+        float gravity = world.getGravity().dot(up) * gravityScale;
+        takeKnocks(dt);
 
         // Velocity: walking sets it on the ground. In the air the walk steers it, and without one it keeps going as it
         // was (a jump carries on, a slide down a steep slope speeds up).
-        Vec3 horizontal = new Vec3(velocity.x(), 0f, velocity.z());
-        if (grounded || (airAcceleration == Float.POSITIVE_INFINITY && !walk.equals(Vec3.ZERO))) {
-            horizontal = walk;
-        } else if (!walk.equals(Vec3.ZERO)) {
-            Vec3 change = walk.sub(horizontal);
+        Vec3 flatWalk = across(walk);
+        Vec3 horizontal = across(velocity);
+        if (grounded || (airAcceleration == Float.POSITIVE_INFINITY && !flatWalk.equals(Vec3.ZERO))) {
+            horizontal = flatWalk;
+        } else if (!flatWalk.equals(Vec3.ZERO)) {
+            Vec3 change = flatWalk.sub(horizontal);
             float most = airAcceleration * dt, length = change.length();
             horizontal = horizontal.add(length > most ? change.mul(most / length) : change);
         }
-        float vy = grounded ? 0f : velocity.y() + gravity * dt;
-        velocity = new Vec3(horizontal.x(), vy, horizontal.z());
+        float vy = grounded ? 0f : velocity.dot(up) + gravity * dt;
+        velocity = horizontal.add(up.mul(vy));
         boolean rising = vy > 0f;
         Vec3 carry = grounded && groundBody != null && groundBody.getType() != BodyType.STATIC ? groundBody.getPointVelocity(groundPoint).mul(dt) : Vec3.ZERO;
-        Vec3 drift = grounded ? Vec3.ZERO : new Vec3(inherited.x(), 0f, inherited.z()).mul(dt);
+        Vec3 drift = (grounded ? Vec3.ZERO : across(inherited).mul(dt)).add(knock.mul(dt));
 
         Vec3 move = velocity.mul(dt).add(drift);
         if (grounded) {
             // Along the slope, at the walking speed across it.
             Vec3 n = groundNormal;
-            move = new Vec3(move.x(), -(move.x() * n.x() + move.z() * n.z()) / n.y(), move.z());
+            Vec3 level = across(move);
+            move = level.add(up.mul(-level.dot(n) / n.dot(up)));
         }
 
         // Moved in the frame of what it stands on: the ground isn't an obstacle to being carried along with it.
@@ -333,7 +393,7 @@ public final class CharacterController {
         }
         if (ground != null && ground.gap > SKIN) {
             // Settle onto it, so standing doesn't float a little above the ground.
-            end = end.sub(new Vec3(0f, Math.min(ground.gap / Math.max(ground.contactUp, 0.3f), 2f * GROUND_PROBE), 0f));
+            end = end.sub(up.mul(Math.min(ground.gap / Math.max(ground.contactUp, 0.3f), 2f * GROUND_PROBE)));
         }
         if (ground != null) {
             if (!wasGrounded) inherited = Vec3.ZERO;
@@ -341,7 +401,7 @@ public final class CharacterController {
             groundNormal = ground.normal;
             groundPoint = ground.point;
             groundBody = ground.body;
-            velocity = new Vec3(velocity.x(), 0f, velocity.z());
+            velocity = across(velocity);
         } else if (wasGrounded) {
             leaveGround();
         }
@@ -349,7 +409,7 @@ public final class CharacterController {
         push(result.pushes);
         if (grounded && groundBody != null && groundBody.isDynamic() && gravity < 0f) {
             // Its weight on what it stands on: a plank sags, a seesaw tips.
-            groundBody.applyImpulseAtPoint(new Vec3(0f, mass * gravity * dt, 0f), groundPoint);
+            groundBody.applyImpulseAtPoint(up.mul(mass * gravity * dt), groundPoint);
         }
 
         actualVelocity = end.sub(start).mul(1f / dt);
@@ -366,7 +426,7 @@ public final class CharacterController {
         List<RigidBody> done = new ArrayList<>(pushes.size());
         for (Push p : pushes) {
             if (done.contains(p.body())) continue;
-            Vec3 into = new Vec3(-p.normal().x(), 0f, -p.normal().z());
+            Vec3 into = across(p.normal().negate());
             float across = into.length();
             if (across < 0.1f) continue; // landed on it or hit it from below: its weight or the solver deals with that
             into = into.mul(1f / across);
@@ -378,9 +438,34 @@ public final class CharacterController {
         }
     }
 
-    private static float horizontalDistance(Vec3 a, Vec3 b) {
-        float dx = a.x() - b.x(), dz = a.z() - b.z();
-        return (float) Math.sqrt(dx * dx + dz * dz);
+    private float horizontalDistance(Vec3 a, Vec3 b) {
+        return across(a.sub(b)).length();
+    }
+
+    /**
+     * Takes the knocks from loose bodies that hit the character: the push the solver gave the kinematic body (which
+     * took it without moving) is the push the character would have taken if it had been loose, so the character's speed
+     * changes by that over its {@link #setMass mass}. Sideways only; being landed on or stood under is not a knock. The
+     * speed it gains fades, quickly on the ground and slowly in the air.
+     */
+    private void takeKnocks(float dt) {
+        Vec3 gained = Vec3.ZERO;
+        if (mass > 0f) {
+            for (Contact c : world.getContacts()) {
+                boolean first = c.getBodyA() == body;
+                if (!first && c.getBodyB() != body) continue;
+                RigidBody other = first ? c.getBodyB() : c.getBodyA();
+                if (!other.isDynamic() || other.isTrigger() || !other.isAwakeDynamic()) continue;
+                float total = c.getImpulse();
+                if (total <= 0f) continue;
+                // The impulse is along the normal onto B; the character, if it is A, is pushed back along it.
+                Vec3 push = across(c.normal.mul(first ? -total : total));
+                gained = gained.add(push.mul(1f / mass));
+            }
+        }
+        float decay = Math.max(0f, 1f - (grounded ? KNOCK_DECAY_GROUND : KNOCK_DECAY_AIR) * dt);
+        knock = across(knock).mul(decay).add(gained);
+        if (knock.lengthSquared() < 1e-6f) knock = Vec3.ZERO;
     }
 
     /**
@@ -450,20 +535,21 @@ public final class CharacterController {
             Vec3 n = overlap.normal;
             Vec3 out = n;
             float distance = overlap.depth;
-            if (n.y() >= minGroundUp) {
+            float upward = n.dot(up);
+            if (upward >= minGroundUp) {
                 if (walking) { // lifted straight up onto walkable ground, keeping the walking speed across it
-                    out = Vec3.UP;
-                    distance = overlap.depth / n.y();
+                    out = up;
+                    distance = overlap.depth / upward;
                 }
-            } else if (n.y() < -0.3f) {
+            } else if (upward < -0.3f) {
                 move.ceiling = true;
             } else {
                 move.wall = true;
-                Vec3 side = new Vec3(n.x(), 0f, n.z());
-                float across = side.length();
-                if (walking && n.y() > 0f && across > 1e-3f) {
-                    out = side.mul(1f / across);
-                    distance = overlap.depth / across;
+                Vec3 side = across(n);
+                float sideways = side.length();
+                if (walking && upward > 0f && sideways > 1e-3f) {
+                    out = side.mul(1f / sideways);
+                    distance = overlap.depth / sideways;
                 }
             }
             move.position = move.position.add(out.mul(distance - SKIN * 0.5f));
@@ -484,7 +570,7 @@ public final class CharacterController {
      */
     private boolean deepest(Vec3 feet, float margin, RigidBody ignore, Overlap out) {
         CapsuleShape capsule = capsule();
-        Pose pose = new Pose(feet.add(new Vec3(0f, centreHeight(), 0f)), Quat.IDENTITY);
+        Pose pose = new Pose(feet.add(up.mul(centreHeight())), body.getRotation());
         var box = RigidBody.worldBounds(capsule, pose, margin + 0.01f);
         boolean found = false;
         out.depth = -Float.MAX_VALUE;
@@ -531,7 +617,7 @@ public final class CharacterController {
      */
     private Ground findGround(Vec3 feet) {
         CapsuleShape capsule = capsule();
-        Pose pose = new Pose(feet.add(new Vec3(0f, centreHeight(), 0f)), Quat.IDENTITY);
+        Pose pose = new Pose(feet.add(up.mul(centreHeight())), body.getRotation());
         var box = RigidBody.worldBounds(capsule, pose, GROUND_PROBE + 0.01f);
         Ground best = null;
         for (RigidBody other : world.near(box)) {
@@ -551,7 +637,7 @@ public final class CharacterController {
                     Ground g = groundIn(manifold, other, feet);
                     if (g != null) found.add(g);
                 }
-                for (Ground g : found) if (best == null || g.normal.y() > best.normal.y()) best = g;
+                for (Ground g : found) if (best == null || g.normal.dot(up) > best.normal.dot(up)) best = g;
             }
         }
         return best;
@@ -564,29 +650,30 @@ public final class CharacterController {
      */
     private Ground groundIn(Manifold m, RigidBody other, Vec3 feet) {
         Vec3 n = m.normal.negate();
-        if (m.count == 0 || n.y() < 0.05f) return null;
+        float upward = n.dot(up);
+        if (m.count == 0 || upward < 0.05f) return null;
         int deepest = 0;
         for (int k = 1; k < m.count; k++) if (m.depths[k] > m.depths[deepest]) deepest = k;
         Vec3 point = m.points[deepest];
-        if (point.y() > feet.y() + capsule().radius()) return null;
+        if (point.sub(feet).dot(up) > capsule().radius()) return null;
         Vec3 surface = n;
-        if (n.y() < minGroundUp) {
-            Vec3 away = new Vec3(point.x() - feet.x(), 0f, point.z() - feet.z());
+        if (upward < minGroundUp) {
+            Vec3 away = across(point.sub(feet));
             float length = away.length();
             if (length < 1e-4f) return null;
-            Vec3 from = point.add(away.mul(0.02f / length)).add(new Vec3(0f, 0.05f, 0f));
+            Vec3 from = point.add(away.mul(0.02f / length)).add(up.mul(0.05f));
             RaycastHit below = surfaceBelow(from, 0.1f);
-            if (below == null || below.normal().y() < minGroundUp) return null;
+            if (below == null || below.normal().dot(up) < minGroundUp) return null;
             surface = below.normal();
         }
-        return new Ground(surface, point, other, Math.max(0f, -m.depths[deepest]), n.y());
+        return new Ground(surface, point, other, Math.max(0f, -m.depths[deepest]), upward);
     }
 
     /**
      * The first solid surface straight below {@code from} within {@code distance}, not counting the character.
      */
     private RaycastHit surfaceBelow(Vec3 from, float distance) {
-        for (RaycastHit hit : world.raycastAll(new Ray(from, new Vec3(0f, -1f, 0f)), distance, -1)) {
+        for (RaycastHit hit : world.raycastAll(new Ray(from, up.negate()), distance, -1)) {
             if (hit.body() != body && !hit.body().isTrigger() && blocks(hit.body())) return hit;
         }
         return null;
@@ -598,18 +685,18 @@ public final class CharacterController {
      * @return the move, or null when there is nothing walkable to step onto
      */
     private Move stepUp(Vec3 start, Vec3 move, Vec3 velocity) {
-        Move up = slide(start, new Vec3(0f, stepHeight, 0f), Vec3.ZERO, null, false);
-        float lifted = up.position.y() - start.y();
+        Move lift = slide(start, up.mul(stepHeight), Vec3.ZERO, null, false);
+        float lifted = lift.position.sub(start).dot(up);
         if (lifted < 1e-3f) return null;
-        Move across = slide(up.position, new Vec3(move.x(), 0f, move.z()), velocity, null, true);
-        Vec3 down = drop(across.position, lifted);
+        Move over = slide(lift.position, across(move), velocity, null, true);
+        Vec3 down = drop(over.position, lifted);
         if (down == null) return null;
         Ground ground = findGround(down);
-        if (ground == null || ground.point.y() > start.y() + stepHeight + 0.01f) return null; // too tall a step
-        across.position = down;
-        across.wall = false;
-        across.velocity = new Vec3(across.velocity.x(), 0f, across.velocity.z());
-        return across;
+        if (ground == null || ground.point.sub(start).dot(up) > stepHeight + 0.01f) return null; // too tall a step
+        over.position = down;
+        over.wall = false;
+        over.velocity = across(over.velocity);
+        return over;
     }
 
     /**
@@ -620,15 +707,15 @@ public final class CharacterController {
     private Vec3 drop(Vec3 from, float distance) {
         Move move = new Move();
         move.position = from;
-        move.velocity = new Vec3(0f, -1f, 0f);
+        move.velocity = up.negate();
         float left = distance;
         while (true) {
             if (findGround(move.position) != null) return move.position;
             if (left <= 0f) return null;
             float d = Math.min(GROUND_PROBE, left);
             left -= d;
-            move.position = move.position.add(new Vec3(0f, -d, 0f));
-            resolve(move, new Vec3(0f, -d, 0f), null, false);
+            move.position = move.position.sub(up.mul(d));
+            resolve(move, up.mul(-d), null, false);
         }
     }
 

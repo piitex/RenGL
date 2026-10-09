@@ -17,8 +17,13 @@ final class Polytope {
     final int[] edges;       // two corners per edge, each edge once
     final int[] edgeDirection; // which of the directions each edge runs along
     final Vec3[] directions; // unit edge directions, parallel ones merged: the edge axes to test
+    /**
+     * The two faces each edge lies between, two per edge in the order of {@link #edges}; null for a flat polytope (a
+     * triangle), whose two faces are the same plane. They are what the Gauss map pruning of the edge axes reads.
+     */
+    final int[] edgeFaces;
 
-    private Polytope(Vec3[] vertices, int[][] faces, Vec3[] normals, float[] offsets, int[] edges, int[] edgeDirection, Vec3[] directions) {
+    private Polytope(Vec3[] vertices, int[][] faces, Vec3[] normals, float[] offsets, int[] edges, int[] edgeDirection, Vec3[] directions, int[] edgeFaces) {
         this.vertices = vertices;
         this.faces = faces;
         this.normals = normals;
@@ -26,6 +31,7 @@ final class Polytope {
         this.edges = edges;
         this.edgeDirection = edgeDirection;
         this.directions = directions;
+        this.edgeFaces = edgeFaces;
     }
 
     /**
@@ -51,13 +57,29 @@ final class Polytope {
             offsets[f] = offset;
         }
         List<int[]> edgeList = new ArrayList<>();
-        java.util.Set<Long> seen = new java.util.HashSet<>();
-        for (int[] loop : faces) {
+        java.util.Map<Long, Integer> seen = new java.util.HashMap<>(); // edge -> its index in edgeList
+        List<int[]> between = new ArrayList<>();
+        for (int f = 0; f < faces.length; f++) {
+            int[] loop = faces[f];
             for (int i = 0; i < loop.length; i++) {
                 int a = loop[i], b = loop[(i + 1) % loop.length];
                 long key = (long) Math.min(a, b) << 32 | Math.max(a, b);
-                if (seen.add(key)) edgeList.add(new int[]{a, b});
+                Integer at = seen.get(key);
+                if (at == null) {
+                    seen.put(key, edgeList.size());
+                    edgeList.add(new int[]{a, b});
+                    between.add(new int[]{f, -1});
+                } else if (between.get(at)[1] < 0) {
+                    between.get(at)[1] = f;
+                }
             }
+        }
+        int[] edgeFaces = new int[edgeList.size() * 2];
+        boolean closed = true;
+        for (int e = 0; e < between.size(); e++) {
+            edgeFaces[e * 2] = between.get(e)[0];
+            edgeFaces[e * 2 + 1] = between.get(e)[1];
+            if (between.get(e)[1] < 0) closed = false;
         }
         int[] edges = new int[edgeList.size() * 2];
         int[] edgeDirection = new int[edgeList.size()];
@@ -75,7 +97,7 @@ final class Polytope {
             }
             edgeDirection[e] = match;
         }
-        return new Polytope(vertices, faces, normals, offsets, edges, edgeDirection, directions.toArray(Vec3[]::new));
+        return new Polytope(vertices, faces, normals, offsets, edges, edgeDirection, directions.toArray(Vec3[]::new), closed ? edgeFaces : null);
     }
 
     static Polytope box(Vec3 half) {
@@ -98,7 +120,7 @@ final class Polytope {
     static Polytope triangle(Vec3 a, Vec3 b, Vec3 c, Vec3 normal) {
         float offset = normal.dot(a);
         return new Polytope(new Vec3[]{a, b, c}, TRIANGLE_FACES, new Vec3[]{normal, normal.negate()}, new float[]{offset, -offset},
-                TRIANGLE_EDGES, TRIANGLE_EDGE_DIRECTIONS, new Vec3[]{b.sub(a).normalized(), c.sub(b).normalized(), a.sub(c).normalized()});
+                TRIANGLE_EDGES, TRIANGLE_EDGE_DIRECTIONS, new Vec3[]{b.sub(a).normalized(), c.sub(b).normalized(), a.sub(c).normalized()}, null);
     }
 
     /**
@@ -115,7 +137,7 @@ final class Polytope {
         }
         Vec3[] d = new Vec3[directions.length];
         for (int k = 0; k < d.length; k++) d[k] = pose.rotate(directions[k]);
-        return new Polytope(v, faces, n, o, edges, edgeDirection, d);
+        return new Polytope(v, faces, n, o, edges, edgeDirection, d, edgeFaces);
     }
 
     float min(Vec3 axis) {

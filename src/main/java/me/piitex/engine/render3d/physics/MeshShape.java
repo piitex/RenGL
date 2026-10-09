@@ -46,21 +46,36 @@ public final class MeshShape implements Shape {
      * @param indices   three corners per triangle; triangles with no area are left out
      */
     public MeshShape(float[] positions, int[] indices) {
+        this(positions, indices, 0f);
+    }
+
+    /**
+     * Like {@link #MeshShape(float[], int[])}, but corners no further apart than {@code weldDistance} metres (in the
+     * mesh's own units) are joined too, not only corners at exactly the same place. A level built of separate pieces
+     * that merely nearly meet, or an exported model whose neighbouring corners differ in the last digits, then has no
+     * gaps for a sliding box to catch on. Keep the distance well below the smallest triangle: a few millimetres.
+     *
+     * @param weldDistance 0 joins only corners at exactly the same place
+     */
+    public MeshShape(float[] positions, int[] indices, float weldDistance) {
         if (positions.length % 3 != 0) throw new IllegalArgumentException("positions must hold x, y, z per corner");
         if (indices.length % 3 != 0) throw new IllegalArgumentException("indices must hold three per triangle");
+        if (!(weldDistance >= 0f)) throw new IllegalArgumentException("The weld distance " + weldDistance + " is below 0");
         int corners = positions.length / 3;
         for (float p : positions) if (!Float.isFinite(p)) throw new IllegalArgumentException("A mesh position isn't finite: " + p);
         // Join corners at the same place: meshes split them where normals or texture coordinates change.
         Map<Vec3, Integer> joined = new HashMap<>();
+        Map<Long, List<Integer>> cells = new HashMap<>();
         int[] remap = new int[corners];
         float[] welded = new float[positions.length];
         int count = 0;
         for (int i = 0; i < corners; i++) {
             Vec3 p = new Vec3(positions[i * 3] + 0f, positions[i * 3 + 1] + 0f, positions[i * 3 + 2] + 0f);
-            Integer at = joined.get(p);
+            Integer at = weldDistance > 0f ? nearby(cells, welded, p, weldDistance) : joined.get(p);
             if (at == null) {
                 at = count++;
-                joined.put(p, at);
+                if (weldDistance > 0f) cells.computeIfAbsent(cell(p, weldDistance), k -> new ArrayList<>(2)).add(at);
+                else joined.put(p, at);
                 welded[at * 3] = p.x();
                 welded[at * 3 + 1] = p.y();
                 welded[at * 3 + 2] = p.z();
@@ -104,15 +119,54 @@ public final class MeshShape implements Shape {
         bounds = new Bounds(new Vec3(minX, minY, minZ), new Vec3(maxX, maxY, maxZ));
     }
 
+    private static long cell(Vec3 p, float size) {
+        return key((long) Math.floor(p.x() / size), (long) Math.floor(p.y() / size), (long) Math.floor(p.z() / size));
+    }
+
+    private static long key(long x, long y, long z) {
+        return (x & 0x1FFFFF) | (y & 0x1FFFFF) << 21 | (z & 0x1FFFFF) << 42;
+    }
+
+    /**
+     * The earliest corner already kept within {@code distance} of {@code p}, found through the grid of cells as wide as
+     * the distance, or null.
+     */
+    private static Integer nearby(Map<Long, List<Integer>> cells, float[] kept, Vec3 p, float distance) {
+        long cx = (long) Math.floor(p.x() / distance), cy = (long) Math.floor(p.y() / distance), cz = (long) Math.floor(p.z() / distance);
+        Integer best = null;
+        float limit = distance * distance;
+        for (long x = cx - 1; x <= cx + 1; x++) {
+            for (long y = cy - 1; y <= cy + 1; y++) {
+                for (long z = cz - 1; z <= cz + 1; z++) {
+                    List<Integer> here = cells.get(key(x, y, z));
+                    if (here == null) continue;
+                    for (int index : here) {
+                        float dx = kept[index * 3] - p.x(), dy = kept[index * 3 + 1] - p.y(), dz = kept[index * 3 + 2] - p.z();
+                        if (dx * dx + dy * dy + dz * dz <= limit && (best == null || index < best)) best = index;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
     /**
      * The mesh's triangles, in its own space. Give it to a body on a node showing that mesh and the two line up, the
      * node's scale included.
      */
     public static MeshShape of(Mesh mesh) {
+        return of(mesh, 0f);
+    }
+
+    /**
+     * Like {@link #of(Mesh)}, joining corners within {@code weldDistance} of each other (see
+     * {@link #MeshShape(float[], int[], float)}).
+     */
+    public static MeshShape of(Mesh mesh, float weldDistance) {
         float[] v = mesh.vertices();
         float[] positions = new float[mesh.vertexCount() * 3];
         for (int i = 0; i < mesh.vertexCount(); i++) System.arraycopy(v, i * Mesh.FLOATS_PER_VERTEX, positions, i * 3, 3);
-        return new MeshShape(positions, mesh.indices());
+        return new MeshShape(positions, mesh.indices(), weldDistance);
     }
 
     /**
@@ -121,6 +175,14 @@ public final class MeshShape implements Shape {
      * them. Hidden nodes count too, so a level can carry simple invisible collision meshes.
      */
     public static MeshShape of(Node3D node) {
+        return of(node, 0f);
+    }
+
+    /**
+     * Like {@link #of(Node3D)}, joining corners within {@code weldDistance} of each other, so the pieces of a level that
+     * only nearly meet become one surface (see {@link #MeshShape(float[], int[], float)}).
+     */
+    public static MeshShape of(Node3D node, float weldDistance) {
         List<float[]> parts = new ArrayList<>();
         List<int[]> partIndices = new ArrayList<>();
         collect(node, null, (positions, indices) -> {
@@ -142,7 +204,7 @@ public final class MeshShape implements Shape {
             for (int index : partIndices.get(i)) indices[q++] = base + index;
             p += parts.get(i).length;
         }
-        return new MeshShape(positions, indices);
+        return new MeshShape(positions, indices, weldDistance);
     }
 
     /**
