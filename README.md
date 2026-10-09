@@ -11,6 +11,29 @@ framework, audio and video playback, and an optional 3D layer.
 **Mission**: RenGL brings creativity and design to everyday applications. Boring, simplistic designs don't have to be
 the normal.
 
+<p align="center">
+  <img src="docs/images/hero.gif" alt="A glass-style RenGL UI over a flowing shader background, with live sliders, toggles and charts" width="100%">
+</p>
+
+## See it move
+
+**Styled from Java.** Everything above is RenGL: a custom SkSL shader as the background, translucent panels with gradient
+borders, gradient text, and the stock widgets.
+
+**A 2D game toolkit.** Thousands of pooled, batched particles, a shader-drawn sky and a scrolling city, all in a plain
+window with no game engine on top.
+
+<p align="center">
+  <img src="docs/images/fireworks.gif" alt="Fireworks made of thousands of particles over a city skyline" width="100%">
+</p>
+
+**Optional 3D.** Physically based materials, image-based sky lighting, shadows, fog and dynamic lights, rendered with
+Vulkan or OpenGL and shown inside the same UI. Programs that don't use it never pay for it.
+
+<p align="center">
+  <img src="docs/images/studio3d.gif" alt="A row of metal spheres and a row of glossy spheres lit by a sunset sky and three orbiting neon lights" width="100%">
+</p>
+
 ```java
 public class Hello {
     static void main() {
