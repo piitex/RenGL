@@ -25,6 +25,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -43,7 +44,8 @@ import java.util.function.Predicate;
  * items. After changing the model, call {@link #refresh()}. Expanded items and the selection are kept by the items'
  * {@code equals}.
  * <p>
- * The user can select a row by clicking it or with the arrow keys, open one with a double-click or Enter
+ * The user can select a row by clicking it or with the arrow keys, select several with {@link #setMultiSelect},
+ * tick check boxes with {@link #setCheckBoxes}, open one with a double-click or Enter
  * ({@link #onActivate}), rename one in place ({@link #startRename}), and, with {@link #setDragEnabled}, drag rows onto
  * other rows. The tree never changes the model: it reports what the user asked for through its callbacks, and the
  * callbacks make the change.
@@ -59,6 +61,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private static final double AUTO_SCROLL_SPEED = 600; // points per second, with the pointer at the very edge
     private static final float PADDING = 4f;
     private static final float ICON_GAP = 6f; // between an item's icon and its name
+    private static final float BOX_SIZE = 14f; // a check box
 
     /**
      * Where a dragged item was dropped: under {@code parent} (null for the top level), at {@code index} among its
@@ -87,7 +90,15 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private Collection<? extends T> roots = List.of();
     private final Set<T> expanded = new HashSet<>();
     private final List<Row<T>> rows = new ArrayList<>();
-    private T selected;
+    private T selected;                                 // the lead: the row the keyboard moves from; null if nothing is selected
+    private final Set<T> selection = new LinkedHashSet<>(); // every selected item, the lead included; just the lead unless multiSelect
+    private T anchor;                                   // where a Shift-click or Shift-arrow range starts
+    private boolean multiSelect;
+    private T pendingCollapse;                          // a press on a selected row in a multi-selection: it becomes the only one if released without dragging
+    private final Set<T> checked = new LinkedHashSet<>();
+    private boolean checkBoxes, cascadeChecks;
+    private BiConsumer<T, Boolean> onCheck;
+    private Consumer<List<T>> onSelectionChange;
 
     private Function<T, String> labelProvider = String::valueOf;
     private Function<T, T> parentProvider;
@@ -142,7 +153,12 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         onMouseClick(event -> {
             if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) return;
             int index = rowAt(event.getMouseY());
-            selectByUser(index >= 0 ? rows.get(index).item : null);
+            T item = index >= 0 ? rows.get(index).item : null;
+            if (multiSelect && item != null && selection.contains(item)) {
+                if (!Objects.equals(selected, item)) setLead(item); // the menu acts on the whole selection; keep it
+                return;
+            }
+            selectByUser(item);
         });
         ThemeManager.register(this);
     }
@@ -170,7 +186,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     public void refresh() {
         rows.clear();
         for (T root : roots) addRow(root, null, 0);
-        if (selected != null && indexOf(selected) < 0) selected = null;
+        pruneSelection();
         if (renaming != null) placeRenameField();
         if (pressed != null) {
             pressed = findRow(pressed.item);
@@ -287,7 +303,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         while (top != null && top.parent != null) top = top.parent;
         expanded.clear();
         refresh();
-        if (top != null) selected = top.item;
+        if (top != null) selectOnly(top.item);
     }
 
     /**
@@ -295,9 +311,22 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
      * selected instead.
      */
     private void refreshKeepingSelection(T toggled) {
-        boolean inside = selected != null && isBelow(findRow(selected), toggled);
+        boolean leadInside = selected != null && isBelow(findRow(selected), toggled);
+        boolean anyInside = leadInside || selectionInside(toggled);
         refresh();
-        if (inside) selected = toggled;
+        if (!anyInside) return;
+        if (leadInside) selectOnly(toggled);
+        else selection.add(toggled); // part of a multi-selection was inside; the closed item stands for it
+    }
+
+    /**
+     * Whether any selected item is under {@code ancestor}.
+     */
+    private boolean selectionInside(T ancestor) {
+        for (T item : selection) {
+            if (isBelow(findRow(item), ancestor)) return true;
+        }
+        return false;
     }
 
     private boolean isBelow(Row<T> row, T ancestor) {
@@ -349,26 +378,108 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     /* Selection */
 
     /**
-     * The selected item, or null.
+     * The selected item, or null. With {@link #setMultiSelect multi-select} it is the lead of the selection: the
+     * row that was clicked or moved to last, which the arrow keys move on from. {@link #getSelectedItems()} has them all.
      */
     public T getSelected() {
         return selected;
     }
 
     /**
-     * Selects {@code item}, opening the items above it and scrolling to it, or clears the selection with null. Does
-     * not fire {@link #onSelect}. An item that is not in the tree clears the selection.
+     * Selects only {@code item}, opening the items above it and scrolling to it, or clears the selection with null.
+     * Does not fire {@link #onSelect}. An item that is not in the tree clears the selection.
      */
     public void setSelected(T item) {
-        selected = reveal(item) ? item : null;
+        if (reveal(item)) selectOnly(item);
+        else clearSelection();
     }
 
     /**
-     * Fired with the new selection (null when cleared) when the user changes it: a click, the arrow keys, or closing
-     * the item above the selected one. Not fired by {@link #setSelected} or {@link #refresh}.
+     * Whether the user can select several rows. Off by default. On, a click selects one row, Cmd-click (Ctrl-click
+     * off macOS) adds or removes a row, Shift-click selects the rows from the last clicked one to this one, Shift with
+     * the arrow keys, Home and End does the same from the keyboard, and Cmd/Ctrl+A selects every row shown. Turning it
+     * off keeps only the lead item selected.
+     */
+    public void setMultiSelect(boolean multiSelect) {
+        this.multiSelect = multiSelect;
+        if (!multiSelect && selection.size() > 1) {
+            if (selected != null) selectOnly(selected);
+            else clearSelection();
+        }
+    }
+
+    public boolean isMultiSelect() {
+        return multiSelect;
+    }
+
+    /**
+     * Every selected item, top to bottom as the rows are shown. Empty if nothing is selected.
+     */
+    public List<T> getSelectedItems() {
+        List<T> items = new ArrayList<>(selection.size());
+        for (Row<T> row : rows) {
+            if (selection.contains(row.item)) items.add(row.item);
+        }
+        return items;
+    }
+
+    public boolean isSelected(T item) {
+        return item != null && selection.contains(item);
+    }
+
+    /**
+     * Selects exactly these items, opening the items above them. Items that are not in the tree are skipped. Without
+     * {@link #setMultiSelect multi-select} only the last one is kept. Does not fire {@link #onSelect} or
+     * {@link #onSelectionChange}. The last item becomes the lead, the first the start of a Shift range.
+     */
+    public void setSelectedItems(Collection<? extends T> items) {
+        List<T> found = new ArrayList<>();
+        for (T item : items) {
+            if (reveal(item)) found.add(item);
+        }
+        selection.clear();
+        selected = anchor = null;
+        if (found.isEmpty()) return;
+        if (!multiSelect) found = List.of(found.getLast());
+        selection.addAll(found);
+        selected = found.getLast();
+        anchor = found.getFirst();
+    }
+
+    /**
+     * Selects every row shown, when {@link #setMultiSelect multi-select} is on; otherwise does nothing. Silent.
+     */
+    public void selectAll() {
+        if (!multiSelect || rows.isEmpty()) return;
+        selection.clear();
+        for (Row<T> row : rows) selection.add(row.item);
+        selected = rows.getLast().item;
+        anchor = rows.getFirst().item;
+    }
+
+    /**
+     * Clears the selection. Silent.
+     */
+    public void clearSelection() {
+        selection.clear();
+        selected = anchor = null;
+    }
+
+    /**
+     * Fired with the new lead item (null when cleared) when the user changes which row has the keyboard: a click, the
+     * arrow keys, or closing the item above the selected one. Not fired by {@link #setSelected} or {@link #refresh}.
+     * With multi-select, {@link #onSelectionChange} says when any row joined or left the selection.
      */
     public void onSelect(Consumer<T> onSelect) {
         this.onSelect = onSelect;
+    }
+
+    /**
+     * Fired with every selected item, top to bottom, when the user changes the selection. Not fired by the setters
+     * or {@link #refresh}.
+     */
+    public void onSelectionChange(Consumer<List<T>> onSelectionChange) {
+        this.onSelectionChange = onSelectionChange;
     }
 
     /**
@@ -390,10 +501,163 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         return toggleOnDoubleClick;
     }
 
+    /**
+     * The user selects only {@code item} (or nothing, with null).
+     */
     private void selectByUser(T item) {
-        if (Objects.equals(item, selected)) return;
+        if (item == null ? selection.isEmpty() : selection.size() == 1 && Objects.equals(item, selected)) {
+            anchor = item;
+            return;
+        }
+        T before = selected;
+        if (item == null) clearSelection();
+        else selectOnly(item);
+        notifySelection(before);
+    }
+
+    /**
+     * Silently makes {@code item} the whole selection.
+     */
+    private void selectOnly(T item) {
+        selection.clear();
+        selection.add(item);
+        selected = anchor = item;
+    }
+
+    /**
+     * Makes an item that is already selected the lead.
+     */
+    private void setLead(T item) {
         selected = item;
         if (onSelect != null) onSelect.accept(item);
+    }
+
+    /**
+     * Tells the listeners what a user change did. {@code leadBefore} is the lead from before the change.
+     */
+    private void notifySelection(T leadBefore) {
+        if (onSelect != null && !Objects.equals(selected, leadBefore)) onSelect.accept(selected);
+        if (onSelectionChange != null) onSelectionChange.accept(getSelectedItems());
+    }
+
+    /**
+     * After the rows were rebuilt: forgets selected items that are no longer shown, and picks a new lead if needed.
+     */
+    private void pruneSelection() {
+        if (selection.isEmpty()) {
+            selected = anchor = null;
+            return;
+        }
+        Set<T> visible = new HashSet<>();
+        for (Row<T> row : rows) visible.add(row.item);
+        selection.retainAll(visible);
+        if (selected != null && !selection.contains(selected)) selected = null;
+        if (anchor != null && !visible.contains(anchor)) anchor = null;
+        if (selected == null && !selection.isEmpty()) selected = selection.iterator().next();
+        if (selection.isEmpty()) selected = anchor = null;
+    }
+
+    /**
+     * Selects the rows between {@code from} and {@code to} (either order), keeping the rest when {@code keep}.
+     */
+    private void selectRange(int from, int to, boolean keep) {
+        if (!keep) selection.clear();
+        for (int i = Math.min(from, to); i <= Math.max(from, to); i++) selection.add(rows.get(i).item);
+    }
+
+    /**
+     * The modifier keys held now, as GLFW bits. A press carries none, so the tree asks the window's input.
+     */
+    protected int heldModifiers() {
+        Window window = getWindow();
+        return window == null ? 0 : window.getInput().getModifiers();
+    }
+
+    /* Check boxes */
+
+    /**
+     * Whether each row has a check box before its icon and name, for choosing items apart from selecting them (the files
+     * to extract, say). Off by default. A click on the box, or Space on the lead row, ticks it; the checked items are
+     * {@link #getCheckedItems()}. Checking is independent of the selection.
+     */
+    public void setCheckBoxes(boolean checkBoxes) {
+        this.checkBoxes = checkBoxes;
+        if (renaming != null) placeRenameField();
+    }
+
+    public boolean isCheckBoxes() {
+        return checkBoxes;
+    }
+
+    /**
+     * Whether ticking an item with children ticks (or clears) everything under it too, as a folder does. Off by
+     * default. There is no half-ticked state: a folder shows ticked only if it was ticked itself, so a folder whose
+     * children were ticked one by one shows empty.
+     */
+    public void setCascadeChecks(boolean cascadeChecks) {
+        this.cascadeChecks = cascadeChecks;
+    }
+
+    public boolean isCascadeChecks() {
+        return cascadeChecks;
+    }
+
+    public boolean isChecked(T item) {
+        return item != null && checked.contains(item);
+    }
+
+    /**
+     * Every checked item, including ones inside closed items, in the order they were checked. Items are remembered by
+     * {@code equals} and are not forgotten when removed from the model: call {@link #clearChecked()} when the tree is
+     * loaded with something new.
+     */
+    public List<T> getCheckedItems() {
+        return new ArrayList<>(checked);
+    }
+
+    /**
+     * Ticks or clears an item (and what is under it, with {@link #setCascadeChecks}). Does not fire {@link #onCheck}.
+     */
+    public void setChecked(T item, boolean on) {
+        if (item == null) return;
+        applyCheck(item, on);
+        if (cascadeChecks) {
+            List<T> stack = new ArrayList<>(List.of(item));
+            while (!stack.isEmpty()) {
+                Collection<? extends T> kids = children.apply(stack.removeLast());
+                if (kids == null) continue;
+                for (T kid : kids) {
+                    applyCheck(kid, on);
+                    stack.add(kid);
+                }
+            }
+        }
+    }
+
+    private void applyCheck(T item, boolean on) {
+        if (on) checked.add(item);
+        else checked.remove(item);
+    }
+
+    /**
+     * Clears every check. Does not fire {@link #onCheck}.
+     */
+    public void clearChecked() {
+        checked.clear();
+    }
+
+    /**
+     * Fired with the item and whether it is now checked when the user ticks or clears a box. An item ticked only
+     * because a parent was (with {@link #setCascadeChecks}) is not reported on its own.
+     */
+    public void onCheck(BiConsumer<T, Boolean> onCheck) {
+        this.onCheck = onCheck;
+    }
+
+    private void toggleCheck(T item) {
+        boolean on = !checked.contains(item);
+        setChecked(item, on);
+        if (onCheck != null) onCheck.accept(item, on);
     }
 
     /* Renaming */
@@ -624,6 +888,13 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         if (action == GLFW.GLFW_RELEASE) return;
         if (keyListener != null && keyListener.onKey(key, mods)) return;
         if (rows.isEmpty()) return;
+        boolean shift = multiSelect && (mods & GLFW.GLFW_MOD_SHIFT) != 0;
+        if (multiSelect && key == GLFW.GLFW_KEY_A && (mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0) {
+            T before = selected;
+            selectAll();
+            notifySelection(before);
+            return;
+        }
         int index = indexOf(selected);
         Row<T> row = index >= 0 ? rows.get(index) : null;
         switch (key) {
@@ -650,6 +921,10 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
                 }
                 index++; // its first child
             }
+            case GLFW.GLFW_KEY_SPACE -> {
+                if (row != null && checkBoxes && action == GLFW.GLFW_PRESS) toggleCheck(row.item);
+                return;
+            }
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
                 if (row != null && onActivate != null && action == GLFW.GLFW_PRESS) onActivate.accept(row.item);
                 return;
@@ -658,7 +933,15 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
                 return;
             }
         }
-        selectByUser(rows.get(index).item);
+        int anchorRow = shift ? indexOf(anchor) : -1;
+        if (anchorRow >= 0) {
+            T before = selected;
+            selectRange(anchorRow, index, false);
+            selected = rows.get(index).item;
+            notifySelection(before);
+        } else {
+            selectByUser(rows.get(index).item);
+        }
         scrollToRow(index);
     }
 
@@ -692,19 +975,48 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         double localX = toLocalX(x);
         if (row.hasChildren && localX >= arrowX(row) && localX < arrowX(row) + indent) {
             T item = row.item;
-            boolean inside = selected != null && isBelow(findRow(selected), item);
-            setExpanded(item, !expanded.contains(item));
-            if (inside) {
-                selected = null; // setExpanded moved it to the item; report that as the user's change
-                selectByUser(item);
+            boolean inside = (selected != null && isBelow(findRow(selected), item)) || selectionInside(item);
+            T before = selected;
+            setExpanded(item, !expanded.contains(item)); // moves the selection to the item quietly; report it as the user's change
+            if (inside) notifySelection(before);
+            return;
+        }
+        if (checkBoxes && localX >= getX() + boxX(row) - ICON_GAP / 2f && localX < getX() + boxX(row) + BOX_SIZE + ICON_GAP / 2f) {
+            toggleCheck(row.item);
+            return;
+        }
+        int mods = multiSelect ? heldModifiers() : 0;
+        boolean toggle = (mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0, range = (mods & GLFW.GLFW_MOD_SHIFT) != 0;
+        if (toggle || range) {
+            lastPressItem = null; // a modifier click is not half of a double-click
+            T before = selected;
+            int anchorRow = indexOf(anchor);
+            if (range && anchorRow >= 0) {
+                selectRange(anchorRow, index, toggle);
+                selected = row.item;
+            } else if (range) {
+                selectOnly(row.item);
+            } else if (selection.add(row.item)) {
+                selected = anchor = row.item;
+            } else {
+                selection.remove(row.item);
+                anchor = row.item;
+                if (Objects.equals(selected, row.item)) selected = selection.isEmpty() ? null : selection.stream().reduce((a, b) -> b).orElse(null);
             }
+            notifySelection(before);
             return;
         }
         long now = System.nanoTime();
         boolean doubleClick = Objects.equals(row.item, lastPressItem) && now - lastPressNanos <= DOUBLE_CLICK_NANOS;
         lastPressItem = row.item;
         lastPressNanos = doubleClick ? 0 : now; // a third press starts a new pair
-        selectByUser(row.item);
+        if (multiSelect && selection.size() > 1 && selection.contains(row.item) && !doubleClick) {
+            // Pressing one of several selected rows may start dragging all of them; it only picks this one on release.
+            pendingCollapse = row.item;
+            if (!Objects.equals(selected, row.item)) setLead(row.item);
+        } else {
+            selectByUser(row.item);
+        }
         if (doubleClick) {
             if (toggleOnDoubleClick && row.hasChildren) setExpanded(row.item, !expanded.contains(row.item));
             if (onActivate != null) onActivate.accept(row.item);
@@ -739,8 +1051,12 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
             super.onDragEnd(x, y);
             return;
         }
-        Drop<T> dropped = draggingRow ? drop : null;
+        boolean wasDragging = draggingRow;
+        Drop<T> dropped = wasDragging ? drop : null;
         endRowDrag();
+        T collapseTo = pendingCollapse;
+        pendingCollapse = null;
+        if (collapseTo != null && !wasDragging) selectByUser(collapseTo);
         if (dropped != null && onDrop != null) onDrop.accept(dropped);
     }
 
@@ -807,6 +1123,13 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
      * The left edge of a row's icon, relative to the tree's content.
      */
     private float iconX(Row<T> row) {
+        return boxX(row) + (checkBoxes ? BOX_SIZE + ICON_GAP : 0f);
+    }
+
+    /**
+     * The left edge of a row's check box, relative to the tree's content.
+     */
+    private float boxX(Row<T> row) {
         return PADDING + (row.depth + 1) * indent + 2f;
     }
 
@@ -939,7 +1262,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         super.applyTheme(theme);
         textColor.applyTheme(theme.getText());
         dimTextColor.applyTheme(theme.getPlaceholderText());
-        selectionColor.applyTheme(theme.getSelection());
+        selectionColor.applyTheme(theme.getAccentTint());
     }
 
     @Override
@@ -992,9 +1315,9 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         org.jetbrains.skia.Font f = getFont();
         float textH = FontMetricsCompat.of(f).getHeight();
         Paint text = textColor.get();
-        Paint selection = selectionColor.get();
+        Paint selectionPaint = selectionColor.get();
         // The selection is translucent so the row's text shows through; the drop marker wants it solid.
-        Paint marker = AnimatedPaint.resolve(selection) instanceof Color c ? c.withAlpha(1f) : selection;
+        Paint marker = AnimatedPaint.resolve(selectionPaint) instanceof Color c ? c.withAlpha(1f) : selectionPaint;
         Color iconTint = solid(text);
 
         int hoverRow = -1;
@@ -1008,9 +1331,9 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
             float rowY = y + i * rowHeight - scroll;
             if (rowY >= y + h) break;
             Row<T> row = rows.get(i);
-            if (Objects.equals(row.item, selected)) {
+            if (selection.contains(row.item)) {
                 if (!focused) renderer.pushAlpha(0.6f);
-                renderer.drawQuad(x, rowY, w, rowHeight, selection, rowCornerRadius);
+                renderer.drawQuad(x, rowY, w, rowHeight, selectionPaint, rowCornerRadius);
                 if (!focused) renderer.popAlpha();
             } else if (i == hoverRow) {
                 renderer.pushAlpha(0.07f);
@@ -1024,6 +1347,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
                 drawArrow(renderer, arrowX(row) + indent / 2f, rowY + rowHeight / 2f, expanded.contains(row.item), text);
             }
             boolean dim = dimmed.test(row.item);
+            if (checkBoxes) drawCheckBox(renderer, x + boxX(row), rowY + (rowHeight - BOX_SIZE) / 2f, checked.contains(row.item), dim ? dimTextColor.get() : text);
             IconAsset icon = iconProvider == null ? null : iconProvider.apply(row.item);
             if (icon != null) {
                 int size = Math.round(iconSize);
@@ -1056,6 +1380,14 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
             case LinearGradient g -> g.getColors().get(0);
             case null, default -> Color.BLACK;
         };
+    }
+
+    private static void drawCheckBox(Renderer renderer, float x, float y, boolean on, Paint color) {
+        renderer.drawBorder(x, y, BOX_SIZE, BOX_SIZE, color, 1.5f, 3f);
+        if (on) {
+            renderer.drawLine(x + 3f, y + BOX_SIZE / 2f, x + BOX_SIZE * 0.42f, y + BOX_SIZE - 4f, color, 2f);
+            renderer.drawLine(x + BOX_SIZE * 0.42f, y + BOX_SIZE - 4f, x + BOX_SIZE - 3f, y + 4f, color, 2f);
+        }
     }
 
     private static void drawArrow(Renderer renderer, float cx, float cy, boolean open, Paint color) {
