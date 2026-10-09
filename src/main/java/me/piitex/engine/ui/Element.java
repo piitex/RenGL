@@ -19,6 +19,8 @@ import me.piitex.engine.ui.layout.Layout;
 import me.piitex.engine.ui.text.TooltipManager;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
+import me.piitex.engine.ui.theme.ThemeManager;
+import me.piitex.engine.ui.theme.Themeable;
 import me.piitex.engine.utils.FormID;
 import me.piitex.engine.ui.menu.PopupMenu;
 import me.piitex.engine.utils.FormIDRegistry;
@@ -57,6 +59,8 @@ public class Element {
     private double relativeWidth = Double.NaN, relativeHeight = Double.NaN, relativeInset;
     private double layoutWeight;
     private boolean hovered;
+    private List<Consumer<Theme>> themeStyles; // see onTheme
+    private Themeable themeStylist;            // held here so the theme registry (weak) keeps it as long as this Element lives
     private Layout.Alignment textAlignment;
     private CursorMode cursorMode;
     private boolean focusTraversable = false;
@@ -469,6 +473,34 @@ public class Element {
      */
     public void setHovered(boolean hovered) {
         this.hovered = hovered;
+    }
+
+    /**
+     * Styles this Element from the theme, now and again whenever {@link ThemeManager#setCurrent} switches it. For an
+     * Element whose look is set by hand: anything given a color through a setter is pinned against the theme, so a
+     * theme switch would leave it as it was; the callback sets the colors again for the new theme instead, with no
+     * rebuilding:
+     * <pre>{@code
+     * badge.onTheme(theme -> {
+     *     badge.getStyling().setBackgroundColor(theme.getAccentTint());
+     *     badge.setTextColor(theme.getText());
+     * });
+     * }</pre>
+     * Several callbacks run in the order they were added. A callback is kept as long as this Element is, and does not
+     * stop the Element's own themed look. Called on the thread that switches the theme, which is the render thread
+     * when the switch comes from a button.
+     */
+    public void onTheme(Consumer<Theme> style) {
+        if (style == null) return;
+        if (themeStyles == null) {
+            themeStyles = new ArrayList<>();
+            themeStylist = theme -> {
+                for (Consumer<Theme> each : List.copyOf(themeStyles)) each.accept(theme);
+            };
+            ThemeManager.register(themeStylist);
+        }
+        themeStyles.add(style);
+        style.accept(ThemeManager.getCurrent());
     }
 
     /**

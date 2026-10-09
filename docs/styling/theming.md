@@ -92,6 +92,22 @@ Practical consequences:
    property. A pinned window background survives later theme switches. `Window.followThemeBackground()` unpins it
    and applies the current theme at once.
 
+### Restyling a hand-styled element
+
+A color given through a setter is pinned, so a theme switch leaves it alone. For an element styled by hand (a badge,
+a toolbar band, a colored label), `element.onTheme(callback)` runs the callback now and again on every
+`ThemeManager.setCurrent`, so it sets its colors for the new theme and nothing needs rebuilding:
+
+```java nocompile
+badge.onTheme(theme -> {
+    badge.getStyling().setBackgroundColor(theme.getAccentTint());
+    badge.setTextColor(theme.getText());
+});
+```
+
+Callbacks run in the order they were added, live as long as the element does, and do not stop the element's own themed
+look. For a plain panel, [`useTheme()`](../containers/container.md) already does this with the container tokens.
+
 ## The tokens
 
 Every token is a getter on `Theme`. A widget picks the tokens it needs.
