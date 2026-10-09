@@ -23,7 +23,7 @@ layout.addElement(new LinkOverlay("RenGL on GitHub", "https://github.com/piitex/
 - The underline is drawn in the text color when that is a plain `Color`; with a gradient there is no underline.
 - `setUrl(String)` changes the target, and `open()` opens it from code, as a click does. It returns `false` if the
   address was refused or no opener could be started.
-- The overlay owns its click listener, like a button. Calling `onMouseClick(...)` replaces it and the link stops opening.
+- `onMouseClick(...)` is safe to use: opening the address is handled apart from it, and your listener runs after.
 
 ## Opening an address without a link
 

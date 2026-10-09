@@ -53,9 +53,8 @@ import java.util.function.Consumer;
  * #setMaxDate} are dimmed and cannot be picked.
  * <p>
  * The box is themed like {@link TextFieldOverlay}'s field, and the panel reuses this
- * overlay's own {@link #getStyling()} background and border. This overlay registers its
- * own {@link #onMouseClick} handler to open and close the panel; replacing that handler
- * stops the picker from opening. It is {@link Focusable} and a Tab stop, and Enter,
+ * overlay's own {@link #getStyling()} background and border. This overlay opens and closes
+ * the panel with a click handler of its own, kept apart from {@link #onMouseClick}. It is {@link Focusable} and a Tab stop, and Enter,
  * Space, or Down opens it.
  * <p>
  * <b>Keyboard in the open panel:</b> Left/Right move the highlighted day by one, Up/Down by a
@@ -77,6 +76,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     private LocalDate minDate, maxDate;
     private boolean use24Hour = true;
     private int minuteStep = 1;
+    private boolean showSeconds;
     private boolean clearable;
     private DayOfWeek firstDay = WeekFields.of(Locale.getDefault()).getFirstDayOfWeek();
     private String placeholder = "Select...";
@@ -90,6 +90,8 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     private org.jetbrains.skia.Font font;
     private Typeface fontTypeface;
     private PickerPopup popup;
+    private StringBuilder typed;   // what is being typed into the closed box, or null
+    private boolean typedParses;
 
     public DateTimePickerOverlay(double width, double height) {
         this(width, height, Mode.DATE);
@@ -101,7 +103,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         setHeight(height);
         setCursorMode(CursorMode.POINTER);
         setFocusTraversable(true);
-        onMouseClick(event -> toggleOpen());
+        setBuiltInClickListener(event -> toggleOpen());
         ThemeManager.register(this);
     }
 
@@ -131,17 +133,22 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     }
 
     /**
-     * The chosen time (to the minute), or null.
+     * The chosen time (to the minute, or to the second with {@link #setShowSeconds}), or null.
      */
     public LocalTime getTime() {
         return time;
     }
 
     /**
-     * Sets the time programmatically. {@link #onChange} does not fire. Null clears it, and seconds are dropped.
+     * Sets the time programmatically. {@link #onChange} does not fire. Null clears it. Seconds are dropped unless
+     * {@link #setShowSeconds shown}.
      */
     public void setTime(LocalTime time) {
-        this.time = time == null ? null : time.truncatedTo(ChronoUnit.MINUTES);
+        this.time = time == null ? null : time.truncatedTo(timeUnit());
+    }
+
+    private ChronoUnit timeUnit() {
+        return showSeconds ? ChronoUnit.SECONDS : ChronoUnit.MINUTES;
     }
 
     /**
@@ -212,6 +219,25 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     }
 
     /**
+     * Adds a seconds column to the clock, and shows seconds in the closed box (default {@code HH:mm:ss}, or
+     * {@code h:mm:ss a} with a 12-hour clock). The seconds arrows move by one. Default false: the time is to the
+     * minute, and a time you set has its seconds dropped. Turning it off drops the seconds of the value.
+     */
+    public void setShowSeconds(boolean showSeconds) {
+        this.showSeconds = showSeconds;
+        if (time != null) time = time.truncatedTo(timeUnit());
+        close();
+    }
+
+    public boolean isShowSeconds() {
+        return showSeconds;
+    }
+
+    private DateTimeFormatter defaultTimeFormatter() {
+        return DateTimeFormatter.ofPattern(use24Hour ? (showSeconds ? "HH:mm:ss" : "HH:mm") : (showSeconds ? "h:mm:ss a" : "h:mm a"));
+    }
+
+    /**
      * Whether the panel has a "Clear" button that empties the value. Default false.
      */
     public void setClearable(boolean clearable) {
@@ -241,7 +267,8 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
     }
 
     /**
-     * How the time reads in the closed box. Default {@code HH:mm}, or {@code h:mm a} with a 12-hour clock.
+     * How the time reads in the closed box. Default {@code HH:mm}, or {@code h:mm a} with a 12-hour clock (with
+     * {@link #setShowSeconds seconds}, {@code HH:mm:ss} and {@code h:mm:ss a}).
      */
     public void setTimeFormatter(DateTimeFormatter timeFormatter) {
         this.timeFormatter = timeFormatter;
@@ -251,14 +278,20 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
      * The text the closed box shows for the current value, or null when it would show the placeholder.
      */
     public String getDisplayText() {
-        DateTimeFormatter df = dateFormatter != null ? dateFormatter : DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        DateTimeFormatter tf = timeFormatter != null ? timeFormatter
-                : DateTimeFormatter.ofPattern(use24Hour ? "HH:mm" : "h:mm a");
+        DateTimeFormatter df = dateFormat(), tf = timeFormat();
         return switch (mode) {
             case DATE -> date == null ? null : df.format(date);
             case TIME -> time == null ? null : tf.format(time);
             case DATE_TIME -> date == null || time == null ? null : df.format(date) + " " + tf.format(time);
         };
+    }
+
+    private DateTimeFormatter dateFormat() {
+        return dateFormatter != null ? dateFormatter : DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    }
+
+    private DateTimeFormatter timeFormat() {
+        return timeFormatter != null ? timeFormatter : defaultTimeFormatter();
     }
 
     private boolean hasDate() {
@@ -341,6 +374,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         if (isOpen()) return;
         Window window = getWindow();
         if (window == null) return;
+        typed = null;
 
         PickerPopup p = new PickerPopup();
         float[] at = PopupPlacement.below(this, window, (float) p.getWidth(), (float) p.getHeight());
@@ -398,14 +432,19 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         float pad = 8f;
         float icon = Math.max(12f, Math.min(h * 0.5f, 18f));
         org.jetbrains.skia.Font f = getFont();
-        String text = getDisplayText();
+        String text = typed != null ? typed.toString() : getDisplayText();
         float textH = FontMetricsCompat.of(f).getHeight();
 
         renderer.pushClip(x, y, w - icon - 2 * pad, h);
         String shown = text != null ? text : placeholder;
         float shift = Math.max(0f, w - icon - 2 * pad - f.measureTextWidth(shown)) * textAlignH(0f);
-        renderer.drawText(shown, x + pad + shift, y + (h - textH) / 2f, f,
-                text != null ? resolveTextColor(textColor.get()) : placeholderColor.get());
+        Paint shownColor = typed != null && !typedParses ? Color.RED
+                : text != null ? resolveTextColor(textColor.get()) : placeholderColor.get();
+        renderer.drawText(shown, x + pad + shift, y + (h - textH) / 2f, f, shownColor);
+        if (typed != null) { // a caret after what is typed
+            float cx = x + pad + shift + f.measureTextWidth(shown) + 1f;
+            renderer.drawLine(cx, y + (h - textH) / 2f, cx, y + (h + textH) / 2f, shownColor, 1.5f);
+        }
         renderer.popClip();
 
         float ix = x + w - pad - icon, iy = y + (h - icon) / 2f;
@@ -435,19 +474,99 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
 
     @Override
     public void onFocusLost() {
+        if (typed != null) {
+            commitTyped(); // a value that reads as a date or time is kept, anything else is dropped
+            typed = null;
+        }
     }
 
+    /**
+     * Typing into the closed box: what is typed replaces the text until Enter (or leaving the box) reads it with the
+     * same formatter that shows it. Text that does not read as a value, or is outside {@link #setMinDate} and
+     * {@link #setMaxDate}, is dropped.
+     */
     @Override
     public void onCharTyped(int codepoint) {
+        if (isOpen() || Character.isISOControl(codepoint)) return;
+        if (typed == null) {
+            if (Character.isWhitespace(codepoint)) return; // the Space that opens the panel
+            typed = new StringBuilder();
+        }
+        if (typed.length() < 40) typed.appendCodePoint(codepoint);
+        typedParses = readTyped(false);
     }
 
     @Override
     public void onKeyPressed(int key, int action, int mods) {
+        if (action == GLFW.GLFW_RELEASE) return;
+        boolean command = (mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
+        if (key == GLFW.GLFW_KEY_BACKSPACE && typed != null) {
+            if (command || typed.length() <= 1) typed = null;
+            else typed.setLength(typed.length() - 1);
+            if (typed != null) typedParses = readTyped(false);
+            return;
+        }
         if (action != GLFW.GLFW_PRESS) return;
+        if (key == GLFW.GLFW_KEY_V && command && !isOpen()) {
+            String clip = me.piitex.engine.input.Clipboard.paste();
+            if (clip != null && !clip.isBlank()) {
+                typed = new StringBuilder(clip.strip().replaceAll("\\s+", " "));
+                if (typed.length() > 40) typed.setLength(40);
+                typedParses = readTyped(false);
+            }
+            return;
+        }
+        if (typed != null) {
+            if (key == GLFW.GLFW_KEY_ESCAPE) {
+                typed = null;
+                return;
+            }
+            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+                if (commitTyped()) typed = null;
+                return;
+            }
+            if (key == GLFW.GLFW_KEY_SPACE) return; // a space inside what is being typed
+        }
         if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER || key == GLFW.GLFW_KEY_SPACE
                 || key == GLFW.GLFW_KEY_DOWN) {
+            typed = null;
             open();
         }
+    }
+
+    /**
+     * Reads the typed text in the format the box shows. With {@code apply} the value is set and {@link #onChange}
+     * fires. Returns whether it is a value that can be picked.
+     */
+    private boolean readTyped(boolean apply) {
+        String text = typed.toString().strip();
+        try {
+            LocalDate d = null;
+            LocalTime t = null;
+            switch (mode) {
+                case DATE -> d = LocalDate.parse(text, dateFormat());
+                case TIME -> t = LocalTime.parse(text, timeFormat());
+                case DATE_TIME -> {
+                    LocalDateTime both = LocalDateTime.parse(text, new java.time.format.DateTimeFormatterBuilder()
+                            .append(dateFormat()).appendLiteral(' ').append(timeFormat()).toFormatter());
+                    d = both.toLocalDate();
+                    t = both.toLocalTime();
+                }
+            }
+            if (d != null && !inRange(d)) return false;
+            if (apply) {
+                if (d != null) date = d;
+                if (t != null) time = t.truncatedTo(timeUnit());
+                changedByUser();
+            }
+            return true;
+        } catch (java.time.format.DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    private boolean commitTyped() {
+        return readTyped(true);
     }
 
     /**
@@ -459,7 +578,8 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         private static final float W = 7 * CELL_W + 2 * PAD;
         private static final float NAV_H = 32f, NAV_BTN = 32f, WEEKDAY_H = 22f, FOOT_H = 30f;
         private static final float TIME_H = 84f, ARROW_H = 22f, VALUE_H = 36f;
-        private static final float COL_W = 56f, COLON_W = 20f, COL_GAP = 12f;
+        private static final float COLON_W = 20f, COL_GAP = 12f;
+        private static final int HOUR = 0, MINUTE = 1, SECOND = 2, AMPM = 3;
 
         private final boolean hasDate = hasDate(), hasTime = hasTime();
         private final float navY, weekdayY, gridY, timeY, footY;
@@ -468,7 +588,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         private YearMonth view;
         private LocalDate cursor;                   // keyboard-highlighted day
         private boolean focusTime;                  // keyboard focus is in the clock
-        private int timeCol;                        // 0 hour, 1 minute, 2 AM/PM
+        private int timeCol;                        // the position of the focused column in columns()
         private boolean keyboardMode;
 
         PickerPopup() {
@@ -485,7 +605,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             footY = y + 4f;
             setHeight(footY + FOOT_H + PAD);
 
-            LocalTime now = LocalTime.now().truncatedTo(ChronoUnit.MINUTES);
+            LocalTime now = LocalTime.now().truncatedTo(owner.timeUnit());
             baseTime = now.withMinute(now.getMinute() / owner.minuteStep * owner.minuteStep);
             LocalDate today = LocalDate.now();
             LocalDate start = owner.date != null ? owner.date : today;
@@ -530,7 +650,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         }
 
         private void pickTime(LocalTime t) {
-            time = t.truncatedTo(ChronoUnit.MINUTES);
+            time = t.truncatedTo(timeUnit());
             if (mode == Mode.DATE_TIME && date == null) {
                 LocalDate today = LocalDate.now();
                 date = minDate != null && today.isBefore(minDate) ? minDate
@@ -540,11 +660,12 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             changedByUser();
         }
 
-        private void adjustTime(int col, int dir) {
+        private void adjustTime(int pos, int dir) {
             LocalTime t = shownTime();
-            switch (col) {
-                case 0 -> t = t.plusHours(dir);
-                case 1 -> {
+            switch (columns()[pos]) {
+                case HOUR -> t = t.plusHours(dir);
+                case SECOND -> t = t.plusSeconds(dir);
+                case MINUTE -> {
                     int m = t.getMinute();
                     int n = dir > 0 ? (m / minuteStep + 1) * minuteStep
                             : (m % minuteStep == 0 ? m - minuteStep : (m / minuteStep) * minuteStep);
@@ -557,7 +678,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
 
         private void today() {
             LocalDate today = LocalDate.now();
-            LocalTime now = LocalTime.now().truncatedTo(ChronoUnit.MINUTES);
+            LocalTime now = LocalTime.now().truncatedTo(timeUnit());
             if (mode == Mode.TIME) {
                 pickTime(now);
             } else {
@@ -575,22 +696,35 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
 
         /* Geometry */
 
+        /** The columns of the clock, left to right, as {@link #HOUR} and so on. */
+        private int[] columns() {
+            if (showSeconds) return use24Hour ? new int[]{HOUR, MINUTE, SECOND} : new int[]{HOUR, MINUTE, SECOND, AMPM};
+            return use24Hour ? new int[]{HOUR, MINUTE} : new int[]{HOUR, MINUTE, AMPM};
+        }
+
+        private float colW() {
+            return showSeconds && !use24Hour ? 50f : 56f; // four columns need to fit the panel's width
+        }
+
+        /** The room between column {@code pos - 1} and column {@code pos}: a colon, or a gap before AM/PM. */
+        private float spaceBefore(int pos) {
+            return columns()[pos] == AMPM ? COL_GAP : COLON_W;
+        }
+
         private float timeX0() {
-            float total = 2 * COL_W + COLON_W + (use24Hour ? 0f : COL_GAP + COL_W);
+            float total = colCount() * colW();
+            for (int i = 1; i < colCount(); i++) total += spaceBefore(i);
             return (W - total) / 2f;
         }
 
-        private float colX(int col) {
-            float x0 = timeX0();
-            return switch (col) {
-                case 0 -> x0;
-                case 1 -> x0 + COL_W + COLON_W;
-                default -> x0 + 2 * COL_W + COLON_W + COL_GAP;
-            };
+        private float colX(int pos) {
+            float x = timeX0();
+            for (int i = 1; i <= pos; i++) x += colW() + spaceBefore(i);
+            return x;
         }
 
         private int colCount() {
-            return use24Hour ? 2 : 3;
+            return columns().length;
         }
 
         /**
@@ -599,7 +733,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         private int[] timeHit(double lx, double ly) {
             if (!hasTime || ly < timeY || ly >= timeY + TIME_H) return null;
             for (int c = 0; c < colCount(); c++) {
-                if (lx >= colX(c) && lx < colX(c) + COL_W) {
+                if (lx >= colX(c) && lx < colX(c) + colW()) {
                     double oy = ly - timeY;
                     return new int[]{c, oy < ARROW_H ? 1 : oy < ARROW_H + VALUE_H ? 0 : -1};
                 }
@@ -635,7 +769,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             if (hit != null) {
                 focusTime = true;
                 timeCol = hit[0];
-                if (hit[1] != 0 || hit[0] == 2) adjustTime(hit[0], hit[1] == 0 ? 1 : hit[1]);
+                if (hit[1] != 0 || columns()[hit[0]] == AMPM) adjustTime(hit[0], hit[1] == 0 ? 1 : hit[1]);
                 return;
             }
             if (ly >= footY && ly < footY + FOOT_H) {
@@ -780,25 +914,29 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                     if (hover != null && hover[0] == c) {
                         float zoneY = hover[1] == 1 ? 0f : hover[1] == 0 ? ARROW_H : ARROW_H + VALUE_H;
                         float zoneH = hover[1] == 0 ? VALUE_H : ARROW_H;
-                        drawHover(renderer, cx, cy + zoneY, COL_W, zoneH, radius);
+                        drawHover(renderer, cx, cy + zoneY, colW(), zoneH, radius);
                     }
                     if (keyboardMode && focusTime && timeCol == c) {
-                        renderer.drawBorder(cx, cy + ARROW_H, COL_W, VALUE_H, text, 2f, radius);
+                        renderer.drawBorder(cx, cy + ARROW_H, colW(), VALUE_H, text, 2f, radius);
                     }
-                    String value = switch (c) {
-                        case 0 ->
+                    String value = switch (columns()[c]) {
+                        case HOUR ->
                                 String.format("%02d", use24Hour ? t.getHour() : (t.getHour() % 12 == 0 ? 12 : t.getHour() % 12));
-                        case 1 -> String.format("%02d", t.getMinute());
+                        case MINUTE -> String.format("%02d", t.getMinute());
+                        case SECOND -> String.format("%02d", t.getSecond());
                         default -> t.getHour() < 12 ? "AM" : "PM";
                     };
                     float vw = bigFont.measureTextWidth(value);
-                    renderer.drawText(value, cx + (COL_W - vw) / 2f, cy + ARROW_H + (VALUE_H - bigH) / 2f, bigFont, unset ? dim : text);
-                    drawChevronVertical(renderer, cx + COL_W / 2f, cy + ARROW_H / 2f, -1, text);
-                    drawChevronVertical(renderer, cx + COL_W / 2f, cy + ARROW_H + VALUE_H + ARROW_H / 2f, 1, text);
+                    renderer.drawText(value, cx + (colW() - vw) / 2f, cy + ARROW_H + (VALUE_H - bigH) / 2f, bigFont, unset ? dim : text);
+                    drawChevronVertical(renderer, cx + colW() / 2f, cy + ARROW_H / 2f, -1, text);
+                    drawChevronVertical(renderer, cx + colW() / 2f, cy + ARROW_H + VALUE_H + ARROW_H / 2f, 1, text);
                 }
-                float colonX = ax + colX(0) + COL_W + COLON_W / 2f, colonY = ay + timeY + ARROW_H + VALUE_H / 2f;
-                renderer.drawCircle(colonX, colonY - 5f, 2f, unset ? dim : text);
-                renderer.drawCircle(colonX, colonY + 5f, 2f, unset ? dim : text);
+                for (int c = 1; c < colCount(); c++) {
+                    if (columns()[c] == AMPM) continue;
+                    float colonX = ax + colX(c - 1) + colW() + COLON_W / 2f, colonY = ay + timeY + ARROW_H + VALUE_H / 2f;
+                    renderer.drawCircle(colonX, colonY - 5f, 2f, unset ? dim : text);
+                    renderer.drawCircle(colonX, colonY + 5f, 2f, unset ? dim : text);
+                }
             }
 
             // Footer: Today/Now on the left, Clear on the right.

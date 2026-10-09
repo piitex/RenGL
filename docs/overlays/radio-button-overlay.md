@@ -72,8 +72,7 @@ button.setDotColor(Color.BLUE); // pins the dot color
 button.getStyling().setBorderColor(Color.BLUE);
 ```
 
-> **Do not call `onMouseClick` on a radio button.** The constructor registers an internal handler that selects
-> it.
+`onMouseClick` is safe to use on a radio button: the selection is handled apart from it, and your listener runs after.
 
 ## Example: labeled options
 

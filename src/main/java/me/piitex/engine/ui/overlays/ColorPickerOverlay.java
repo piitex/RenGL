@@ -72,7 +72,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         setCursorMode(CursorMode.POINTER);
         setFocusTraversable(true);
         setFromColor(initial == null ? Color.BLACK : initial);
-        onMouseClick(event -> toggleOpen());
+        setBuiltInClickListener(event -> toggleOpen());
         ThemeManager.register(this);
     }
 

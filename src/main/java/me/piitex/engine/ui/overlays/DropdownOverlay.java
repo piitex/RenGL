@@ -70,7 +70,7 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         setHeight(height);
         setCursorMode(CursorMode.POINTER);
         setFocusTraversable(true);
-        onMouseClick(event -> toggleOpen());
+        setBuiltInClickListener(event -> toggleOpen());
         ThemeManager.register(this);
     }
 

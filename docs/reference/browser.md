@@ -49,7 +49,11 @@ Browser.open(extracted);    // the .txt in the text editor, the folder in Finder
 Browser.reveal(extracted);  // "Show in Finder": the file selected inside its folder
 ```
 
-Both return `false`, with a warning in the log, if the path does not exist.
+```java
+Browser.openAsText(script); // a .sh, .bat or .js in the text editor, which open(Path) refuses to start
+```
+
+Both `open` and `reveal` return `false`, with a warning in the log, if the path does not exist.
 
 `open(Path)` **refuses a program**: a file ending in `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.scr`, `.ps1`, `.vbs`,
 `.sh`, `.command`, `.jar`, `.lnk`, `.js` and a few more, and anything ending in `.app`. Opening one would run it, and the
@@ -61,6 +65,15 @@ no such rule, since showing a file in the file manager does not run it.
 | macOS | `open <path>` | `open -R <path>` |
 | Windows | `explorer.exe <folder>` or `rundll32 url.dll,FileProtocolHandler <file>` | `explorer.exe /select, <path>` |
 | Linux | `xdg-open <path>` | `xdg-open <parent folder>`: file managers have no common way to select a file |
+
+`openAsText(Path)` opens a file in the system's text editor, so a script from an archive can be read without running it
+(the editor is given the file, nothing runs it). It refuses folders and missing files.
+
+| Platform | `openAsText(Path)` |
+|---|---|
+| macOS | `open -t <path>` (TextEdit) |
+| Windows | `notepad.exe <path>` |
+| Linux | `gtk-launch <default text/plain entry> <path>`; the entry comes from `xdg-mime query default text/plain`, asked and answered before the editor starts. `false` if the system names none |
 
 ## How it opens the browser
 

@@ -274,14 +274,36 @@ public final class Sound implements AutoCloseable {
     }
 
     /**
+     * Plays once at {@code volume}, starting silent and fading in over {@code fadeInSeconds}. Unlike calling
+     * {@link Playback#fadeIn} on a playback that has already started, there is no moment at full volume.
+     */
+    public Playback play(float volume, float fadeInSeconds) {
+        return start(volume, false, null, fadeInSeconds);
+    }
+
+    /**
      * Plays repeatedly until you {@link Playback#stop()} it.
      */
     public Playback loop() {
         return start(1f, true);
     }
 
+    /**
+     * Plays repeatedly, starting silent and fading in over {@code fadeInSeconds}.
+     */
+    public Playback loop(float fadeInSeconds) {
+        return start(1f, true, null, fadeInSeconds);
+    }
+
     private Playback start(float volume, boolean loop) {
         return start(volume, loop, null);
+    }
+
+    private Playback start(float volume, boolean loop, float[] position, float fadeInSeconds) {
+        if (fadeInSeconds <= 0f) return start(volume, loop, position);
+        Playback p = start(0f, loop, position);
+        if (!p.isFinished()) p.fadeTo(volume, fadeInSeconds);
+        return p;
     }
 
     private Playback start(float volume, boolean loop, float[] position) {

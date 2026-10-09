@@ -26,12 +26,8 @@ import java.io.File;
  * anchored at the top-left corner, a pointer {@link CursorMode} on hover, and an
  * {@link #onAction} click callback.
  * <p>
- * The constructor registers its own {@link #onMouseClick} handler to fire
- * {@link #onAction}. Calling {@code onMouseClick(...)} afterward replaces that handler
- * and stops the button from firing, since {@link me.piitex.engine.ui.Element} holds only
- * one click listener at a time. That is the expected trade-off here, because a click on
- * a button is the action, unlike cases elsewhere in this engine where a hook is claimed
- * for something an application might not expect.
+ * A click fires {@link #onAction} through a handler of the button's own, kept apart from
+ * {@link #onMouseClick}: a listener set there runs after it and does not replace it.
  */
 public class ButtonOverlay extends TextOverlay implements Themeable {
     /**
@@ -68,7 +64,7 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
         setWidth(width);
         setHeight(height);
         setCursorMode(CursorMode.POINTER);
-        onMouseClick(event -> fireAction());
+        setBuiltInClickListener(event -> fireAction());
         setClickOnRelease(true);
         ThemeManager.register(this);
     }
@@ -81,7 +77,7 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
         setWidth(width);
         setHeight(height);
         setCursorMode(CursorMode.POINTER);
-        onMouseClick(event -> fireAction());
+        setBuiltInClickListener(event -> fireAction());
         setClickOnRelease(true);
         ThemeManager.register(this);
     }

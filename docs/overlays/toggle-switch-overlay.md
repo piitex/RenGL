@@ -54,8 +54,8 @@ at the opacity the knob has travelled, which looks the same for opaque paints.
 
 The switch draws its own track, so its `getStyling()` background and border are unused.
 
-> **Do not call `onMouseClick` on a switch.** The constructor registers an internal handler that toggles it, and replacing it
-> breaks the widget. Use `onToggle`.
+`onMouseClick` is safe to use on a switch: the toggle is handled apart from it, and your listener runs after. To react to
+the state, use `onToggle`.
 
 ## Method reference
 
