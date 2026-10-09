@@ -44,6 +44,25 @@ float size = title.getFontSize();
 `setText`, `setFontSize` and `setFontFile` all recompute the overlay's width/height so layouts and
 alignment see the new size.
 
+## Text that does not fit
+
+A `TextOverlay` sizes itself to its text, so a long file name or status line makes a long overlay. To cap that:
+
+```java
+name.setMaxWidth(240);            // never wider than 240; shorter text still takes only what it needs
+status.setWidth(300);             // a box of a set width...
+status.setEllipsize(true);        // ...shortens text that is wider than it, instead of running past
+name.setEllipsizeMiddle(true);    // "quarterl….xlsx": cut the middle, keep both ends (suits file names)
+```
+
+Text that is cut ends in an ellipsis (`…`). `getText()` still returns the whole string, so nothing is lost; only
+what is drawn is shortened. `setMaxWidth` is for an overlay that sizes itself, `setEllipsize` is for one given a width with
+`setWidth`; if both are set the narrower wins. Set a [tooltip](../core/element.md) to the full text if the person may
+need to read it.
+
+`TextFit.ellipsize(String, Font, float maxWidth[, boolean middle])` in `me.piitex.engine.ui.text` does the same for text you
+draw yourself. It never splits a surrogate pair, so an emoji is cut whole or not at all.
+
 ## Colors and gradients
 
 The text color is a [`Paint`](../styling/colors-and-paints.md): a solid [`Color`](../styling/colors-and-paints.md#color), or a gradient stretched across the text's own bounds.
@@ -130,6 +149,9 @@ title.dispose(); // release the native Font when permanently discarding this ove
 | `getTextColor()/setTextColor(Paint)` | Solid or gradient fill; setting pins it |
 | `isBold()/setBold(boolean)` | Synthesized bold weight, no separate font file needed |
 | `isItalic()/setItalic(boolean)` | Synthesized oblique slant, no separate font file needed |
+| `getMaxWidth()/setMaxWidth(double)` | The widest an overlay that sizes itself may be; longer text is shortened with `…` |
+| `isEllipsize()/setEllipsize(boolean)` | Shorten text wider than a width set with `setWidth` |
+| `isEllipsizeMiddle()/setEllipsizeMiddle(boolean)` | Put the `…` in the middle, keeping both ends |
 | `render(Renderer)`, `update(float)` | Overridable; `update` also advances an animated text paint |
 | `dispose()` | Releases the native `Font` |
-| Protected | `drawText(Renderer)`, `getOrBuildFont()`, `updateComputedSize()` (used by [`ButtonOverlay`](button-overlay.md)) |
+| Protected | `drawText(Renderer)`, `getOrBuildFont()`, `updateComputedSize()`, `textLimit()`, `fit(String, Font, float)` (used by [`ButtonOverlay`](button-overlay.md)) |
