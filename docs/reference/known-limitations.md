@@ -50,7 +50,15 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 - **The dialog is modal to the whole app.** The engine keeps rendering under it, but the main loop is busy until it
   closes, so other queued dialogs, the clipboard and cursor changes wait for it.
-- **No dialog title or parent-window option, and no in-engine file browser.**
+- **No dialog title or parent-window option, and no in-engine file browser.** The native file dialog library has no way
+  to set a title or prompt text. A "Choose where to extract to" prompt has to go in your own UI beside the dialog.
+
+## Operating system integration
+
+- **No hover feedback while files are dragged over the window.** GLFW reports a [file drop](../core/window.md#files-dropped-on-the-window)
+  only when it happens, so a drop target cannot light up as the drag approaches.
+- **No dragging rows out of the app into Finder or Explorer.** There is no native drag source.
+- **No Dock or taskbar progress, and no system notification** when a long job finishes in the background.
 
 ## Audio
 

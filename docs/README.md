@@ -39,6 +39,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [ModalContainer](containers/modal-container.md) | Dialogs that block the rest of the UI |
 | [ReorderableGrid](containers/reorderable-grid.md) | Drag-to-rearrange grid of items |
 | [TreeView](containers/tree-view.md) | A tree of items, like an editor's hierarchy or a file browser |
+| [TableView](containers/table-view.md) | Rows and columns with a fixed header, click-to-sort and resizable columns, like an archive's listing |
 | **[Layouts](layouts/README.md)** | Automatic positioning |
 | [Layouts overview](layouts/README.md) | How automatic positioning works |
 | [Layout files](containers/layout-files.md) | Load a screen designed in the editor from JSON |
@@ -106,7 +107,8 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | **[Reference](reference/README.md)** | Custom elements, utilities, known limitations |
 | [Writing custom elements](reference/custom-elements.md) | Subclassing [`Element`](core/element.md) / [`Overlay`](core/overlay.md) |
 | [Utilities](reference/utilities.md) | `FormID`, `AssetManager`, `FileUtil`, `ProcessUtil`, the AI-disclosure annotations |
-| [Browser](reference/browser.md) | Open a web address in the OS default browser with `Browser.open` |
+| [Browser](reference/browser.md) | Open a web address in the OS default browser, or open and reveal a file or folder, with `Browser` |
+| [Packaging](reference/packaging.md) | Ship an installable app with jpackage: JVM flags, icon, version, file types, signing and notarization |
 | [AppEnvironment](reference/app-environment.md) | Dev vs release file locations, chosen automatically |
 | [Downloads](reference/downloads.md) | Background HTTP downloads with progress, speed and ETA displays |
 | [Config](reference/config.md) | Settings files with flat and nested values |
