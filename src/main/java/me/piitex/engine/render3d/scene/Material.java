@@ -35,6 +35,8 @@ public final class Material {
     private TextureData emissiveTexture;
     private float emissiveR, emissiveG, emissiveB;
     private float normalScale = 1f;
+    private float uvOffsetU, uvOffsetV, uvScaleU = 1f, uvScaleV = 1f, uvRotation;
+    private int uvSets;
 
     public Material() {
     }
@@ -314,6 +316,78 @@ public final class Material {
         this.emissiveB = Math.max(0f, b);
         this.pbr = true;
         return this;
+    }
+
+    /**
+     * What a material's textures can read the second set of texture coordinates for.
+     */
+    public enum Slot {
+        BASE_COLOR, NORMAL, METALLIC_ROUGHNESS, OCCLUSION, EMISSIVE
+    }
+
+    /**
+     * Moves, turns and stretches every texture of the material over the surface, as glTF's {@code KHR_texture_transform}
+     * does: a texture coordinate is scaled, then turned by {@code rotation} radians, then moved by the offset. Tile a
+     * texture with a scale above 1 (the textures repeat), slide it for flowing water or a scrolling screen by changing
+     * the offset every frame, or turn it with the rotation. The default is no change: offset 0, scale 1, rotation 0.
+     */
+    public Material setUvTransform(float offsetU, float offsetV, float scaleU, float scaleV, float rotation) {
+        this.uvOffsetU = offsetU;
+        this.uvOffsetV = offsetV;
+        this.uvScaleU = scaleU;
+        this.uvScaleV = scaleV;
+        this.uvRotation = rotation;
+        return this;
+    }
+
+    /**
+     * The same scale on both axes and no offset or turn, to tile a texture.
+     */
+    public Material setUvScale(float scale) {
+        return setUvTransform(0f, 0f, scale, scale, 0f);
+    }
+
+    public float getUvOffsetU() {
+        return uvOffsetU;
+    }
+
+    public float getUvOffsetV() {
+        return uvOffsetV;
+    }
+
+    public float getUvScaleU() {
+        return uvScaleU;
+    }
+
+    public float getUvScaleV() {
+        return uvScaleV;
+    }
+
+    public float getUvRotation() {
+        return uvRotation;
+    }
+
+    /**
+     * Makes one of the textures read the mesh's second set of texture coordinates ({@code 1}, see
+     * {@link Mesh#setUvs2}) instead of the first ({@code 0}, the default): a baked occlusion or light map laid out
+     * separately from the colour texture. A mesh with no second set gives set 1 the first's coordinates.
+     */
+    public Material setTexCoordSet(Slot slot, int set) {
+        if (set != 0 && set != 1) throw new IllegalArgumentException("A texture reads texture coordinate set 0 or 1, not " + set);
+        if (set == 1) uvSets |= 1 << slot.ordinal();
+        else uvSets &= ~(1 << slot.ordinal());
+        return this;
+    }
+
+    public int getTexCoordSet(Slot slot) {
+        return (uvSets >> slot.ordinal()) & 1;
+    }
+
+    /**
+     * The texture slots that read the second set of coordinates, a bit per {@link Slot} in order.
+     */
+    int texCoordBits() {
+        return uvSets;
     }
 
     private static float clamp01(float v) {

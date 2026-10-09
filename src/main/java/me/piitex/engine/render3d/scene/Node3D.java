@@ -36,6 +36,7 @@ public final class Node3D {
     private boolean castShadow = true;
     private boolean receiveShadow = true;
     private boolean frustumCulled = true;
+    private boolean sortTriangles;
     private Instances instances;
     private Skin skin;
     private MorphState morph;
@@ -214,11 +215,28 @@ public final class Node3D {
 
     /**
      * Whether the node is skipped when it is entirely outside the camera's view (true by default). Turn it off for a mesh
-     * whose picture is not where its box is. A skinned mesh is never skipped, because its box does not follow the pose.
-     * A node outside the view still throws its shadow.
+     * whose picture is not where its box is. A skinned mesh is bounded by its joints (the farthest vertex each one moves),
+     * so it is skipped when all of them are out of view. A node outside the view still throws its shadow.
      */
     public Node3D setFrustumCulled(boolean frustumCulled) {
         this.frustumCulled = frustumCulled;
+        return this;
+    }
+
+    public boolean isSortTriangles() {
+        return sortTriangles;
+    }
+
+    /**
+     * Draws the triangles of this node's see-through ({@link Material#setBlend blended}) mesh from far to near each frame
+     * (false by default). Without it a mesh is drawn in the order its triangles are stored, so a see-through shape that
+     * folds over itself (a bottle, a bush of leaf cards, a cloud of particles in one mesh) can show its far side over its
+     * near side from some angles. It costs a sort of the triangles on the CPU and an upload of the indices every frame
+     * the camera or the node moves, so turn it on for the nodes that need it. It does not sort one node against another
+     * (that is by the middle of each), and has no effect on a node with instances, a skin or blend shapes.
+     */
+    public Node3D setSortTriangles(boolean sortTriangles) {
+        this.sortTriangles = sortTriangles;
         return this;
     }
 
@@ -421,6 +439,7 @@ public final class Node3D {
         c.castShadow = castShadow;
         c.receiveShadow = receiveShadow;
         c.frustumCulled = frustumCulled;
+        c.sortTriangles = sortTriangles;
         c.instances = instances == null ? null : instances.copy();
         c.skin = skin;
         if (morph != null) {

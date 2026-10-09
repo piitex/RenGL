@@ -20,6 +20,10 @@ class ShadowPlannerTest {
         return ShadowPlanner.select(scene, CAMERA.getPosition(), cameraPlanes(), truncated);
     }
 
+    private static List<ShadowPlanner.Candidate> select(Scene3D scene, boolean[] truncated, int limit) {
+        return ShadowPlanner.select(scene, CAMERA.getPosition(), cameraPlanes(), truncated, limit);
+    }
+
     private static float[] clip(Mat4 m, Vec3 p) {
         Vec3 unused = Vec3.ZERO;
         float[] a = m.toArray();
@@ -146,7 +150,7 @@ class ShadowPlannerTest {
     }
 
     @Test
-    void atMostFourLightsGetShadowsAndTheNearestWin() {
+    void whenThereAreMoreLightsThanTheLimitTheNearestWin() {
         Scene3D scene = new Scene3D();
         scene.lights().clear();
         scene.lights().add(Light.point(new Vec3(0, 1, 30), Color.WHITE, 1f, 100f).setCastShadow(true));  // 0: far (but in range of the view)
@@ -156,13 +160,26 @@ class ShadowPlannerTest {
         scene.lights().add(Light.point(new Vec3(0.5f, 2, 7), Color.WHITE, 1f, 20f).setCastShadow(true)); // 4: nearest
         scene.lights().add(Light.directional(new Vec3(0, -1, 0), Color.WHITE, 1f).setCastShadow(true));  // 5: always first
         boolean[] truncated = {false};
-        List<ShadowPlanner.Candidate> chosen = select(scene, truncated);
+        List<ShadowPlanner.Candidate> chosen = select(scene, truncated, 4);
         assertTrue(truncated[0]);
         assertEquals(4, chosen.size());
         assertEquals(5, chosen.get(0).index(), "the sun is first");
         assertEquals(4, chosen.get(1).index());
         assertEquals(2, chosen.get(2).index());
         assertEquals(1, chosen.get(3).index());
+    }
+
+    @Test
+    void everyLightOfTheSceneCanCastShadows() {
+        assertEquals(Scene3D.MAX_LIGHTS, Scene3D.MAX_SHADOW_LIGHTS);
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) {
+            scene.lights().add(Light.point(new Vec3(i - 3, 1, 5), Color.WHITE, 1f, 20f).setCastShadow(true));
+        }
+        boolean[] truncated = {false};
+        assertEquals(8, select(scene, truncated).size());
+        assertFalse(truncated[0]);
     }
 
     @Test

@@ -25,6 +25,7 @@ public final class Mesh {
     private final Bounds baseBounds;
     private int[] skinJoints;
     private float[] skinWeights;
+    private float[] uvs2;
     private List<MorphTarget> morphTargets = List.of();
     private float[] morphDefaults = new float[0];
     private volatile Bvh bvh;
@@ -100,6 +101,29 @@ public final class Mesh {
 
     public boolean isSkinned() {
         return skinJoints != null;
+    }
+
+    /**
+     * A second set of texture coordinates, for a texture laid out apart from the colour texture (a baked light map or
+     * occlusion map). Give a {@link Material} the textures that read it with {@link Material#setTexCoordSet}.
+     *
+     * @param uvs u, v per vertex, or null to take it away
+     */
+    public Mesh setUvs2(float[] uvs) {
+        if (uvs != null && uvs.length != vertexCount() * 2) throw new IllegalArgumentException("uvs must hold u, v per vertex (" + vertexCount() + " vertices)");
+        this.uvs2 = uvs == null ? null : uvs.clone();
+        return this;
+    }
+
+    public boolean hasUvs2() {
+        return uvs2 != null;
+    }
+
+    /**
+     * The second set of texture coordinates, u and v per vertex, or null. Do not change the array.
+     */
+    public float[] uvs2() {
+        return uvs2;
     }
 
     /**

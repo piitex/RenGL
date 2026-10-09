@@ -91,9 +91,10 @@ A value you don't set comes from the scene, so these still work as the defaults 
 
 ### Which lights get shadows
 
-At most **4 lights** cast shadows at a time (`Scene3D.MAX_SHADOW_LIGHTS`). Directional lights come first, then the point
-and spot lights nearest the camera. A point or spot light whose reach is wholly outside the camera's view is skipped for
-that frame. A fifth light with shadows on casts none until one of the others drops out, and the scene logs a warning once.
+Every light of a scene can cast shadows: up to **8** (`Scene3D.MAX_SHADOW_LIGHTS`, the same as the most lights a scene uses).
+Directional lights come first, then the point and spot lights nearest the camera. A point or spot light whose reach is
+wholly outside the camera's view is skipped for that frame. Each light is a pass over the casters, so eight of them cost
+about eight times one; keep the shadows of the lights that matter and leave `setCastShadow` off on the rest.
 
 All shadow pictures live in one shared **atlas** texture, and a light gets a tile of it per view: a directional light one
 tile per cascade, a spot light one, and a point light six (one per side of a cube around it). The atlas is only as large
@@ -177,6 +178,26 @@ torch.setFalloff(LightFalloff.LINEAR);      // or a built-in one
   or falloff, so a typo costs you the look and not the frame.
 - A directional light doesn't fade, so a falloff on it does nothing.
 
+## Tone mapping and exposure
+
+Lights add up: three lamps on one wall, a strong sun, a bright glow can light a surface to more than white, and a screen
+can only show white. Without help the sum is cut off, and bright areas become flat patches with no detail in them.
+`scene.setToneMapping(...)` bends the bright end of the range instead, and `scene.setExposure(...)` scales the light first:
+
+```java nocompile
+scene.setToneMapping(ToneMapping.ACES);   // NONE (the default), REINHARD, or ACES
+scene.setExposure(1.3f);                  // 2 is one stop brighter, 0.5 one darker
+```
+
+| Mapping | Look |
+|---|---|
+| `NONE` | Colours are cut off at white: what a scene did before there were tone mappers. Nothing changes until you set one |
+| `REINHARD` | `c / (1 + c)`: soft, never reaches white, a little flat in the middle tones |
+| `ACES` | A fit of the film curve: more contrast, deeper shadows, highlights that roll off gently. Darkens the middle tones a little, so raise the exposure to 1.2 or 1.5 if the scene gets dim |
+
+It applies to everything lit, fog included, and not to the skybox, which is drawn as its picture is. Exposure works with
+`NONE` too, as a plain brightness. In a [scene file](scene-files.md) they are the world's `toneMapping` and `exposure`.
+
 ## Fog
 
 ```java nocompile
@@ -245,8 +266,8 @@ scene.setAmbient(Color.WHITE, 0f);  // no longer used where the sky lights the s
 - **The sky doesn't light the scene** unless you call [`setEnvironmentLighting`](#light-from-the-sky). Otherwise set the
   ambient light and the lights to match it.
 - **Only the first 8 lights count,** and a light that casts shadows must be among them, or it is ignored.
-- **Only 4 lights cast shadows at once:** the directional ones, then the nearest to the camera. Check
-  `scene.getStats().shadowViews()` if a shadow is missing.
+- **Shadows cost a pass per view:** a point light is six, a directional light one per cascade. Check
+  `scene.getStats().shadowViews()` if a shadow is missing or the frame is slow.
 - **Shadow memory adds up:** the shadow atlas is one per scene and device, shared by its viewports, and a 4096 square is
   64 MB of GPU memory. A point light is six tiles and each cascade one, so `ULTRA` on several lights fills it at once and
   the biggest tiles are halved. `HIGH` is sharp enough for most scenes.
