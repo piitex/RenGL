@@ -40,6 +40,8 @@ not move rows needs no `refresh()`.
 | `setComparator(Comparator<T>)` | How a click on the header orders the rows. See [Sorting](#sorting) |
 | `setSortable(boolean)` | Whether a header click sorts by it. On by default |
 | `setResizable(boolean)` | Whether the user can drag its right edge. On by default |
+| `setEllipsized(boolean)` | Text too long for the cell ends with `…` (header titles too). On by default; off cuts it at the cell's edge |
+| `setEllipsisInMiddle(boolean)` | Put the `…` in the middle so the end stays, such as a file name's extension. Off by default |
 | `setIconProvider(item -> IconAsset)` | An icon before the text, such as `Feather.FOLDER`, or null for none on that row |
 | `setIconColorProvider(item -> Color)` | The color of that icon, so a folder can be the accent; null, or null for a row, is the text color |
 
@@ -145,8 +147,8 @@ table.dispose();               // frees the font
 
 ## Gotchas
 
-- **Do not call `onMouseClick` on the table.** Its own handler selects the row under a right-click.
-- Text that does not fit its cell is cut off at the cell's edge. Resize the column, or give it a wider default.
+- `onMouseClick` on the table is safe to use: the table's own right-click row selection runs first, then your handler.
+- Text that does not fit its cell ends with an ellipsis. Resize the column, give it a wider default, or turn `setEllipsisInMiddle` on to keep a file extension.
 - Rows cannot be dragged, reordered by the user or edited in place. For a hierarchy use [`TreeView`](tree-view.md).
 - One `equals` per item: two entries that are equal are one selection. Use records or types with identity or a unique
   key.

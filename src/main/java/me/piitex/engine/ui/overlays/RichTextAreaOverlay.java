@@ -85,7 +85,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
     {
         // Right-clicking a flagged word offers corrections. Registered here (an instance
         // initializer) so every constructor gets it without repeating the call.
-        onMouseClick(event -> {
+        setBuiltInClickListener(event -> {
             if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
                 openSuggestions(event.getMouseX(), event.getMouseY());
             }

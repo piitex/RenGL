@@ -15,6 +15,7 @@ import me.piitex.engine.ui.scroll.ScrollContainer;
 import me.piitex.engine.ui.text.Font;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.ui.text.FontScalable;
+import me.piitex.engine.ui.text.TextFit;
 import me.piitex.engine.ui.text.TextAlign;
 import me.piitex.engine.ui.theme.Overridable;
 import me.piitex.engine.ui.theme.Theme;
@@ -58,8 +59,8 @@ import java.util.function.Predicate;
  * right-click after selecting the row under the pointer (unless it is already part of the selection). When the
  * columns are wider than the table it scrolls sideways, and the header scrolls with the cells.
  * <p>
- * It follows the theme like a {@link Container} that {@link #useTheme() uses the theme}. It registers its own
- * {@link #onMouseClick} handler, so do not replace it.
+ * It follows the theme like a {@link Container} that {@link #useTheme() uses the theme}. Its own right-click
+ * selection runs before any {@link #onMouseClick} handler you set.
  */
 public class TableView<T> extends ScrollContainer implements Focusable, FontScalable {
     private static final long DOUBLE_CLICK_NANOS = 400_000_000L;
@@ -78,7 +79,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         private float width = 120f, minWidth = 40f;
         private TextAlign alignment = TextAlign.LEFT;
         private Comparator<? super T> comparator;
-        private boolean sortable = true, resizable = true;
+        private boolean sortable = true, resizable = true, ellipsize = true, ellipsisInMiddle;
         private Function<T, IconAsset> icon;
         private Function<T, Color> iconColor;
 
@@ -180,6 +181,32 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             return this;
         }
 
+        public boolean isEllipsized() {
+            return ellipsize;
+        }
+
+        /**
+         * Whether text too long for the cell is ended with an ellipsis ({@code …}). On by default; off cuts it at the
+         * cell's edge.
+         */
+        public Column<T> setEllipsized(boolean ellipsize) {
+            this.ellipsize = ellipsize;
+            return this;
+        }
+
+        public boolean isEllipsisInMiddle() {
+            return ellipsisInMiddle;
+        }
+
+        /**
+         * Puts the ellipsis in the middle of text that does not fit, so the end stays: a file name keeps its extension.
+         * Off by default.
+         */
+        public Column<T> setEllipsisInMiddle(boolean ellipsisInMiddle) {
+            this.ellipsisInMiddle = ellipsisInMiddle;
+            return this;
+        }
+
         private String textOf(T item) {
             String value = text.apply(item);
             return value == null ? "" : value;
@@ -244,7 +271,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         super(width, height);
         setHorizontalScrollEnabled(true);
         setFocusTraversable(true);
-        onMouseClick(event -> {
+        setBuiltInClickListener(event -> {
             if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) return;
             int index = rowAt(event.getMouseY());
             T item = index >= 0 ? items.get(index) : null;
@@ -1128,6 +1155,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         if (column.icon != null) left += iconSize + 6f;
         String text = column.textOf(item);
         if (text.isEmpty() || right <= left) return;
+        if (column.ellipsize) text = TextFit.ellipsize(text, f, right - left, column.ellipsisInMiddle);
         float textW = f.measureTextWidth(text);
         boolean clip = textW > right - left;
         float textX = switch (column.alignment) {
@@ -1163,7 +1191,8 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             boolean sorted = column == sortColumn;
             if (sorted) right -= SORT_ARROW + 4f;
             if (right > left) {
-                float textW = f.measureTextWidth(column.title);
+                String title = column.ellipsize ? TextFit.ellipsize(column.title, f, right - left) : column.title;
+                float textW = f.measureTextWidth(title);
                 boolean clip = textW > right - left;
                 float textX = switch (column.alignment) {
                     case RIGHT -> Math.max(left, right - textW);
@@ -1171,7 +1200,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
                     default -> left;
                 };
                 if (clip) renderer.pushClip(left, y, right - left, headerHeight);
-                renderer.drawText(column.title, textX, y + (headerHeight - textH) / 2f, f, titles);
+                renderer.drawText(title, textX, y + (headerHeight - textH) / 2f, f, titles);
                 if (clip) renderer.popClip();
             }
             if (sorted) drawSortArrow(renderer, cellX + cellW - CELL_PADDING - SORT_ARROW / 2f, y + headerHeight / 2f, sortAscending, titles);

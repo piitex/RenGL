@@ -64,8 +64,8 @@ All five are done.
   there is one click handler ([button-overlay.md](docs/overlays/button-overlay.md#an-icon-beside-the-label)).
 - **A visible disabled state.** `ButtonOverlay.setDisabled(true)`: faded (`setDisabledOpacity`, 45% by default), no hover
   color, a "not allowed" cursor, `onAction` does not fire and `onDisabledClick(Runnable)` does, the tooltip still shows
-  ([button-overlay.md](docs/overlays/button-overlay.md#disabled)). Only buttons have it; other controls still only have
-  `setEnabled(false)`, which hides them.
+  ([button-overlay.md](docs/overlays/button-overlay.md#disabled)). Every element has it now (`Element.setDisabled`), a
+  disabled container disables what is inside it ([element.md](docs/core/element.md#disabled)).
 - **Ellipsis for text that doesn't fit.** `TextOverlay.setMaxWidth(double)` (an overlay that sizes itself, capped),
   `setEllipsize(true)` (a box of a set width) and `setEllipsizeMiddle(true)` to keep a file name's extension; `ButtonOverlay`
   honors `setEllipsize` too. `TextFit.ellipsize(...)` does it for text you draw yourself

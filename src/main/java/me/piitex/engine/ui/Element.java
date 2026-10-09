@@ -86,6 +86,11 @@ public class Element {
 
     // Event handling
     private Consumer<MouseClickEvent> mouseClickListenerConsumer;
+    private boolean disabled;
+    private float disabledOpacity = DEFAULT_DISABLED_OPACITY;
+    private Runnable onDisabledClick;
+    private Consumer<MouseClickEvent> builtInClickListener;
+    private Consumer<MouseClickEvent> combinedClickListener;
     private boolean clickOnRelease;
     private boolean propagateClicks;
     private boolean dragsContainer;
@@ -151,6 +156,80 @@ public class Element {
      */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    /**
+     * How much of itself a {@link #setDisabled disabled} element draws, unless {@link #setDisabledOpacity} says otherwise.
+     */
+    public static final float DEFAULT_DISABLED_OPACITY = 0.45f;
+
+    /**
+     * Shows this element as unavailable: drawn faded, with no hover color, a "not allowed" cursor, and it takes no
+     * clicks, drags or keyboard focus. A disabled {@link me.piitex.engine.ui.containers.Container} disables everything
+     * inside it. The element stays visible and keeps its {@link #setTooltip tooltip}, so the tooltip can say why. This
+     * is different from {@link #setEnabled}, which hides an element and removes it from input altogether.
+     * <p>
+     * A click on a disabled element runs {@link #onDisabledClick}, if there is one.
+     */
+    public void setDisabled(boolean disabled) {
+        this.disabled = disabled;
+    }
+
+    /**
+     * Whether {@link #setDisabled} was called on this element. Use {@link #isEffectivelyDisabled()} to include a
+     * disabled container above it.
+     */
+    public boolean isDisabled() {
+        return disabled;
+    }
+
+    /**
+     * Whether this element, or any container it is inside, is {@link #setDisabled disabled}.
+     */
+    public boolean isEffectivelyDisabled() {
+        for (Element e = this; e != null; e = e.owner) {
+            if (e.disabled) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Registers what a click on this element does while it is {@link #setDisabled disabled}, such as telling the person
+     * why nothing happened. Only one is held; null removes it. A disabled container's handler also runs for a click on
+     * a child of it that has none of its own.
+     */
+    public void onDisabledClick(Runnable onDisabledClick) {
+        this.onDisabledClick = onDisabledClick;
+    }
+
+    /**
+     * The nearest element at or above this one that is {@link #setDisabled disabled}, or null if none is.
+     */
+    public Element getDisablingElement() {
+        for (Element e = this; e != null; e = e.owner) {
+            if (e.disabled) return e;
+        }
+        return null;
+    }
+
+    /**
+     * Runs the {@link #onDisabledClick} handler, if there is one.
+     */
+    public void fireDisabledClick() {
+        if (onDisabledClick != null) onDisabledClick.run();
+    }
+
+    /**
+     * How much of itself a {@link #setDisabled disabled} element draws, from 0 (nothing) to 1 (no change).
+     * {@link #DEFAULT_DISABLED_OPACITY} by default. This is separate from {@link #setOpacity}, so a fade and a disabled
+     * element combine.
+     */
+    public void setDisabledOpacity(float opacity) {
+        this.disabledOpacity = Math.clamp(opacity, 0f, 1f);
+    }
+
+    public float getDisabledOpacity() {
+        return disabledOpacity;
     }
 
     /**
@@ -512,7 +591,7 @@ public class Element {
      * once per Element, such as {@code TEXT} for a text field.
      */
     public CursorMode getCursorMode() {
-        return cursorMode;
+        return isEffectivelyDisabled() ? CursorMode.NOT_ALLOWED : cursorMode;
     }
 
     public void setCursorMode(CursorMode cursorMode) {
@@ -899,15 +978,18 @@ public class Element {
             transition.renderBackground(renderer, this);
         }
 
-        if (opacity > 0f) {
+        float shown = disabled ? opacity * disabledOpacity : opacity;
+        boolean hoveredBefore = hovered;
+        if (disabled) setHovered(false); // an element that cannot be used does not light up under the mouse
+        if (shown > 0f) {
             boolean scaled = scale != 1f;
             if (scaled) {
                 float pivotX = Double.isNaN(scaleOriginX) ? (float) (x + width / 2.0) : (float) scaleOriginX;
                 float pivotY = Double.isNaN(scaleOriginY) ? (float) (y + height / 2.0) : (float) scaleOriginY;
                 renderer.pushScale(scale, pivotX, pivotY);
             }
-            if (opacity < 1f) {
-                renderer.pushOpacityLayer((float) x, (float) y, (float) width, (float) height, opacity);
+            if (shown < 1f) {
+                renderer.pushOpacityLayer((float) x, (float) y, (float) width, (float) height, shown);
                 renderWithEffect(renderer);
                 renderer.popOpacityLayer();
             } else {
@@ -915,6 +997,7 @@ public class Element {
             }
             if (scaled) renderer.popScale();
         }
+        if (disabled) setHovered(hoveredBefore);
 
         for (Transition transition : transitions) {
             transition.render(renderer, this);
@@ -1199,18 +1282,41 @@ public class Element {
     }
 
     /**
-     * The currently registered click listener, or null if none is set.
+     * The click listener that runs on a press: the element's own built-in one (a table's right-click selection, say)
+     * and then the one set with {@link #onMouseClick}, or null if there is neither.
      */
     public Consumer<MouseClickEvent> getMouseClickListenerConsumer() {
-        return mouseClickListenerConsumer;
+        return combinedClickListener;
     }
 
     /**
      * Registers a callback invoked when this Element is pressed, with any mouse button, or, if it
-     * {@link #setClickOnRelease clicks on release}, when a left press on it is released over it. A press on a child that has no click listener of its own goes up to the nearest ancestor that has one, so this also fires for presses on the labels or icons inside this Element; only one listener runs per press unless the Element {@link #setPropagateClicks propagates clicks}. Only one listener is held at a time; calling this again replaces the previous listener rather than adding a second one.
+     * {@link #setClickOnRelease clicks on release}, when a left press on it is released over it. A press on a child that has no click listener of its own goes up to the nearest ancestor that has one, so this also fires for presses on the labels or icons inside this Element; only one listener runs per press unless the Element {@link #setPropagateClicks propagates clicks}. Only one listener is held at a time; calling this again replaces the previous listener rather than adding a second one. An element that handles clicks itself ({@link me.piitex.engine.ui.containers.TableView}, {@link me.piitex.engine.ui.containers.TreeView}, {@link me.piitex.engine.ui.overlays.RichTextAreaOverlay}) keeps that handling and runs this one after it.
      */
     public void onMouseClick(Consumer<MouseClickEvent> mouseClickListenerConsumer) {
         this.mouseClickListenerConsumer = mouseClickListenerConsumer;
+        combineClickListeners();
+    }
+
+    /**
+     * For an element that reacts to clicks on its own: the listener it needs, kept apart from the one a user sets with
+     * {@link #onMouseClick} so that setting one does not remove the other. It runs first.
+     */
+    protected void setBuiltInClickListener(Consumer<MouseClickEvent> listener) {
+        this.builtInClickListener = listener;
+        combineClickListeners();
+    }
+
+    private void combineClickListeners() {
+        Consumer<MouseClickEvent> own = builtInClickListener, user = mouseClickListenerConsumer;
+        if (own == null || user == null) {
+            combinedClickListener = own != null ? own : user;
+        } else {
+            combinedClickListener = event -> {
+                own.accept(event);
+                user.accept(event);
+            };
+        }
     }
 
     /**

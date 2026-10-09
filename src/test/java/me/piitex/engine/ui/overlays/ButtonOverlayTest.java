@@ -107,14 +107,14 @@ class ButtonOverlayTest {
     @Test
     void aDisabledButtonIsDrawnFaded() {
         ButtonOverlay button = button("Extract");
-        int normal = darkest(draw(button::render));
+        int normal = darkest(draw(button::renderWithTransitions));
         button.setDisabled(true);
-        int faded = darkest(draw(button::render));
+        int faded = darkest(draw(button::renderWithTransitions));
         assertTrue(normal < 60, "the label is dark: " + normal);
         assertTrue(faded > normal + 60, "and faded when disabled: " + faded + " vs " + normal);
 
         button.setDisabledOpacity(0f);
-        assertEquals(255, darkest(draw(button::render)), "fully faded draws nothing");
+        assertEquals(255, darkest(draw(button::renderWithTransitions)), "fully faded draws nothing");
     }
 
     @Test
@@ -123,11 +123,11 @@ class ButtonOverlayTest {
         button.getStyling().setHoverColor(new Color(1f, 0f, 0f, 1f));
         button.setDisabledOpacity(1f);
         button.setHovered(true);
-        Bitmap hovered = draw(button::render);
+        Bitmap hovered = draw(button::renderWithTransitions);
         assertEquals(0xFF0000, hovered.getColor(100, 30) & 0xFFFFFF, "enabled and hovered shows the hover color");
 
         button.setDisabled(true);
-        Bitmap disabled = draw(button::render);
+        Bitmap disabled = draw(button::renderWithTransitions);
         assertEquals(0xFFFFFF, disabled.getColor(100, 30) & 0xFFFFFF, "disabled does not");
         assertTrue(button.isHovered(), "the hover state itself is left as it was");
     }
@@ -157,7 +157,7 @@ class ButtonOverlayTest {
     void anIconAloneIsCentered() {
         ButtonOverlay button = button("");
         button.setIcon(Feather.PLUS);
-        Bitmap bmp = draw(button::render);
+        Bitmap bmp = draw(button::renderWithTransitions);
         double left = firstInkedColumn(bmp) - 10, right = 170 - lastInkedColumn(bmp);
         assertEquals(left, right, 3);
         assertTrue(inked(bmp, 10, 170) > 0);
@@ -187,7 +187,7 @@ class ButtonOverlayTest {
         button.setIcon(Feather.PLUS);
         button.setIconSize(24);
         button.setTextColor(new Color(1f, 0f, 0f, 1f));
-        Bitmap bmp = draw(button::render);
+        Bitmap bmp = draw(button::renderWithTransitions);
         int redInk = 0;
         for (int y = 10; y < 50; y++) {
             for (int x = 10; x < 170; x++) {
@@ -201,11 +201,11 @@ class ButtonOverlayTest {
     @Test
     void removingTheIconPutsTheLabelBack() {
         ButtonOverlay button = button("Add files");
-        Bitmap before = draw(button::render);
+        Bitmap before = draw(button::renderWithTransitions);
         button.setIcon(Feather.PLUS);
         button.setIcon(null);
         assertFalse(button.hasIcon());
-        Bitmap after = draw(button::render);
+        Bitmap after = draw(button::renderWithTransitions);
         assertEquals(firstInkedColumn(before), firstInkedColumn(after));
         assertEquals(lastInkedColumn(before), lastInkedColumn(after));
     }

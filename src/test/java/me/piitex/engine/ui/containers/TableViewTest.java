@@ -207,6 +207,15 @@ class TableViewTest {
     }
 
     @Test
+    void aClickHandlerOfYoursRunsAfterTheTablesOwnAndDoesNotReplaceIt() {
+        List<Integer> seen = new ArrayList<>();
+        table.onMouseClick(event -> seen.add(table.getSelectedItems().size()));
+        table.getMouseClickListenerConsumer().accept(new MouseClickEvent(20, rowY(1), GLFW.GLFW_MOUSE_BUTTON_RIGHT, GLFW.GLFW_PRESS));
+        assertEquals(List.of(b), table.getSelectedItems(), "the right-click still selects the row");
+        assertEquals(List.of(1), seen, "and the handler saw the selection already made");
+    }
+
+    @Test
     void scrollRangeCoversHeaderRowsAndColumns() {
         assertEquals(0, table.getMaxScrollX(), "250 of columns fit in 400");
         size.setWidth(400);

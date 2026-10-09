@@ -35,18 +35,11 @@ import java.io.File;
  */
 public class ButtonOverlay extends TextOverlay implements Themeable {
     /**
-     * How much of itself a {@link #setDisabled disabled} button draws, unless {@link #setDisabledOpacity} says otherwise.
-     */
-    public static final float DEFAULT_DISABLED_OPACITY = 0.45f;
-    /**
      * Room kept clear at each side of the label when it is shortened with {@link #setEllipsize}.
      */
     private static final float EDGE_PADDING = 8f;
 
     private Runnable onAction;
-    private Runnable onDisabledClick;
-    private boolean disabled;
-    private float disabledOpacity = DEFAULT_DISABLED_OPACITY;
 
     private IconOverlay icon;
     private double iconSize;          // 0 = follows the font size
@@ -113,8 +106,9 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
     }
 
     private void fireAction() {
-        if (disabled) {
-            if (onDisabledClick != null) onDisabledClick.run();
+        me.piitex.engine.ui.Element disabler = getDisablingElement();
+        if (disabler != null) {
+            disabler.fireDisabledClick();
             return;
         }
         if (onAction != null) {
@@ -127,72 +121,6 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
      */
     public void onAction(Runnable onAction) {
         this.onAction = onAction;
-    }
-
-    /**
-     * Shows this button as unavailable: drawn faded, with no hover color, a "not allowed" cursor, and a click that does
-     * not fire {@link #onAction}. It stays visible and keeps its {@link #setTooltip tooltip}, so the tooltip can say
-     * why. This is different from {@link #setEnabled}, which hides an element and removes it from the layout of input
-     * altogether.
-     * <p>
-     * A click on a disabled button runs {@link #onDisabledClick}, if there is one.
-     */
-    public void setDisabled(boolean disabled) {
-        this.disabled = disabled;
-    }
-
-    public boolean isDisabled() {
-        return disabled;
-    }
-
-    /**
-     * Registers what a click on this button does while it is {@link #setDisabled disabled}, such as telling the person
-     * why nothing happened. Only one is held; null removes it.
-     */
-    public void onDisabledClick(Runnable onDisabledClick) {
-        this.onDisabledClick = onDisabledClick;
-    }
-
-    /**
-     * How much of itself a {@link #setDisabled disabled} button draws, from 0 (nothing) to 1 (no change).
-     * {@link #DEFAULT_DISABLED_OPACITY} by default. This is separate from {@link #setOpacity}, so a fade and a disabled
-     * button combine.
-     */
-    public void setDisabledOpacity(float opacity) {
-        this.disabledOpacity = Math.clamp(opacity, 0f, 1f);
-    }
-
-    public float getDisabledOpacity() {
-        return disabledOpacity;
-    }
-
-    /**
-     * A disabled button shows the "not allowed" cursor instead of the pointer.
-     */
-    @Override
-    public CursorMode getCursorMode() {
-        return disabled ? CursorMode.NOT_ALLOWED : super.getCursorMode();
-    }
-
-    /**
-     * Draws the button, faded and without its hover color while {@link #isDisabled()}.
-     */
-    @Override
-    public void render(Renderer renderer) {
-        if (!isEnabled()) return;
-        if (!disabled) {
-            super.render(renderer);
-            return;
-        }
-        boolean hovered = isHovered();
-        setHovered(false); // a button that cannot be pressed does not light up under the mouse
-        renderer.pushOpacityLayer((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(), disabledOpacity);
-        try {
-            super.render(renderer);
-        } finally {
-            renderer.popOpacityLayer();
-            setHovered(hovered);
-        }
     }
 
     // --- Icon ----------------------------------------------------------------------------------------------------
