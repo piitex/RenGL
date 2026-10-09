@@ -50,8 +50,10 @@ final class SceneRenderer {
     private static final Material DEFAULT_MATERIAL = new Material();
 
     private static final int KEY_CULL = 1, KEY_BLEND = 2, KEY_MIRRORED = 4, KEY_SKINNED = 8, KEY_SHADOW = 16, KEY_ADDITIVE = 32, KEY_ENV_SHIFT = 6;
-    /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits. */
-    private static final int KEY_VARIANT_SHIFT = 8;
+    /** The mesh has a second set of texture coordinates, read from a vertex buffer of its own. */
+    private static final int KEY_UV2 = 1 << 8;
+    /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 bit. */
+    private static final int KEY_VARIANT_SHIFT = 9;
 
     /**
      * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
@@ -65,13 +67,15 @@ final class SceneRenderer {
         final GpuBuffer vertices;
         final GpuBuffer indices;
         final GpuBuffer skin;
+        GpuBuffer uv2;
         final int indexCount;
         long lastUsed;
 
-        GpuMesh(GpuBuffer vertices, GpuBuffer indices, GpuBuffer skin, int indexCount) {
+        GpuMesh(GpuBuffer vertices, GpuBuffer indices, GpuBuffer skin, GpuBuffer uv2, int indexCount) {
             this.vertices = vertices;
             this.indices = indices;
             this.skin = skin;
+            this.uv2 = uv2;
             this.indexCount = indexCount;
         }
 
@@ -79,6 +83,7 @@ final class SceneRenderer {
             vertices.close();
             indices.close();
             if (skin != null) skin.close();
+            if (uv2 != null) uv2.close();
         }
     }
 
@@ -115,6 +120,7 @@ final class SceneRenderer {
         GpuBuffer instances;
         long instanceCapacity;
         final List<GpuBuffer> joints = new ArrayList<>();
+        final List<GpuBuffer> sortedIndices = new ArrayList<>();
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
@@ -127,6 +133,7 @@ final class SceneRenderer {
             sky.close();
             if (instances != null) instances.close();
             for (GpuBuffer b : joints) b.close();
+            for (GpuBuffer b : sortedIndices) if (b != null) b.close();
         }
     }
 
@@ -147,6 +154,13 @@ final class SceneRenderer {
         boolean unbounded; // a caster whose shape the sphere can't promise (skinned, morphed, or not culled): always drawn
         float[] morph; // blend-shape weights to draw with, or null
         int key;
+        /**
+         * The instances to write, in order, when only some of a node's are wanted: those in view first, then (for a shadow
+         * caster) those out of view, which only the shadow pass draws. Null for all of them, in their own order.
+         */
+        int[] order;
+        int visible; // how many of the first of order are in view
+        boolean sortTriangles; // draw the mesh's triangles far to near, from the node's own index buffer
     }
 
     /**
@@ -162,6 +176,9 @@ final class SceneRenderer {
         boolean inView = true; // false: only drawn into the shadow map
         GpuBuffer vertices; // a morphed node's own vertices, or null for the mesh's
         int first, count;
+        int viewCount; // of the first records, how many are in view; the shadow pass draws all of count
+        boolean isolated; // holds records out of view after those in view, so nothing may be merged in after it
+        GpuBuffer indices; // a see-through node's triangles in this frame's order, or null for the mesh's own
         int joints = -1; // index into the render call's joint buffers, for a skinned group
     }
 
@@ -169,9 +186,9 @@ final class SceneRenderer {
     private final VertexLayout meshLayout = VertexLayout.of(VertexFormat.FLOAT3, VertexFormat.FLOAT3, VertexFormat.FLOAT2);
     private final VertexLayout instanceLayout = VertexLayout.of(3, VertexLayout.Rate.INSTANCE,
             VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4,
-            VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4,
-            VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4);
+            VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4);
     private final VertexLayout skinLayout = VertexLayout.of(14, VertexLayout.Rate.VERTEX, VertexFormat.FLOAT4, VertexFormat.FLOAT4);
+    private final VertexLayout uv2Layout = VertexLayout.of(12, VertexLayout.Rate.VERTEX, VertexFormat.FLOAT2);
     private final Map<Integer, Pipeline> pipelines = new HashMap<>();
     private final List<Variant> variants = new ArrayList<>(List.of(Variant.NONE));
     private final java.util.Set<Integer> brokenVariants = new java.util.HashSet<>();
@@ -181,6 +198,10 @@ final class SceneRenderer {
     private final Map<Skybox, GpuImage> skies = new IdentityHashMap<>();
     private final Map<Skybox, float[]> skyLight = new IdentityHashMap<>();
     private final Map<Node3D, MorphedVertices> morphed = new IdentityHashMap<>();
+    private final Map<Node3D, SkinReach> skinReach = new java.util.WeakHashMap<>();
+    private final Map<Mesh, float[]> centroids = new IdentityHashMap<>();
+    private final Map<Resources, Integer> sortedCounter = new IdentityHashMap<>();
+    private Vec3 eye = Vec3.ZERO;
     private ByteBuffer morphScratch = MemoryUtil.memAlloc(1024).order(ByteOrder.nativeOrder());
     private final List<Resources> resourcePool = new ArrayList<>();
     private final GpuTexture whiteTexture, flatNormalTexture;
@@ -219,19 +240,22 @@ final class SceneRenderer {
     private Pipeline pipeline(int key) {
         Pipeline existing = pipelines.get(key);
         if (existing != null) return existing;
-        boolean skinned = (key & KEY_SKINNED) != 0;
+        boolean skinned = (key & KEY_SKINNED) != 0, uv2 = (key & KEY_UV2) != 0;
+        // The vertex buffers after the mesh's own, at bindings 1 and up: the instance stream, then the skin, then the
+        // second texture coordinates, whichever of those the geometry has.
+        List<VertexLayout> extra = new ArrayList<>(List.of(instanceLayout));
+        if (skinned) extra.add(skinLayout);
         PipelineDesc desc;
         if ((key & KEY_SHADOW) != 0) {
-            desc = new PipelineDesc(shadowVertex(skinned), SHADOW_FRAGMENT, meshLayout, true, false, false, false,
-                    skinned ? List.of(instanceLayout, skinLayout) : List.of(instanceLayout));
+            desc = new PipelineDesc(shadowVertex(skinned), SHADOW_FRAGMENT, meshLayout, true, false, false, false, extra);
         } else {
             boolean blend = (key & KEY_BLEND) != 0;
+            if (uv2) extra.add(uv2Layout);
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
-            desc = new PipelineDesc(vertex(skinned), fragment((key >> KEY_ENV_SHIFT) & 3, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
+            desc = new PipelineDesc(vertex(skinned, uv2), fragment((key >> KEY_ENV_SHIFT) & 3, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
                     variants.get(key >> KEY_VARIANT_SHIFT).falloffs()), meshLayout, true, (key & KEY_CULL) != 0, blend,
-                    (key & KEY_MIRRORED) != 0, skinned ? List.of(instanceLayout, skinLayout) : List.of(instanceLayout),
-                    (key & KEY_ADDITIVE) != 0, !blend);
+                    (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend);
         }
         Pipeline created = device.createPipeline(desc);
         pipelines.put(key, created);
@@ -257,6 +281,8 @@ final class SceneRenderer {
         }
         while (resourcePool.size() <= resourcesUsed) resourcePool.add(new Resources(device));
         Resources res = resourcePool.get(resourcesUsed++);
+        jointCounter.remove(res);
+        sortedCounter.remove(res);
 
         float aspect = (float) target.width() / Math.max(1, target.height());
         Camera camera = scene.camera();
@@ -266,6 +292,7 @@ final class SceneRenderer {
         List<Draw> blended = new ArrayList<>();
         float[] planes = frustumPlanes(viewProj);
         int[] counts = {0, 0};
+        eye = camera.getPosition();
         collect(scene.root(), Mat4.identity(), camera.getPosition(), planes, counts, opaque, blended);
         opaque.sort(Comparator.<Draw>comparingInt(d -> d.key).thenComparingInt(d -> System.identityHashCode(d.material))
                 .thenComparingInt(d -> System.identityHashCode(d.mesh)));
@@ -296,10 +323,10 @@ final class SceneRenderer {
             Material[] lastMaterial = {null};
             for (List<Group> list : List.of(opaqueGroups, blendedGroups)) {
                 for (Group group : list) {
-                    if (!group.inView) continue;
+                    if (!group.inView || group.viewCount == 0) continue;
                     drawGroup(pass, res, group, state, lastMaterial, false, fragmentBits, null);
                     drawCalls++;
-                    drawnRecords += group.count;
+                    drawnRecords += group.viewCount;
                 }
             }
         }
@@ -354,9 +381,11 @@ final class SceneRenderer {
         }
         pass.bindVertexBuffer(0, group.vertices != null ? group.vertices : mesh.vertices);
         pass.bindVertexBuffer(1, res.instances);
-        if (mesh.skin != null && (key & KEY_SKINNED) != 0) pass.bindVertexBuffer(2, mesh.skin);
-        pass.bindIndexBuffer(mesh.indices);
-        pass.drawIndexed(mesh.indexCount, group.count, group.first);
+        int next = 2;
+        if (mesh.skin != null && (key & KEY_SKINNED) != 0) pass.bindVertexBuffer(next++, mesh.skin);
+        if (mesh.uv2 != null && (key & KEY_UV2) != 0 && !shadowPass) pass.bindVertexBuffer(next, mesh.uv2);
+        pass.bindIndexBuffer(group.indices != null ? group.indices : mesh.indices);
+        pass.drawIndexed(mesh.indexCount, shadowPass ? group.count : group.viewCount, group.first);
     }
 
     // ---- collecting and building the instance stream -----------------------------------------------------------
@@ -386,27 +415,138 @@ final class SceneRenderer {
                 log.warn("The node {} has a skin but its mesh has no skinning data; drawing it unskinned.", node.getName());
             }
             draw.key = (draw.material.isDoubleSided() ? 0 : KEY_CULL) | (draw.material.isBlend() ? KEY_BLEND : 0) | (draw.material.isAdditive() ? KEY_ADDITIVE : 0)
-                    | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0);
+                    | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0) | (mesh.hasUvs2() && usesSecondUvs(draw.material) ? KEY_UV2 : 0);
+            // A skinned mesh is placed by its joints, so it is bounded by them, not by its node.
+            float[] skinSphere = skinned ? skinSphere(node, mesh) : null;
+            Instances instances = skinned ? null : node.getInstances();
+            draw.sortTriangles = node.isSortTriangles() && draw.material.isBlend() && !skinned && instances == null && draw.morph == null;
             if (draw.cast) {
-                draw.sphere = worldSphere(world, mesh, skinned ? null : node.getInstances());
-                draw.unbounded = skinned || draw.morph != null || !node.isFrustumCulled();
+                draw.sphere = skinned ? skinSphere : worldSphere(world, mesh, instances);
+                draw.unbounded = draw.sphere == null || draw.morph != null || !node.isFrustumCulled();
             }
-            if (node.getInstances() != null && node.getInstances().size() == 0 && !skinned) {
+            boolean culls = node.isFrustumCulled();
+            boolean outOfView = culls && (skinned
+                    ? skinSphere != null && !ShadowPlanner.intersects(planes, skinSphere[0], skinSphere[1], skinSphere[2], skinSphere[3])
+                    : !inFrustum(planes, world, mesh, instances));
+            if (instances != null && instances.size() == 0) {
                 // nothing to draw
-            } else if (skinned || !node.isFrustumCulled() || inFrustum(planes, world, mesh, node.getInstances())) {
-                counts[0]++;
-                (draw.material.isBlend() ? blended : opaque).add(draw);
-            } else {
+            } else if (outOfView) {
                 counts[1]++;
                 if (draw.cast) {
                     // Out of view, but its shadow may fall into it.
                     draw.inView = false;
                     opaque.add(draw);
                 }
+            } else if (instances != null && culls && instances.size() > 1) {
+                addInstanced(draw, world, mesh, instances, planes, eye, counts, opaque, blended);
+            } else {
+                counts[0]++;
+                (draw.material.isBlend() ? blended : opaque).add(draw);
             }
         }
         for (Node3D child : node.getChildren()) collect(child, world, eye, planes, counts, opaque, blended);
     }
+
+    /**
+     * Whether any of the material's textures reads the second set of texture coordinates, so a mesh that has one needs it
+     * sent to the shader.
+     */
+    private static boolean usesSecondUvs(Material material) {
+        return material.texCoordBits() != 0;
+    }
+
+    /**
+     * A sphere around a posed skinned mesh, or null if it has no bound (a joint list that moves no vertex).
+     */
+    private float[] skinSphere(Node3D node, Mesh mesh) {
+        Skin skin = node.getSkin();
+        SkinReach cached = skinReach.get(node);
+        if (cached == null || cached.mesh != mesh || cached.skin != skin) {
+            cached = new SkinReach(mesh, skin, SkinBounds.reach(mesh, skin));
+            skinReach.put(node, cached);
+        }
+        return SkinBounds.sphere(skin, cached.reach);
+    }
+
+    private record SkinReach(Mesh mesh, Skin skin, float[] reach) {
+    }
+
+    /**
+     * An instanced node, one instance at a time: those out of view are left out of the main pass (a shadow caster keeps
+     * them after the others, for the shadow views), and see-through ones become a draw each so they sort among
+     * themselves, far to near, instead of the whole node sorting by one point.
+     */
+    private void addInstanced(Draw draw, Mat4 world, Mesh mesh, Instances instances, float[] planes, Vec3 eye, int[] counts,
+                              List<Draw> opaque, List<Draw> blended) {
+        int n = instances.size();
+        float[] data = instances.matrixData();
+        float[] w = world.toArray();
+        Vec3 c = mesh.bounds().center();
+        float radius = mesh.bounds().radius();
+        float[] model = new float[16];
+        int[] seen = new int[n];
+        int visible = 0;
+        float[] distance = draw.material.isBlend() ? new float[n] : null;
+        for (int i = 0; i < n; i++) {
+            multiply(w, data, i * 16, model);
+            float x = model[0] * c.x() + model[4] * c.y() + model[8] * c.z() + model[12];
+            float y = model[1] * c.x() + model[5] * c.y() + model[9] * c.z() + model[13];
+            float z = model[2] * c.x() + model[6] * c.y() + model[10] * c.z() + model[14];
+            if (ShadowPlanner.intersects(planes, x, y, z, radius * maxColumn(model, 0))) {
+                seen[visible++] = i;
+                if (distance != null) {
+                    float dx = x - eye.x(), dy = y - eye.y(), dz = z - eye.z();
+                    distance[i] = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+                }
+            }
+        }
+        if (visible == 0) {
+            counts[1]++;
+            if (draw.cast) {
+                draw.inView = false;
+                opaque.add(draw);
+            }
+            return;
+        }
+        counts[0]++;
+        if (distance != null && n <= MAX_SORTED_INSTANCES) {
+            // Each in-view instance is a draw of its own with its own distance; neighbours of the same kind merge again
+            // into one call once they are sorted.
+            for (int k = 0; k < visible; k++) {
+                Draw each = new Draw();
+                each.node = draw.node;
+                each.mesh = draw.mesh;
+                each.material = draw.material;
+                each.world = draw.world;
+                each.mirrored = draw.mirrored;
+                each.receive = draw.receive;
+                each.key = draw.key;
+                each.order = new int[]{seen[k]};
+                each.visible = 1;
+                each.distance = distance[seen[k]];
+                blended.add(each);
+            }
+            return;
+        }
+        if (visible < n) {
+            int[] order = new int[draw.cast ? n : visible];
+            System.arraycopy(seen, 0, order, 0, visible);
+            if (draw.cast) {
+                boolean[] in = new boolean[n];
+                for (int k = 0; k < visible; k++) in[seen[k]] = true;
+                int at = visible;
+                for (int i = 0; i < n; i++) if (!in[i]) order[at++] = i;
+            }
+            draw.order = order;
+            draw.visible = visible;
+        }
+        (draw.material.isBlend() ? blended : opaque).add(draw);
+    }
+
+    /**
+     * Past this many instances a see-through node is not split into draws to sort one by one.
+     */
+    private static final int MAX_SORTED_INSTANCES = 20_000;
 
     /**
      * The six planes of the view volume, each as (a, b, c, d) with a unit normal pointing inside, for {@code ax + by + cz + d >= 0}.
@@ -510,10 +650,13 @@ final class SceneRenderer {
             boolean skinned = (draw.key & KEY_SKINNED) != 0;
             int count = 1;
             Instances instances = skinned ? null : draw.node.getInstances();
-            if (instances != null) count = instances.size();
+            if (instances != null) count = draw.order != null ? draw.order.length : instances.size();
             ensureScratch(cursor[0] + count);
+            // Records out of view come after those in view, so a call for the main pass can stop short of them; nothing
+            // can follow them in the same call, and no other call can run on into them.
+            boolean hidden = draw.order != null && draw.visible < draw.order.length;
 
-            boolean merge = last != null && !skinned && last.joints < 0 && last.vertices == null && draw.morph == null
+            boolean merge = last != null && !skinned && last.joints < 0 && last.vertices == null && draw.morph == null && !last.isolated && !hidden && !draw.sortTriangles && last.indices == null
                     && last.mesh == draw.mesh && last.material == draw.material
                     && last.key == draw.key && last.cast == draw.cast && last.inView == draw.inView;
             if (!merge) {
@@ -526,8 +669,10 @@ final class SceneRenderer {
                 last.sphere = draw.sphere;
                 last.unbounded = draw.unbounded;
                 last.first = cursor[0];
+                last.isolated = hidden;
                 if (skinned) last.joints = writeJoints(res, draw.node.getSkin());
                 if (draw.morph != null) last.vertices = morphedBuffer(draw.node, draw.mesh, draw.morph);
+                if (draw.sortTriangles) last.indices = sortedIndices(res, draw);
                 groups.add(last);
             }
             if (merge && draw.cast) {
@@ -536,6 +681,7 @@ final class SceneRenderer {
             }
             writeRecords(draw, instances, skinned);
             last.count += count;
+            last.viewCount += hidden ? draw.visible : count;
             cursor[0] += count;
         }
         return groups;
@@ -544,7 +690,7 @@ final class SceneRenderer {
     /**
      * The smallest sphere around two spheres {@code {x, y, z, radius}}.
      */
-    private static float[] union(float[] a, float[] b) {
+    static float[] union(float[] a, float[] b) {
         float dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
         float d = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (d + b[3] <= a[3]) return a;
@@ -578,12 +724,63 @@ final class SceneRenderer {
         instanceScratch.clear();
     }
 
+    /**
+     * The mesh's triangles sorted far to near as seen from the camera, in an index buffer of this render call: one per
+     * sorted node, so a scene shown by two viewports gives each its own order.
+     */
+    private GpuBuffer sortedIndices(Resources res, Draw draw) {
+        Mesh mesh = draw.mesh;
+        int[] source = mesh.indices();
+        int triangles = source.length / 3;
+        float[] middle = centroids.computeIfAbsent(mesh, m -> {
+            float[] v = m.vertices();
+            float[] c = new float[triangles * 3];
+            for (int t = 0; t < triangles; t++) {
+                for (int k = 0; k < 3; k++) {
+                    int o = source[t * 3 + k] * Mesh.FLOATS_PER_VERTEX;
+                    c[t * 3] += v[o] / 3f;
+                    c[t * 3 + 1] += v[o + 1] / 3f;
+                    c[t * 3 + 2] += v[o + 2] / 3f;
+                }
+            }
+            return c;
+        });
+        float[] w = draw.world.toArray();
+        long[] keys = new long[triangles];
+        for (int t = 0; t < triangles; t++) {
+            float x = w[0] * middle[t * 3] + w[4] * middle[t * 3 + 1] + w[8] * middle[t * 3 + 2] + w[12] - eye.x();
+            float y = w[1] * middle[t * 3] + w[5] * middle[t * 3 + 1] + w[9] * middle[t * 3 + 2] + w[13] - eye.y();
+            float z = w[2] * middle[t * 3] + w[6] * middle[t * 3 + 1] + w[10] * middle[t * 3 + 2] + w[14] - eye.z();
+            // A squared distance is never negative, so its bits sort like the number; the largest sorts first.
+            keys[t] = (long) Float.floatToIntBits(x * x + y * y + z * z) << 32 | t;
+        }
+        java.util.Arrays.sort(keys);
+        ByteBuffer data = MemoryUtil.memAlloc(source.length * 4).order(ByteOrder.nativeOrder());
+        try {
+            for (int k = triangles - 1; k >= 0; k--) {
+                int t = (int) (keys[k] & 0xFFFFFFFFL);
+                data.putInt(source[t * 3]).putInt(source[t * 3 + 1]).putInt(source[t * 3 + 2]);
+            }
+            data.flip();
+            int slot = sortedCounter.merge(res, 1, Integer::sum) - 1;
+            while (res.sortedIndices.size() <= slot) res.sortedIndices.add(null);
+            GpuBuffer buffer = res.sortedIndices.get(slot);
+            if (buffer == null || buffer.size() < data.remaining()) {
+                if (buffer != null) buffer.close();
+                buffer = device.createDynamicBuffer(BufferType.INDEX, Math.max(data.remaining(), 1024));
+                res.sortedIndices.set(slot, buffer);
+            }
+            buffer.update(data);
+            return buffer;
+        } finally {
+            MemoryUtil.memFree(data);
+        }
+    }
+
     private int writeJoints(Resources res, Skin skin) {
-        int slot = 0;
-        // Joint buffers are handed out in order within a render call; the call's groups use consecutive slots.
-        for (GpuBuffer ignored : res.joints) slot++;
-        // Find the first slot not used by an earlier group of this call: tracked by the count written so far.
-        slot = jointsWritten(res);
+        // Joint buffers are handed out in order within a render call; the call's groups use consecutive slots, counted from
+        // the first at the start of each call (render() resets the count).
+        int slot = jointsWritten(res);
         while (res.joints.size() <= slot) res.joints.add(device.createDynamicBuffer(BufferType.UNIFORM, JOINT_BLOCK_SIZE));
         scratch.clear();
         for (int i = 0; i < skin.joints().size(); i++) skin.jointMatrix(i).put(scratch);
@@ -605,15 +802,16 @@ final class SceneRenderer {
     private void writeRecords(Draw draw, Instances instances, boolean skinned) {
         Material m = draw.material;
         float[] world = draw.world.toArray();
-        int flags = (m.getNormalTexture() != null ? FLAG_NORMAL_MAP : 0) | (draw.receive ? FLAG_RECEIVE_SHADOW : 0);
+        int flags = (m.getNormalTexture() != null ? FLAG_NORMAL_MAP : 0) | (draw.receive ? FLAG_RECEIVE_SHADOW : 0) | (m.texCoordBits() << FLAG_UV1_SHIFT);
         int mode = m.isUnlit() ? MODE_UNLIT : m.isPbr() ? MODE_PBR : MODE_CLASSIC;
         float p0 = m.isPbr() ? m.getMetallic() : m.getSpecular();
         float p1 = m.isPbr() ? m.getRoughness() : Math.max(1f, m.getShininess());
+        float rotationCos = (float) Math.cos(m.getUvRotation()), rotationSin = (float) Math.sin(m.getUvRotation());
         float[] model = new float[16];
-        float[] normal = new float[12];
         ByteBuffer b = instanceScratch;
-        int count = instances == null ? 1 : instances.size();
-        for (int i = 0; i < count; i++) {
+        int count = instances == null ? 1 : draw.order != null ? draw.order.length : instances.size();
+        for (int slot = 0; slot < count; slot++) {
+            int i = draw.order != null ? draw.order[slot] : slot;
             float tr = m.getRed(), tg = m.getGreen(), tb = m.getBlue(), ta = m.getAlpha();
             if (skinned) {
                 java.util.Arrays.fill(model, 0f);
@@ -630,13 +828,12 @@ final class SceneRenderer {
                     ta *= t[i * 4 + 3];
                 }
             }
-            normalMatrix(model, normal);
             for (float v : model) b.putFloat(v);
-            for (int c = 0; c < 3; c++) b.putFloat(normal[c * 3]).putFloat(normal[c * 3 + 1]).putFloat(normal[c * 3 + 2]).putFloat(0f);
             b.putFloat(tr).putFloat(tg).putFloat(tb).putFloat(ta);
             b.putFloat(p0).putFloat(p1).putFloat(mode).putFloat(m.getAlphaCutoff());
             b.putFloat(m.getEmissiveRed()).putFloat(m.getEmissiveGreen()).putFloat(m.getEmissiveBlue()).putFloat(flags);
-            b.putFloat(m.getNormalScale()).putFloat(m.isAdditive() ? 1f : 0f).putFloat(0f).putFloat(0f);
+            b.putFloat(m.getNormalScale()).putFloat(m.isAdditive() ? 1f : 0f).putFloat(rotationCos).putFloat(rotationSin);
+            b.putFloat(m.getUvOffsetU()).putFloat(m.getUvOffsetV()).putFloat(m.getUvScaleU()).putFloat(m.getUvScaleV());
         }
     }
 
@@ -650,30 +847,6 @@ final class SceneRenderer {
                         + a[8 + r] * b[offset + c * 4 + 2] + a[12 + r] * b[offset + c * 4 + 3];
             }
         }
-    }
-
-    /**
-     * The inverse transpose of the model matrix's 3x3, as three columns, so normals stay perpendicular under scaling.
-     */
-    private static void normalMatrix(float[] m, float[] out) {
-        float c0x = m[0], c0y = m[1], c0z = m[2], c1x = m[4], c1y = m[5], c1z = m[6], c2x = m[8], c2y = m[9], c2z = m[10];
-        float n0x = c1y * c2z - c1z * c2y, n0y = c1z * c2x - c1x * c2z, n0z = c1x * c2y - c1y * c2x;
-        float det = c0x * n0x + c0y * n0y + c0z * n0z;
-        if (Math.abs(det) < 1e-20f) {
-            java.util.Arrays.fill(out, 0f);
-            out[0] = out[4] = out[8] = 1f;
-            return;
-        }
-        float inv = 1f / det;
-        out[0] = n0x * inv;
-        out[1] = n0y * inv;
-        out[2] = n0z * inv;
-        out[3] = (c2y * c0z - c2z * c0y) * inv;
-        out[4] = (c2z * c0x - c2x * c0z) * inv;
-        out[5] = (c2x * c0y - c2y * c0x) * inv;
-        out[6] = (c0y * c1z - c0z * c1y) * inv;
-        out[7] = (c0z * c1x - c0x * c1z) * inv;
-        out[8] = (c0x * c1y - c0y * c1x) * inv;
     }
 
     // ---- shadows -----------------------------------------------------------------------------------------------
@@ -917,7 +1090,7 @@ final class SceneRenderer {
         }
         Color fog = scene.getFogColor();
         scratch.putFloat(linear(fog.getR())).putFloat(linear(fog.getG())).putFloat(linear(fog.getB())).putFloat(scene.getFogDensity());
-        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(0f).putFloat(0f).putFloat(0f);
+        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(scene.getExposure()).putFloat(scene.getToneMapping().ordinal()).putFloat(0f);
         Skybox sky = scene.getSkybox();
         if (env == ENV_NONE) {
             for (int i = 0; i < 13; i++) scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(0f);
@@ -1001,13 +1174,23 @@ final class SceneRenderer {
                     sb.flip();
                     skin = device.createBuffer(BufferType.VERTEX, sb);
                 }
-                gpu = new GpuMesh(device.createBuffer(BufferType.VERTEX, vb), device.createBuffer(BufferType.INDEX, ib), skin, indices.length);
+                gpu = new GpuMesh(device.createBuffer(BufferType.VERTEX, vb), device.createBuffer(BufferType.INDEX, ib), skin, null, indices.length);
             } finally {
                 MemoryUtil.memFree(vb);
                 MemoryUtil.memFree(ib);
                 if (sb != null) MemoryUtil.memFree(sb);
             }
             meshes.put(mesh, gpu);
+        }
+        if (gpu.uv2 == null && mesh.hasUvs2()) {
+            float[] uvs = mesh.uvs2();
+            ByteBuffer ub = MemoryUtil.memAlloc(uvs.length * 4);
+            try {
+                ub.order(ByteOrder.nativeOrder()).asFloatBuffer().put(uvs);
+                gpu.uv2 = device.createBuffer(BufferType.VERTEX, ub);
+            } finally {
+                MemoryUtil.memFree(ub);
+            }
         }
         gpu.lastUsed = frame;
         return gpu;
@@ -1101,6 +1284,7 @@ final class SceneRenderer {
                 it.remove();
             }
         }
+        centroids.keySet().removeIf(mesh -> !meshes.containsKey(mesh));
         for (Iterator<MorphedVertices> it = morphed.values().iterator(); it.hasNext(); ) {
             MorphedVertices m = it.next();
             if (frame - m.lastUsed > KEEP_FRAMES) {

@@ -82,6 +82,13 @@ final class ShadowPlanner {
      * @param truncated    {@code truncated[0]} is set when more lights wanted shadows than the limit allows
      */
     static List<Candidate> select(Scene3D scene, Vec3 eye, float[] cameraPlanes, boolean[] truncated) {
+        return select(scene, eye, cameraPlanes, truncated, Scene3D.MAX_SHADOW_LIGHTS);
+    }
+
+    /**
+     * As above with the limit given, to try the choosing with fewer lights than the scene allows.
+     */
+    static List<Candidate> select(Scene3D scene, Vec3 eye, float[] cameraPlanes, boolean[] truncated, int limit) {
         List<Light> lights = scene.lights();
         List<Candidate> wanted = new ArrayList<>();
         for (int i = 0; i < Math.min(lights.size(), Scene3D.MAX_LIGHTS); i++) {
@@ -96,9 +103,9 @@ final class ShadowPlanner {
         }
         wanted.sort(Comparator.comparingDouble(c -> c.light().getType() == Light.Type.DIRECTIONAL ? -1.0
                 : c.light().getVector().sub(eye).length()));
-        if (wanted.size() > Scene3D.MAX_SHADOW_LIGHTS) {
+        if (wanted.size() > limit) {
             truncated[0] = true;
-            return new ArrayList<>(wanted.subList(0, Scene3D.MAX_SHADOW_LIGHTS));
+            return new ArrayList<>(wanted.subList(0, limit));
         }
         return wanted;
     }

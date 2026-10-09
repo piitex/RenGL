@@ -50,7 +50,7 @@ public class Scene3D implements Viewport3D.Content {
     /**
      * The most lights whose shadows are drawn in one frame: the ones nearest the camera among the first {@link #MAX_LIGHTS}.
      */
-    public static final int MAX_SHADOW_LIGHTS = 4;
+    public static final int MAX_SHADOW_LIGHTS = 8;
 
     /**
      * Runs once per frame before the scene is drawn.
@@ -82,6 +82,8 @@ public class Scene3D implements Viewport3D.Content {
     private Color fogColor = Color.WHITE;
     private float fogDensity;
     private float fogHeightFalloff;
+    private ToneMapping toneMapping = ToneMapping.NONE;
+    private float exposure = 1f;
     private final List<AnimationPlayer> animators = new ArrayList<>();
 
     private final Map<GpuDevice, Shared> renderers = new IdentityHashMap<>();
@@ -293,6 +295,32 @@ public class Scene3D implements Viewport3D.Content {
         this.fogColor = color;
         this.fogDensity = Math.max(0f, density);
         this.fogHeightFalloff = Math.max(0f, heightFalloff);
+        return this;
+    }
+
+    public ToneMapping getToneMapping() {
+        return toneMapping;
+    }
+
+    /**
+     * Bends colours brighter than white into the range the screen shows ({@link ToneMapping#NONE} by default, which cuts
+     * them off). Applies to everything lit, the fog included; the skybox is drawn as it is.
+     */
+    public Scene3D setToneMapping(ToneMapping toneMapping) {
+        this.toneMapping = toneMapping == null ? ToneMapping.NONE : toneMapping;
+        return this;
+    }
+
+    public float getExposure() {
+        return exposure;
+    }
+
+    /**
+     * Multiplies the light before tone mapping (1 by default): 2 is one stop brighter, 0.5 one darker. Works without a
+     * tone mapper too, as a plain brightness.
+     */
+    public Scene3D setExposure(float exposure) {
+        this.exposure = Math.max(0f, exposure);
         return this;
     }
 

@@ -16,9 +16,10 @@ final class SceneShaders {
     }
 
     /**
-     * Floats per instance in the instance stream: eleven vec4s.
+     * Floats per instance in the instance stream: nine vec4s (the model matrix, the tint, the material's parameters, and the
+     * texture transform). The normal matrix is worked out from the model matrix in the vertex shader.
      */
-    static final int INSTANCE_FLOATS = 44;
+    static final int INSTANCE_FLOATS = 36;
 
     /**
      * The shadow views one frame can hold: up to {@link Scene3D#MAX_SHADOW_LIGHTS} lights of six (a point light's sides).
@@ -31,13 +32,19 @@ final class SceneShaders {
 
     static final int FLAG_NORMAL_MAP = 1;
     static final int FLAG_RECEIVE_SHADOW = 2;
+    /**
+     * The material's texture slots that read the second set of texture coordinates instead of the first, one bit each
+     * from this one up: base colour, normal, metallic-roughness, occlusion, emissive.
+     */
+    static final int FLAG_UV1_SHIFT = 2;
 
     static final int MODE_CLASSIC = 0;
     static final int MODE_PBR = 1;
     static final int MODE_UNLIT = 2;
 
     /**
-     * Per-vertex attributes at locations 0 to 2; instance attributes follow at 3 to 13, skin attributes at 14 and 15.
+     * Per-vertex attributes at locations 0 to 2; instance attributes follow at 3 to 11, a second set of texture coordinates
+     * at 12, and skin attributes at 14 and 15.
      */
     private static final String INPUTS = """
             layout(location = 0) in vec3 aPos;
@@ -47,13 +54,25 @@ final class SceneShaders {
             layout(location = 4) in vec4 iModel1;
             layout(location = 5) in vec4 iModel2;
             layout(location = 6) in vec4 iModel3;
-            layout(location = 7) in vec4 iNormal0;
-            layout(location = 8) in vec4 iNormal1;
-            layout(location = 9) in vec4 iNormal2;
-            layout(location = 10) in vec4 iTint;
-            layout(location = 11) in vec4 iParams;
-            layout(location = 12) in vec4 iExtra;
-            layout(location = 13) in vec4 iExtra2;
+            layout(location = 7) in vec4 iTint;
+            layout(location = 8) in vec4 iParams;
+            layout(location = 9) in vec4 iExtra;
+            layout(location = 10) in vec4 iExtra2;
+            layout(location = 11) in vec4 iUv;
+            """;
+
+    private static final String UV2_INPUT = """
+            layout(location = 12) in vec2 aUv2;
+            """;
+
+    /**
+     * The material's texture transform: scale, then turn (its cosine and sine are in the record), then offset.
+     */
+    private static final String UV_TRANSFORM = """
+            vec2 transformUv(vec2 uv) {
+                vec2 s = uv * iUv.zw;
+                return vec2(iExtra2.z * s.x + iExtra2.w * s.y, -iExtra2.w * s.x + iExtra2.z * s.y) + iUv.xy;
+            }
             """;
 
     private static final String SKIN_INPUTS = """
@@ -96,8 +115,8 @@ final class SceneShaders {
     /**
      * The scene's own vertex shader. {@code skinned} adds the joint blend, which replaces the instance's model matrix.
      */
-    static String vertex(boolean skinned) {
-        return "#version 450\n" + INPUTS + (skinned ? SKIN_INPUTS : "") + FRAME_BLOCK + """
+    static String vertex(boolean skinned, boolean uv2) {
+        return "#version 450\n" + INPUTS + (uv2 ? UV2_INPUT : "") + (skinned ? SKIN_INPUTS : "") + UV_TRANSFORM + FRAME_BLOCK + """
                 layout(location = 0) out vec3 vWorldPos;
                 layout(location = 1) out vec3 vNormal;
                 layout(location = 2) out vec2 vUv;
@@ -105,6 +124,7 @@ final class SceneShaders {
                 layout(location = 4) flat out vec4 vParams;
                 layout(location = 5) flat out vec4 vExtra;
                 layout(location = 6) flat out vec4 vExtra2;
+                layout(location = 7) out vec2 vUv1;
                 void main() {
                 """ + (skinned ? """
                     mat4 skin = aWeights.x * joints[int(aJoints.x)] + aWeights.y * joints[int(aJoints.y)]
@@ -114,10 +134,14 @@ final class SceneShaders {
                 """ : """
                     mat4 model = mat4(iModel0, iModel1, iModel2, iModel3);
                     vec4 world = model * vec4(aPos, 1.0);
-                    vNormal = mat3(iNormal0.xyz, iNormal1.xyz, iNormal2.xyz) * aNormal;
+                    // The inverse transpose keeps normals square to the surface under stretching.
+                    mat3 m3 = mat3(model);
+                    vNormal = (abs(determinant(m3)) < 1e-20 ? m3 : transpose(inverse(m3))) * aNormal;
                 """) + """
                     vWorldPos = world.xyz;
-                    vUv = aUv;
+                    vUv = transformUv(aUv);
+                    vUv1 = transformUv(""" + (uv2 ? "aUv2" : "aUv") + """
+                );
                     vTint = iTint;
                     vParams = iParams;
                     vExtra = iExtra;
@@ -169,6 +193,7 @@ final class SceneShaders {
             layout(location = 4) flat in vec4 vParams;
             layout(location = 5) flat in vec4 vExtra;
             layout(location = 6) flat in vec4 vExtra2;
+            layout(location = 7) in vec2 vUv1;
             """ + FRAME_BLOCK + """
             layout(set = 0, binding = 2) uniform sampler2D baseTexture;
             layout(set = 0, binding = 3) uniform sampler2D normalTexture;
@@ -352,12 +377,18 @@ final class SceneShaders {
             }
 
             void main() {
-                vec4 tex = texture(baseTexture, vUv);
+                int mode = int(vParams.z + 0.5);
+                int flags = int(vExtra.w + 0.5);
+                // Each texture reads the first set of texture coordinates or the second, as its material says.
+                vec2 uvBase = (flags & 4) != 0 ? vUv1 : vUv;
+                vec2 uvNormal = (flags & 8) != 0 ? vUv1 : vUv;
+                vec2 uvMetalRough = (flags & 16) != 0 ? vUv1 : vUv;
+                vec2 uvOcclusion = (flags & 32) != 0 ? vUv1 : vUv;
+                vec2 uvEmissive = (flags & 64) != 0 ? vUv1 : vUv;
+                vec4 tex = texture(baseTexture, uvBase);
                 vec3 albedo = pow(tex.rgb * vTint.rgb, vec3(2.2));
                 float alpha = tex.a * vTint.a;
                 if (alpha < vParams.w) discard;
-                int mode = int(vParams.z + 0.5);
-                int flags = int(vExtra.w + 0.5);
 
                 vec3 lit = albedo;
                 if (mode != 2) {
@@ -365,8 +396,8 @@ final class SceneShaders {
                     if (!gl_FrontFacing) n = -n;
                     vec3 dp1 = dFdx(vWorldPos);
                     vec3 dp2 = dFdy(vWorldPos);
-                    vec2 duv1 = dFdx(vUv);
-                    vec2 duv2 = dFdy(vUv);
+                    vec2 duv1 = dFdx(uvNormal);
+                    vec2 duv2 = dFdy(uvNormal);
                     if ((flags & 1) != 0) {
                         // The surface's own directions of increasing u and v, solved from the screen-space derivatives
                         // (the same on both APIs, whichever way the screen's y runs). Image rows run down, so the
@@ -378,7 +409,7 @@ final class SceneShaders {
                         t = t - n * dot(n, t);
                         b = b - n * dot(n, b);
                         float invMax = inversesqrt(max(max(dot(t, t), dot(b, b)), 1e-20));
-                        vec3 tn = texture(normalTexture, vUv).xyz * 2.0 - 1.0;
+                        vec3 tn = texture(normalTexture, uvNormal).xyz * 2.0 - 1.0;
                         tn.xy *= vExtra2.x;
                         n = normalize(mat3(t * invMax, b * invMax, n) * tn);
                     }
@@ -387,10 +418,10 @@ final class SceneShaders {
                     bool receives = (flags & 2) != 0;
 
                     if (mode == 1) {
-                        vec4 mr = texture(metalRoughTexture, vUv);
+                        vec4 mr = texture(metalRoughTexture, uvMetalRough);
                         float roughness = clamp(vParams.y * mr.g, 0.04, 1.0);
                         float metallic = clamp(vParams.x * mr.b, 0.0, 1.0);
-                        float occlusion = texture(occlusionTexture, vUv).r;
+                        float occlusion = texture(occlusionTexture, uvOcclusion).r;
                         vec3 f0 = mix(vec3(0.04), albedo, metallic);
                         vec3 diffuseColor = albedo * (1.0 - metallic);
                         float a = roughness * roughness;
@@ -421,7 +452,7 @@ final class SceneShaders {
                             // The light's intensity is irradiance over pi, so a white light of 1 lights a white surface to 1.
                             lit += ((vec3(1.0) - f) * diffuseColor + PI * spec) * lightColor[i].rgb * atten * nl;
                         }
-                        lit += vExtra.xyz * pow(texture(emissiveTexture, vUv).rgb, vec3(2.2));
+                        lit += vExtra.xyz * pow(texture(emissiveTexture, uvEmissive).rgb, vec3(2.2));
                     } else {
             #if ENV_KIND != 0
                         lit = envDiffuse(n) * albedo;
@@ -449,6 +480,14 @@ final class SceneShaders {
                     float amount = 1.0 - exp(-k * k);
                     lit = vExtra2.y > 0.5 ? lit * (1.0 - amount) : mix(lit, fog.rgb, amount);
                 }
+                lit *= fogParams.y;
+                int toneMapping = int(fogParams.z + 0.5);
+                if (toneMapping == 1) {
+                    lit = lit / (1.0 + lit);
+                } else if (toneMapping == 2) {
+                    // A fit of the ACES film curve (Narkowicz), which expects the exposure already in.
+                    lit = clamp((lit * (2.51 * lit + 0.03)) / (lit * (2.43 * lit + 0.59) + 0.14), 0.0, 1.0);
+                }
                 outColor = vec4(pow(lit, vec3(1.0 / 2.2)), alpha);
             }
             """;
@@ -456,7 +495,7 @@ final class SceneShaders {
     // ---- shadow pass -----------------------------------------------------------------------------------------
 
     static String shadowVertex(boolean skinned) {
-        return "#version 450\n" + INPUTS + (skinned ? SKIN_INPUTS : "") + """
+        return "#version 450\n" + INPUTS + (skinned ? SKIN_INPUTS : "") + UV_TRANSFORM + """
                 layout(set = 0, binding = 0) uniform ShadowFrame { mat4 lightViewProj; vec4 shadowMode; };
                 layout(location = 0) out vec2 vUv;
                 layout(location = 1) flat out vec4 vTint;
@@ -469,7 +508,7 @@ final class SceneShaders {
                 """ : """
                     vec4 world = mat4(iModel0, iModel1, iModel2, iModel3) * vec4(aPos, 1.0);
                 """) + """
-                    vUv = aUv;
+                    vUv = transformUv(aUv);
                     vTint = iTint;
                     vParams = iParams;
                     gl_Position = lightViewProj * world;

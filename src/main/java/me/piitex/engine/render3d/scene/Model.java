@@ -104,7 +104,9 @@ public final class Model {
         if (!Files.isRegularFile(file)) throw new IOException("No model file at " + file);
         // From the path, not from memory, so Assimp's own file access finds the .mtl, .bin and texture files beside it.
         AIScene scene = aiImportFile(file.toAbsolutePath().toString(), IMPORT_FLAGS);
-        return convert(scene, file.getFileName().toString(), file.toAbsolutePath().getParent());
+        String lower = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        List<GltfTextureInfo.Material> placing = lower.endsWith(".gltf") || lower.endsWith(".glb") ? GltfTextureInfo.read(Files.readAllBytes(file)) : List.of();
+        return convert(scene, file.getFileName().toString(), file.toAbsolutePath().getParent(), placing);
     }
 
     /**
@@ -123,7 +125,8 @@ public final class Model {
         } finally {
             MemoryUtil.memFree(buffer);
         }
-        return convert(scene, name, null);
+        String lower = name.toLowerCase(Locale.ROOT);
+        return convert(scene, name, null, lower.endsWith(".gltf") || lower.endsWith(".glb") ? GltfTextureInfo.read(data) : List.of());
     }
 
     private static final int IMPORT_FLAGS = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenSmoothNormals
@@ -131,13 +134,13 @@ public final class Model {
             // Assimp hands out OpenGL-style texture coordinates for every format; undo that for top-first images.
             | aiProcess_FlipUVs;
 
-    private static Model convert(AIScene scene, String name, Path directory) throws IOException {
+    private static Model convert(AIScene scene, String name, Path directory, List<GltfTextureInfo.Material> placing) throws IOException {
         if (scene == null || scene.mRootNode() == null) {
             throw new IOException("Could not load the model " + name + ": " + aiGetErrorString());
         }
         String lower = name.toLowerCase(Locale.ROOT);
         try {
-            return new Converter(scene, name, directory, lower.endsWith(".gltf") || lower.endsWith(".glb")).convert();
+            return new Converter(scene, name, directory, lower.endsWith(".gltf") || lower.endsWith(".glb"), placing).convert();
         } finally {
             aiReleaseImport(scene);
         }
@@ -148,6 +151,7 @@ public final class Model {
         final String name;
         final Path directory;
         final boolean linearColors;
+        final List<GltfTextureInfo.Material> placing;
         final Map<String, TextureData> textures = new HashMap<>();
         final List<Mesh> meshes = new ArrayList<>();
         final List<Material> materials = new ArrayList<>();
@@ -157,7 +161,8 @@ public final class Model {
         /** Every node that got a mesh, with the number of the Assimp mesh, to attach skins once all nodes exist. */
         final List<Object[]> meshNodes = new ArrayList<>();
 
-        Converter(AIScene scene, String name, Path directory, boolean linearColors) {
+        Converter(AIScene scene, String name, Path directory, boolean linearColors, List<GltfTextureInfo.Material> placing) {
+            this.placing = placing;
             this.scene = scene;
             this.name = name;
             this.directory = directory;
@@ -170,6 +175,7 @@ public final class Model {
             PointerBuffer materialPointers = scene.mMaterials();
             for (int i = 0; i < materialCount; i++) {
                 materialByIndex[i] = convertMaterial(AIMaterial.create(materialPointers.get(i)));
+                if (i < placing.size()) place(materialByIndex[i], placing.get(i));
                 materials.add(materialByIndex[i]);
             }
 
@@ -357,10 +363,12 @@ public final class Model {
             AIVector3D.Buffer vertices = source.mVertices();
             AIVector3D.Buffer normals = source.mNormals();
             AIVector3D.Buffer uvSource = source.mTextureCoords(0);
+            AIVector3D.Buffer uvSource2 = source.mTextureCoords(1);
 
             float[] positions = new float[vertexCount * 3];
             float[] normalArray = normals != null ? new float[vertexCount * 3] : null;
             float[] uvs = uvSource != null ? new float[vertexCount * 2] : null;
+            float[] uvs2 = uvSource2 != null ? new float[vertexCount * 2] : null;
             for (int i = 0; i < vertexCount; i++) {
                 AIVector3D v = vertices.get(i);
                 positions[i * 3] = v.x();
@@ -376,6 +384,11 @@ public final class Model {
                     AIVector3D uv = uvSource.get(i);
                     uvs[i * 2] = uv.x();
                     uvs[i * 2 + 1] = uv.y();
+                }
+                if (uvs2 != null) {
+                    AIVector3D uv = uvSource2.get(i);
+                    uvs2[i * 2] = uv.x();
+                    uvs2[i * 2 + 1] = uv.y();
                 }
             }
 
@@ -393,6 +406,7 @@ public final class Model {
             if (count == 0 || vertexCount == 0) return null;
             if (count < indices.length) indices = java.util.Arrays.copyOf(indices, count);
             Mesh mesh = new Mesh(positions, normalArray, uvs, indices);
+            if (uvs2 != null) mesh.setUvs2(uvs2);
             if (source.mNumBones() > 0) applyBones(mesh, source, vertexCount);
             if (source.mNumAnimMeshes() > 0) applyMorphTargets(mesh, source, positions, normalArray);
             return mesh;
@@ -573,6 +587,19 @@ public final class Model {
                 }
             }
             return material;
+        }
+
+        /**
+         * Gives a material the texture transform and texture coordinate sets its glTF file says.
+         */
+        void place(Material material, GltfTextureInfo.Material info) {
+            float[] t = info.transform();
+            if (t != null) material.setUvTransform(t[0], t[1], t[2], t[3], t[4]);
+            if (info.mixedTransforms()) {
+                log.warn("{} gives the textures of one material different transforms; every texture of it gets the first.", name);
+            }
+            Material.Slot[] slots = Material.Slot.values();
+            for (int slot = 0; slot < slots.length; slot++) material.setTexCoordSet(slots[slot], info.texCoords()[slot]);
         }
 
         /**

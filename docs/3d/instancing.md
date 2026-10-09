@@ -57,9 +57,13 @@ scene.setUpdateHandler((s, delta) -> {
 - The node's **children are not repeated**; they follow the node once. To repeat a hierarchy, instance each of its meshes
   on its own node.
 - [Picking](scenes.md#picking) tests every instance and reports the nearest, with `Hit.instance()` saying which.
-- The node is [culled](scenes.md#frustum-culling) as a whole, by one sphere around all its copies; instances are not
-  culled one by one. A very large set is as cheap as the GPU can fill it; split a huge world into several nodes (one per
-  tile) so most of it can be skipped when it is out of view.
+- Copies are [culled](scenes.md#frustum-culling) one by one: a copy wholly outside the view is left out of the picture
+  (the node as a whole is dropped first by one sphere around all of them, which is the cheap test). A copy out of view
+  still throws its shadow. With tens of thousands of copies the per-frame cost of testing them is on the CPU, so a huge
+  world split into several nodes (one per tile) skips most of them with a single sphere test each.
+- See-through copies (a [blended](scenes.md#material) material) are sorted **one by one**, farthest first, so a field of
+  glass panes or particles of one mesh draws in the right order among themselves (up to 20,000 copies of a node; past that
+  they draw in list order).
 - A node with no instances (`size() == 0`) draws nothing.
 - Without `Instances`, nodes that share a mesh and a material are still drawn together in one call automatically, so a few
   hundred ordinary nodes are not a problem either.

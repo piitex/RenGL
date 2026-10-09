@@ -129,6 +129,7 @@ class ShadowGpuTest {
         return List.of(
                 new Scenario("two lights cast shadows", ShadowGpuTest::twoCasters, ShadowGpuTest::twoCastersCheck),
                 new Scenario("a point light casts shadows all round", ShadowGpuTest::pointRoom, ShadowGpuTest::pointRoomCheck),
+                new Scenario("eight lights cast shadows", ShadowGpuTest::eightSpots, ShadowGpuTest::eightSpotsCheck),
                 new Scenario("three cascades", () -> cascadeScene(3), ShadowGpuTest::cascadeCheck),
                 new Scenario("one cascade", () -> cascadeScene(1), ShadowGpuTest::cascadeCheck),
                 new Scenario("custom falloffs", ShadowGpuTest::falloffScene, ShadowGpuTest::falloffCheck),
@@ -219,6 +220,43 @@ class ShadowGpuTest {
             r.check("two lights: the floor between is evenly lit", Math.abs(betweenA - betweenB) < Math.max(12, betweenA * 0.1),
                     betweenA + " vs " + betweenB);
         });
+    }
+
+    // ---- eight lights ---------------------------------------------------------------------------------------------
+
+    /**
+     * Eight spot lights in a row, each over its own pillar and leaning towards it from the outer side, so each throws a
+     * shadow towards the middle of the picture that no other light fills in (the pillars' tops, seen from the middle,
+     * lean outwards and would hide a shadow on that side).
+     */
+    private static Scene3D eightSpots() {
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        scene.setAmbient(Color.WHITE, 0.02f);
+        scene.setSkybox(Skybox.gradient(Color.BLACK, Color.BLACK, Color.BLACK));
+        scene.add(floor(80f));
+        for (int i = 0; i < 8; i++) {
+            float x = -24.5f + 7f * i, outward = x < 0 ? -1f : 1f;
+            scene.lights().add(Light.spot(new Vec3(x + 3f * outward, 6f, 0f), new Vec3(-3f * outward, -6f, 0f), Color.WHITE, 3f, 20f, 15f, 25f)
+                    .setShadows(Shadows.of(ShadowQuality.LOW)));
+            scene.add(pillar("pillar" + i, x, 0f, 2f));
+        }
+        scene.camera().lookAt(new Vec3(0, 45f, 0.01f), new Vec3(0, 0, 0)).setFovYDegrees(70);
+        return scene;
+    }
+
+    private static void eightSpotsCheck(Scene3D scene, RenderTarget target, GpuHarness.Recorder r, Pixels px) {
+        r.check("eight lights: all eight are given shadow views", scene.getStats().shadowViews() == 8, "views " + scene.getStats().shadowViews());
+        for (int i = 0; i < 8; i++) {
+            int light = i;
+            String name = "eight lights: light " + i + " throws a shadow behind its pillar";
+            r.guard(name, () -> {
+                float x = -24.5f + 7f * light, outward = x < 0 ? -1f : 1f;
+                // The pillar's far edge is 0.5 towards the middle and the shadow runs 1.75 further.
+                int shadowed = px.luma(x - 1.4f * outward, 0f, 0f), lit = px.luma(x + 2.3f * outward, 0f, 0f);
+                r.check(name, shadowed < lit * 0.5 && lit > 100, "shadowed " + shadowed + " lit " + lit);
+            });
+        }
     }
 
     // ---- a point light ---------------------------------------------------------------------------------------------

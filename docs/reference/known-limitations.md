@@ -27,18 +27,20 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   from nine spherical-harmonic terms and blurs reflections with the sky's mipmaps instead of filtering a real
   environment map, and the sky pictures are 8-bit, so there is no bright sun in them and a sharp reflection of a small
   bright thing is out of reach.
-- **At most 4 lights cast shadows at once,** with a soft edge of the same width everywhere
-  ([`setShadowSoftness`](../3d/lighting.md#shadows) scales it).
+- **Shadows have a soft edge of the same width everywhere** ([`setShadowSoftness`](../3d/lighting.md#shadows) scales
+  it), and every shadow-casting light is a pass over the casters.
 - **Morph targets are blended on the CPU,** so a mesh with very many vertices whose weights change every frame costs
   frame time ([details](../3d/animation.md#morph-targets)). glTF cubic-spline animation arrives as plain keys,
   because Assimp drops the tangents.
-- **Frustum culling is per node,** by a sphere: an [instanced](../3d/instancing.md) node is kept or dropped as a whole,
-  and a skinned mesh is never culled. There is no occlusion culling, so things hidden behind other things are still drawn.
+- **Frustum culling is by spheres** (a node, each copy of an [instanced](../3d/instancing.md) node, a skinned mesh's joints),
+  so something just outside the view can still be drawn. There is no occlusion culling, so things hidden behind other
+  things are still drawn.
 - **Skinned and morphed meshes are picked by posing them on the CPU,** which follows the animation but costs a pass over
   the vertices per pick.
-- **Blended surfaces are sorted per node, by the centre of its mesh,** so overlapping see-through objects can still draw
-  in the wrong order where they interpenetrate or one is much bigger than the other. Split a large see-through surface into
-  pieces if that shows.
+- **Blended surfaces are sorted per node (and per copy of an instanced node), by the centre of its mesh,** so overlapping
+  see-through objects can still draw in the wrong order where they interpenetrate or one is much bigger than the other.
+  Split a large see-through surface into pieces if that shows; a single mesh that folds over itself is fixed with
+  `Node3D.setSortTriangles(true)`.
 - **A [`Background3D`](../3d/background-3d.md) sees game input only.** A container with a click listener, or a draggable
   or scrollable element under the mouse, takes the event first and the 3D never sees it. Using it as an `Element`
   background (3D behind one panel) is untested.

@@ -255,6 +255,22 @@ public final class SceneKinds {
         prop(MATERIAL, "emissiveTexture", "Glow Map", String.class, maps, m -> SceneMeta.material(m).textures[MaterialInfo.EMISSIVE],
                 (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.EMISSIVE, s(x), b)).omitWhen("").hint(Hint.IMAGE).when(Material::isPbr);
 
+        String placing = "Texture Placement";
+        prop(MATERIAL, "uvOffsetU", "Shift Across", Float.class, placing, Material::getUvOffsetU,
+                (m, x, b) -> m.setUvTransform(f(x), m.getUvOffsetV(), m.getUvScaleU(), m.getUvScaleV(), m.getUvRotation())).omitWhen(0f).range(-100, 100).step(0.05)
+                .tip("Slides every texture of the material along the surface, across. 1 is a whole texture");
+        prop(MATERIAL, "uvOffsetV", "Shift Down", Float.class, placing, Material::getUvOffsetV,
+                (m, x, b) -> m.setUvTransform(m.getUvOffsetU(), f(x), m.getUvScaleU(), m.getUvScaleV(), m.getUvRotation())).omitWhen(0f).range(-100, 100).step(0.05)
+                .tip("Slides every texture of the material along the surface, down");
+        prop(MATERIAL, "uvScaleU", "Repeat Across", Float.class, placing, Material::getUvScaleU,
+                (m, x, b) -> m.setUvTransform(m.getUvOffsetU(), m.getUvOffsetV(), f(x), m.getUvScaleV(), m.getUvRotation())).omitWhen(1f).range(-100, 100).step(0.1)
+                .tip("How many times the texture repeats across the surface");
+        prop(MATERIAL, "uvScaleV", "Repeat Down", Float.class, placing, Material::getUvScaleV,
+                (m, x, b) -> m.setUvTransform(m.getUvOffsetU(), m.getUvOffsetV(), m.getUvScaleU(), f(x), m.getUvRotation())).omitWhen(1f).range(-100, 100).step(0.1)
+                .tip("How many times the texture repeats down the surface");
+        prop(MATERIAL, "uvRotation", "Turn", Float.class, placing, m -> (float) Math.toDegrees(m.getUvRotation()),
+                (m, x, b) -> m.setUvTransform(m.getUvOffsetU(), m.getUvOffsetV(), m.getUvScaleU(), m.getUvScaleV(), (float) Math.toRadians(f(x)))).omitWhen(0f)
+                .range(-360, 360).step(1).tip("Turns the textures on the surface, in degrees");
         prop(MATERIAL, "emissiveColor", "Glow Color", Color.class, glow, SceneMeta::emissiveColor,
                 (m, x, b) -> SceneMeta.setEmissive(m, c(x), SceneMeta.emissiveStrength(m))).omitWhen(Color.WHITE)
                 .tip("Light it gives off whatever the lights do. It doesn't light its surroundings");
@@ -410,6 +426,12 @@ public final class SceneKinds {
         prop(WORLD, "environmentLighting", "Sky Lighting", Float.class, gLight, Scene3D::getEnvironmentLighting,
                 (s, x, b) -> s.setEnvironmentLighting(f(x))).omitWhen(0f).range(0, 4).step(0.05).when(s -> !sky(s, SkyKind.NONE))
                 .tip("Light and reflections from the sky, in place of ambient light. 0 turns it off");
+
+        prop(WORLD, "toneMapping", "Tone Mapping", me.piitex.engine.render3d.scene.ToneMapping.class, gLight, Scene3D::getToneMapping,
+                (s, x, b) -> s.setToneMapping((me.piitex.engine.render3d.scene.ToneMapping) x)).omitWhen(me.piitex.engine.render3d.scene.ToneMapping.NONE)
+                .tip("How light brighter than white is bent into the range of the screen. None cuts it off; ACES is the film look");
+        prop(WORLD, "exposure", "Exposure", Float.class, gLight, Scene3D::getExposure, (s, x, b) -> s.setExposure(f(x))).omitWhen(1f)
+                .range(0, 8).step(0.05).tip("Scales the light before tone mapping: 2 is one stop brighter");
 
         prop(WORLD, "fogColor", "Color", Color.class, gFog, Scene3D::getFogColor, (s, x, b) -> s.setFog(c(x), s.getFogDensity(), s.getFogHeightFalloff()))
                 .omitWhen(Color.WHITE).tip("What distant things fade into. Match it to the horizon");

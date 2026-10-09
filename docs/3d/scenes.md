@@ -48,6 +48,7 @@ Call `scene.lights().clear()` for different lighting.
 | `setFog(Color, float density)` / `setFog(Color, density, heightFalloff)` | Fades distant things into a colour, see [Fog](lighting.md#fog). Off by default |
 | `setShadowMapSize(int)`, `setShadowDistance(float)`, `setShadowBias(float)`, `setShadowSoftness(float)` | The default quality of [shadows](lighting.md#shadows), for lights that don't set their own with `Light.setShadows` |
 | `setShadowAtlasSize(int)` | The largest width and height of the picture all shadows share (`4096`), see [Which lights get shadows](lighting.md#which-lights-get-shadows) |
+| `setToneMapping(ToneMapping)` / `setExposure(float)` | Bends light brighter than white into the screen's range (`NONE`, `REINHARD`, `ACES`), after scaling it by the exposure; see [Tone mapping](lighting.md#tone-mapping-and-exposure). `NONE` and `1` by default, which change nothing |
 | `setEnvironmentLighting(float)` / `getEnvironmentLighting()` | Light and reflections from the skybox, `0` (off, the default) or more, see [Light from the sky](lighting.md#light-from-the-sky) |
 | `getStats()` | A `Scene3D.Stats(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight)` for the last time the scene was drawn, see [Frustum culling](#frustum-culling) and [Which lights get shadows](lighting.md#which-lights-get-shadows) |
 | `animate(AnimationPlayer)` / `stopAnimating(AnimationPlayer)` | Registers a player that advances once per frame, see [Animation](animation.md) |
@@ -128,6 +129,7 @@ arm.rotate(Vec3.UP, 0.5f);                      // the hand swings with it
 | `setSkin(Skin)` / `getSkin()` | Makes the mesh follow the joints of a [skin](animation.md) |
 | `setMorphWeights(float...)` / `setMorphWeight(i, w)` / `getMorphWeights()` | Mixes the mesh's [blend shapes](animation.md#morph-targets) |
 | `setFrustumCulled(boolean)` | Whether the node is skipped when outside the view (on by default), see [Frustum culling](#frustum-culling) |
+| `setSortTriangles(boolean)` | Draws the triangles of a see-through mesh far to near each frame, for shapes that fold over themselves. Off by default; see [Material](#material) |
 | `setPosition(Vec3)` / `setPosition(x, y, z)` | Position in the parent's space |
 | `setRotation(Quat)` | Rotation in the parent's space |
 | `rotate(Vec3 axis, float radians)` | Turns by that much on top of the current rotation |
@@ -212,7 +214,9 @@ Material glass = new Material(new Color(0.6f, 0.8f, 1f, 0.35f)).setBlend(true).s
 | `setUnlit(boolean)` | `false` | Skips lighting; the surface is drawn in its plain colour |
 | `setDoubleSided(boolean)` | `false` | Draws the back of triangles too, lit from the side that faces the camera. Off skips them |
 | `setAdditive(boolean)` | `false` | Adds the colour, times its alpha, to what is behind instead of mixing: for light-like things (flames, sparks, glows). Turns blending on; drawn with the blended nodes, casts no shadow, and fades out in fog |
-| `setBlend(boolean)` | `false` | Mixes the surface with what is behind it by its alpha. Blended nodes are drawn after the solid ones, farthest first, **ordered by their node's position**, so overlapping see-through surfaces can still look wrong. They test against the depth buffer but don't write to it. Blended surfaces do not cast shadows |
+| `setBlend(boolean)` | `false` | Mixes the surface with what is behind it by its alpha. Blended nodes are drawn after the solid ones, farthest first, **ordered by the middle of each one's mesh** (and each copy of an [instanced](instancing.md) node on its own), so overlapping see-through nodes can still look wrong where they interpenetrate. A single mesh whose own triangles fold over each other is drawn right with `node.setSortTriangles(true)`, which sorts them every frame on the CPU. They test against the depth buffer but don't write to it. Blended surfaces do not cast shadows |
+| `setUvTransform(offsetU, offsetV, scaleU, scaleV, rotation)` / `setUvScale(float)` | none | Moves, turns and stretches all of the material's textures over the surface (glTF's `KHR_texture_transform`): scale, then turn by the rotation in radians, then offset. A scale above 1 tiles the texture; changing the offset every frame scrolls it (water, a screen, a conveyor belt) |
+| `setTexCoordSet(Slot, 0 or 1)` | `0` | Makes one texture (`BASE_COLOR`, `NORMAL`, `METALLIC_ROUGHNESS`, `OCCLUSION` or `EMISSIVE`) read the mesh's second set of texture coordinates (`Mesh.setUvs2`), for a baked light or occlusion map laid out apart from the colour texture. A mesh without a second set gives set 1 the first |
 | `setAlphaCutoff(float)` | `0` | Pixels whose alpha (texture times colour) is below this are not drawn at all: a cut-out for leaves and fences that needs no sorting. `0` draws everything. Cut-outs cast shadows with their holes |
 | `setPbr(boolean)` | `false` | Physically based shading, see above |
 | `setMetallic(float)` | `0` | PBR: `0` for plastic, wood and stone, `1` for bare metal, which tints its reflections with the colour. Multiplied with the blue channel of the metallic-roughness map |
@@ -446,11 +450,13 @@ A node whose mesh is wholly outside the camera's view is not drawn, so a big wor
 what is in front of the camera. The test is cheap and conservative: a sphere around the mesh against the six sides of the
 view volume, so a node just outside may still be drawn, and one inside is never dropped.
 
-- A node with [`Instances`](instancing.md) is tested as a whole: one sphere around all of its copies. Spread a huge field
-  over several nodes (one per tile, say) so most of them can be skipped.
+- A node with [`Instances`](instancing.md) is tested as a whole first (one sphere around all of its copies), then copy by
+  copy: a copy out of view is not drawn.
 - **Shadows don't care.** A node out of view that casts a shadow into the view is still drawn into the shadow picture.
-- A skinned mesh is never culled, because its box doesn't follow the animation. `node.setFrustumCulled(false)` turns it
-  off for a node whose picture is not where its mesh's box is.
+- A skinned mesh is bounded by its **joints**: each joint is the middle of a sphere as big as the farthest vertex it moves
+  (worked out once from the bind pose), so the mesh is culled when every one of them is out of view, whatever the
+  animation does. `node.setFrustumCulled(false)` turns culling off for a node whose picture is not where its mesh's box
+  is (a mesh bent by a shader of your own, say).
 - `scene.getStats()` says what the last frame did: nodes drawn, nodes culled, instance records and draw calls. It is the
   quickest way to see that culling and batching are working.
 
@@ -465,4 +471,4 @@ view volume, so a node just outside may still be drawn, and one inside is never 
 - **Many nodes are fine, many distinct materials cost more.** Nodes that share a mesh and a material draw together;
   each change of material binds its textures again. Use [`Instances`](instancing.md) for thousands of copies.
 - **Skinned meshes ignore their node's transform.** The joints place them, as in glTF; move the skeleton's nodes instead.
-- **Lights past the eighth are ignored**, and at most 4 lights cast shadows at a time: directional ones first, then the nearest to the camera.
+- **Lights past the eighth are ignored.** Every one of the eight can cast shadows, at a pass each.
