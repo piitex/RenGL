@@ -19,8 +19,10 @@ button.onMouseClick(event -> Browser.open("https://github.com/piitex/RenGL"));
 | Member | Description |
 |---|---|
 | `static boolean open(String url)` | Opens `url` in the default browser. Returns `true` if the OS opener was launched, `false` if the address was refused or there is no opener. |
+| `static boolean open(Path path)` | Opens a file or folder with the program the OS has for it, as double-clicking it would. See [Files and folders](#files-and-folders). |
+| `static boolean reveal(Path path)` | Shows a file or folder selected in Finder / Explorer. |
 
-That is the whole API; the class has no instances.
+The class has no instances.
 
 ## What it accepts
 
@@ -38,7 +40,27 @@ Only `http`, `https` and `mailto` addresses are opened.
 
 The scheme check is there because the text of a link often comes from outside the application, such as a save file, a
 chat message or a web response. Handing that to the OS opener unchecked could launch a program or open a local file.
-If you need to open a local file or folder, use the platform's own facilities rather than this class.
+A local file or folder goes through `open(Path)` or `reveal(Path)` instead, which take a `Path` and not text.
+
+## Files and folders
+
+```java
+Browser.open(extracted);    // the .txt in the text editor, the folder in Finder
+Browser.reveal(extracted);  // "Show in Finder": the file selected inside its folder
+```
+
+Both return `false`, with a warning in the log, if the path does not exist.
+
+`open(Path)` **refuses a program**: a file ending in `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.scr`, `.ps1`, `.vbs`,
+`.sh`, `.command`, `.jar`, `.lnk`, `.js` and a few more, and anything ending in `.app`. Opening one would run it, and the
+path may have come out of an archive. A folder that merely has such a name is fine, except a `.app` bundle. `reveal` has
+no such rule, since showing a file in the file manager does not run it.
+
+| Platform | `open(Path)` | `reveal(Path)` |
+|---|---|---|
+| macOS | `open <path>` | `open -R <path>` |
+| Windows | `explorer.exe <folder>` or `rundll32 url.dll,FileProtocolHandler <file>` | `explorer.exe /select, <path>` |
+| Linux | `xdg-open <path>` | `xdg-open <parent folder>`: file managers have no common way to select a file |
 
 ## How it opens the browser
 
