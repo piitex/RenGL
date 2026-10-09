@@ -38,6 +38,22 @@ Like `TextOverlay`, the background is **transparent with no border** by default.
 - A single word wider than the box is broken mid-word rather than overflowing.
 - Changing the text, font, size, width, padding or line spacing re-wraps automatically.
 
+## Styled runs
+
+`setRuns(List<InlineRun>)` makes stretches of the text bold, italic, monospace or a link. The runs index into the
+current text, are measured in their own fonts when wrapping, and wrap and align together with the plain text.
+Setting the text again drops them, so set them after the text.
+
+```java
+TextFlowOverlay note = new TextFlowOverlay("Read the guide for more.", 300);
+note.setRuns(List.of(new InlineRun(9, 14, false, false, false, "https://example.com/guide")));
+note.setLinkHandler(address -> openInApp(address)); // default: Browser.open
+```
+
+A link run is drawn in the theme accent, underlined, and shows the pointer cursor when hovered. An element with no link
+runs takes no clicks of its own, so it does not stop a click from reaching what is behind it. Most code gets runs
+from [`FormattedTextOverlay`](formatted-text-overlay.md) and `MarkdownFormatPreset` rather than building them by hand.
+
 ## Alignment, spacing and padding
 
 ```java
@@ -92,6 +108,8 @@ blurb.scrollTo(0); // programmatic scrolling, clamped
 | `getScrollSpeed()/setScrollSpeed(float)` | Wheel speed |
 | `getScrollBarStyle()` | Thumb/track colors and geometry |
 | `getMaxScrollY()`, `scrollBy(double)`, `scrollTo(double)` | Programmatic scrolling |
+| `getRuns()/setRuns(List<InlineRun>)` | Bold, italic, code and link stretches within the text |
+| `setLinkHandler(Consumer<String>)` | What a click on a link run does |
 
 Everything else (`setText`, `setFontSize`, `setFontFile`, `setTextColor`, `setBold`/`setItalic`, `dispose()`,
 ...) is inherited from [`TextOverlay`](text-overlay.md). Call `dispose()` when permanently discarding the

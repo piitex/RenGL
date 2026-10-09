@@ -26,7 +26,7 @@ root.addElement(tos);
 | `FormattedTextOverlay(double width, double height, TextFormatPreset preset)` | |
 | `FormattedTextOverlay(double x, double y, double width, double height, TextFormatPreset preset)` | |
 
-The preset is fixed for the overlay's lifetime; change the document through `setSource(...)`, not the preset.
+The preset can be switched later with `setPreset(...)`, which parses the current source again with it.
 
 ## How it's built
 
@@ -38,10 +38,12 @@ gap to every child and has no way to give a heading more room than a paragraph.
 
 ```java
 tos.setSource(newDocument); // re-parses and rebuilds every block; scroll position resets to the top
+tos.setWidth(300);          // wraps the same blocks again, with no parsing
 ```
 
 Calling `setSource` on every keystroke of a live edit is not the intended use. Parse once for a document that
-changes occasionally, or once for a static one.
+changes occasionally, or once for a static one. Resizing is cheap: `setWidth` and `setHeight` wrap the blocks that
+already exist, so a drag-resize can call them every frame.
 
 ## The TextFormatPreset interface
 
@@ -52,7 +54,9 @@ public interface TextFormatPreset {
 }
 
 public record FormattedBlock(String text, TextStyle style, float spacingBefore, float spacingAfter,
-                             float indent, String marker, Paint background) {}
+                             float indent, String marker, Paint background, List<InlineRun> runs) {}
+
+public record InlineRun(int start, int end, boolean bold, boolean italic, boolean code, String href) {}
 
 public record TextStyle(float fontSize, boolean bold, boolean italic, Paint color) {}
 ```
@@ -61,13 +65,18 @@ A preset owns both the syntax **and** the resulting sizes, unlike
 [`TextSpanStyler`](rich-text-area-overlay.md#coloring-text-with-a-textspanstyler) (which only recolors runs of
 an already-fixed string, with no size or weight of its own). `TextStyle.color()` of `null` inherits the
 destination's own theme color, the same convention `TextSpan` uses, and a color that is given is kept even when a
-theme is applied. There is no inline styling within one block — a block draws its whole text in one `TextStyle`; mixing
-styles mid-paragraph means splitting into more blocks.
+theme is applied. A block draws its text in one `TextStyle`; stretches inside it can be bold, italic, code or a link on top
+of that through its `runs`.
 
 A block can also be a **list item**: its `marker` (a bullet, or `1.`) is drawn at `indent`, and the text lines up beside it,
 so a long item wraps under its own text and not under the bullet. A block with a `background` is a **code block**: the
 paint is drawn behind it with a little padding round the text, and the line breaks in its text are kept. A preset that
 makes plain paragraphs only uses the four-argument constructor, `new FormattedBlock(text, style, before, after)`.
+
+An `InlineRun` marks `[start, end)` of the block's text: `bold` and `italic` are synthesized like `TextStyle`'s, `code` draws
+in the monospace font on a faint chip, and a run with an `href` is drawn underlined in the theme's accent color and opens
+that address when clicked. Runs may overlap (bold inside a link), and the stretches wrap and align together with the plain
+text. Without `runs` a block is drawn exactly as before.
 
 RenGL ships two presets:
 
@@ -84,8 +93,23 @@ The part of Markdown that documentation needs:
   background (`setCodeBackground`, or null for none) in the code style (`setCodeStyle`).
 - A line of three or more `-`, `*` or `_` ends the paragraph before it and draws nothing.
 
-There is no inline styling. The marks of `**bold**`, `*italic*` and `` `code` `` are taken out and what they wrap is
-left as plain text, and `[text](address)` shows as its text. Tables, quotes and pictures read as paragraphs.
+Inline marks style the text inside a block:
+
+| Mark | Result |
+|---|---|
+| `**bold**`, `__bold__` | bold |
+| `*italic*`, `_italic_` | italic |
+| `***both***` | bold and italic |
+| `` `code` `` | monospace, with nothing inside interpreted |
+| `[text](address)` | a link, with the text itself able to hold emphasis |
+| `\*` | the mark as a plain character |
+
+A mark that never closes stays as written, as do asterisks with spaces round them (`2 * 3 * 4`) and underscores inside a
+word (`snake_case`). Tables, quotes and pictures read as paragraphs.
+
+A click on a link goes to `setLinkHandler(Consumer<String>)`. The default opens the address through
+[`Browser.open`](../reference/browser.md), which only takes web and mail addresses; pass a handler to route links
+inside your app instead, or null to make links inert.
 
 ```java
 MarkdownFormatPreset preset = new MarkdownFormatPreset();
@@ -178,13 +202,16 @@ bold font, but works with any typeface. See [TextOverlay](text-overlay.md#weight
 | Method | Description |
 |---|---|
 | `getSource()/setSource(String)` | The raw marked-up text; setting re-parses and rebuilds every block |
+| `getPreset()/setPreset(TextFormatPreset)` | The syntax; setting parses the current source again with it |
+| `setLinkHandler(Consumer<String>)` | What a click on a link does; default opens it in the browser |
 | Inherited | Everything on [`ScrollContainer`](../containers/scroll-container.md) — scroll speed, scrollbar style, `scrollTo`/`scrollBy`, theming |
 
 ## Gotchas
 
 - One `TextFlowOverlay` per block means block count matters for a very long document; a multi-thousand-block
   document was not a design target.
-- `setWidth(...)` triggers the same full rebuild `setSource` does (every block is re-parsed and re-wrapped),
-  not a cheap re-wrap. Resizing this overlay every frame, such as during a drag-resize, would re-parse every
-  frame too — debounce that at the call site if it comes up.
-- The preset instance is fixed at construction. To switch presets, build a new `FormattedTextOverlay`.
+- `setWidth(...)` and `setHeight(...)` wrap every block again, which costs a pass over the text but no parsing. A
+  very long document resized every frame still pays for that pass.
+- Bold, italic and code inside a block use the synthesized bold and slant, so they look a little rougher than a real
+  bold or italic font. A link run is clicked through the block, so a block with a link takes clicks that would otherwise
+  go to whatever is behind it.
