@@ -158,6 +158,23 @@ window.onRestore(() -> resumeMusic()); // back to normal size from either state
 
 They fire whether the user clicked the title bar button or your code called `minimize()` / `maximize()`, and run on the render thread like other callbacks. `isMinimized()` and `isMaximized()` give the current state. Un-minimizing a window that was maximized before returns it to maximized, and fires `onRestore` only, not `onMaximize`. Each listener is a single slot: setting one replaces the previous. Pass `null` to remove one.
 
+## Files dropped on the window
+
+```java
+window.onFileDrop(paths -> {
+    for (Path path : paths) archive.add(path);
+});
+```
+
+Fires when the user drops files or folders on the window from Finder / Explorer, with their paths in the order the OS
+gave them. It runs on the render thread, is a single slot, and `null` removes it; with no listener a drop does nothing.
+The paths are only names: nothing is read, and a folder is not expanded into its files. Use
+`window.getInputManager()`'s mouse position, or the elements' own bounds, to tell what the files landed on.
+
+**There is no hover feedback.** GLFW reports a drop only when it happens. It says nothing while a drag is still over
+the window, so a drop target cannot light up as the drag approaches. Show a standing "Drop files here" hint instead.
+`me.piitex.examples.demo.TableDemo` lists the folder that is dropped on it.
+
 ## Resize event
 
 ```java
