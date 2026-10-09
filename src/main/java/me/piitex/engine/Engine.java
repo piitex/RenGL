@@ -15,6 +15,7 @@ import me.piitex.engine.input.CursorManager;
 import me.piitex.engine.input.FileDialog;
 import me.piitex.engine.input.InputProcessor;
 import me.piitex.engine.input.MouseTracker;
+import me.piitex.engine.input.OpenFiles;
 import me.piitex.engine.scheduler.Scheduler;
 import me.piitex.engine.ui.background.Background;
 import me.piitex.engine.ui.containers.Container;
@@ -29,12 +30,14 @@ import org.apache.logging.log4j.Logger;
 import org.lwjgl.system.MemoryStack;
 
 import java.nio.IntBuffer;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
@@ -116,6 +119,36 @@ public class Engine {
     }
 
     /**
+     * Sets what happens when the operating system asks the application to open files: a {@code .zip} double-clicked
+     * in Finder / Explorer when the application is registered for that type, "Open With", or a file dropped on the
+     * Dock icon. The listener gets the paths on the render thread. Static, so it can be set before the engine exists.
+     * Requests that came earlier (the OS can ask while the window is still opening) are delivered as soon as the
+     * listener is set.
+     * <p>
+     * Windows and Linux pass these paths as {@code main}'s arguments, which macOS does not; call
+     * {@link #openFilesFromArguments} with them so every platform arrives here:
+     * <pre>{@code
+     * public static void main(String[] args) {
+     *     Engine.onOpenFiles(paths -> archive.open(paths.getFirst()));
+     *     Engine.openFilesFromArguments(args);
+     *     new Engine().start(window);
+     * }
+     * }</pre>
+     * Pass null to remove the listener. The packaging guide (docs/reference/packaging.md) covers registering file types.
+     */
+    public static void onOpenFiles(Consumer<List<Path>> listener) {
+        OpenFiles.onOpenFiles(listener);
+    }
+
+    /**
+     * Delivers the {@code main} arguments that name an existing file or folder to {@link #onOpenFiles}, as one
+     * request. Options and other arguments are ignored. Safe from any thread, before or after {@link #start}.
+     */
+    public static void openFilesFromArguments(String[] args) {
+        OpenFiles.fromArguments(args);
+    }
+
+    /**
      * The engine that is running, or null before {@link #start} and after it returns.
      */
     public static Engine getRunning() {
@@ -144,6 +177,7 @@ public class Engine {
     private void run(Window window) {
         log.info("Starting engine...");
         started = true;
+        OpenFiles.install(); // before GLFW starts, so macOS can hand over the file the app was launched to open
         Host main = createHost(window);
         primary = main;
         Clipboard.attach(main.handle); // GLFW's clipboard is system-wide; any window's handle will do
@@ -513,6 +547,7 @@ public class Engine {
 
             NativeMenuBar.drainActions(); // callbacks of items chosen in the macOS system menu bar
             FileDialog.drainCallbacks();  // results of native open/save dialogs
+            OpenFiles.drain();            // files the OS asked the application to open
             Scheduler.update(delta);      // runLater callbacks, timers, and async results
 
             // Game time: every window's scenes take the fixed steps (as many as this frame covers), then their

@@ -35,6 +35,27 @@ new Engine().start(window);
 // Nothing after this line runs until the window is closed.
 ```
 
+## Files the OS asks the app to open
+Double-clicking a `.zip` that is associated with your app, "Open With", or dropping a file on its Dock icon asks the
+running (or starting) app to open it. Windows and Linux start the program with the paths as `main(String[])`
+arguments. macOS passes no arguments: it sends an Apple event. One hook covers both:
+
+```java nocompile
+public static void main(String[] args) {
+    Engine.onOpenFiles(paths -> archive.open(paths.getFirst())); // render thread
+    Engine.openFilesFromArguments(args);                         // Windows and Linux; harmless on macOS
+    new Engine().start(window);
+}
+```
+
+`onOpenFiles` and `openFilesFromArguments` are static, so they work before the engine exists. A request that arrives
+before the listener is set (the OS can ask while the window is still opening) is kept and delivered on the first frame
+after it is set. `openFilesFromArguments` keeps only the arguments that name an existing file or folder, so options
+such as `--verbose` are ignored. On macOS the engine adds the receiving method to GLFW's application delegate before GLFW
+starts, because Finder's event for a double-clicked file arrives while the app is starting. It ignores the
+launch command's own words (`java -jar app.jar` reports `app.jar` as a file to open). Registering the file type with the
+OS is part of [packaging](../reference/packaging.md).
+
 ## What the render thread does every frame
 In order: apply a pending resize, process input, advance an animated window background, run
 [`Scheduler`](scheduler.md) tasks and queued menu and file-dialog callbacks, run the [scenes'](../game/scenes.md)

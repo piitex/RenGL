@@ -10,6 +10,7 @@ import me.piitex.engine.input.InputManager;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.glfw.GLFWDropCallback;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.jetbrains.skia.EncodedImageFormat;
 import org.jetbrains.skia.Image;
@@ -71,6 +72,7 @@ public class GLFWindow {
     private final InputManager inputManager;
     private volatile Consumer<Boolean> iconifyHandler, maximizeHandler;
     private volatile java.util.function.BooleanSupplier closeRequestHandler;
+    private volatile Consumer<java.util.List<java.nio.file.Path>> dropHandler;
     private boolean fullscreen; // main thread only
     private boolean frameHiddenForFullscreen; // main thread only: fullscreen took the title bar off a STANDARD window
     private int windowedX, windowedY, windowedW, windowedH; // bounds to return to when leaving fullscreen
@@ -186,6 +188,13 @@ public class GLFWindow {
     }
 
     /**
+     * Called on the main thread with the files the user dropped on the window from Finder / Explorer. Set before {@link #createWindow}.
+     */
+    public void setDropHandler(Consumer<java.util.List<java.nio.file.Path>> handler) {
+        this.dropHandler = handler;
+    }
+
+    /**
      * Creates the actual GLFW window and wires up input callbacks. The window is
      * created hidden, since {@code GLFW_VISIBLE} was set to false above. The engine
      * shows it later, once the first frame has rendered, so the user never sees a blank
@@ -221,6 +230,19 @@ public class GLFWindow {
         glfwSetWindowMaximizeCallback(window, (w, maximized) -> {
             Consumer<Boolean> handler = maximizeHandler;
             if (handler != null) handler.accept(maximized);
+        });
+        glfwSetDropCallback(window, (w, count, names) -> {
+            Consumer<java.util.List<java.nio.file.Path>> handler = dropHandler;
+            if (handler == null || count <= 0) return;
+            java.util.List<java.nio.file.Path> paths = new java.util.ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                try {
+                    paths.add(java.nio.file.Path.of(GLFWDropCallback.getName(names, i)));
+                } catch (java.nio.file.InvalidPathException ignored) {
+                    // not a path this file system can name; nothing to hand over
+                }
+            }
+            if (!paths.isEmpty()) handler.accept(java.util.List.copyOf(paths));
         });
         glfwSetWindowCloseCallback(window, w -> {
             java.util.function.BooleanSupplier handler = closeRequestHandler;

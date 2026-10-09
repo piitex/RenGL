@@ -72,6 +72,7 @@ public class Window implements Themeable {
     private volatile Runnable minimizeListener, maximizeListener, restoreListener;
     private volatile java.util.function.BiConsumer<Integer, Integer> resizeListener;
     private volatile Runnable closeRequestListener;
+    private volatile java.util.function.Consumer<List<java.nio.file.Path>> fileDropListener;
     private static final long FPS_SAMPLE_NANOS = 500_000_000L;
     private volatile double fps;
     private volatile double frameTime;
@@ -91,6 +92,7 @@ public class Window implements Themeable {
         glfWindow.setIconifyHandler(this::notifyMinimized);
         glfWindow.setMaximizeHandler(this::notifyMaximized);
         glfWindow.setCloseRequestHandler(this::notifyCloseRequested);
+        glfWindow.setDropHandler(this::notifyFilesDropped);
     }
 
     public WindowOptions getWindowOptions() {
@@ -539,6 +541,28 @@ public class Window implements Themeable {
      */
     public void onCloseRequest(Runnable listener) {
         this.closeRequestListener = listener;
+    }
+
+    /**
+     * Runs when the user drops files or folders on the window from Finder / Explorer, with their paths in the order
+     * the OS gave them. Runs on the render thread. Pass null to remove; with no listener a drop does nothing.
+     * <p>
+     * Use {@link #getInputManager()}'s mouse position to tell which element the files were dropped on. The OS tells
+     * the window nothing while a drag is still over it (GLFW has no drag-enter or drag-hover event), so a drop
+     * target can't light up as the drag approaches: show a standing "drop files here" hint instead.
+     * <p>
+     * The paths are only names. Nothing is read, and a folder is not expanded into its files.
+     */
+    public void onFileDrop(java.util.function.Consumer<List<java.nio.file.Path>> listener) {
+        this.fileDropListener = listener;
+    }
+
+    /**
+     * Main thread, from the GLFW drop callback. See {@link #onFileDrop}.
+     */
+    private void notifyFilesDropped(List<java.nio.file.Path> paths) {
+        java.util.function.Consumer<List<java.nio.file.Path>> listener = fileDropListener;
+        if (listener != null) fire(() -> listener.accept(paths));
     }
 
     /**
