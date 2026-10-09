@@ -198,6 +198,30 @@ scene.setExposure(1.3f);                  // 2 is one stop brighter, 0.5 one dar
 It applies to everything lit, fog included, and not to the skybox, which is drawn as its picture is. Exposure works with
 `NONE` too, as a plain brightness. In a [scene file](scene-files.md) they are the world's `toneMapping` and `exposure`.
 
+## Bloom
+
+Bloom makes the brightest parts of the picture glow, the way a camera lens does: a halo round a lamp, a glint on metal,
+the sun in a window.
+
+```java nocompile
+scene.setToneMapping(ToneMapping.ACES);
+scene.setBloom(0.6f);            // strength, 0 (off, the default) to about 1
+scene.setBloomThreshold(0.8f);   // how bright, as a share of white, a pixel must be to glow
+scene.setBloomRadius(1f);        // how far the glow spreads
+```
+
+It works on the finished picture, after tone mapping and exposure, so with a tone mapper only real highlights pass the
+threshold. Give a material an [emissive](scenes.md#material) colour above 1 and it glows without any light on it.
+
+- **Cost:** the scene draws into a target of its own and through a few full-screen passes at half and quarter size: a few
+  percent of the frame and two small textures.
+- **No multisampling while it is on.** The glow has to read the picture, which a multisampled one can't be without a
+  resolve step, so edges are rougher. Raise the viewport's `setResolutionScale` to 1.5 or 2 to smooth them.
+- It is a post effect on the picture, not on light itself: it does not see brightness the tone mapper has already
+  squeezed to white, so a very bright sun and a white wall glow the same.
+- A radius above about 3 shows the blur's taps as faint copies of the light.
+- In a [scene file](scene-files.md) they are the world's `bloom`, `bloomThreshold` and `bloomRadius`.
+
 ## Fog
 
 ```java nocompile
@@ -224,6 +248,7 @@ scene.setSkybox(Skybox.gradient(
 
 scene.setSkybox(Skybox.cube(right, left, top, bottom, front, back));   // six TextureData
 scene.setSkybox(Skybox.equirect(TextureData.load(Path.of("sky.png"))));
+scene.setSkybox(Skybox.equirectHdr(HdrTextureData.load(Path.of("sky.hdr"))));   // light with no upper limit
 scene.setSkybox(null);                                                  // back to the plain colour
 ```
 
@@ -232,6 +257,8 @@ scene.setSkybox(null);                                                  // back 
 | Gradient | `Skybox.gradient(top, horizon, bottom)` | Three colours blended by the height of the view direction. No pictures, no memory |
 | Cube map | `Skybox.cube(+X, -X, +Y, -Y, +Z, -Z)` | Six square pictures of the same size, the faces of a cube around the camera, in the order of the usual *right, left, top, bottom, front, back* skybox files. Mipmapped |
 | Panorama | `Skybox.equirect(TextureData)` | One wide picture, the middle row at the horizon and the top row straight up, usually twice as wide as high. The centre of the picture is the direction the camera looks along `-Z` |
+
+| HDR panorama | `Skybox.equirectHdr(HdrTextureData)` | The same panorama made of light with no upper limit: a Radiance `.hdr` file, as HDRI photographs of real skies come. The sun in it is really bright. Held as 16-bit floats, so it takes twice the memory of an 8-bit picture of the same size |
 
 `Skybox.setBrightness(float)` scales the sky (`1` as drawn). One skybox can be set on any number of scenes. The pictures
 are uploaded when first drawn and freed some time after the scene stops using them, like any texture.
@@ -255,11 +282,29 @@ scene.setAmbient(Color.WHITE, 0f);  // no longer used where the sky lights the s
   filtered environment map. Classic materials get the diffuse part only.
 - **It replaces the flat ambient light** wherever it is on. Your [lights](scenes.md#light) still add their own light on
   top, and only they cast shadows: the sky lights every surface from every side whether or not something shades it.
-- Works with all three kinds of skybox. The gradient is evaluated directly; a cube map or panorama is read from its
+- Works with every kind of skybox. The gradient is evaluated directly; a cube map or panorama is read from its
   mipmaps.
-- The skybox pictures are ordinary 8-bit images, so a bright sun in one adds no more light than white does. Put the sun
-  in as a directional light.
+- The skybox pictures of the other kinds are ordinary 8-bit images, so a bright sun in one adds no more light than white
+  does. Put the sun in as a directional light, or use an [HDR panorama](#hdr-skies).
 - It is a **per-scene** setting and costs one more texture binding in the shader programs of the scenes that use it.
+
+### HDR skies
+
+An 8-bit sky can't hold a sun: white is as bright as it gets. A `.hdr` panorama can, so with it the sun lights the scene
+and shines in glossy surfaces by itself:
+
+```java nocompile
+scene.setSkybox(Skybox.equirectHdr(HdrTextureData.load(Path.of("sky.hdr"))));
+scene.setEnvironmentLighting(1f);
+scene.setToneMapping(ToneMapping.ACES);   // brings the sun into range without whitening everything else
+scene.setExposure(0.8f);
+```
+
+- Without a [tone mapper](#tone-mapping-and-exposure) the sky is cut off at white, as an 8-bit one is, so use one.
+- The sun still doesn't cast shadows: add a directional light pointing the same way for that.
+- Only the Radiance `.hdr` format (RGBE) loads, flat or run-length coded; OpenEXR doesn't.
+- In a [scene file](scene-files.md), choose a panorama whose path ends in `.hdr`.
+- Needs a GPU that can sample 16-bit float textures, which every OpenGL 3.3 and Vulkan device can.
 
 ## Gotchas
 
