@@ -94,6 +94,22 @@ public final class TileMap {
         return new TiledReader().readMap(path);
     }
 
+    /**
+     * As {@link #load(Path)}, with the {@link TiledProject} the map belongs to, whose custom class definitions supply the
+     * members the map leaves at their default. Without it those members read as not set.
+     */
+    public static TileMap load(Path path, TiledProject project) {
+        return new TiledReader(project).readMap(path);
+    }
+
+    public static TileMap load(String path, TiledProject project) {
+        return load(Path.of(path), project);
+    }
+
+    public static TileMap load(File file, TiledProject project) {
+        return load(file.toPath(), project);
+    }
+
     // ---- Size
 
     /**
@@ -377,7 +393,7 @@ public final class TileMap {
         if (backgroundColor != null && view != null) {
             renderer.drawQuad(view.x(), view.y(), view.width(), view.height(), backgroundColor, 0f);
         }
-        for (MapLayer layer : layers) layer.render(renderer, view, MapLayer.DrawState.ROOT);
+        for (MapLayer layer : layers) layer.renderBlended(renderer, view, MapLayer.DrawState.ROOT);
     }
 
     /**

@@ -1,6 +1,7 @@
 package me.piitex.engine.tilemap;
 
 import me.piitex.engine.gl.renderer.Renderer;
+import me.piitex.engine.graphics.BlendMode;
 import me.piitex.engine.math.Rect;
 import me.piitex.engine.ui.color.Color;
 
@@ -28,6 +29,7 @@ public abstract sealed class MapLayer permits TileLayer, ObjectLayer, ImageLayer
     private boolean visible = true;
     private float opacity = 1f;
     private Color tint;
+    private BlendMode blendMode = BlendMode.NORMAL;
     private float offsetX, offsetY;
     private float parallaxX = 1f, parallaxY = 1f;
     private Properties properties = Properties.EMPTY;
@@ -51,7 +53,7 @@ public abstract sealed class MapLayer permits TileLayer, ObjectLayer, ImageLayer
             state = state.with(group);
             if (state == null) return;
         }
-        render(renderer, view, state);
+        renderBlended(renderer, view, state);
     }
 
     /**
@@ -65,6 +67,25 @@ public abstract sealed class MapLayer permits TileLayer, ObjectLayer, ImageLayer
      * Draws the layer, combining {@code parent}, the settings of the groups it is in, with its own.
      */
     abstract void render(Renderer renderer, Rect view, DrawState parent);
+
+    /**
+     * {@link #render}, drawn as one unit and combined with what is below by the layer's {@linkplain #getBlendMode blend
+     * mode} if it has one.
+     */
+    final void renderBlended(Renderer renderer, Rect view, DrawState parent) {
+        if (blendMode == BlendMode.NORMAL) {
+            render(renderer, view, parent);
+            return;
+        }
+        // Without a view the layer is drawn whole, and a layer can reach anywhere; Skia trims the layer to the canvas.
+        Rect area = view != null ? view : new Rect(-1e7f, -1e7f, 2e7f, 2e7f);
+        renderer.pushBlendLayer(area.x(), area.y(), area.width(), area.height(), blendMode, 1f);
+        try {
+            render(renderer, view, parent);
+        } finally {
+            renderer.popOpacityLayer();
+        }
+    }
 
     void setMap(TileMap map) {
         this.map = map;
@@ -138,6 +159,18 @@ public abstract sealed class MapLayer permits TileLayer, ObjectLayer, ImageLayer
 
     public void setTint(Color tint) {
         this.tint = tint;
+    }
+
+    /**
+     * How the layer is combined with what is drawn below it: {@link BlendMode#NORMAL}, covering it, by default. Tiled
+     * 1.12's layer "Mode" loads here. A layer with a mode is drawn as one unit, so its own overlaps don't blend twice.
+     */
+    public BlendMode getBlendMode() {
+        return blendMode;
+    }
+
+    public void setBlendMode(BlendMode mode) {
+        this.blendMode = mode == null ? BlendMode.NORMAL : mode;
     }
 
     /**

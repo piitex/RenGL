@@ -304,6 +304,16 @@ public abstract class SkiaRenderer implements Renderer {
     }
 
     @Override
+    public void pushBlendLayer(float x, float y, float width, float height, me.piitex.engine.graphics.BlendMode mode, float opacity) {
+        if (!frameValid) return;
+        try (org.jetbrains.skia.Paint paint = new org.jetbrains.skia.Paint()) {
+            paint.setAlphaf(Math.max(0f, Math.min(1f, opacity)));
+            paint.setBlendMode(SkiaBlend.of(mode));
+            canvas.saveLayer(Rect.makeXYWH(x, y, width, height), paint);
+        }
+    }
+
+    @Override
     public void popOpacityLayer() {
         if (!frameValid) return;
         canvas.restore();

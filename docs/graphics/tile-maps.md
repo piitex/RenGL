@@ -39,23 +39,35 @@ throws an `IllegalArgumentException` that names the file and what is wrong with 
 
 | Read | |
 |---|---|
-| Maps | Orthogonal, fixed size or infinite; every tile layer format (CSV, base64 uncompressed, zlib or gzip, and XML) |
-| Layers | Tile layers, object layers, image layers and groups, with visibility, opacity, tint, offset and parallax |
+| Maps | Orthogonal, fixed size or infinite; every tile layer format (CSV, base64 uncompressed, zlib, gzip or zstd, and XML) |
+| Layers | Tile layers, object layers, image layers and groups, with visibility, opacity, tint, blend mode, offset and parallax |
 | Tiles | Mirrored and turned tiles, tiles bigger than the grid, drawing offsets, animations, collision shapes, "Tile Render Size" and "Fill Mode" |
-| Tile sets | One image cut into a grid (with margin and spacing), or a collection of images; a transparent color that is cut out |
+| Tile sets | One image cut into a grid (with margin and spacing), or a collection of images, as files or embedded in a `.tmx`; a transparent color that is cut out |
 | Objects | Rectangles, ellipses, capsules, points, polygons, polylines, text and tile objects, turned, and templates |
 | Properties | Every type: string, int, float, bool, color, file, object and custom classes |
 
 Not supported:
 
 - **Isometric, staggered and hexagonal maps.** Loading one fails, saying so.
-- **zstd compression.** Loading fails with a message saying how to change it: in the map's properties, set Tile
-  Layer Format to CSV, or to Base64 uncompressed, zlib or gzip.
-- **Images embedded in the file.** Keep images as files.
-- **Layer blend modes** ("Mode" in Tiled 1.12) are ignored: layers draw normally.
-- **Text objects aren't drawn.** Their text is there to read; draw it with the engine's text.
-- **Custom class defaults.** Tiled doesn't save class members left at their default, and the engine doesn't read
-  the project file that holds the defaults, so those members read as not set. Pass the default to the getter.
+- **Images embedded in a JSON map.** Tiled can't write them there; only a `.tmx` holds them. They must be base64, plain or compressed.
+- **Fonts for text objects.** Every text object is drawn in the engine's [default font](../styling/fonts.md), whatever family
+  Tiled shows. The family name is there to read (`getTextFormat().fontFamily()`).
+
+### Custom class defaults
+
+Tiled doesn't save a class member left at its default, so by itself a map only holds what was changed. Give the loader the
+project file and it fills in the rest:
+
+```java nocompile
+TiledProject project = TiledProject.load("assets/game.tiled-project");
+TileMap map = TileMap.load("assets/levels/forest.tmx", project);
+float speed = enemy.getProperties().getFloat("speed", 80f);   // the class default when the map doesn't set it
+```
+
+It applies to anything with a class (a map, layer, tile set, tile or object), and to a property whose type is a class, down
+through classes made of classes. A class that overrides the default of a member that is itself a class (an `Enemy` whose
+`stats` start at attack 5) wins over that class's own defaults. Without the project, those members read as not set and
+the getter's default applies, as before. `project.getClassNames()` lists what it defines.
 
 ## Drawing
 
@@ -91,6 +103,7 @@ properties. A group's settings apply on top of those of the layers in it.
 | `setVisible(boolean)` | Hides or shows it. Hidden layers still count for collision |
 | `setOpacity(float)` | 0 invisible, 1 solid: fade a roof out when the player walks inside |
 | `setTint(color)` | Multiplied with everything the layer draws; null for none |
+| `setBlendMode(BlendMode)` | How it combines with what is below: `NORMAL`, `ADD`, `MULTIPLY`, `SCREEN`, `OVERLAY`, `DARKEN`, `LIGHTEN`, `COLOR_DODGE`, `COLOR_BURN`, `HARD_LIGHT`, `SOFT_LIGHT`, `DIFFERENCE`, `EXCLUSION`. Tiled's layer "Mode" loads here |
 | `setOffset(x, y)` | Moves it, in pixels |
 | `setParallax(x, y)` | How fast it scrolls: 1 with the map, 0.5 half as fast, 0 not at all |
 
@@ -188,12 +201,16 @@ for (MapObject object : map.getObjectLayer("entities").getObjects()) {
 | `getShapes()` | Its shapes for collision; empty for points and polylines |
 | `getPoints()` | A polygon's or polyline's points in the world: a path to patrol |
 | `getTile()`, `isFlipX()`, `isFlipY()` | What a tile object shows |
-| `getText()` | A text object's text |
+| `getText()`, `getTextFormat()` | A text object's text, and its font family, size, color, style and alignment |
 | `setVisible(boolean)` | Hides a tile object, such as a coin that was picked up |
 | `makeSprite()` | A [`Sprite`](sprites.md) that looks like a tile object: hide the object and move the sprite, for a crate that can be pushed |
 
 Objects made from a **template** have the template's settings with the object's own on top, including their
-properties. Drawing an object layer draws its visible tile objects; other kinds are only for the game.
+properties. Drawing an object layer draws its visible tile objects and text objects; other kinds are only for the game.
+
+A **text object** is drawn inside its box, turned with the object and clipped to the box, in the size, color,
+weight and alignment Tiled shows: wrapped to the width when "Word wrap" is on, and placed at the top, middle or bottom of
+the box. A text object whose box has no size draws without clipping from its corner.
 
 ## Properties
 

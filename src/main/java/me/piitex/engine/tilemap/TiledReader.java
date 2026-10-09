@@ -1,10 +1,12 @@
 package me.piitex.engine.tilemap;
 
 import me.piitex.engine.graphics.Animation;
+import me.piitex.engine.graphics.BlendMode;
 import me.piitex.engine.graphics.Texture;
 import me.piitex.engine.graphics.TextureRegion;
 import me.piitex.engine.io.Json;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.text.TextAlign;
 import org.jetbrains.skia.Bitmap;
 import org.jetbrains.skia.ColorAlphaType;
 import org.jetbrains.skia.ColorType;
@@ -44,6 +46,18 @@ final class TiledReader {
     private final Map<Path, Template> templates = new HashMap<>();
     private final Map<String, Texture> textures = new HashMap<>();
     private TileMap map;
+    private final TiledProject project;
+
+    TiledReader() {
+        this(null);
+    }
+
+    /**
+     * @param project the project the map belongs to, whose class defaults fill in what the map leaves out, or null
+     */
+    TiledReader(TiledProject project) {
+        this.project = project;
+    }
 
     /**
      * A problem already worded with the file it is in, so it isn't wrapped again on its way out.
@@ -159,6 +173,7 @@ final class TiledReader {
         layer.setVisible(bool(entry, "visible", true));
         layer.setOpacity((float) num(entry, "opacity", 1));
         layer.setTint(color(entry, "tintcolor"));
+        layer.setBlendMode(BlendMode.fromName(str(entry, "mode", "normal")));
         layer.setOffset((float) num(entry, "offsetx", 0), (float) num(entry, "offsety", 0));
         layer.setParallax((float) num(entry, "parallaxx", 1), (float) num(entry, "parallaxy", 1));
         layer.setProperties(new Properties(properties(entry, file), map));
@@ -215,7 +230,7 @@ final class TiledReader {
             gids = new int[list.size()];
             for (int i = 0; i < gids.length; i++) gids[i] = (int) unsigned(list.get(i), where);
         } else if (data instanceof String text && encoding.equals("base64")) {
-            byte[] bytes = decompress(Base64.getMimeDecoder().decode(text.trim()), compression, where);
+            byte[] bytes = TileCompression.decompress(Base64.getMimeDecoder().decode(text.trim()), compression, where);
             if (bytes.length % 4 != 0) throw new IllegalArgumentException(where + ": tile data is " + bytes.length + " bytes, not whole numbers");
             gids = new int[bytes.length / 4];
             ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(gids);
@@ -240,23 +255,6 @@ final class TiledReader {
         }
     }
 
-    private static byte[] decompress(byte[] bytes, String compression, String where) {
-        if (compression.isEmpty()) return bytes;
-        try (InputStream in = switch (compression) {
-            case "zlib" -> new InflaterInputStream(new ByteArrayInputStream(bytes));
-            case "gzip" -> new GZIPInputStream(new ByteArrayInputStream(bytes));
-            case "zstd" -> throw new IllegalArgumentException(where + " is compressed with zstd, which isn't supported: in"
-                    + " the map's properties in Tiled, set Tile Layer Format to CSV, or to Base64 uncompressed, zlib or gzip");
-            default -> throw new IllegalArgumentException(where + " is compressed in an unknown way: '" + compression + "'");
-        }) {
-            ByteArrayOutputStream out = new ByteArrayOutputStream(bytes.length * 4);
-            in.transferTo(out);
-            return out.toByteArray();
-        } catch (IOException e) {
-            throw new IllegalArgumentException(where + ": tile data doesn't decompress as " + compression + ": " + e.getMessage(), e);
-        }
-    }
-
     private ObjectLayer objectLayer(Map<String, Object> entry, String name, Path file, Gids gids) {
         List<MapObject> objects = new ArrayList<>();
         for (Object object : list(entry, "objects")) objects.add(object(cast(object), file, gids, "layer '" + name + "'"));
@@ -265,8 +263,7 @@ final class TiledReader {
     }
 
     private ImageLayer imageLayer(Map<String, Object> entry, String name, Path file) {
-        String image = str(entry, "image", "");
-        Texture texture = image.isEmpty() ? null : texture(file.resolveSibling(image).normalize(), str(entry, "transparentcolor", null));
+        Texture texture = imageOf(entry, file, str(entry, "transparentcolor", null));
         ImageLayer layer = new ImageLayer(name, texture);
         layer.setRepeat(bool(entry, "repeatx", false), bool(entry, "repeaty", false));
         return layer;
@@ -303,7 +300,7 @@ final class TiledReader {
 
         MapObject.Kind kind;
         float[] points = null;
-        String text = null;
+        ObjectText text = null;
         if (tile != null) {
             kind = MapObject.Kind.TILE;
         } else if (bool(merged, "ellipse", false)) {
@@ -320,7 +317,7 @@ final class TiledReader {
             points = points(polyline);
         } else if (merged.get("text") instanceof Map<?, ?> t) {
             kind = MapObject.Kind.TEXT;
-            text = str(cast(t), "text", "");
+            text = objectText(cast(t));
         } else {
             kind = MapObject.Kind.RECTANGLE;
         }
@@ -331,6 +328,23 @@ final class TiledReader {
                 (float) num(merged, "width", 0), (float) num(merged, "height", 0), (float) num(merged, "rotation", 0),
                 points, tile, (gid & FLIPPED_HORIZONTALLY) != 0, (gid & FLIPPED_VERTICALLY) != 0, text,
                 bool(merged, "visible", true), (float) num(merged, "opacity", 1), new Properties(props, map));
+    }
+
+    private static ObjectText objectText(Map<String, Object> t) {
+        Color color = color(t, "color");
+        TextAlign horizontal = switch (str(t, "halign", "left")) {
+            case "center" -> TextAlign.CENTER;
+            case "right" -> TextAlign.RIGHT;
+            default -> TextAlign.LEFT;
+        };
+        float vertical = switch (str(t, "valign", "top")) {
+            case "center" -> 0.5f;
+            case "bottom" -> 1f;
+            default -> 0f;
+        };
+        return new ObjectText(str(t, "text", ""), str(t, "fontfamily", "sans-serif"), (float) num(t, "pixelsize", 16),
+                bool(t, "wrap", false), color, bool(t, "bold", false), bool(t, "italic", false),
+                bool(t, "underline", false), bool(t, "strikeout", false), horizontal, vertical);
     }
 
     private static float[] points(List<?> list) {
@@ -394,10 +408,9 @@ final class TiledReader {
         String where = "Tile set '" + name + "'";
         int tileWidth = integer(entry, "tilewidth"), tileHeight = integer(entry, "tileheight");
         int margin = intOr(entry, "margin", 0), spacing = intOr(entry, "spacing", 0);
-        String image = str(entry, "image", "");
+        Texture texture = imageOf(entry, file, str(entry, "transparentcolor", null));
         TileSet set;
-        if (!image.isEmpty()) {
-            Texture texture = texture(file.resolveSibling(image).normalize(), str(entry, "transparentcolor", null));
+        if (texture != null) {
             // The image as it is now decides the grid, as in Tiled, even if it has changed size since the map was saved.
             int columns = Math.max(0, (texture.getWidth() - 2 * margin + spacing) / (tileWidth + spacing));
             int rows = Math.max(0, (texture.getHeight() - 2 * margin + spacing) / (tileHeight + spacing));
@@ -427,12 +440,11 @@ final class TiledReader {
             int id = integer(definition, "id");
             Tile tile;
             if (set.getTexture() == null) {
-                String tileImage = str(definition, "image", "");
-                if (tileImage.isEmpty()) throw new IllegalArgumentException(where + ": tile " + id + " has no image");
-                Texture texture = texture(file.resolveSibling(tileImage).normalize(), null);
+                Texture tileTexture = imageOf(definition, file, null);
+                if (tileTexture == null) throw new IllegalArgumentException(where + ": tile " + id + " has no image");
                 int x = intOr(definition, "x", 0), y = intOr(definition, "y", 0);
-                int w = intOr(definition, "width", texture.getWidth() - x), h = intOr(definition, "height", texture.getHeight() - y);
-                tile = new Tile(set, id, new TextureRegion(texture, x, y, w, h));
+                int w = intOr(definition, "width", tileTexture.getWidth() - x), h = intOr(definition, "height", tileTexture.getHeight() - y);
+                tile = new Tile(set, id, new TextureRegion(tileTexture, x, y, w, h));
                 set.put(tile);
             } else {
                 tile = set.findTile(id);
@@ -478,6 +490,25 @@ final class TiledReader {
         };
     }
 
+    /**
+     * The picture a tile set, tile or image layer names: a file next to {@code file}, or the bytes embedded in it.
+     * Null if it names none.
+     */
+    private Texture imageOf(Map<String, Object> entry, Path file, String transparent) {
+        String image = str(entry, "image", "");
+        if (!image.isEmpty()) return texture(file.resolveSibling(image).normalize(), transparent);
+        if (!(entry.get("imagedata") instanceof byte[] bytes)) return null;
+        Image decoded;
+        try {
+            decoded = Image.Companion.makeFromEncoded(bytes);
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("an embedded image can't be read as a picture: " + e.getMessage(), e);
+        }
+        Texture texture = new Texture(decoded);
+        Color cut = parseColor(transparent);
+        return cut == null ? texture : withoutColor(texture, cut.toARGB() & 0xFFFFFF);
+    }
+
     private Texture texture(Path path, String transparent) {
         String key = path + "|" + (transparent == null ? "" : transparent);
         Texture cached = textures.get(key);
@@ -513,16 +544,35 @@ final class TiledReader {
 
     // ---- Properties
 
+    /**
+     * The properties of a map, layer, tile set, tile or object: the defaults of its class if the project defines it, with
+     * what the file sets on top.
+     */
     private Map<String, Object> properties(Map<String, Object> entry, Path file) {
-        return propertyList(list(entry, "properties"), file);
+        String className = str(entry, "class", "");
+        Map<String, Object> values = new LinkedHashMap<>();
+        if (project != null && project.hasClass(className)) values.putAll(classDefaults(className, file, 0));
+        values.putAll(propertyList(list(entry, "properties"), file, values));
+        return values;
     }
 
     private Map<String, Object> propertyList(List<Object> list, Path file) {
+        return propertyList(list, file, Map.of());
+    }
+
+    /**
+     * The properties in {@code list}, typed. {@code below} is what they are set on top of: for a class-typed one,
+     * the value already there supplies the members the file leaves out.
+     */
+    private Map<String, Object> propertyList(List<Object> list, Path file, Map<String, Object> below) {
         Map<String, Object> values = new LinkedHashMap<>();
         for (Object p : list) {
             Map<String, Object> property = cast(p);
             String name = str(property, "name", "");
-            Object value = propertyValue(name, str(property, "type", "string"), property.get("value"), file);
+            String type = str(property, "type", "string");
+            Object value = type.equals("class")
+                    ? classProperty(str(property, "propertytype", ""), property.get("value"), below.get(name) instanceof Properties p2 ? p2 : null, file, 0)
+                    : propertyValue(name, type, property.get("value"), file);
             if (value != null) values.put(name, value);
         }
         return values;
@@ -537,13 +587,59 @@ final class TiledReader {
             case "color" -> parseColor(raw == null ? null : String.valueOf(raw));
             case "file" -> raw == null || String.valueOf(raw).isEmpty() ? null : file.resolveSibling(String.valueOf(raw)).normalize();
             case "object" -> new Properties.ObjectId(raw == null ? 0 : (int) whole(raw, where));
-            case "class" -> {
-                if (raw instanceof List<?> members) yield new Properties(propertyList(cast(members), file), map);
-                if (raw instanceof Map<?, ?> members) yield new Properties(untyped(cast(members)), map);
-                yield Properties.EMPTY;
-            }
+            case "class" -> classProperty("", raw, null, file, 0);
             default -> raw == null ? "" : raw instanceof Double d ? formatNumber(d) : String.valueOf(raw);
         };
+    }
+
+    /**
+     * A property whose type is a custom class. Built from the class's defaults in the project (or from {@code below}, if
+     * an outer class changed them), then the members the file sets.
+     *
+     * @param className the class's name, or "" when unknown
+     * @param raw       the members the file sets: a typed list in XML, an untyped object in JSON, or null
+     */
+    private Properties classProperty(String className, Object raw, Properties below, Path file, int depth) {
+        if (depth > 16) throw new IllegalArgumentException("class '" + className + "' contains itself");
+        Map<String, Object> values = new LinkedHashMap<>();
+        if (below != null) values.putAll(below.raw());
+        else if (project != null && project.hasClass(className)) values.putAll(classDefaults(className, file, depth));
+        if (raw instanceof List<?> members) {
+            values.putAll(propertyList(cast(members), file, values));
+        } else if (raw instanceof Map<?, ?> members) {
+            Map<String, Object> given = cast(members);
+            if (project != null && project.hasClass(className)) {
+                for (Map.Entry<String, Object> member : given.entrySet()) {
+                    TiledProject.Member definition = project.member(className, member.getKey());
+                    if (definition == null) {
+                        values.putAll(untyped(Map.of(member.getKey(), member.getValue())));
+                    } else if (definition.type().equals("class")) {
+                        values.put(member.getKey(), classProperty(definition.propertyType(), member.getValue(),
+                                values.get(member.getKey()) instanceof Properties p ? p : null, file, depth + 1));
+                    } else {
+                        Object value = propertyValue(member.getKey(), definition.type(), member.getValue(), file);
+                        if (value != null) values.put(member.getKey(), value);
+                    }
+                }
+            } else {
+                values.putAll(untyped(given));
+            }
+        }
+        return values.isEmpty() ? Properties.EMPTY : new Properties(values, map);
+    }
+
+    /**
+     * Every member of a class at its default, as the project defines them.
+     */
+    private Map<String, Object> classDefaults(String className, Path file, int depth) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (TiledProject.Member member : project.members(className)) {
+            Object value = member.type().equals("class")
+                    ? classProperty(member.propertyType(), member.value(), null, file, depth + 1)
+                    : propertyValue(member.name(), member.type(), member.value(), file);
+            if (value != null) values.put(member.name(), value);
+        }
+        return values;
     }
 
     /**
