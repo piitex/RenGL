@@ -225,5 +225,5 @@ In suggested order:
 1. **Platforms:** build Skiko with Vulkan for Windows and Linux, run the demos and `./mvnw test` there (the GPU tests exercise OpenGL where it is real), and move off the snapshot version when an official release has it. This is the one piece that needs the other machines.
 2. **Use it:** run `Scene3DDemo`, `Background3DDemo`, `PhysicsDemo`, `DominoDemo`, `TerrainDemo` and `PlaygroundDemo` with a real mouse and keyboard; nothing has driven the click, hover, drag or walking paths of the demos by hand.
 3. **Physics in the editor:** RenGL-Editor's inspector shows the node and world physics properties as they are, from `SceneKinds`; joints need a list like the lights (`Scene3DFile.joints`, `SceneKinds.joint`, `newJoint`), a play mode (`buildPhysics`, then step the world), and a `ColliderView` toggle in the 3D view.
-4. **Later ideas:** HDR sky images for a real sun and sharper reflections, per-instance culling, post-processing (bloom, tone mapping), texture transforms.
+4. **Later ideas:** GPU morph targets, a direct solver for joint trees, bloom on an HDR buffer with multisampling.
 5. **Your own list of other engine issues and changes**, which has not been sent yet.
