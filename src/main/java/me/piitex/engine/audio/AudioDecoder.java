@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.util.Arrays;
 
@@ -85,17 +84,16 @@ final class AudioDecoder {
      * Fully decodes a clip.
      */
     static Pcm decode(String name, byte[] bytes) {
-        if (isWav(bytes)) return decodeWav(name, bytes);
         try (PcmStream stream = open(name, bytes)) {
             return drain(stream);
         }
     }
 
     /**
-     * Opens a clip for streaming. WAV is already small enough to hold decoded, everything else is decoded as it plays.
+     * Opens a clip for streaming: it is decoded a little at a time as it plays.
      */
     static PcmStream open(String name, byte[] bytes) {
-        if (isWav(bytes)) return decodeWav(name, bytes).stream();
+        if (isWav(bytes)) return wav(new WavStream(name, WavStream.of(bytes)));
         if (isOgg(bytes)) return isOpus(bytes) ? new OpusStream(name, bytes) : new VorbisStream(name, bytes);
         if (isFlac(bytes)) {
             PcmStream flac = new FlacStream(name, bytes);
@@ -104,6 +102,35 @@ final class AudioDecoder {
         if (isMp3(bytes)) return new Mp3Stream(name, bytes);
         throw new IllegalArgumentException("Unsupported audio format: " + name
                 + " (supported: .ogg, .opus, .flac, .mp3, .wav)");
+    }
+
+    /**
+     * Whether {@code path} names a WAV file on disk, so a track can be played straight from it. False for a classpath
+     * resource, a missing file, or anything else.
+     */
+    static boolean isWavFile(String path) {
+        File file = new File(path);
+        if (!file.isFile()) return false;
+        try (InputStream in = Files.newInputStream(file.toPath())) {
+            return isWav(in.readNBytes(12));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Opens a WAV file on disk for streaming without reading it into memory.
+     */
+    static PcmStream openWavFile(String name, String path) {
+        try {
+            return wav(new WavStream(name, WavStream.of(new File(path).toPath())));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read audio file: " + path, e);
+        }
+    }
+
+    private static PcmStream wav(PcmStream stream) {
+        return Downmix.supports(stream.channels()) ? Downmix.stream(stream) : stream;
     }
 
     private static Pcm drain(PcmStream stream) {
@@ -123,54 +150,5 @@ final class AudioDecoder {
     static IllegalArgumentException tooManyChannels(String name, int channels) {
         return new IllegalArgumentException(name + " has " + channels + " channels; mono, stereo and up to "
                 + Downmix.MAX_CHANNELS + " channels (mixed down to stereo) are supported");
-    }
-
-    private static Pcm decodeWav(String name, byte[] bytes) {
-        ByteBuffer b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-        int format = 0, channels = 0, rate = 0, bits = 0;
-        int dataOff = -1, dataLen = 0;
-        int pos = 12;
-        while (pos + 8 <= bytes.length) {
-            int id = b.getInt(pos);
-            int size = b.getInt(pos + 4);
-            int body = pos + 8;
-            if (id == 0x20746d66) { // "fmt "
-                format = b.getShort(body) & 0xFFFF;
-                channels = b.getShort(body + 2);
-                rate = b.getInt(body + 4);
-                bits = b.getShort(body + 14);
-                if (format == 0xFFFE && size >= 26) format = b.getShort(body + 24) & 0xFFFF; // extensible: sub-format
-            } else if (id == 0x61746164) { // "data"
-                dataOff = body;
-                dataLen = Math.min(size < 0 ? Integer.MAX_VALUE : size, bytes.length - body);
-                break;
-            }
-            if (size < 0) break;
-            pos = body + size + (size & 1); // chunks are word aligned
-        }
-        if (dataOff < 0 || channels == 0) throw new IllegalArgumentException("Invalid WAV file: " + name);
-        if (channels > Downmix.MAX_CHANNELS) throw tooManyChannels(name, channels);
-        boolean pcm = format == 1 && (bits == 8 || bits == 16 || bits == 24 || bits == 32);
-        boolean floating = format == 3 && bits == 32;
-        if (!pcm && !floating) throw new IllegalArgumentException("Unsupported WAV encoding in " + name
-                + " (need 8/16/24/32-bit PCM or 32-bit float)");
-
-        int bytesPer = bits / 8;
-        int count = dataLen / bytesPer;
-        count -= count % channels;
-        short[] out = new short[count];
-        for (int i = 0; i < count; i++) {
-            int p = dataOff + i * bytesPer;
-            out[i] = switch (bits) {
-                case 8 -> (short) (((bytes[p] & 0xFF) - 128) << 8);
-                case 16 -> b.getShort(p);
-                case 24 -> (short) (((bytes[p + 1] & 0xFF) | (bytes[p + 2] << 8)));
-                default -> floating
-                        ? (short) Math.round(Math.max(-1f, Math.min(1f, b.getFloat(p))) * 32767f)
-                        : (short) (b.getInt(p) >> 16);
-            };
-        }
-        if (Downmix.supports(channels)) return new Pcm(Downmix.toStereo(out, channels), 2, rate);
-        return new Pcm(out, channels, rate);
     }
 }
