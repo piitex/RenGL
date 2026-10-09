@@ -6,6 +6,8 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Set;
 
@@ -16,10 +18,20 @@ import java.util.Set;
  * Only {@code http}, {@code https} and {@code mailto} addresses are opened. A string that is not one
  * of those (a {@code file:} path, a custom scheme, an executable) is refused, because a link's text
  * often comes from outside the application and handing it to the OS opener could launch a program.
+ * <p>
+ * {@link #open(Path)} and {@link #reveal(Path)} do the same for a file or folder on disk: open it with the
+ * program the OS has for it, or show it selected in Finder / Explorer.
  */
 public final class Browser {
     private static final Logger log = LogManager.getLogger("Engine");
     private static final Set<String> ALLOWED_SCHEMES = Set.of("http", "https", "mailto");
+
+    /**
+     * Extensions {@link #open(Path)} will not hand to the OS, because opening them runs a program. A file that
+     * came out of an archive is the usual case. {@link #reveal} still shows them.
+     */
+    private static final Set<String> PROGRAM_EXTENSIONS = Set.of("app", "bat", "cmd", "com", "command", "desktop",
+            "exe", "jar", "js", "jse", "lnk", "msi", "pif", "ps1", "reg", "scr", "sh", "vbe", "vbs", "wsf");
 
     private Browser() {
     }
@@ -55,6 +67,95 @@ public final class Browser {
             log.warn("Could not launch '{}' to open {}: {}", command[0], target, e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Opens a file or folder with the program the OS has for it, as double-clicking it would: a folder opens in
+     * Finder / Explorer, a {@code .zip} in the archive program, a picture in the viewer.
+     * <p>
+     * A program (an {@code .exe}, {@code .bat}, {@code .sh}, {@code .app}, {@code .jar} and so on) is refused, since
+     * opening it would run it; the path may have come from an archive. Use {@link #reveal} to show such a file.
+     *
+     * @return true if the OS opener was launched; false if the path does not exist, is a program, or no opener
+     * exists. It cannot tell whether the program then opened the file.
+     */
+    public static boolean open(Path path) {
+        if (path == null || !Files.exists(path)) {
+            log.warn("Cannot open '{}': it does not exist", path);
+            return false;
+        }
+        if (isProgram(path)) {
+            log.warn("Refusing to open '{}': it is a program", path);
+            return false;
+        }
+        return launch(openCommand(Platform.getCurrent(), path.toAbsolutePath()), path.toString());
+    }
+
+    /**
+     * Shows a file or folder in Finder / Explorer, selected inside its parent folder. On Linux, where file managers
+     * have no common way to select a file, the parent folder is opened.
+     *
+     * @return true if the OS opener was launched; false if the path does not exist or no opener exists
+     */
+    public static boolean reveal(Path path) {
+        if (path == null || !Files.exists(path)) {
+            log.warn("Cannot reveal '{}': it does not exist", path);
+            return false;
+        }
+        return launch(revealCommand(Platform.getCurrent(), path.toAbsolutePath()), path.toString());
+    }
+
+    private static boolean launch(String[] command, String target) {
+        if (command == null) {
+            log.warn("No way to open '{}' on this platform", target);
+            return false;
+        }
+        try {
+            new ProcessBuilder(command).redirectErrorStream(true).start();
+            return true;
+        } catch (IOException e) {
+            log.warn("Could not launch '{}' to open {}: {}", command[0], target, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Whether opening {@code path} would run a program. Folders are never programs, except a macOS {@code .app}.
+     */
+    static boolean isProgram(Path path) {
+        Path fileName = path.getFileName();
+        if (fileName == null) return false;
+        String name = fileName.toString().toLowerCase(Locale.ROOT);
+        int dot = name.lastIndexOf('.');
+        if (dot < 0) return false;
+        String extension = name.substring(dot + 1);
+        if (extension.equals("app")) return true;
+        return PROGRAM_EXTENSIONS.contains(extension) && !Files.isDirectory(path);
+    }
+
+    static String[] openCommand(Platform platform, Path path) {
+        String target = path.toString();
+        return switch (platform) {
+            case MACOS -> new String[]{"open", target};
+            case WINDOWS -> Files.isDirectory(path)
+                    ? new String[]{"explorer.exe", target}
+                    : new String[]{"rundll32", "url.dll,FileProtocolHandler", target};
+            case LINUX -> new String[]{"xdg-open", target};
+            case OTHER -> null;
+        };
+    }
+
+    static String[] revealCommand(Platform platform, Path path) {
+        return switch (platform) {
+            case MACOS -> new String[]{"open", "-R", path.toString()};
+            // Two arguments: Java would quote a single "/select,<path with spaces>" in a way Explorer misreads.
+            case WINDOWS -> new String[]{"explorer.exe", "/select,", path.toString()};
+            case LINUX -> {
+                Path parent = path.getParent();
+                yield new String[]{"xdg-open", (parent == null ? path : parent).toString()};
+            }
+            case OTHER -> null;
+        };
     }
 
     /**
