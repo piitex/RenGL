@@ -41,6 +41,14 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
     private boolean fontDirty = true;
     private boolean fixedWidth;
     private boolean sizing;
+    private double maxWidth;
+    private boolean ellipsize;
+    private boolean ellipsizeMiddle;
+    private String fittedFor;               // the last text, room and font that were shortened, to skip doing it again each frame
+    private float fittedLimit;
+    private org.jetbrains.skia.Font fittedFont;
+    private boolean fittedMiddle;
+    private String fitted;
     private boolean bold;
     private boolean italic;
 
@@ -228,7 +236,10 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
 
             org.jetbrains.skia.Font font = getOrBuildFont();
             FontMetricsCompat metrics = FontMetricsCompat.of(font);
-            if (!fixedWidth) setWidth(font.measureTextWidth(text));
+            if (!fixedWidth) {
+                float measured = font.measureTextWidth(text);
+                setWidth(maxWidth > 0 ? Math.min(measured, maxWidth) : measured);
+            }
             setHeight(-metrics.getAscent() + metrics.getDescent());
         } finally {
             sizing = false;
@@ -247,6 +258,77 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
             fixedWidth = width > 0;
             if (!fixedWidth) updateComputedSize();
         }
+    }
+
+    /**
+     * The widest this text may be, when it sizes itself to its text. Text that measures wider is shortened with an
+     * ellipsis ({@code …}) to fit, as {@link #setEllipsize} does for a text with a fixed width. Short text still takes
+     * only the room it needs. A value of 0 or less, the default, puts no limit on it. This has no effect on a text
+     * given a width with {@link #setWidth}; use {@link #setEllipsize} for that.
+     * <p>
+     * {@link #getText()} still returns the whole string; only what is drawn is shortened.
+     */
+    public void setMaxWidth(double maxWidth) {
+        this.maxWidth = Math.max(0, maxWidth);
+        updateComputedSize();
+    }
+
+    public double getMaxWidth() {
+        return maxWidth;
+    }
+
+    /**
+     * Whether text wider than the width given with {@link #setWidth} is shortened with an ellipsis ({@code …}) instead
+     * of running past the box. Off by default. A text that sizes itself to its text is never wider than itself, so this
+     * is for a box of a set width; see {@link #setMaxWidth} for a cap on one that sizes itself.
+     */
+    public void setEllipsize(boolean ellipsize) {
+        this.ellipsize = ellipsize;
+    }
+
+    public boolean isEllipsize() {
+        return ellipsize;
+    }
+
+    /**
+     * Where the ellipsis goes. By default at the end; with {@code true} in the middle, so the start and the end both
+     * stay, which suits a file name whose extension matters. Only has an effect while the text is being shortened,
+     * through {@link #setEllipsize} or {@link #setMaxWidth}.
+     */
+    public void setEllipsizeMiddle(boolean middle) {
+        this.ellipsizeMiddle = middle;
+    }
+
+    public boolean isEllipsizeMiddle() {
+        return ellipsizeMiddle;
+    }
+
+    /**
+     * The most room {@link #getText()} may take, or {@link Float#MAX_VALUE} for no limit: the narrower of
+     * {@link #setMaxWidth} and, with {@link #setEllipsize}, a set width.
+     */
+    protected float textLimit() {
+        float limit = Float.MAX_VALUE;
+        if (maxWidth > 0) limit = (float) maxWidth;
+        if (ellipsize && fixedWidth) limit = Math.min(limit, (float) getWidth());
+        return limit;
+    }
+
+    /**
+     * {@code label} as drawn in {@code font} within {@code limit}: itself if it fits, otherwise shortened with an
+     * ellipsis. The last result is kept, so the same text in the same room costs one comparison per frame.
+     */
+    protected String fit(String label, org.jetbrains.skia.Font font, float limit) {
+        if (limit == Float.MAX_VALUE) return label;
+        if (fitted != null && fittedFont == font && fittedLimit == limit && fittedMiddle == ellipsizeMiddle && label.equals(fittedFor)) {
+            return fitted;
+        }
+        fitted = me.piitex.engine.ui.text.TextFit.ellipsize(label, font, limit, ellipsizeMiddle);
+        fittedFor = label;
+        fittedFont = font;
+        fittedLimit = limit;
+        fittedMiddle = ellipsizeMiddle;
+        return fitted;
     }
 
     /**
@@ -292,13 +374,15 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
     protected void drawText(Renderer renderer) {
         if (text != null && !text.isEmpty()) {
             org.jetbrains.skia.Font font = getOrBuildFont();
-            float x = (float) getX() + Math.max(0f, (float) getWidth() - font.measureTextWidth(text)) * textAlignH(0f);
+            String shown = fit(text, font, textLimit());
+            float x = (float) getX() + Math.max(0f, (float) getWidth() - font.measureTextWidth(shown)) * textAlignH(0f);
             float y = (float) getY();
             if (getTextAlignment() != null) {
                 FontMetricsCompat m = FontMetricsCompat.of(font);
                 y += Math.max(0f, (float) getHeight() - (-m.getAscent() + m.getDescent())) * textAlignV(0f);
             }
-            renderer.drawText(text, x, y, font, resolveTextColor(textColor.get()));
+            Paint color = resolveTextColor(textColor.get());
+            renderer.drawText(shown, x, y, font, color);
         }
     }
 
