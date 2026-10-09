@@ -3,8 +3,8 @@
 [Documentation](../README.md) › [Containers](README.md)
 
 `me.piitex.engine.ui.containers.TreeView<T>` shows items in a tree, one row each, indented under their parent with
-an arrow to open and close them: an editor's hierarchy panel, or a file browser. The user selects rows, opens them,
-renames them in place and drags them to new places.
+an arrow to open and close them: an editor's hierarchy panel, or a file browser. The user selects rows (one, or
+several), ticks check boxes, opens rows, renames them in place and drags them to new places.
 
 It is a [`ScrollContainer`](scroll-container.md), so the wheel and the scrollbar work the same way.
 
@@ -57,8 +57,8 @@ Closing an item that has the selection inside it selects the item itself.
 
 ## Selection
 
-One row is selected at a time. The user selects with a click, a right-click, or the arrow keys, and clicking below
-the last row clears the selection.
+One row is selected at a time unless [multi-select](#selecting-several-rows) is on. The user selects with a click, a
+right-click, or the arrow keys, and clicking below the last row clears the selection.
 
 ```java nocompile
 tree.onSelect(item -> ...); // the user changed it; null when cleared
@@ -70,8 +70,69 @@ tree.onActivate(item -> ...); // a double-click, or Enter on the selected row
 A double-click on an item with children also opens or closes it, before `onActivate` fires. Turn that off with
 `tree.setToggleOnDoubleClick(false)`, such as when a double-click renames.
 
-`onSelect` fires only for the user's own changes. `setSelected` and `refresh()` do not fire it; if a refresh finds
+`onSelect` fires only for the user's own changes. (With multi-select it fires when the *lead* row changes; see below.) `setSelected` and `refresh()` do not fire it; if a refresh finds
 the selected item gone (removed, or inside a closed item), the selection is cleared quietly.
+
+## Selecting several rows
+
+```java nocompile
+tree.setMultiSelect(true);
+tree.onSelectionChange(items -> status.setText(items.size() + " selected")); // every selected item, top to bottom
+List<Path> chosen = tree.getSelectedItems();
+```
+
+| User action | Result |
+|---|---|
+| Click | Selects that row only |
+| Cmd-click (Ctrl-click off macOS) | Adds the row to the selection, or removes it if it was selected |
+| Shift-click | Selects every row from the last clicked one (the *anchor*) to this one, replacing the rest |
+| Shift + Cmd/Ctrl-click | The same range, added to what is selected |
+| Shift + Up, Down, Home, End, Page Up, Page Down | Extends the range from the anchor |
+| Cmd/Ctrl + A | Selects every row shown |
+| Right-click | A row that is in the selection keeps it, so a context menu acts on all of them; any other row becomes the only selection |
+
+`getSelected()` is the **lead**: the row clicked or moved to last, which the arrow keys move on from.
+`onSelect` fires when the lead changes, and `onSelectionChange` when any row joins or leaves the selection. Neither
+fires for the setters below or for `refresh()`.
+
+| Method | What it does |
+|---|---|
+| `getSelectedItems()` | Every selected item, in the order the rows are shown; empty if none |
+| `isSelected(item)` | Whether one is in the selection |
+| `setSelectedItems(items)` | Selects exactly these, opening the items above them; items not in the tree are skipped |
+| `selectAll()` | Every row shown (not the ones inside closed items) |
+| `clearSelection()` | Nothing selected |
+
+Pressing a row that is one of several keeps them all selected until the button is released, so they can be
+dragged together: if a dragged row is in the selection, `onDrop` gets the pressed row, and the whole selection is
+`getSelectedItems()`. Releasing without dragging selects only that row. Closing an item that has selected rows inside
+it removes them from the selection and selects the closed item. `refresh()` forgets selected items that are gone.
+
+## Check boxes
+
+```java nocompile
+tree.setCheckBoxes(true);
+tree.setCascadeChecks(true);              // ticking a folder ticks everything under it
+tree.onCheck((item, on) -> updateTotal());
+List<Path> toExtract = tree.getCheckedItems();
+```
+
+A box before each row's icon and name chooses items apart from selecting them: a click on the box, or Space on the
+lead row, ticks it, and checking never changes the selection. Checked items are remembered by `equals` and include
+ones inside closed items.
+
+| Method | What it does |
+|---|---|
+| `setCheckBoxes(boolean)` | Shows or hides the boxes. Off by default |
+| `setCascadeChecks(boolean)` | Ticking or clearing an item with children does the same to everything under it. Off by default |
+| `isChecked(item)`, `getCheckedItems()` | What is checked, in the order it was checked |
+| `setChecked(item, on)` | Ticks or clears one (and what is under it, with cascade). Does not fire `onCheck` |
+| `clearChecked()` | Clears every box |
+| `onCheck((item, on) -> ...)` | The user ticked or cleared a box. An item ticked only because a parent was is not reported on its own |
+
+There is no half-ticked state: a folder shows ticked only if it was ticked itself, so a folder whose children were
+ticked one by one shows empty. Items are not forgotten when removed from the model; call `clearChecked()` when you load
+something new into the tree.
 
 ## Renaming in place
 
@@ -165,7 +226,7 @@ tree.setContextMenu(menu);
 
 The tree follows the [theme](../styling/theming.md) as soon as it is made, like a container that
 [uses the theme](container.md): the container background and border, the theme's text color for the rows, its
-placeholder color for dimmed items, and its selection color for the selected row. The selection is drawn fainter
+placeholder color for dimmed items, and the theme's [accent tint](../styling/theming.md#the-accent) for the selected row. The selection is drawn fainter
 while the tree does not have the keyboard.
 
 ```java nocompile
@@ -182,4 +243,6 @@ tree.dispose(); // frees the font
 
 - **Do not call `onMouseClick` on the tree.** Its own handler selects the row under a right-click.
 - A row's text is cut off at the tree's right edge; the tree does not scroll sideways.
-- One row selected at a time. There is no multi-select yet.
+- Multi-select is off by default, so a tree that reads `getSelected()` behaves as before. A context menu that acts on
+  `getSelected()` should read `getSelectedItems()` once multi-select is on.
+- Checked items outlive the model; see [Check boxes](#check-boxes).
