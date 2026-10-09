@@ -1,5 +1,7 @@
 package me.piitex.engine.ui.menu;
 
+import me.piitex.engine.ui.image.IconAsset;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -11,6 +13,7 @@ import java.util.function.Consumer;
  * <ul>
  *     <li>an <b>action</b>, {@link #MenuItem(String, Runnable)}: runs when chosen;</li>
  *     <li>a <b>check item</b>, {@link #check}: toggles a tick each time it is chosen;</li>
+ *     <li>a <b>radio item</b>, {@link #radioGroup}: a ticked choice among a group, where choosing one clears the rest;</li>
  *     <li>a <b>submenu</b>, {@link #submenu}: opens a cascading menu to the side;</li>
  *     <li>a <b>separator</b>, {@link #separator()}: a thin divider line, never selectable.</li>
  * </ul>
@@ -23,7 +26,11 @@ public class MenuItem {
     private boolean enabled = true;
     private final boolean separator;
     private final boolean checkable;
+    private boolean radio;
+    private List<MenuItem> radioGroup;
     private boolean checked;
+    private IconAsset icon;
+    private char mnemonic;
     private Runnable action;
     private Consumer<Boolean> onToggle;
     private final List<MenuItem> children = new ArrayList<>();
@@ -57,6 +64,30 @@ public class MenuItem {
         item.checked = checked;
         item.onToggle = onToggle;
         return item;
+    }
+
+    /**
+     * A group of radio items: one of them is ticked, and choosing another moves the tick to it. Pass the result to
+     * {@link PopupMenu#PopupMenu(MenuItem...)} or {@link PopupMenu#addAll}; keep the items next to each other so they
+     * read as a group. {@code onSelect} gets the index of the item chosen, and is not called for the one that is already
+     * ticked. {@code selected} is the index ticked to begin with, or -1 for none.
+     */
+    public static MenuItem[] radioGroup(int selected, java.util.function.IntConsumer onSelect, String... labels) {
+        MenuItem[] items = new MenuItem[labels.length];
+        List<MenuItem> group = new ArrayList<>(labels.length);
+        for (int i = 0; i < labels.length; i++) {
+            MenuItem item = new MenuItem(labels[i], null, false, true);
+            item.radio = true;
+            item.radioGroup = group;
+            item.checked = i == selected;
+            int index = i;
+            item.onToggle = on -> {
+                if (onSelect != null) onSelect.accept(index);
+            };
+            items[i] = item;
+            group.add(item);
+        }
+        return items;
     }
 
     /**
@@ -102,8 +133,50 @@ public class MenuItem {
         return separator;
     }
 
+    /**
+     * Whether this row has a tick: a check item or a radio item.
+     */
     public boolean isCheckable() {
         return checkable;
+    }
+
+    /**
+     * Whether this is one of a {@link #radioGroup}: ticked with a dot, and exclusive with the rest of its group.
+     */
+    public boolean isRadio() {
+        return radio;
+    }
+
+    public IconAsset getIcon() {
+        return icon;
+    }
+
+    /**
+     * A small picture drawn before the label, in the label's color, or null for none. Menus that have an icon on any
+     * row leave room for it on every row. The in-window menus draw it; the macOS system menu bar does not.
+     */
+    public void setIcon(IconAsset icon) {
+        this.icon = icon;
+    }
+
+    /**
+     * The letter that chooses this row while its menu is open, such as {@code 'S'} for Save, or 0 for none. It is
+     * underlined in the first place it appears in the label, ignoring case. Pressing it chooses the row (or, if
+     * several rows share it, moves to the next of them). Only the in-window menus use it.
+     */
+    public char getMnemonic() {
+        return mnemonic;
+    }
+
+    public void setMnemonic(char mnemonic) {
+        this.mnemonic = mnemonic;
+    }
+
+    /**
+     * Where the mnemonic is underlined in the label, or -1.
+     */
+    int mnemonicIndex() {
+        return mnemonic == 0 ? -1 : label.toLowerCase().indexOf(Character.toLowerCase(mnemonic));
     }
 
     public boolean isChecked() {
@@ -142,7 +215,12 @@ public class MenuItem {
      * check {@link #isEnabled()} and does nothing for a separator or submenu.
      */
     public void fire() {
-        if (checkable) {
+        if (radio) {
+            if (checked) return; // already the chosen one
+            for (MenuItem other : radioGroup) other.checked = false;
+            checked = true;
+            if (onToggle != null) onToggle.accept(true);
+        } else if (checkable) {
             checked = !checked;
             if (onToggle != null) onToggle.accept(checked);
         } else if (action != null) {

@@ -53,6 +53,7 @@ public class Window implements Themeable {
     private final Input input = new Input(this);
     private volatile GLFWindow glfWindow;
     private Element focusedElement;
+    private final java.util.concurrent.CopyOnWriteArrayList<me.piitex.engine.input.ShortcutHandler> shortcutHandlers = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Overridable<Paint> backgroundColor = new Overridable<>(Color.WHITE);
     private final Overridable<Background> background = new Overridable<>(null);
     private Background themeEffect; // the one the theme made, kept so a later theme change can update it instead of starting over
@@ -1089,6 +1090,29 @@ public class Window implements Themeable {
      */
     public Element getFocusedElement() {
         return focusedElement;
+    }
+
+    /**
+     * Adds a {@link me.piitex.engine.input.ShortcutHandler} that is offered every key combination before the focused
+     * element or the game. A {@link me.piitex.engine.ui.menu.MenuBarOverlay} adds itself while it is in the window.
+     * Adding the same handler twice has no effect.
+     */
+    public void addShortcutHandler(me.piitex.engine.input.ShortcutHandler handler) {
+        shortcutHandlers.addIfAbsent(handler);
+    }
+
+    public void removeShortcutHandler(me.piitex.engine.input.ShortcutHandler handler) {
+        shortcutHandlers.remove(handler);
+    }
+
+    /**
+     * Offers a key press to the shortcut handlers in the order they were added; true if one used it.
+     */
+    public boolean dispatchShortcut(int key, int mods) {
+        for (me.piitex.engine.input.ShortcutHandler handler : shortcutHandlers) {
+            if (handler.onShortcut(key, mods)) return true;
+        }
+        return false;
     }
 
     /**
