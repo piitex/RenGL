@@ -103,10 +103,38 @@ public class Container extends Element implements Themeable, Draggable {
     }
 
     /**
-     * As {@link #addElement(Element)}, at a specific draw index (replacing whatever is there).
+     * As {@link #addElement(Element)}, at a specific draw index, <b>replacing</b> whatever is there. To put a child at
+     * a position and keep the others, use {@link #insertElement(Element, int)}.
      */
     public void addElement(Element child, int index) {
         elements.put(index, child);
+        adopt(child);
+    }
+
+    /**
+     * Puts {@code child} at draw position {@code index} and moves the children from there on up by one, so none is
+     * lost. Index 0 puts it at the back, behind everything; an index past the last child, or any index in an empty
+     * container, adds it on top, as {@link #addElement(Element)} does. A negative index is 0. In a layout the child
+     * also takes that place in the row or column.
+     * <p>
+     * A container whose indices are fixed slots, such as a split, does not support this.
+     *
+     * @throws UnsupportedOperationException from a container that keeps its own numbering
+     */
+    public void insertElement(Element child, int index) {
+        if (keepsIndices()) throw new UnsupportedOperationException("This container's indices are fixed slots; it cannot insert");
+        if (elements.isEmpty() || index > elements.lastKey()) {
+            addElement(child);
+            return;
+        }
+        int at = Math.max(0, index);
+        // From the top down, each child is copied to the next index before its own is overwritten, so a frame being
+        // drawn on the render thread sees one twice at worst, never not at all.
+        List<Map.Entry<Integer, Element>> shifting = new ArrayList<>(elements.tailMap(at, true).entrySet());
+        for (int i = shifting.size() - 1; i >= 0; i--) {
+            elements.put(shifting.get(i).getKey() + 1, shifting.get(i).getValue());
+        }
+        elements.put(at, child);
         adopt(child);
     }
 

@@ -247,6 +247,12 @@ public abstract class Layout extends Container {
     }
 
     @Override
+    public void insertElement(Element element, int index) {
+        super.insertElement(element, index);
+        relayout();
+    }
+
+    @Override
     public boolean removeElement(Element element) {
         boolean removed = super.removeElement(element);
         if (removed) relayout();
