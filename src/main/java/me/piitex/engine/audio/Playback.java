@@ -5,6 +5,7 @@ import me.piitex.engine.utils.flags.GeneratedClass;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.openal.AL;
+import org.lwjgl.openal.EXTEfx;
 import org.lwjgl.openal.EXTStereoAngles;
 import org.lwjgl.openal.SOFTSourceSpatialize;
 
@@ -14,6 +15,7 @@ import java.util.Arrays;
 import static org.lwjgl.openal.AL10.*;
 import static org.lwjgl.openal.AL11.AL_SAMPLE_OFFSET;
 import static org.lwjgl.openal.AL11.AL_SEC_OFFSET;
+import static org.lwjgl.openal.AL11.alSource3i;
 
 /**
  * One playing instance of a {@link Sound} or {@link Music}. You get one back from every {@code play} call and can
@@ -37,6 +39,21 @@ public final class Playback {
     private final AudioChannel channel;
     private final PcmStream stream; // null for a fully loaded Sound
     private int source;
+
+    /** The OpenAL source, for tests. */
+    int sourceId() {
+        return source;
+    }
+
+    /** The filter on the direct path, or 0 for none; OpenAL cannot be asked, so for tests. */
+    int appliedDirectFilter() {
+        return occlusion > 0f ? directFilter : 0;
+    }
+
+    /** The effect slot this sends to, or 0 for none, for tests. */
+    int appliedSendSlot() {
+        return appliedSlot;
+    }
     private int[] streamBuffers;
     private short[] scratch;
     private int format;
@@ -56,6 +73,9 @@ public final class Playback {
     private boolean positional;
     private float px, py, pz, vx, vy, vz;
     private float refDistance = 1f, maxDistance = Float.MAX_VALUE, rolloff = 1f;
+    private float dx, dy, dz, coneInner = 360f, coneOuter = 360f, coneGain = 0f;
+    private float occlusion, reverbAmount = -1f; // reverbAmount below 0 means the default for the kind of playback
+    private int directFilter, sendFilter, appliedSlot;
     private boolean looping, paused, finished;
 
     private boolean fading, stopWhenFaded;
@@ -113,6 +133,7 @@ public final class Playback {
                 if (stream != null) stream.close();
                 return silent(channel);
             }
+            alGetError(); // forget an earlier mistake, so it isn't taken for running out of sources
             p.source = alGenSources();
             if (alGetError() != AL_NO_ERROR) {
                 log.warn("Out of audio sources; dropping a sound.");
@@ -252,6 +273,82 @@ public final class Playback {
             this.maxDistance = Math.max(this.refDistance, maxDistance);
             this.rolloff = Math.max(0f, rolloff);
             applyPosition();
+        }
+        return this;
+    }
+
+    /**
+     * Makes a positioned sound louder in front of it than behind, like a speaker or a shouting person: the way it
+     * faces is {@link #direction}, and this sets how wide the loud part is. Inside the {@code inner} angle it plays at
+     * full volume, outside the {@code outer} angle at {@code outerGain} of it, and in between it fades smoothly. The
+     * angles are whole-cone widths in degrees (360 is all round, the default), and only matter once a direction is set.
+     *
+     * @param innerDegrees width of the full-volume cone, 0 to 360
+     * @param outerDegrees width of the cone beyond which the sound is at {@code outerGain}; at least the inner one
+     * @param outerGain    volume outside the outer cone, 0 to 1
+     */
+    public Playback cone(float innerDegrees, float outerDegrees, float outerGain) {
+        synchronized (Audio.LOCK) {
+            coneInner = Math.max(0f, Math.min(360f, innerDegrees));
+            coneOuter = Math.max(coneInner, Math.min(360f, outerDegrees));
+            coneGain = Math.max(0f, Math.min(1f, outerGain));
+            applyPosition();
+        }
+        return this;
+    }
+
+    /**
+     * The way a positioned sound faces, as a vector from it (its length doesn't matter). Without a {@link #cone} it
+     * changes nothing; the zero vector, the default, means it sounds the same in every direction.
+     */
+    public Playback direction(float x, float y, float z) {
+        synchronized (Audio.LOCK) {
+            dx = x;
+            dy = y;
+            dz = z;
+            applyPosition();
+        }
+        return this;
+    }
+
+    /**
+     * {@link #direction(float, float, float)} for a 2D game: faces along (x, y) on the plane {@code z = 0}.
+     */
+    public Playback direction(float x, float y) {
+        return direction(x, y, 0f);
+    }
+
+    /**
+     * Muffles this sound as if something solid stood between it and the listener: 0 is a clear path, 1 is behind a
+     * thick wall, where it is quieter and dull (the highs are cut). Set it from your own line-of-sight test; nothing
+     * checks for walls on its own. Any {@linkplain Audio#setReverb reverb} the sound sends is dulled with it, less so,
+     * since a room still rings behind a wall.
+     * <p>
+     * Needs the sound system's effects extension (see {@link Audio#isReverbSupported()}); without it nothing happens.
+     */
+    public Playback occlusion(float amount) {
+        synchronized (Audio.LOCK) {
+            occlusion = Math.max(0f, Math.min(1f, amount));
+            applyEffects();
+        }
+        return this;
+    }
+
+    public float getOcclusion() {
+        synchronized (Audio.LOCK) {
+            return occlusion;
+        }
+    }
+
+    /**
+     * How much of this sound goes into the {@linkplain Audio#setReverb world reverb}, 0 to 1. The default is 1 for a
+     * positioned sound and 0 for a flat or panned one, so interface sounds and music stay dry. Has no effect while
+     * no reverb is set.
+     */
+    public Playback reverb(float amount) {
+        synchronized (Audio.LOCK) {
+            reverbAmount = Math.max(0f, Math.min(1f, amount));
+            applyEffects();
         }
         return this;
     }
@@ -526,8 +623,44 @@ public final class Playback {
         if (!finished) alSourcef(source, AL_GAIN, volume * Audio.channelGain(channel));
     }
 
+    /**
+     * Sets the occlusion filter and the reverb send on the source. Call with {@link Audio#LOCK} held.
+     */
+    void applyEffects() {
+        if (finished || !Audio.hasEfx()) return;
+        if (occlusion > 0f) {
+            if (directFilter == 0) directFilter = lowpass();
+            // Behind a thick wall: about a fifth of the loudness and almost none of the highs.
+            EXTEfx.alFilterf(directFilter, EXTEfx.AL_LOWPASS_GAIN, 1f - 0.8f * occlusion);
+            EXTEfx.alFilterf(directFilter, EXTEfx.AL_LOWPASS_GAINHF, 1f - 0.97f * occlusion);
+            alSourcei(source, EXTEfx.AL_DIRECT_FILTER, directFilter);
+        } else {
+            alSourcei(source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
+        }
+
+        int slot = Audio.reverbSlot();
+        float amount = reverbAmount >= 0f ? reverbAmount : positional ? 1f : 0f;
+        if (slot != 0 && amount > 0f) {
+            if (sendFilter == 0) sendFilter = lowpass();
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, amount * (1f - 0.5f * occlusion));
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, 1f - 0.7f * occlusion);
+            alSource3i(source, EXTEfx.AL_AUXILIARY_SEND_FILTER, slot, 0, sendFilter);
+            appliedSlot = slot;
+        } else {
+            appliedSlot = 0;
+            alSource3i(source, EXTEfx.AL_AUXILIARY_SEND_FILTER, EXTEfx.AL_EFFECTSLOT_NULL, 0, EXTEfx.AL_FILTER_NULL);
+        }
+    }
+
+    private static int lowpass() {
+        int filter = EXTEfx.alGenFilters();
+        EXTEfx.alFilteri(filter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
+        return filter;
+    }
+
     private void applyPosition() {
         if (finished) return;
+        applyEffects(); // whether it sends to the reverb depends on being positioned
         boolean spatialize = AL.getCapabilities().AL_SOFT_source_spatialize;
         if (positional) {
             alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);
@@ -536,6 +669,10 @@ public final class Playback {
             alSourcef(source, AL_REFERENCE_DISTANCE, refDistance);
             alSourcef(source, AL_MAX_DISTANCE, maxDistance);
             alSourcef(source, AL_ROLLOFF_FACTOR, rolloff);
+            alSource3f(source, AL_DIRECTION, dx, dy, dz);
+            alSourcef(source, AL_CONE_INNER_ANGLE, coneInner);
+            alSourcef(source, AL_CONE_OUTER_ANGLE, coneOuter);
+            alSourcef(source, AL_CONE_OUTER_GAIN, coneGain);
             if (channels > 1) {
                 // A stereo file is placed in the world as two speakers, like a mono one, but keeps its own spread.
                 if (spatialize) alSourcei(source, SOFTSourceSpatialize.AL_SOURCE_SPATIALIZE_SOFT, AL_TRUE);
@@ -547,6 +684,7 @@ public final class Playback {
         }
         // Flat: fixed to the listener, so it never fades with distance or follows the listener's turning.
         alSourcei(source, AL_SOURCE_RELATIVE, AL_TRUE);
+        alSource3f(source, AL_DIRECTION, 0f, 0f, 0f);
         alSource3f(source, AL_VELOCITY, 0f, 0f, 0f);
         alSourcef(source, AL_ROLLOFF_FACTOR, 0f);
         if (spatialize)
@@ -660,6 +798,9 @@ public final class Playback {
         alSourceStop(source);
         alSourcei(source, AL_BUFFER, 0);
         alDeleteSources(source);
+        if (directFilter != 0) EXTEfx.alDeleteFilters(directFilter);
+        if (sendFilter != 0) EXTEfx.alDeleteFilters(sendFilter);
+        directFilter = sendFilter = 0;
         if (streamBuffers != null) {
             for (int b : streamBuffers) alDeleteBuffers(b);
         }

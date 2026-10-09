@@ -31,6 +31,9 @@ Audio.play("sfx/explosion.ogg").volume(0.8f).pitch(0.7f).pan(-0.5f);
 | `velocity(x, y, z)` | How fast it moves, for the Doppler effect |
 | `attenuation(ref, max, rolloff)` | How it fades with distance |
 | `isPositional()` | Whether it has a world position |
+| `direction(x, y, z)`, `cone(inner, outer, outerGain)` | Which way it faces and how wide its loud front is; see [cones](spatial-audio.md#cones) |
+| `occlusion(amount)` | Muffles it as if behind a wall, 0 to 1; see [occlusion](spatial-audio.md#occlusion) |
+| `reverb(amount)` | How much of it goes into the world [reverb](spatial-audio.md#reverb) |
 | `loop(boolean)` / `isLooping()` | Repeat forever |
 | `pause()` / `resume()` | Keep the position |
 | `seek(seconds)` | Jump to a time in the sound, clamped to its length. Keeps playing, or stays paused, from there |

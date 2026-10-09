@@ -132,6 +132,7 @@ Pass an `.ogg`, `.mp3` or `.wav` path as the first argument to try music crossfa
 | `Audio.listener()` | The [listener](spatial-audio.md#the-listener) |
 | `Audio.hearIn2D(fullVolumeDistance, silentDistance)` | Set up positioned sounds for a [2D game](spatial-audio.md#2d-games) in one call |
 | `Audio.setDistanceModel(model)` / `setDefaultAttenuation(ref, max, rolloff)` / `setDopplerFactor(f)` / `setSpeedOfSound(v)` | World-wide [3D settings](spatial-audio.md) |
+| `Audio.setReverb(Reverb)` / `getReverb()` / `isReverbSupported()` | A world [reverb](spatial-audio.md#reverb), or null for none |
 | `Audio.playMusic(path)` / `playMusic(path, fadeSeconds)` | Loop a track, crossfading from the current one. Does nothing if that track is already playing |
 | `Audio.stopMusic()` / `stopMusic(fadeSeconds)` | Fade out and stop the background music |
 | `Audio.getMusic()` | The current music `Playback`, or `null` |
