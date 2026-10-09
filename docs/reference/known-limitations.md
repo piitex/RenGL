@@ -8,9 +8,6 @@ something not listed, please add it.
 
 ## Graphics
 
-- **Smooth sprites turned at an angle can leave a few see-through pixels between them in snapshots.** Only the CPU
-  renderer that [snapshots](../core/snapshots.md) use does this, and only for sprites of a smooth texture drawn
-  turned. On screen, and for pixel-art textures, sprites side by side never leave gaps.
 - **Tile maps are orthogonal only.** [`TileMap`](../graphics/tile-maps.md#loading) reads Tiled's square and
   rectangular grids, not isometric, staggered or hexagonal maps. Text objects are drawn in the engine's default font,
   whatever family Tiled shows.
