@@ -151,4 +151,23 @@ class MorphTargetTest {
         assertDoesNotThrow(() -> new AnimationClip.Channel(n, AnimationClip.Path.WEIGHTS,
                 new float[]{0, 1}, new float[]{0, 0, 1, 1}, AnimationClip.Interpolation.LINEAR));
     }
+
+    @Test
+    void aSkinnedMeshKeepsItsShapesToo() throws Exception {
+        Model model = Model.load(Path.of("src/test/resources/models/skinmorph.gltf"));
+        Node3D face = model.root().find("face");
+        Mesh mesh = face.getMesh();
+        assertTrue(mesh.isSkinned() && mesh.isMorphed(), "both the joints and the shape came through");
+        assertNotNull(face.getSkin());
+        assertEquals(List.of("up"), mesh.morphTargets().stream().map(Mesh.MorphTarget::name).toList());
+
+        Scene3D scene = new Scene3D();
+        scene.add(model.root());
+        Ray down = new Ray(new Vec3(0, 5, -1), new Vec3(0, -1, 0));
+        assertEquals(5f, scene.pick(down).distance(), 1e-3f);
+        face.setMorphWeights(1f);
+        assertEquals(4f, scene.pick(down).distance(), 1e-3f, "the shape lifts the skinned quad");
+        model.root().find("joint").setPosition(0, 2, 0);
+        assertEquals(2f, scene.pick(down).distance(), 1e-3f, "and the joint carries it on from there");
+    }
 }

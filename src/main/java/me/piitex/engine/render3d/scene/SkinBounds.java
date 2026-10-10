@@ -15,7 +15,8 @@ final class SkinBounds {
 
     /**
      * For each joint, how far from its origin, in the joint's own space, the farthest vertex it moves lies; -1 for a
-     * joint that moves none.
+     * joint that moves none. A vertex counts with the most its blend shapes can push it (every shape at full weight, in the
+     * worst direction), since the joints move the morphed vertex.
      */
     static float[] reach(Mesh mesh, Skin skin) {
         int joints = skin.joints().size();
@@ -26,13 +27,20 @@ final class SkinBounds {
         float[] v = mesh.vertices();
         Mat4[] inverse = new Mat4[joints];
         for (int i = 0; i < joints; i++) inverse[i] = skin.inverseBind(i);
+        java.util.List<Mesh.MorphTarget> shapes = mesh.morphTargets();
         for (int vertex = 0; vertex < mesh.vertexCount(); vertex++) {
             Vec3 p = new Vec3(v[vertex * Mesh.FLOATS_PER_VERTEX], v[vertex * Mesh.FLOATS_PER_VERTEX + 1], v[vertex * Mesh.FLOATS_PER_VERTEX + 2]);
             for (int k = 0; k < 4; k++) {
                 if (weights[vertex * 4 + k] <= 1e-6f) continue;
                 int joint = ids[vertex * 4 + k];
                 if (joint < 0 || joint >= joints) continue;
-                reach[joint] = Math.max(reach[joint], inverse[joint].transformPoint(p).length());
+                float far = inverse[joint].transformPoint(p).length();
+                for (Mesh.MorphTarget shape : shapes) {
+                    float[] o = shape.positions();
+                    float x = o[vertex * 3], y = o[vertex * 3 + 1], z = o[vertex * 3 + 2];
+                    if (x != 0f || y != 0f || z != 0f) far += inverse[joint].transformDirection(new Vec3(x, y, z)).length();
+                }
+                reach[joint] = Math.max(reach[joint], far);
             }
         }
         return reach;

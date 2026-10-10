@@ -549,14 +549,14 @@ final class SceneRenderer {
     private float[] skinSphere(Node3D node, Mesh mesh) {
         Skin skin = node.getSkin();
         SkinReach cached = skinReach.get(node);
-        if (cached == null || cached.mesh != mesh || cached.skin != skin) {
-            cached = new SkinReach(mesh, skin, SkinBounds.reach(mesh, skin));
+        if (cached == null || cached.mesh != mesh || cached.skin != skin || cached.shapes != mesh.morphTargets()) {
+            cached = new SkinReach(mesh, skin, mesh.morphTargets(), SkinBounds.reach(mesh, skin));
             skinReach.put(node, cached);
         }
         return SkinBounds.sphere(skin, cached.reach);
     }
 
-    private record SkinReach(Mesh mesh, Skin skin, float[] reach) {
+    private record SkinReach(Mesh mesh, Skin skin, List<Mesh.MorphTarget> shapes, float[] reach) {
     }
 
     /**

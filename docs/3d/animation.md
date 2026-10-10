@@ -165,7 +165,8 @@ node.setMorphWeight(0, 0.5f);                        // half way up
   weights change: the same picture, but a cost per vertex when the weights change every frame. The shapes' offsets are
   stored in half precision on the GPU, which is plenty for a smile and not for a shape that moves a vertex by thousands of
   units.
-- Morphing runs before [skinning](#skins), so a face can smile while the head turns.
+- Morphing runs before [skinning](#skins), so a face can smile while the head turns. This holds on the GPU, in a shadow,
+  when picking, and in the culling bound, which counts the farthest each shape can push a vertex.
 - A target may also change the normals; when it doesn't, the normals stay as authored.
 - The mesh's `bounds()` grow to hold the shapes at full weight, which keeps [culling](scenes.md#frustum-culling) and
   [picking](scenes.md#picking) from clipping a morphed mesh. Picking uses the blended shape.

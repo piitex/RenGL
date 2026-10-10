@@ -105,4 +105,25 @@ class PickingCacheTest {
         assertEquals(5f, scene.pick(down).distance(), 1e-3f, "no weights is the plain mesh, which needs no mixing");
         assertEquals(2, Picking.POSES.get() - before);
     }
+
+    @Test
+    void aSkinnedMeshIsPickedWhereItsShapesPutIt() {
+        Scene3D scene = new Scene3D();
+        Node3D joint = new Node3D("joint");
+        joint.setPosition(0, 0, -5);
+        Node3D body = skinnedCube(scene, joint);
+        float[] slide = new float[body.getMesh().vertexCount() * 3];
+        for (int v = 0; v < slide.length; v += 3) slide[v] = 6f;
+        body.getMesh().setMorphTargets(List.of(new Mesh.MorphTarget("slide", slide, null)), null);
+
+        assertNotNull(scene.pick(Ray.of(Vec3.ZERO, FORWARD)), "no weight, the cube is in front of the ray");
+        body.setMorphWeights(1f);
+        assertNull(scene.pick(Ray.of(Vec3.ZERO, FORWARD)), "the shape slid the cube out of the way");
+        Hit hit = scene.pick(Ray.of(new Vec3(6, 0, 0), FORWARD));
+        assertNotNull(hit, "and it is where the shape put it");
+        assertSame(body, hit.node());
+        assertEquals(4f, hit.distance(), 1e-3f);
+        joint.setPosition(0, 0, -8);
+        assertEquals(7f, scene.pick(Ray.of(new Vec3(6, 0, 0), FORWARD)).distance(), 1e-3f, "and the joint still moves the morphed mesh");
+    }
 }
