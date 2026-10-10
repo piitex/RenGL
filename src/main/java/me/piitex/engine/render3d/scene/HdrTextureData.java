@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.scene;
 
+import me.piitex.engine.render3d.math.Vec3;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -58,6 +59,41 @@ public final class HdrTextureData {
         FloatBuffer buffer = MemoryUtil.memAllocFloat(rgba.length);
         buffer.put(rgba).flip();
         return buffer;
+    }
+
+    /**
+     * The world direction, as seen from the middle of the sky, of the brightest part of the picture read as an equirectangular
+     * panorama ({@link Skybox#equirectHdr}): where the sun is, in a daytime sky. Use it to point a directional light the
+     * same way ({@code Light.directional(sunDirection().negate(), ...)}, since a light's direction is the way it travels).
+     * <p>
+     * It looks at the brightness of small blocks rather than single pixels, so one hot pixel doesn't move it. A picture with
+     * no sun gives the direction of whatever is brightest in it.
+     */
+    public Vec3 sunDirection() {
+        int bw = Math.max(1, width / 128), bh = Math.max(1, height / 64);
+        double best = -1;
+        double bestX = 0, bestY = 0;
+        for (int y0 = 0; y0 < height; y0 += bh) {
+            for (int x0 = 0; x0 < width; x0 += bw) {
+                double sum = 0;
+                int count = 0;
+                for (int y = y0; y < Math.min(height, y0 + bh); y++) {
+                    for (int x = x0; x < Math.min(width, x0 + bw); x++) {
+                        int i = (y * width + x) * 4;
+                        sum += rgba[i] * 0.2126 + rgba[i + 1] * 0.7152 + rgba[i + 2] * 0.0722;
+                        count++;
+                    }
+                }
+                if (sum / count > best) {
+                    best = sum / count;
+                    bestX = (x0 + Math.min(width, x0 + bw)) * 0.5;
+                    bestY = (y0 + Math.min(height, y0 + bh)) * 0.5;
+                }
+            }
+        }
+        // u = 0.5 looks along -Z, u = 0.75 along +X, the top row straight up.
+        double phi = (bestX / width - 0.5) * 2 * Math.PI, elevation = (0.5 - bestY / height) * Math.PI;
+        return new Vec3((float) (Math.sin(phi) * Math.cos(elevation)), (float) Math.sin(elevation), (float) (-Math.cos(phi) * Math.cos(elevation)));
     }
 
     public static HdrTextureData load(Path file) throws IOException {

@@ -119,8 +119,9 @@ The repo has two runnable examples in `me.piitex.examples.demo`, which also show
 |---|---|
 | `Scene3DDemo` | A main viewport with a floor, textured cube, specular and glass spheres, a loaded model and an orbiting light; a second small viewport with its own scene; sliders and check boxes for the lights; a file dialog that loads a model |
 | `Background3DDemo` | A cube, a sphere and a floor behind a control panel, with the orbit controls working through the UI |
+| `HdrSkyDemo` | An HDR sky lighting chrome, gold, plastic and matte spheres, with a shadow-casting sun light aimed by `HdrTextureData.sunDirection()`; sliders for exposure, sky lighting, bloom and sun, a tone mapping switch, and "Load sky..." (or `-Drengl.demo.sky=file.hdr`) for any Radiance file. It makes its own sky when none is given |
 
-Both pick Vulkan on macOS and OpenGL elsewhere, and `-Drengl.demo.api=VULKAN` or `OPENGL` overrides that. The OpenGL
+All pick Vulkan on macOS and OpenGL elsewhere, and `-Drengl.demo.api=VULKAN` or `OPENGL` overrides that. The OpenGL
 path of the demos has not been run on Windows or Linux yet.
 
 ## Limits at a glance
