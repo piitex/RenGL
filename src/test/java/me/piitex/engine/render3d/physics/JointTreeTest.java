@@ -36,9 +36,10 @@ class JointTreeTest {
         return a.distance(b);
     }
 
+    /** The widest any joint has opened; a slider is meant to slide, so it is measured by {@link #offRail}. */
     private static float worstGap(PhysicsWorld world) {
         float worst = 0f;
-        for (Joint joint : world.joints()) worst = Math.max(worst, gap(joint));
+        for (Joint joint : world.joints()) worst = Math.max(worst, joint instanceof SliderJoint slider ? offRail(slider) : gap(joint));
         return worst;
     }
 
@@ -173,5 +174,86 @@ class JointTreeTest {
         for (Joint joint : world.joints()) {
             if (joint instanceof BallJoint) assertTrue(gap(joint) < 0.02f, "a corner opened by " + gap(joint));
         }
+    }
+
+    /** How far B's anchor has slid sideways off A's rail: the part of the gap that isn't along the axis. */
+    private static float offRail(SliderJoint slider) {
+        Vec3 gap = Joint.center(slider.b).add(Joint.offset(slider.b, slider.localAnchorB()))
+                .sub(Joint.center(slider.a).add(Joint.offset(slider.a, slider.localAnchorA())));
+        return gap.sub(slider.getAxis().mul(gap.dot(slider.getAxis()))).length();
+    }
+
+    @Test
+    void aHeavyLoadHangingFromALightCarriageDoesNotPullItOffItsRail() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        RigidBody carriage = box(world, new Vec3(0f, 10f, 0f), 0.1f, 0.2f);
+        SliderJoint rail = new SliderJoint(carriage, null, new Vec3(0f, 10f, 0f), Vec3.X);
+        world.addJoint(rail);
+        RigidBody weight = box(world, new Vec3(0f, 9.4f, 0f), 0.25f, 400f); // 2000:1
+        world.addJoint(new BallJoint(weight, carriage, new Vec3(0f, 9.9f, 0f)));
+        for (int i = 0; i < 180; i++) world.step(DT);
+        assertEquals(10f, carriage.getPosition().y(), 0.002f);
+        assertTrue(offRail(rail) < 0.002f, "the carriage left its rail by " + offRail(rail));
+        assertTrue(worstGap(world) < 0.002f, "a joint opened by " + worstGap(world));
+        float expected = 400.2f * 9.81f;
+        assertEquals(expected, rail.getReactionForce().length(), expected * 0.02f);
+    }
+
+    @Test
+    void aSwingingLoadOnASliderKeepsItTurnedTheSameWay() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        RigidBody carriage = box(world, new Vec3(0f, 10f, 0f), 0.1f, 0.2f);
+        world.addJoint(new SliderJoint(carriage, null, new Vec3(0f, 10f, 0f), Vec3.X));
+        RigidBody weight = box(world, new Vec3(0f, 9f, 0f), 0.25f, 400f);
+        world.addJoint(new BallJoint(weight, carriage, new Vec3(0f, 10f, 0f)));
+        weight.applyImpulse(new Vec3(800f, 0f, 400f));
+        float turn = 0f;
+        for (int i = 0; i < 240; i++) {
+            world.step(DT);
+            turn = Math.max(turn, 2f * (float) Math.acos(Math.min(1f, Math.abs(carriage.getRotation().w()))));
+        }
+        assertTrue(turn < 0.05f, "the carriage turned by " + turn);
+        assertTrue(worstGap(world) < 0.02f, "a joint opened by " + worstGap(world));
+    }
+
+    @Test
+    void aTelescopingRailBetweenTwoBodiesHoldsAHeavyLoad() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        RigidBody outer = box(world, new Vec3(0f, 10f, 0f), 0.1f, 1f);
+        SliderJoint first = new SliderJoint(outer, null, new Vec3(0f, 10f, 0f), Vec3.X);
+        world.addJoint(first);
+        RigidBody inner = box(world, new Vec3(0f, 10f, 0f), 0.08f, 0.2f);
+        SliderJoint second = new SliderJoint(inner, outer, new Vec3(0f, 10f, 0f), Vec3.X);
+        world.addJoint(second);
+        RigidBody weight = box(world, new Vec3(0f, 9.4f, 0f), 0.25f, 400f);
+        world.addJoint(new BallJoint(weight, inner, new Vec3(0f, 9.9f, 0f)));
+        for (int i = 0; i < 180; i++) world.step(DT);
+        assertEquals(10f, inner.getPosition().y(), 0.003f);
+        assertTrue(offRail(first) < 0.002f && offRail(second) < 0.002f,
+                "off the rails by " + offRail(first) + " and " + offRail(second));
+    }
+
+    @Test
+    void aChainHangingFromASliderHoldsItsLength() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        RigidBody carriage = box(world, new Vec3(0f, 10f, 0f), 0.1f, 0.2f);
+        SliderJoint rail = new SliderJoint(carriage, null, new Vec3(0f, 10f, 0f), Vec3.X);
+        world.addJoint(rail);
+        RigidBody previous = carriage;
+        for (int i = 0; i < 10; i++) {
+            RigidBody link = capsule(world, 0f, 10f - 0.3f - i * 0.6f, 0f, 0.5f);
+            world.addJoint(new BallJoint(link, previous, new Vec3(0f, 10f - i * 0.6f, 0f)));
+            previous = link;
+        }
+        RigidBody weight = box(world, new Vec3(0f, 10f - 6f - 0.25f, 0f), 0.25f, 200f);
+        world.addJoint(new BallJoint(weight, previous, new Vec3(0f, 10f - 6f, 0f)));
+        weight.applyImpulse(new Vec3(100f, 0f, 50f));
+        float worst = 0f;
+        for (int i = 0; i < 240; i++) {
+            world.step(DT);
+            worst = Math.max(worst, worstGap(world));
+        }
+        assertTrue(worst < 0.01f, "a joint opened by " + worst);
+        assertEquals(10f, carriage.getPosition().y(), 0.01f);
     }
 }
