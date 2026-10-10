@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Solves the always-on rows of the joints exactly (the pivot of a ball joint or hinge, a hinge's axis, a weld, a slider's rails and its lock on turning), all
- * joints of a tree at once, instead of a pass at a time.
+ * Solves the rows of the joints exactly (the pivot of a ball joint or hinge, a hinge's axis, a weld, a slider's rails and
+ * its lock on turning, and the stops and motors), all joints of a tree at once, instead of a pass at a time.
  * <p>
  * A pass-at-a-time solver passes a correction one link along a chain per pass, and a heavy end load takes more passes
  * than there are to hold the chain together. Here the rows of all the joints of a connected tree are one linear system,
@@ -19,27 +19,58 @@ import java.util.Map;
  * step are all at one body, which they already share: no new coupling appears, so factoring and solving take time in
  * proportion to the number of joints, however long the chain or heavy the load.
  * <p>
+ * A stop or motor is a row whose impulse depends on its speed in steps (a stop can only push, a motor only so hard, and
+ * a joint with both has one row for the two), so which of them are pushing is not known beforehand. The tree starts
+ * each from where it was last step. After each solve a row that pushed past what its step can give is moved to the
+ * stretch beside it, pushing with a fixed impulse and left out of the system, and one held out whose speed has reached
+ * a step is put back, and the system is solved again. That is a few extra factorisations when a stop is first touched
+ * or let go, and none while the set stays as it is.
+ * <p>
  * Only the joints that give rows ({@link Joint#directRows}) are taken; a joint that would close a loop of bodies, or a
- * rope or spring, stays with the pass-at-a-time solver, which solves the stops and motors of all joints too.
+ * rope or spring, stays with the pass-at-a-time solver.
  */
 final class JointTree {
-    /** A pivot below this fraction of the block's largest is a row the others already hold, and is left out. */
     /** The most a body is turned by one position pass, in radians, as a joint's own fix is held to. */
     private static final double MAX_TURN = Joint.MAX_ANGULAR_CORRECTION;
+    /** A pivot below this fraction of the block's largest is a row the others already hold, and is left out. */
     private static final double DEPENDENT = 1e-9;
+    /** How many times one velocity solve may change which stops and motors are pushing. */
+    private static final int MAX_PASSES = 4;
+    /** A held row lets go when its speed is this far past what it should be, so a row at rest doesn't flicker. */
+    private static final double LET_GO = 1e-6;
 
     private static final class Entry {
         final Joint joint;
         final int m;
         int off, parent, nodeA = -1, nodeB = -1, localA, localB;
         final Joint.Row[] rows;
-        final double[] diag = new double[36], inverse = new double[36];
+        final double[] diag = new double[Joint.MAX_DIRECT_ROWS * Joint.MAX_DIRECT_ROWS], inverse = new double[diag.length];
         /** The rows' effect on each body's velocity, [0] for body A and [1] for B: linear and turning, 3 per row. */
-        final double[][] lin = {new double[18], new double[18]}, ang = {new double[18], new double[18]};
+        final double[][] lin = {new double[Joint.MAX_DIRECT_ROWS * 3], new double[Joint.MAX_DIRECT_ROWS * 3]},
+                ang = {new double[Joint.MAX_DIRECT_ROWS * 3], new double[Joint.MAX_DIRECT_ROWS * 3]};
+        /** The same, with the rows of stops that aren't pushing left in: what a stop held at a bound still does. */
+        final double[][] lin0 = {new double[Joint.MAX_DIRECT_ROWS * 3], new double[Joint.MAX_DIRECT_ROWS * 3]},
+                ang0 = {new double[Joint.MAX_DIRECT_ROWS * 3], new double[Joint.MAX_DIRECT_ROWS * 3]};
+        /** The rows from here on are stops and motors. */
+        final int firstBounded;
+        /**
+         * For a stop or motor row, where on its staircase ({@link Joint.Row#steps}) it is: {@code 2k + 1} when it holds
+         * the speed of step {@code k} (and is solved with the rest), and {@code 2k} when its speed is between steps
+         * {@code k - 1} and {@code k} and it pushes with a fixed impulse (and is held out of the system).
+         */
+        final int[] mode = new int[Joint.MAX_DIRECT_ROWS];
+
+        boolean pushing(int r) {
+            return r < firstBounded || (mode[r] & 1) == 1;
+        }
+
+        /** Whether the row was kept when the system was last factored, or left out because the others already hold it. */
+        final boolean[] kept = new boolean[Joint.MAX_DIRECT_ROWS];
 
         Entry(Joint joint) {
             this.joint = joint;
             this.m = joint.directRows();
+            this.firstBounded = m - joint.directBoundedRows();
             this.rows = joint.directBuffer();
         }
     }
@@ -62,6 +93,13 @@ final class JointTree {
     private double[] rhs = new double[0], solution = new double[0], scratch = new double[0];
     private final float[] error = new float[Joint.MAX_DIRECT_ROWS];
     private int total;
+    private boolean anyBounded, stale;
+
+    /** A stop or motor row held at a bound this solve, with the impulse that takes it there from where it was. */
+    private record Held(Entry entry, int row, double delta) {
+    }
+
+    private final List<Held> held = new ArrayList<>();
 
     /**
      * Picks the joints it can solve and sets their {@link Joint#direct}, and clears it on the others.
@@ -199,27 +237,171 @@ final class JointTree {
     }
 
     /**
-     * Takes the rows from the joints as they are set up for the step, and factors the system.
+     * Takes the rows from the joints as they are set up for the step, starts the stops and motors off as they were
+     * last step, and factors the system.
      */
     void prepare() {
         if (order.isEmpty()) return;
-        for (Entry entry : order) entry.joint.directVelocityRows(entry.rows);
+        anyBounded = false;
+        held.clear();
+        for (Entry entry : order) {
+            entry.joint.directVelocityRows(entry.rows);
+            for (int r = entry.firstBounded; r < entry.m; r++) {
+                anyBounded = true;
+                entry.mode[r] = start(entry.rows[r], entry.joint.directAccumulated(r));
+            }
+        }
         factor(false);
+        stale = false;
+    }
+
+    /**
+     * Where on its staircase a row starts: held at the impulse it was at, if that is one a stretch between steps pushes
+     * with, else on the step that has room for it (or the nearest, for an impulse that a weakened motor can't give).
+     */
+    private static int start(Joint.Row row, double acc) {
+        int steps = row.steps;
+        for (int p = 0; p <= 2 * steps; p += 2) {
+            double at = between(row, p);
+            if (Double.isFinite(at) && Math.abs(acc - at) <= tolerance(at)) return p;
+        }
+        int best = 1;
+        double nearest = Double.POSITIVE_INFINITY;
+        for (int k = 0; k < steps; k++) {
+            double away = acc < row.low[k] ? row.low[k] - acc : acc > row.high[k] ? acc - row.high[k] : 0.0;
+            if (away < nearest) {
+                nearest = away;
+                best = 2 * k + 1;
+            }
+        }
+        return best;
+    }
+
+    /** The impulse a row pushes with while its speed is in stretch {@code p} (even) of its staircase. */
+    private static double between(Joint.Row row, int p) {
+        return p == 0 ? row.high[0] : row.low[p / 2 - 1];
+    }
+
+    private static double tolerance(double bound) {
+        return 1e-6 * Math.max(1.0, Math.abs(bound));
     }
 
     /**
      * Stops the joints' rows from moving apart, with what each body is doing now.
+     * <p>
+     * The stops and motors that are holding a speed are solved with the rest. A row that comes out past the impulse it
+     * can push with is moved off its step instead, and the system is solved again without it and with its push counted
+     * in as known, before anything is applied to the bodies: the push on its own would throw the light bodies around
+     * until the rest caught up.
      */
     void solveVelocity() {
         if (order.isEmpty()) return;
-        for (Entry entry : order) {
-            for (int r = 0; r < entry.m; r++) rhs[entry.off + r] = -entry.rows[r].velocity(entry.joint.a, entry.joint.b);
+        for (int pass = 0; ; pass++) {
+            do {
+                if (stale) {
+                    factor(false);
+                    stale = false;
+                }
+                speeds();
+                solve();
+            } while (anyBounded && clamp());
+            for (Held h : held) solution[h.entry.off + h.row] += h.delta;
+            held.clear();
+            for (Entry entry : order) {
+                for (int r = 0; r < entry.m; r++) entry.rows[r].apply(entry.joint.a, entry.joint.b, (float) solution[entry.off + r]);
+                entry.joint.directImpulses(solution, entry.off);
+            }
+            if (!anyBounded || pass == MAX_PASSES || !recheck()) return;
+            stale = true;
         }
-        solve();
+    }
+
+    /**
+     * Sets the right-hand side to minus each row's speed (from the speed it should hold, for a stop or motor), less what
+     * the impulses already held between steps would do to it.
+     */
+    private void speeds() {
         for (Entry entry : order) {
-            for (int r = 0; r < entry.m; r++) entry.rows[r].apply(entry.joint.a, entry.joint.b, (float) solution[entry.off + r]);
-            entry.joint.directImpulses(solution, entry.off);
+            for (int r = 0; r < entry.m; r++) {
+                Joint.Row row = entry.rows[r];
+                double speed = row.velocity(entry.joint.a, entry.joint.b);
+                rhs[entry.off + r] = r < entry.firstBounded ? -speed
+                        : (entry.mode[r] & 1) == 1 ? row.speed[entry.mode[r] / 2] - speed : 0.0;
+            }
         }
+        for (Held h : held) {
+            Entry p = h.entry;
+            for (int side = 0; side < 2; side++) {
+                int n = side == 0 ? p.nodeA : p.nodeB;
+                if (n < 0) continue;
+                Node node = nodes.get(n);
+                for (Entry e : node.entries) {
+                    int se = e.nodeB == n ? 1 : 0;
+                    for (int s = 0; s < e.m; s++) {
+                        if (!e.pushing(s)) continue;
+                        double v = 0;
+                        for (int i = 0; i < 3; i++) {
+                            v += p.lin0[side][h.row * 3 + i] * e.lin0[se][s * 3 + i] * node.mass[i];
+                            double iw = node.inertia[i * 3] * e.ang0[se][s * 3] + node.inertia[i * 3 + 1] * e.ang0[se][s * 3 + 1]
+                                    + node.inertia[i * 3 + 2] * e.ang0[se][s * 3 + 2];
+                            v += p.ang0[side][h.row * 3 + i] * iw;
+                        }
+                        rhs[e.off + s] -= v * h.delta;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Moves each stop or motor row whose impulse came out past what its step can give off the step, to the stretch
+     * beside it that pushes with the impulse at that edge.
+     *
+     * @return true if any was, so the rest has to be solved again
+     */
+    private boolean clamp() {
+        boolean any = false;
+        for (Entry entry : order) {
+            for (int r = entry.firstBounded; r < entry.m; r++) {
+                if (!entry.pushing(r)) continue;
+                Joint.Row row = entry.rows[r];
+                int k = entry.mode[r] / 2;
+                double acc = entry.joint.directAccumulated(r), next = acc + solution[entry.off + r];
+                if (next > row.high[k]) hold(entry, r, 2 * k, row.high[k] - acc);
+                else if (next < row.low[k]) hold(entry, r, 2 * k + 2, row.low[k] - acc);
+                else continue;
+                any = true;
+            }
+        }
+        if (any) stale = true;
+        return any;
+    }
+
+    private void hold(Entry entry, int r, int mode, double delta) {
+        entry.mode[r] = mode;
+        held.add(new Held(entry, r, delta));
+    }
+
+    /**
+     * After the rows have been applied: puts a row held between steps back on the step its speed has reached.
+     *
+     * @return true if any row moved, so there is more to solve
+     */
+    private boolean recheck() {
+        boolean changed = false;
+        for (Entry entry : order) {
+            for (int r = entry.firstBounded; r < entry.m; r++) {
+                int p = entry.mode[r];
+                if ((p & 1) == 1) continue;
+                Joint.Row row = entry.rows[r];
+                double speed = row.velocity(entry.joint.a, entry.joint.b);
+                if (p > 0 && speed < row.speed[p / 2 - 1] - LET_GO) entry.mode[r] = p - 1;
+                else if (p < 2 * row.steps && speed > row.speed[p / 2] + LET_GO) entry.mode[r] = p + 1;
+                else continue;
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     /**
@@ -276,7 +458,7 @@ final class JointTree {
     private void factor(boolean uniform) {
         assemble(uniform);
         for (Entry p : order) {
-            invert(p.diag, p.m, p.inverse);
+            invert(p.diag, p.m, p.inverse, p.kept);
             Node node = nodes.get(p.parent);
             int d = node.entries.size(), lp = p.nodeA == p.parent ? p.localA : p.localB;
             for (int k = lp + 1; k < d; k++) {
@@ -314,6 +496,19 @@ final class JointTree {
                 e.ang[0][r * 3] = -row.sax;
                 e.ang[0][r * 3 + 1] = -row.say;
                 e.ang[0][r * 3 + 2] = -row.saz;
+                for (int side = 0; side < 2; side++) {
+                    for (int i = 0; i < 3; i++) {
+                        e.lin0[side][r * 3 + i] = e.lin[side][r * 3 + i];
+                        e.ang0[side][r * 3 + i] = e.ang[side][r * 3 + i];
+                    }
+                }
+                // A stop that isn't pushing is out of the system for the speeds; for positions the joint leaves the
+                // row empty itself.
+                if (!uniform && !e.pushing(r)) {
+                    for (int side = 0; side < 2; side++) {
+                        for (int i = 0; i < 3; i++) e.lin[side][r * 3 + i] = e.ang[side][r * 3 + i] = 0.0;
+                    }
+                }
             }
         }
         for (int n = 0; n < nodes.size(); n++) {
@@ -447,9 +642,9 @@ final class JointTree {
      * Inverts a symmetric positive semi-definite matrix of up to 6x6, leaving out any row that the others already hold
      * (as a hinge held to a body that cannot turn would have).
      */
-    private static void invert(double[] a, int n, double[] out) {
+    private static void invert(double[] a, int n, double[] out, boolean[] kept) {
         double[] l = new double[n * n];
-        boolean[] kept = new boolean[n];
+        Arrays.fill(kept, false);
         double largest = 0;
         for (int i = 0; i < n; i++) largest = Math.max(largest, a[i * n + i]);
         for (int j = 0; j < n; j++) {
