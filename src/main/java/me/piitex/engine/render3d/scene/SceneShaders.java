@@ -235,7 +235,7 @@ final class SceneShaders {
      * The tone mappers: 0 cuts off at white, 1 is c / (1 + c), 2 a fit of the ACES film curve (Narkowicz), which expects
      * the exposure already in.
      */
-    private static final String TONE_MAP = """
+    static final String TONE_MAP = """
             vec3 toneMap(vec3 c, int mode) {
                 if (mode == 1) return c / (1.0 + c);
                 if (mode == 2) return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
@@ -543,7 +543,10 @@ final class SceneShaders {
                     float amount = 1.0 - exp(-k * k);
                     lit = vExtra2.y > 0.5 ? lit * (1.0 - amount) : mix(lit, fog.rgb, amount);
                 }
-                outColor = vec4(pow(toneMap(lit * fogParams.y, int(fogParams.z + 0.5)), vec3(1.0 / 2.2)), alpha);
+                vec3 exposed = lit * fogParams.y;
+                // Bloom keeps the light as it is (fogParams.w is 1) and tone maps the whole picture afterwards.
+                outColor = fogParams.w > 0.5 ? vec4(min(exposed, vec3(65000.0)), alpha)
+                        : vec4(pow(toneMap(exposed, int(fogParams.z + 0.5)), vec3(1.0 / 2.2)), alpha);
             }
             """;
 
@@ -622,20 +625,23 @@ final class SceneShaders {
                 vec4 bottom;
             };
             layout(location = 0) out vec4 outColor;
+            // forward.w is 1 when bloom keeps the light linear: a sky of 8-bit colours is decoded then, and tone mapped
+            // with the rest of the picture.
+            vec3 fromDisplay(vec3 c) { return forward.w > 0.5 ? pow(c, vec3(2.2)) : c; }
             """;
 
     static final String SKY_GRADIENT_FRAGMENT = "#version 450\n" + SKY_BLOCK + """
             void main() {
                 float t = normalize(vDir).y;
                 vec3 color = t >= 0.0 ? mix(horizon.rgb, top.rgb, pow(t, 0.6)) : mix(horizon.rgb, bottom.rgb, pow(-t, 0.6));
-                outColor = vec4(color * top.a, 1.0);
+                outColor = vec4(fromDisplay(color * top.a), 1.0);
             }
             """;
 
     static final String SKY_CUBE_FRAGMENT = "#version 450\n" + SKY_BLOCK + """
             layout(set = 0, binding = 1) uniform samplerCube skyTexture;
             void main() {
-                outColor = vec4(texture(skyTexture, normalize(vDir)).rgb * top.a, 1.0);
+                outColor = vec4(fromDisplay(texture(skyTexture, normalize(vDir)).rgb * top.a), 1.0);
             }
             """;
 
@@ -650,7 +656,8 @@ final class SceneShaders {
                 vec3 d = normalize(vDir);
                 vec2 uv = vec2(atan(d.x, -d.z) / (2.0 * 3.14159265) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / 3.14159265);
                 vec3 c = textureLod(skyTexture, uv, 0.0).rgb * top.a * horizon.x;
-                outColor = vec4(pow(toneMap(c, int(horizon.y + 0.5)), vec3(1.0 / 2.2)), 1.0);
+                outColor = forward.w > 0.5 ? vec4(min(c, vec3(65000.0)), 1.0)
+                        : vec4(pow(toneMap(c, int(horizon.y + 0.5)), vec3(1.0 / 2.2)), 1.0);
             }
             """;
 
@@ -659,7 +666,7 @@ final class SceneShaders {
             void main() {
                 vec3 d = normalize(vDir);
                 vec2 uv = vec2(atan(d.x, -d.z) / (2.0 * 3.14159265) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / 3.14159265);
-                outColor = vec4(textureLod(skyTexture, uv, 0.0).rgb * top.a, 1.0);
+                outColor = vec4(fromDisplay(textureLod(skyTexture, uv, 0.0).rgb * top.a), 1.0);
             }
             """;
 }

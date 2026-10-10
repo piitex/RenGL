@@ -311,12 +311,13 @@ public final class VkGpuDevice implements GpuDevice {
     @Override
     public RenderTarget createRenderTarget(int width, int height, boolean depth, int samples) {
         int wanted = Integer.highestOneBit(Math.max(1, samples));
-        return new VkTarget(this, width, height, depth, Math.min(wanted, maxSamples), false, true);
+        return new VkTarget(this, width, height, depth, Math.min(wanted, maxSamples), false, true, false);
     }
 
     @Override
-    public RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear) {
-        return new VkTarget(this, width, height, depth, 1, true, linear);
+    public RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear, boolean hdr, int samples) {
+        int wanted = Integer.highestOneBit(Math.max(1, samples));
+        return new VkTarget(this, width, height, depth, Math.min(wanted, maxSamples), true, linear, hdr);
     }
 
     @Override
@@ -562,15 +563,18 @@ public final class VkGpuDevice implements GpuDevice {
      * images are only ever written within the pass, so their contents are not kept.
      */
     long renderPass(boolean depth, int samples) {
-        return renderPass(depth, samples, false);
+        return renderPass(depth, samples, false, false);
     }
 
     /**
      * @param sampled the colour image is read by shaders afterwards, so it is left in {@code SHADER_READ_ONLY_OPTIMAL}
-     *                instead (single sample only; such a target is never shown by the UI layer)
+     *                instead (such a target is never shown by the UI layer; with multisampling it is the resolved image
+     *                that is left that way)
+     * @param hdr     16-bit floating point colour instead of 8-bit
      */
-    long renderPass(boolean depth, int samples, boolean sampled) {
-        int key = (samples << 2) | (sampled ? 2 : 0) | (depth ? 1 : 0);
+    long renderPass(boolean depth, int samples, boolean sampled, boolean hdr) {
+        int colorFormat = hdr ? HDR_FORMAT : COLOR_FORMAT;
+        int key = (samples << 3) | (hdr ? 4 : 0) | (sampled ? 2 : 0) | (depth ? 1 : 0);
         Long existing = renderPasses.get(key);
         if (existing != null) return existing;
         boolean multisampled = samples > 1;
@@ -580,18 +584,19 @@ public final class VkGpuDevice implements GpuDevice {
             int depthIndex = multisampled ? 2 : 1;
             VkAttachmentDescription.Buffer attachments = VkAttachmentDescription.calloc(count, stack);
             attachments.get(0)
-                    .format(COLOR_FORMAT).samples(sampleBit)
+                    .format(colorFormat).samples(sampleBit)
                     .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
                     .storeOp(multisampled ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE)
                     .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
                     .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
-                    .finalLayout(sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                    .finalLayout(sampled && !multisampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             if (multisampled) {
                 attachments.get(1)
-                        .format(COLOR_FORMAT).samples(VK_SAMPLE_COUNT_1_BIT)
+                        .format(colorFormat).samples(VK_SAMPLE_COUNT_1_BIT)
                         .loadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).storeOp(VK_ATTACHMENT_STORE_OP_STORE)
                         .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
-                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED).finalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                        .finalLayout(sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             }
             if (depth) {
                 attachments.get(depthIndex)

@@ -381,18 +381,19 @@ final class SceneRenderer {
         Skybox sky = scene.getSkybox();
         int env = environmentKind(scene, sky);
         int variant = variantFor(scene, shadowFrame, env);
-        writeFrameBlock(res.frame, scene, camera, viewProj, shadowFrame, env, variants.get(variant));
+        boolean bloomed = scene.getBloom() > 0f;
+        writeFrameBlock(res.frame, scene, camera, viewProj, shadowFrame, env, variants.get(variant), bloomed);
         int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT);
-        if (sky != null) writeSky(res.sky, scene, camera, aspect, sky);
+        if (sky != null) writeSky(res.sky, scene, camera, aspect, sky, bloomed);
 
         Color bg = scene.getBackground();
         int drawCalls = 0, drawnRecords = 0;
-        // With bloom the scene goes into a target of its own first, and the viewport's target gets it with the glow.
-        boolean bloomed = scene.getBloom() > 0f;
+        // With bloom the scene goes into a target of its own first, in linear light, and the viewport's target gets it
+        // tone mapped, with the glow.
         RenderTarget drawTarget = target;
         if (bloomed) {
             if (res.bloom == null) res.bloom = new BloomPass(device, skyTriangle);
-            drawTarget = res.bloom.sceneTarget(target.width(), target.height());
+            drawTarget = res.bloom.sceneTarget(target.width(), target.height(), target.samples());
         }
         try (RenderPass pass = device.beginPass(drawTarget, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
@@ -409,7 +410,7 @@ final class SceneRenderer {
                 }
             }
         }
-        if (bloomed) res.bloom.apply(target, scene.getBloom(), scene.getBloomThreshold(), scene.getBloomRadius());
+        if (bloomed) res.bloom.apply(target, scene.getBloom(), scene.getBloomThreshold(), scene.getBloomRadius(), scene.getToneMapping().ordinal());
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
                 shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight()));
         if (frame % SWEEP_EVERY == 0) sweep();
@@ -1089,7 +1090,7 @@ final class SceneRenderer {
         return (float) Math.pow(Math.max(0f, srgb), 2.2);
     }
 
-    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant) {
+    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput) {
         scratch.clear();
         viewProj.put(scratch);
         Vec3 eye = camera.getPosition();
@@ -1182,7 +1183,7 @@ final class SceneRenderer {
         }
         Color fog = scene.getFogColor();
         scratch.putFloat(linear(fog.getR())).putFloat(linear(fog.getG())).putFloat(linear(fog.getB())).putFloat(scene.getFogDensity());
-        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(scene.getExposure()).putFloat(scene.getToneMapping().ordinal()).putFloat(0f);
+        scratch.putFloat(scene.getFogHeightFalloff()).putFloat(scene.getExposure()).putFloat(scene.getToneMapping().ordinal()).putFloat(linearOutput ? 1f : 0f);
         Skybox sky = scene.getSkybox();
         if (env == ENV_NONE) {
             for (int i = 0; i < 13; i++) scratch.putFloat(0f).putFloat(0f).putFloat(0f).putFloat(0f);
@@ -1200,13 +1201,13 @@ final class SceneRenderer {
         buffer.update(scratch);
     }
 
-    private void writeSky(GpuBuffer buffer, Scene3D scene, Camera camera, float aspect, Skybox sky) {
+    private void writeSky(GpuBuffer buffer, Scene3D scene, Camera camera, float aspect, Skybox sky, boolean linearOutput) {
         Vec3 f = camera.getTarget().sub(camera.getPosition()).normalized();
         Vec3 r = f.cross(camera.getUp()).normalized();
         Vec3 u = r.cross(f);
         float tanY = (float) Math.tan(Math.toRadians(camera.getFovYDegrees()) * 0.5);
         scratch.clear();
-        scratch.putFloat(f.x()).putFloat(f.y()).putFloat(f.z()).putFloat(0f);
+        scratch.putFloat(f.x()).putFloat(f.y()).putFloat(f.z()).putFloat(linearOutput ? 1f : 0f);
         scratch.putFloat(r.x()).putFloat(r.y()).putFloat(r.z()).putFloat(tanY * aspect);
         scratch.putFloat(u.x()).putFloat(u.y()).putFloat(u.z()).putFloat(tanY);
         if (sky.kind == Skybox.Kind.GRADIENT) {
