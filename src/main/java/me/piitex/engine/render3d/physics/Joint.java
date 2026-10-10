@@ -475,6 +475,19 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
             mass = k > 1e-12f ? 1f / k : 0f;
         }
 
+        void copy(Row other) {
+            nx = other.nx;
+            ny = other.ny;
+            nz = other.nz;
+            sax = other.sax;
+            say = other.say;
+            saz = other.saz;
+            sbx = other.sbx;
+            sby = other.sby;
+            sbz = other.sbz;
+            mass = other.mass;
+        }
+
         void angular(RigidBody a, RigidBody b, Vec3 axis) {
             set(a, b, Vec3.ZERO, axis, axis);
         }

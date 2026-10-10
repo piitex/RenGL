@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Solves the always-on rows of the joints exactly (the pivot of a ball joint or hinge, a hinge's axis, a weld), all
+ * Solves the always-on rows of the joints exactly (the pivot of a ball joint or hinge, a hinge's axis, a weld, a slider's rails and its lock on turning), all
  * joints of a tree at once, instead of a pass at a time.
  * <p>
  * A pass-at-a-time solver passes a correction one link along a chain per pass, and a heavy end load takes more passes
@@ -20,7 +20,7 @@ import java.util.Map;
  * proportion to the number of joints, however long the chain or heavy the load.
  * <p>
  * Only the joints that give rows ({@link Joint#directRows}) are taken; a joint that would close a loop of bodies, or a
- * rope, slider or spring, stays with the pass-at-a-time solver, which solves the stops and motors of all joints too.
+ * rope or spring, stays with the pass-at-a-time solver, which solves the stops and motors of all joints too.
  */
 final class JointTree {
     /** A pivot below this fraction of the block's largest is a row the others already hold, and is left out. */

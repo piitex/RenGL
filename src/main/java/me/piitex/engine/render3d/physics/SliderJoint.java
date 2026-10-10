@@ -26,6 +26,8 @@ public final class SliderJoint extends Joint {
     private Mat3 angularMass;
     private final Row across1 = new Row(), across2 = new Row(), along = new Row();
     private Vec3 angularImpulse = Vec3.ZERO;
+    /** B's anchor from A's, as of the last {@link #setRows}. */
+    private Vec3 spread = Vec3.ZERO;
     private float impulse1, impulse2, motorImpulse, lowerImpulse, upperImpulse;
 
     /**
@@ -182,6 +184,7 @@ public final class SliderJoint extends Joint {
         across2.set(a, b, side[1], far.cross(side[1]), rb.cross(side[1]));
         along.set(a, b, n, far.cross(n), rb.cross(n));
         translation = d.dot(n);
+        spread = d;
     }
 
     @Override
@@ -216,6 +219,7 @@ public final class SliderJoint extends Joint {
             upperImpulse = Math.max(old - along.mass * (-along.velocity(a, b) + Math.max(gap, 0f) / dt), 0f);
             along.apply(a, b, old - upperImpulse);
         }
+        if (direct) return;
         Vec3 t = angularMass.mul(angularVelocity(a, b)).negate();
         angularImpulse = angularImpulse.add(t);
         applyAngular(a, b, t);
@@ -229,14 +233,61 @@ public final class SliderJoint extends Joint {
     }
 
     @Override
-    boolean solvePosition() {
-        float angle = solveRotation(a, b, relative);
+    int directRows() {
+        return 5;
+    }
+
+    @Override
+    void directVelocityRows(Row[] rows) {
+        rows[0].copy(across1);
+        rows[1].copy(across2);
+        angularRows(rows);
+    }
+
+    @Override
+    void directImpulses(double[] lambda, int at) {
+        impulse1 += (float) lambda[at];
+        impulse2 += (float) lambda[at + 1];
+        angularImpulse = angularImpulse.add(new Vec3((float) lambda[at + 2], (float) lambda[at + 3], (float) lambda[at + 4]));
+    }
+
+    @Override
+    boolean directPositionRows(Row[] rows, float[] error) {
         setRows();
-        Vec3 d = center(b).add(rb).sub(center(a).add(ra));
-        float c1 = d.dot(across1.linear()), c2 = d.dot(across2.linear());
-        float error = Math.max(Math.abs(c1), Math.abs(c2));
-        across1.nudge(a, b, -across1.mass * Math.clamp(c1, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION));
-        across2.nudge(a, b, -across2.mass * Math.clamp(c2, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION));
+        rows[0].copy(across1);
+        rows[1].copy(across2);
+        angularRows(rows);
+        float c1 = spread.dot(across1.linear()), c2 = spread.dot(across2.linear());
+        error[0] = Math.clamp(c1, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION);
+        error[1] = Math.clamp(c2, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION);
+        Vec3 turn = rotationError(a, b, relative);
+        float angle = turn.length();
+        if (angle > MAX_ANGULAR_CORRECTION) turn = turn.mul(MAX_ANGULAR_CORRECTION / angle);
+        error[2] = turn.x();
+        error[3] = turn.y();
+        error[4] = turn.z();
+        return Math.max(Math.abs(c1), Math.abs(c2)) <= LINEAR_SLOP && angle <= ANGULAR_SLOP;
+    }
+
+    /** The slider's lock on turning: one row for each world axis, after the two sideways rows. */
+    private void angularRows(Row[] rows) {
+        rows[2].angular(a, b, Vec3.X);
+        rows[3].angular(a, b, Vec3.UP);
+        rows[4].angular(a, b, Vec3.Z);
+    }
+
+    @Override
+    boolean solvePosition() {
+        float angle = direct ? 0f : solveRotation(a, b, relative);
+        setRows();
+        float error = 0f;
+        if (!direct) {
+            Vec3 d = spread;
+            float c1 = d.dot(across1.linear()), c2 = d.dot(across2.linear());
+            error = Math.max(Math.abs(c1), Math.abs(c2));
+            across1.nudge(a, b, -across1.mass * Math.clamp(c1, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION));
+            across2.nudge(a, b, -across2.mass * Math.clamp(c2, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION));
+        }
         if (limited) {
             float c = translation < lower ? translation - lower : translation > upper ? translation - upper : 0f;
             if (c != 0f) {
