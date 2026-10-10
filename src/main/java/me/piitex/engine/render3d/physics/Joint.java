@@ -244,6 +244,71 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
      */
     abstract Vec3 angularImpulse();
 
+    /**
+     * The longest {@link #directRows} any joint has.
+     */
+    static final int MAX_DIRECT_ROWS = 6;
+    private Row[] directBuffer;
+
+    /**
+     * True while the world's {@link JointTree} holds this joint's always-on rows (the pivot, the axis, the weld), so the
+     * joint's own passes leave those to it and see to the stops and the motor only.
+     */
+    boolean direct;
+
+    /**
+     * How many always-on rows the joint gives the {@link JointTree}, which solves them exactly together with the rest of
+     * its tree of joints: 0 for a joint that can't (it is then solved a pass at a time with the rest).
+     */
+    int directRows() {
+        return 0;
+    }
+
+    /**
+     * The scratch rows the tree fills in with {@link #directVelocityRows} and {@link #directPositionRows}.
+     */
+    final Row[] directBuffer() {
+        if (directBuffer == null) {
+            directBuffer = new Row[MAX_DIRECT_ROWS];
+            for (int i = 0; i < MAX_DIRECT_ROWS; i++) directBuffer[i] = new Row();
+        }
+        return directBuffer;
+    }
+
+    /**
+     * Sets the rows to the joint's always-on constraints for this step, after {@link #prepare}.
+     */
+    void directVelocityRows(Row[] rows) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Takes what the tree solver pushed on the rows, to keep the joint's impulses (and so its reaction) right.
+     */
+    void directImpulses(double[] lambda, int at) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Sets the rows to the joint's always-on constraints where the bodies are now, and {@code error} to how far each is
+     * off (at most one correction's worth).
+     *
+     * @return true if they were already as close as they need to be
+     */
+    boolean directPositionRows(Row[] rows, float[] error) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Rows that hold B's anchor at A's: one for each world axis.
+     */
+    static void pointRows(Row[] rows, int at, RigidBody a, Vec3 ra, RigidBody b, Vec3 rb) {
+        for (int i = 0; i < 3; i++) {
+            Vec3 n = i == 0 ? Vec3.X : i == 1 ? Vec3.UP : Vec3.Z;
+            rows[at + i].set(a, b, n, ra.cross(n), rb.cross(n));
+        }
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------------------------
 
     /**
@@ -385,7 +450,7 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
      * body: a slider's sideways lock, a hinge's limit, a rope's length.
      */
     static final class Row {
-        private float nx, ny, nz, sax, say, saz, sbx, sby, sbz;
+        float nx, ny, nz, sax, say, saz, sbx, sby, sbz;
         /**
          * 1 over how much an impulse of 1 changes the row's speed.
          */

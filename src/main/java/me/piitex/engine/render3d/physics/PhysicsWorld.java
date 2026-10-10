@@ -60,6 +60,7 @@ public final class PhysicsWorld {
 
     private final List<RigidBody> bodies = new ArrayList<>();
     private final List<Joint> joints = new ArrayList<>();
+    private final JointTree jointTree = new JointTree();
     private final List<CharacterController> characters = new ArrayList<>();
     private final List<ColliderView> views = new ArrayList<>();
     float nodesAlpha = 1f; // how far between steps the nodes were last put
@@ -549,10 +550,13 @@ public final class PhysicsWorld {
         List<Joint> holding = new ArrayList<>(joints.size());
         for (Joint joint : joints) if (joint.active()) holding.add(joint);
         ContactSolver.prepare(solving, dt);
+        jointTree.build(holding);
         for (Joint joint : holding) joint.prepare(dt);
+        jointTree.prepare();
         // Joints first, so the contacts have the last word and joined bodies don't get pulled into the ground.
         for (int i = 0; i < velocityIterations; i++) {
             for (Joint joint : holding) joint.solveVelocity();
+            jointTree.solveVelocity();
             ContactSolver.solveVelocities(solving, dt, i % 2 == 1);
         }
         ContactSolver.applyRestitution(solving, dt);
@@ -564,7 +568,10 @@ public final class PhysicsWorld {
             broken.add(joint);
             removeJoint(joint);
         }
-        if (broken != null) holding.removeAll(broken);
+        if (broken != null) {
+            holding.removeAll(broken);
+            jointTree.build(holding);
+        }
         for (RigidBody body : active) {
             if (body.getWorld() == this) body.integratePosition(dt);
             if (last) body.clearForces();
@@ -575,6 +582,7 @@ public final class PhysicsWorld {
         for (int i = 0; i < Math.max(2 * positionIterations, 1); i++) {
             boolean done = true;
             for (Joint joint : holding) done &= joint.solvePosition();
+            done &= jointTree.solvePosition();
             if (done) break;
         }
         if (last) for (RigidBody body : bodies) if (!body.settled()) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries

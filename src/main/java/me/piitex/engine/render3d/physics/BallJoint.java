@@ -259,9 +259,38 @@ public final class BallJoint extends Joint {
             upperImpulse = Math.max(old - twistStop.effective * (speed + Math.max(gap, 0f) / dt), 0f);
             twistStop.apply(old - upperImpulse);
         }
+        if (direct) return;
         Vec3 p = mass.mul(anchorVelocity(a, ra, b, rb)).negate();
         impulse = impulse.add(p);
         applyPoint(a, ra, b, rb, p);
+    }
+
+    @Override
+    int directRows() {
+        return 3;
+    }
+
+    @Override
+    void directVelocityRows(Row[] rows) {
+        pointRows(rows, 0, a, ra, b, rb);
+    }
+
+    @Override
+    void directImpulses(double[] lambda, int at) {
+        impulse = impulse.add(new Vec3((float) lambda[at], (float) lambda[at + 1], (float) lambda[at + 2]));
+    }
+
+    @Override
+    boolean directPositionRows(Row[] rows, float[] error) {
+        Vec3 pa = offset(a, localA), pb = offset(b, localB);
+        Vec3 gap = center(b).add(pb).sub(center(a).add(pa));
+        float length = gap.length();
+        if (length > MAX_LINEAR_CORRECTION) gap = gap.mul(MAX_LINEAR_CORRECTION / length);
+        pointRows(rows, 0, a, pa, b, pb);
+        error[0] = gap.x();
+        error[1] = gap.y();
+        error[2] = gap.z();
+        return length <= LINEAR_SLOP;
     }
 
     @Override
@@ -287,6 +316,7 @@ public final class BallJoint extends Joint {
                 angularError = Math.max(angularError, Math.abs(c));
             }
         }
+        if (direct) return angularError <= ANGULAR_SLOP;
         float gap = solvePoint(a, localA, b, localB);
         return gap <= LINEAR_SLOP && angularError <= ANGULAR_SLOP;
     }

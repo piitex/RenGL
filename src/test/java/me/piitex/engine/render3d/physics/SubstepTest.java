@@ -64,8 +64,8 @@ class SubstepTest {
     }
 
     @Test
-    void aHeavyLoadOnALightChainStretchesLessInSmallerSteps() {
-        assertTrue(chainReach(100f, 1) > 4.2f, "200:1 stretches the chain");
+    void aHeavyLoadOnALightChainHoldsInAnyStepSize() {
+        assertEquals(3.85f, chainReach(100f, 1), 0.03f);
         assertEquals(3.85f, chainReach(100f, 8), 0.05f);
         assertEquals(3.85f, chainReach(10f, 4), 0.05f);
     }
