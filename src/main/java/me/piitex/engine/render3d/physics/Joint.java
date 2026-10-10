@@ -251,17 +251,35 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
     private Row[] directBuffer;
 
     /**
-     * True while the world's {@link JointTree} holds this joint's always-on rows (the pivot, the axis, the weld), so the
-     * joint's own passes leave those to it and see to the stops and the motor only.
+     * True while the world's {@link JointTree} holds this joint's rows (the pivot, the axis, the weld, and the stops and
+     * motor), so the joint's own passes leave all of them to it.
      */
     boolean direct;
 
     /**
-     * How many always-on rows the joint gives the {@link JointTree}, which solves them exactly together with the rest of
-     * its tree of joints: 0 for a joint that can't (it is then solved a pass at a time with the rest).
+     * How many rows the joint gives the {@link JointTree}, which solves them exactly together with the rest of its tree
+     * of joints: 0 for a joint that can't (it is then solved a pass at a time with the rest). The always-on rows come
+     * first, then {@link #directBoundedRows} stops and motors.
      */
     int directRows() {
         return 0;
+    }
+
+    /**
+     * How many of the last {@link #directRows} are stops and motors: rows whose impulse is limited, set up with
+     * {@link Row#limits}, so the tree has to find where on their limits they are.
+     */
+    int directBoundedRows() {
+        return 0;
+    }
+
+    /**
+     * The impulse a stop or motor row has used so far this step, which the tree keeps within the row's limits.
+     *
+     * @param row the row's index among all of the joint's rows
+     */
+    float directAccumulated(int row) {
+        throw new UnsupportedOperationException();
     }
 
     /**
@@ -455,6 +473,67 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
          * 1 over how much an impulse of 1 changes the row's speed.
          */
         float mass;
+        /**
+         * For a stop or motor row, how its impulse depends on its speed, as steps of a staircase: the row holds still at
+         * {@code speed[k]} with any impulse from {@code low[k]} to {@code high[k]}, and in between the steps it
+         * pushes with the {@code low} of the lower step, which is the {@code high} of the next. A stop is a step with
+         * no top (or no bottom), and a motor a step at its speed with the most it can push either way.
+         */
+        int steps;
+        /** Which way the motor is pushing flat out against a stop that outranks it (-1 or 1), or 0. */
+        int pinned;
+        final float[] speed = new float[3], low = new float[3], high = new float[3];
+
+        /**
+         * Sets the staircase of a row that may have a stop at each end of its travel and a motor: a stop lets the speed
+         * close in on it by what is left of the gap (given as the speeds it holds at, below and above 0), and a motor
+         * pushes up to {@code maxMotor} to get to its speed. A stop wins over a motor, which then pushes as hard as it
+         * can against it.
+         */
+        void limits(boolean lowerStop, float lowerSpeed, boolean upperStop, float upperSpeed, boolean motor, float motorSpeed, float maxMotor) {
+            steps = 0;
+            pinned = 0;
+            float inf = Float.POSITIVE_INFINITY;
+            if (!motor || maxMotor <= 0f) {
+                if (lowerStop) step(lowerSpeed, 0f, inf);
+                if (upperStop) step(upperSpeed, -inf, 0f);
+            } else if (lowerStop && motorSpeed < lowerSpeed) {
+                pinned = -1;
+                step(lowerSpeed, -maxMotor, inf);
+                if (upperStop) step(upperSpeed, -inf, -maxMotor);
+            } else if (upperStop && motorSpeed > upperSpeed) {
+                pinned = 1;
+                if (lowerStop) step(lowerSpeed, maxMotor, inf);
+                step(upperSpeed, -inf, maxMotor);
+            } else {
+                if (lowerStop) step(lowerSpeed, maxMotor, inf);
+                step(motorSpeed, -maxMotor, maxMotor);
+                if (upperStop) step(upperSpeed, -inf, -maxMotor);
+            }
+        }
+
+        private void step(float at, float low, float high) {
+            speed[steps] = at;
+            this.low[steps] = low;
+            this.high[steps] = high;
+            steps++;
+        }
+
+        /**
+         * How much of the row's total impulse the motor gives, the stops giving the rest: what it can, or all it can
+         * where it is pushing against a stop.
+         */
+        float motorShare(float total, float maxMotor) {
+            return pinned != 0 ? pinned * maxMotor : Math.clamp(total, -maxMotor, maxMotor);
+        }
+
+        /**
+         * Makes the row push nowhere, for a stop that isn't touched.
+         */
+        void clear() {
+            nx = ny = nz = sax = say = saz = sbx = sby = sbz = 0f;
+            mass = 0f;
+        }
 
         /**
          * B moves along {@code n} and turns around {@code sb}; A moves along {@code -n} and turns around {@code -sa}.

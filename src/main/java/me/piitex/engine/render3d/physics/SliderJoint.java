@@ -193,7 +193,7 @@ public final class SliderJoint extends Joint {
         setRows();
         angularMass = angularMass(a, b).inverse();
         if (!limited) lowerImpulse = upperImpulse = 0f;
-        if (!motor) motorImpulse = 0f;
+        if (!motor || maxMotorForce <= 0f) motorImpulse = 0f;
         applyAngular(a, b, angularImpulse);
         across1.apply(a, b, impulse1);
         across2.apply(a, b, impulse2);
@@ -202,6 +202,7 @@ public final class SliderJoint extends Joint {
 
     @Override
     void solveVelocity() {
+        if (direct) return;
         if (motor) {
             float max = maxMotorForce * dt;
             float old = motorImpulse;
@@ -219,7 +220,6 @@ public final class SliderJoint extends Joint {
             upperImpulse = Math.max(old - along.mass * (-along.velocity(a, b) + Math.max(gap, 0f) / dt), 0f);
             along.apply(a, b, old - upperImpulse);
         }
-        if (direct) return;
         Vec3 t = angularMass.mul(angularVelocity(a, b)).negate();
         angularImpulse = angularImpulse.add(t);
         applyAngular(a, b, t);
@@ -232,9 +232,20 @@ public final class SliderJoint extends Joint {
         across2.apply(a, b, l2);
     }
 
+    /** The two sideways rows and the three that lock turning, then one for the stops and the motor (if it has either). */
     @Override
     int directRows() {
-        return 5;
+        return 5 + directBoundedRows();
+    }
+
+    @Override
+    int directBoundedRows() {
+        return limited || (motor && maxMotorForce > 0f) ? 1 : 0;
+    }
+
+    @Override
+    float directAccumulated(int row) {
+        return lowerImpulse - upperImpulse + motorImpulse;
     }
 
     @Override
@@ -242,6 +253,12 @@ public final class SliderJoint extends Joint {
         rows[0].copy(across1);
         rows[1].copy(across2);
         angularRows(rows);
+        if (directBoundedRows() > 0) {
+            // The stops may let the slider close in on them this step, but not pass.
+            rows[5].copy(along);
+            rows[5].limits(limited, -Math.max(translation - lower, 0f) / dt, limited, Math.max(upper - translation, 0f) / dt,
+                    motor, motorSpeed, maxMotorForce * dt);
+        }
     }
 
     @Override
@@ -249,6 +266,13 @@ public final class SliderJoint extends Joint {
         impulse1 += (float) lambda[at];
         impulse2 += (float) lambda[at + 1];
         angularImpulse = angularImpulse.add(new Vec3((float) lambda[at + 2], (float) lambda[at + 3], (float) lambda[at + 4]));
+        if (directBoundedRows() > 0) {
+            float total = lowerImpulse - upperImpulse + motorImpulse + (float) lambda[at + 5];
+            float max = motor ? maxMotorForce * dt : 0f;
+            motorImpulse = directBuffer()[5].motorShare(total, max);
+            lowerImpulse = Math.max(total - motorImpulse, 0f);
+            upperImpulse = Math.max(motorImpulse - total, 0f);
+        }
     }
 
     @Override
@@ -266,7 +290,20 @@ public final class SliderJoint extends Joint {
         error[2] = turn.x();
         error[3] = turn.y();
         error[4] = turn.z();
-        return Math.max(Math.abs(c1), Math.abs(c2)) <= LINEAR_SLOP && angle <= ANGULAR_SLOP;
+        boolean done = Math.max(Math.abs(c1), Math.abs(c2)) <= LINEAR_SLOP && angle <= ANGULAR_SLOP;
+        if (directBoundedRows() > 0) {
+            rows[5].clear();
+            error[5] = 0f;
+            if (limited && translation < lower) {
+                rows[5].copy(along);
+                error[5] = Math.max(translation - lower, -MAX_LINEAR_CORRECTION);
+            } else if (limited && translation > upper) {
+                rows[5].copy(along);
+                error[5] = Math.min(translation - upper, MAX_LINEAR_CORRECTION);
+            }
+            done &= !limited || translation >= lower - LINEAR_SLOP && translation <= upper + LINEAR_SLOP;
+        }
+        return done;
     }
 
     /** The slider's lock on turning: one row for each world axis, after the two sideways rows. */
@@ -278,16 +315,14 @@ public final class SliderJoint extends Joint {
 
     @Override
     boolean solvePosition() {
-        float angle = direct ? 0f : solveRotation(a, b, relative);
+        if (direct) return true; // the tree closes the rails, the lock on turning and the stops
+        float angle = solveRotation(a, b, relative);
         setRows();
-        float error = 0f;
-        if (!direct) {
-            Vec3 d = spread;
-            float c1 = d.dot(across1.linear()), c2 = d.dot(across2.linear());
-            error = Math.max(Math.abs(c1), Math.abs(c2));
-            across1.nudge(a, b, -across1.mass * Math.clamp(c1, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION));
-            across2.nudge(a, b, -across2.mass * Math.clamp(c2, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION));
-        }
+        Vec3 d = spread;
+        float c1 = d.dot(across1.linear()), c2 = d.dot(across2.linear());
+        float error = Math.max(Math.abs(c1), Math.abs(c2));
+        across1.nudge(a, b, -across1.mass * Math.clamp(c1, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION));
+        across2.nudge(a, b, -across2.mass * Math.clamp(c2, -MAX_LINEAR_CORRECTION, MAX_LINEAR_CORRECTION));
         if (limited) {
             float c = translation < lower ? translation - lower : translation > upper ? translation - upper : 0f;
             if (c != 0f) {

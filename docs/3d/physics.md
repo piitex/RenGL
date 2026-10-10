@@ -420,13 +420,14 @@ A motor with a speed of 0 holds the joint still against whatever pushes it, up t
 brake. A spring's frequency is how many times a second it bounces, whatever the masses, and its damping ratio how quickly
 it stops (0 bounces forever, 1 settles without overshooting).
 
-Joined bodies sleep and wake together, like a stack. Ball joints, hinges, sliders and fixed joints (the "always on" part of
-each: the pivot, the hinge's axis, the slider's rail, the weld) are solved exactly, all the joints of a connected tree at once, so a
+Joined bodies sleep and wake together, like a stack. Ball joints, hinges, sliders and fixed joints (the pivot, the hinge's axis,
+the slider's rail, the weld, and the stops and motors) are solved exactly, all the joints of a connected tree at once, so a
 chain, a ragdoll or a door on a heavy block doesn't stretch whatever the masses: a 100 kg weight on six 0.5 kg links
-(200 to 1) holds the chain at its length, and the time grows in proportion to the number of joints. Joints that close
-a loop of bodies, ropes and springs, and the stops and motors of every joint, are solved a pass at a time with
-the contacts, so keep the masses behind those within about 10 to 1 (a stop under an 80 kg load on a 1 kg arm gives a few
-degrees), or use [substeps](#substeps). Past about 600 to 1 even a tree needs them: a taut chain whips faster than a
+(200 to 1) holds the chain at its length, a hinge stop or motor holds a 400 kg load on a 0.2 kg arm, and the time grows in
+proportion to the number of joints (a stop or motor that is being hit or let go of costs a few more solves that step; a
+60-link whip with stops and a motor takes about twice as long as one without). Joints that close
+a loop of bodies, ropes and springs are solved a pass at a time with
+the contacts, so keep the masses behind those within about 10 to 1, or use [substeps](#substeps). Past about 600 to 1 even a tree needs them: a taut chain whips faster than a
 step can follow (2 substeps hold 2000 to 1, 4 hold 10000 to 1). Links should also be about as long as the gap they span; a small ball with joints far from it acts much
 lighter at them than its mass.
 
@@ -545,9 +546,9 @@ bodies at the surface and keeps a fast ball from passing through a thin wall, wi
 - A mesh joins its corners only where they are at exactly the same place unless you give it a weld distance
   (`new MeshShape(positions, indices, 0.002f)`, `MeshShape.of(node, 0.002f)`, or the collider's Weld in a scene file);
   a level whose pieces merely nearly meet keeps real edges along the gaps, which a sliding box can catch on, until welded.
-- Joints that close a loop of bodies, ropes and springs, and every joint's stops and motors, are solved a pass
+- Joints that close a loop of bodies, ropes and springs are solved a pass
   at a time with the contacts, so the masses behind them should stay within about 10 to 1 at one step ([substeps](#substeps)
-  take that further). Trees of ball joints, hinges, sliders and fixed joints are solved exactly, up to about 600 to 1 in one step.
+  take that further). Trees of ball joints, hinges, sliders and fixed joints, stops and motors included, are solved exactly, up to about 600 to 1 in one step.
 - A character isn't turned by a turning platform (it is carried round, facing the same way).
 - Fast spinning bodies are covered by growing the contact margin by how far their far end travels in a step, which is
   right for a stick hitting a wall or floor; a very long thin body spinning so fast that it turns a large angle in one

@@ -256,4 +256,103 @@ class JointTreeTest {
         assertTrue(worst < 0.01f, "a joint opened by " + worst);
         assertEquals(10f, carriage.getPosition().y(), 0.01f);
     }
+
+    /** A light arm out along +x from a hinge at (0, 10, 0) on the world, with a weight welded on at its tip. */
+    private static HingeJoint heavyArm(PhysicsWorld world, float load, float lower, float upper) {
+        RigidBody arm = capsule(world, 0.5f, 10f, 0f, 0.2f);
+        arm.setRotation(Quat.fromAxisAngle(Vec3.Z, (float) Math.PI / 2f));
+        HingeJoint hinge = new HingeJoint(arm, null, new Vec3(0f, 10f, 0f), Vec3.Z);
+        if (lower < upper) hinge.setLimits(lower, upper);
+        world.addJoint(hinge);
+        RigidBody weight = box(world, new Vec3(1.25f, 10f, 0f), 0.25f, load);
+        world.addJoint(new FixedJoint(weight, arm));
+        return hinge;
+    }
+
+    private static final float ARM_TORQUE = (400f * 1.25f + 0.2f * 0.5f) * 9.81f;
+
+    @Test
+    void aStopHoldsAHeavyLoadOnALightArm() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        HingeJoint hinge = heavyArm(world, 400f, 0f, 1f); // 2000:1, resting on its lower stop
+        float lowest = 0f;
+        for (int i = 0; i < 180; i++) {
+            world.step(DT);
+            lowest = Math.min(lowest, hinge.getAngle());
+        }
+        assertTrue(lowest > -0.01f, "the stop gave way by " + lowest + " rad");
+        assertEquals(ARM_TORQUE, hinge.getReactionTorque().length(), ARM_TORQUE * 0.03f);
+    }
+
+    @Test
+    void aMotorHoldsAHeavyLoadOnALightArm() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        HingeJoint hinge = heavyArm(world, 400f, 0f, 0f).setMotor(0f, 10000f);
+        float lowest = 0f;
+        for (int i = 0; i < 180; i++) {
+            world.step(DT);
+            lowest = Math.min(lowest, hinge.getAngle());
+        }
+        assertTrue(lowest > -0.01f, "the motor gave way by " + lowest + " rad");
+        assertEquals(ARM_TORQUE, hinge.getMotorTorque(), ARM_TORQUE * 0.03f);
+    }
+
+    @Test
+    void aMotorThatIsTooWeakPushesAsHardAsItCanAndTheLoadSinks() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        HingeJoint hinge = heavyArm(world, 400f, 0f, 0f).setMotor(0f, 1000f);
+        for (int i = 0; i < 60; i++) world.step(DT);
+        assertTrue(hinge.getAngle() < -0.3f, "the arm only sank to " + hinge.getAngle());
+        assertEquals(1000f, hinge.getMotorTorque(), 20f);
+    }
+
+    @Test
+    void aMotorPushingIntoAStopLeavesTheArmAtTheStopAndLetsGoWhenReversed() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        HingeJoint hinge = heavyArm(world, 40f, -1f, 0.5f).setMotor(1f, 5000f);
+        float highest = 0f;
+        for (int i = 0; i < 240; i++) {
+            world.step(DT);
+            highest = Math.max(highest, hinge.getAngle());
+        }
+        assertTrue(highest < 0.52f, "the arm went through its stop to " + highest);
+        assertEquals(0.5f, hinge.getAngle(), 0.02f);
+        assertEquals(5000f, hinge.getMotorTorque(), 100f, "the motor pushes as hard as it can against the stop");
+        hinge.setMotor(-1f, 5000f);
+        for (int i = 0; i < 60; i++) world.step(DT);
+        assertTrue(hinge.getAngle() < 0.1f, "the arm stayed at the stop: " + hinge.getAngle());
+        assertEquals(-1f, hinge.getAngularSpeed(), 0.05f);
+    }
+
+    @Test
+    void aSliderStopAndMotorHoldAHeavyLoad() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        RigidBody carriage = box(world, new Vec3(0f, 10f, 0f), 0.1f, 0.2f);
+        SliderJoint lift = new SliderJoint(carriage, null, new Vec3(0f, 10f, 0f), Vec3.UP).setLimits(-1f, 1f).setMotor(0f, 10000f);
+        world.addJoint(lift);
+        RigidBody weight = box(world, new Vec3(0f, 9.5f, 0f), 0.25f, 400f);
+        world.addJoint(new FixedJoint(weight, carriage));
+        for (int i = 0; i < 180; i++) world.step(DT);
+        assertEquals(10f, carriage.getPosition().y(), 0.01f);
+        assertEquals(400.2f * 9.81f, lift.getMotorForce(), 400.2f * 9.81f * 0.03f);
+        // With the motor off the weight hangs from the lower stop alone.
+        lift.clearMotor();
+        for (int i = 0; i < 120; i++) world.step(DT);
+        assertEquals(9f, carriage.getPosition().y(), 0.02f);
+        assertEquals(400.2f * 9.81f, lift.getReactionForce().length(), 400.2f * 9.81f * 0.03f);
+    }
+
+    @Test
+    void aBallJointsTwistStopHoldsAHeavyLoad() {
+        PhysicsWorld world = new PhysicsWorld().setSleeping(false);
+        RigidBody arm = capsule(world, 0.5f, 10f, 0f, 0.2f);
+        arm.setRotation(Quat.fromAxisAngle(Vec3.Z, (float) Math.PI / 2f));
+        BallJoint shoulder = new BallJoint(arm, null, new Vec3(0f, 10f, 0f), Vec3.X).setTwistLimit(-0.2f, 0.2f);
+        world.addJoint(shoulder);
+        // The weight hangs off to the side of the arm's axis, so it twists the arm until the stop catches it.
+        RigidBody weight = box(world, new Vec3(0.5f, 9.7f, 0f), 0.2f, 100f);
+        world.addJoint(new FixedJoint(weight, arm));
+        for (int i = 0; i < 240; i++) world.step(DT);
+        assertTrue(Math.abs(shoulder.getTwist()) < 0.25f, "the twist stop gave way: " + shoulder.getTwist());
+    }
 }

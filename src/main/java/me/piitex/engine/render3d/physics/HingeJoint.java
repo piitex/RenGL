@@ -198,7 +198,7 @@ public final class HingeJoint extends Joint {
         axialMass = axial > 1e-12f ? 1f / axial : 0f;
         angle = getAngle();
         if (!limited) lowerImpulse = upperImpulse = 0f;
-        if (!motor) motorImpulse = 0f;
+        if (!motor || maxMotorTorque <= 0f) motorImpulse = 0f;
 
         // The pivot's share of last step's motor and stop impulses is already in its own impulse.
         applyPoint(a, ra, b, rb, pointImpulse);
@@ -218,6 +218,7 @@ public final class HingeJoint extends Joint {
 
     @Override
     void solveVelocity() {
+        if (direct) return;
         if (motor) {
             float speed = angularVelocity(a, b).dot(worldAxis) - motorSpeed;
             float max = maxMotorTorque * dt;
@@ -239,7 +240,6 @@ public final class HingeJoint extends Joint {
             upperImpulse = Math.max(old - axialMass * (speed + Math.max(gap, 0f) / dt), 0f);
             applyAxial(old - upperImpulse);
         }
-        if (direct) return;
         Vec3 w = angularVelocity(a, b);
         float c1 = b1.dot(w), c2 = b2.dot(w);
         float l1 = -(k11 * c1 + k12 * c2), l2 = -(k12 * c1 + k22 * c2);
@@ -252,9 +252,20 @@ public final class HingeJoint extends Joint {
         applyPoint(a, ra, b, rb, p);
     }
 
+    /** The pivot's three rows and the two that hold the axis, then one for the stops and the motor (if it has either). */
     @Override
     int directRows() {
-        return 5;
+        return 5 + directBoundedRows();
+    }
+
+    @Override
+    int directBoundedRows() {
+        return limited || (motor && maxMotorTorque > 0f) ? 1 : 0;
+    }
+
+    @Override
+    float directAccumulated(int row) {
+        return lowerImpulse - upperImpulse + motorImpulse;
     }
 
     @Override
@@ -262,6 +273,12 @@ public final class HingeJoint extends Joint {
         pointRows(rows, 0, a, ra, b, rb);
         rows[3].angular(a, b, b1);
         rows[4].angular(a, b, b2);
+        if (directBoundedRows() > 0) {
+            // The stops may let the hinge close in on them this step, but not pass.
+            rows[5].angular(a, b, worldAxis);
+            rows[5].limits(limited, -Math.max(angle - lower, 0f) / dt, limited, Math.max(upper - angle, 0f) / dt,
+                    motor, motorSpeed, maxMotorTorque * dt);
+        }
     }
 
     @Override
@@ -269,6 +286,13 @@ public final class HingeJoint extends Joint {
         pointImpulse = pointImpulse.add(new Vec3((float) lambda[at], (float) lambda[at + 1], (float) lambda[at + 2]));
         impulse1 += (float) lambda[at + 3];
         impulse2 += (float) lambda[at + 4];
+        if (directBoundedRows() > 0) {
+            float total = lowerImpulse - upperImpulse + motorImpulse + (float) lambda[at + 5];
+            float max = motor ? maxMotorTorque * dt : 0f;
+            motorImpulse = directBuffer()[5].motorShare(total, max);
+            lowerImpulse = Math.max(total - motorImpulse, 0f);
+            upperImpulse = Math.max(motorImpulse - total, 0f);
+        }
     }
 
     @Override
@@ -290,15 +314,30 @@ public final class HingeJoint extends Joint {
         rows[4].angular(a, b, across[1]);
         error[3] = across[0].dot(drift);
         error[4] = across[1].dot(drift);
-        return length <= LINEAR_SLOP && turn <= ANGULAR_SLOP;
+        boolean done = length <= LINEAR_SLOP && turn <= ANGULAR_SLOP;
+        if (directBoundedRows() > 0) {
+            float now = getAngle();
+            rows[5].clear();
+            error[5] = 0f;
+            if (limited && now < lower) {
+                rows[5].angular(a, b, axisOnA);
+                error[5] = Math.max(now - lower, -MAX_ANGULAR_CORRECTION);
+            } else if (limited && now > upper) {
+                rows[5].angular(a, b, axisOnA);
+                error[5] = Math.min(now - upper, MAX_ANGULAR_CORRECTION);
+            }
+            done &= !limited || now >= lower - ANGULAR_SLOP && now <= upper + ANGULAR_SLOP;
+        }
+        return done;
     }
 
     @Override
     boolean solvePosition() {
+        if (direct) return true; // the tree closes the pivot, the axis and the stops
         // Line the axes up again: B's axis has drifted from A's by about their cross product.
         Vec3 axisOnA = a.getRotation().rotate(axisA), axisOnB = b.getRotation().rotate(axisB);
         Vec3 drift = axisOnA.cross(axisOnB);
-        float angularError = direct ? 0f : drift.length();
+        float angularError = drift.length();
         if (angularError > 1e-7f) {
             Vec3[] across = perpendiculars(axisOnA);
             Mat3 k = angularMass(a, b);
@@ -321,7 +360,6 @@ public final class HingeJoint extends Joint {
                 angularError = Math.max(angularError, Math.abs(c));
             }
         }
-        if (direct) return angularError <= ANGULAR_SLOP;
         float gap = solvePoint(a, localA, b, localB);
         return gap <= LINEAR_SLOP && angularError <= ANGULAR_SLOP;
     }

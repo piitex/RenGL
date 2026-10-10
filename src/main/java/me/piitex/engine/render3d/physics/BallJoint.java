@@ -207,6 +207,7 @@ public final class BallJoint extends Joint {
         if (!twistLimited) lowerImpulse = upperImpulse = 0f;
         swing = getSwing();
         twist = getTwist();
+        if (swing <= MIN_SWING) swingImpulse = 0f;
         if (swingLimited) swingStop.set(swingDirection());
         if (twistLimited) twistStop.set(a.getRotation().rotate(axisA));
 
@@ -234,6 +235,7 @@ public final class BallJoint extends Joint {
 
     @Override
     void solveVelocity() {
+        if (direct) return;
         if (swingLimited) {
             if (swing > MIN_SWING) {
                 // The stop may let the leaning close in on the cone this step, but not pass it.
@@ -259,25 +261,56 @@ public final class BallJoint extends Joint {
             upperImpulse = Math.max(old - twistStop.effective * (speed + Math.max(gap, 0f) / dt), 0f);
             twistStop.apply(old - upperImpulse);
         }
-        if (direct) return;
         Vec3 p = mass.mul(anchorVelocity(a, ra, b, rb)).negate();
         impulse = impulse.add(p);
         applyPoint(a, ra, b, rb, p);
     }
 
+    /** The pivot's three rows, then one for the swing stop (if any), then one for the twist stops (if any). */
     @Override
     int directRows() {
-        return 3;
+        return 3 + directBoundedRows();
+    }
+
+    @Override
+    int directBoundedRows() {
+        return (swingLimited ? 1 : 0) + (twistLimited ? 1 : 0);
+    }
+
+    /** The twist row: after the pivot's and the swing's. */
+    private int twistRow() {
+        return swingLimited ? 4 : 3;
+    }
+
+    @Override
+    float directAccumulated(int row) {
+        return swingLimited && row == 3 ? swingImpulse : lowerImpulse - upperImpulse;
     }
 
     @Override
     void directVelocityRows(Row[] rows) {
         pointRows(rows, 0, a, ra, b, rb);
+        // Each stop may let the joint close in on it this step, but not pass it.
+        if (swingLimited) {
+            rows[3].angular(a, b, swing > MIN_SWING ? swingStop.n.negate() : Vec3.ZERO);
+            rows[3].limits(true, -Math.max(swingMax - swing, 0f) / dt, false, 0f, false, 0f, 0f);
+        }
+        if (twistLimited) {
+            int at = twistRow();
+            rows[at].angular(a, b, twistStop.n);
+            rows[at].limits(true, -Math.max(twist - twistLower, 0f) / dt, true, Math.max(twistUpper - twist, 0f) / dt, false, 0f, 0f);
+        }
     }
 
     @Override
     void directImpulses(double[] lambda, int at) {
         impulse = impulse.add(new Vec3((float) lambda[at], (float) lambda[at + 1], (float) lambda[at + 2]));
+        if (swingLimited) swingImpulse = Math.max(swingImpulse + (float) lambda[at + 3], 0f);
+        if (twistLimited) {
+            float total = lowerImpulse - upperImpulse + (float) lambda[at + twistRow()];
+            lowerImpulse = Math.max(total, 0f);
+            upperImpulse = Math.max(-total, 0f);
+        }
     }
 
     @Override
@@ -290,11 +323,38 @@ public final class BallJoint extends Joint {
         error[0] = gap.x();
         error[1] = gap.y();
         error[2] = gap.z();
-        return length <= LINEAR_SLOP;
+        boolean done = length <= LINEAR_SLOP;
+        if (swingLimited) {
+            float now = getSwing();
+            rows[3].clear();
+            error[3] = 0f;
+            if (now > swingMax && now > MIN_SWING) {
+                rows[3].angular(a, b, swingDirection().negate());
+                error[3] = -Math.min(now - swingMax, MAX_ANGULAR_CORRECTION);
+                done &= now - swingMax <= ANGULAR_SLOP;
+            }
+        }
+        if (twistLimited) {
+            float now = getTwist();
+            int at = twistRow();
+            rows[at].clear();
+            error[at] = 0f;
+            Vec3 n = a.getRotation().rotate(axisA);
+            if (now < twistLower) {
+                rows[at].angular(a, b, n);
+                error[at] = Math.max(now - twistLower, -MAX_ANGULAR_CORRECTION);
+            } else if (now > twistUpper) {
+                rows[at].angular(a, b, n);
+                error[at] = Math.min(now - twistUpper, MAX_ANGULAR_CORRECTION);
+            }
+            done &= now >= twistLower - ANGULAR_SLOP && now <= twistUpper + ANGULAR_SLOP;
+        }
+        return done;
     }
 
     @Override
     boolean solvePosition() {
+        if (direct) return true; // the tree closes the pivot and the stops
         float angularError = 0f;
         if (swingLimited) {
             float now = getSwing();
@@ -316,7 +376,6 @@ public final class BallJoint extends Joint {
                 angularError = Math.max(angularError, Math.abs(c));
             }
         }
-        if (direct) return angularError <= ANGULAR_SLOP;
         float gap = solvePoint(a, localA, b, localB);
         return gap <= LINEAR_SLOP && angularError <= ANGULAR_SLOP;
     }
