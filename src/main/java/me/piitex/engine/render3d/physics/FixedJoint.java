@@ -59,6 +59,7 @@ public final class FixedJoint extends Joint {
 
     @Override
     void solveVelocity() {
+        if (direct) return;
         Vec3 t = angularMass.mul(angularVelocity(a, b)).negate();
         angular = angular.add(t);
         applyAngular(a, b, t);
@@ -68,7 +69,49 @@ public final class FixedJoint extends Joint {
     }
 
     @Override
+    int directRows() {
+        return 6;
+    }
+
+    @Override
+    void directVelocityRows(Row[] rows) {
+        pointRows(rows, 0, a, ra, b, rb);
+        rows[3].angular(a, b, Vec3.X);
+        rows[4].angular(a, b, Vec3.UP);
+        rows[5].angular(a, b, Vec3.Z);
+    }
+
+    @Override
+    void directImpulses(double[] lambda, int at) {
+        linear = linear.add(new Vec3((float) lambda[at], (float) lambda[at + 1], (float) lambda[at + 2]));
+        angular = angular.add(new Vec3((float) lambda[at + 3], (float) lambda[at + 4], (float) lambda[at + 5]));
+    }
+
+    @Override
+    boolean directPositionRows(Row[] rows, float[] error) {
+        Vec3 pa = offset(a, localA), pb = offset(b, localB);
+        Vec3 gap = center(b).add(pb).sub(center(a).add(pa));
+        float length = gap.length();
+        if (length > MAX_LINEAR_CORRECTION) gap = gap.mul(MAX_LINEAR_CORRECTION / length);
+        pointRows(rows, 0, a, pa, b, pb);
+        error[0] = gap.x();
+        error[1] = gap.y();
+        error[2] = gap.z();
+        Vec3 turn = rotationError(a, b, relative);
+        float angle = turn.length();
+        if (angle > MAX_ANGULAR_CORRECTION) turn = turn.mul(MAX_ANGULAR_CORRECTION / angle);
+        rows[3].angular(a, b, Vec3.X);
+        rows[4].angular(a, b, Vec3.UP);
+        rows[5].angular(a, b, Vec3.Z);
+        error[3] = turn.x();
+        error[4] = turn.y();
+        error[5] = turn.z();
+        return length <= LINEAR_SLOP && angle <= ANGULAR_SLOP;
+    }
+
+    @Override
     boolean solvePosition() {
+        if (direct) return true;
         float angle = solveRotation(a, b, relative);
         float gap = solvePoint(a, localA, b, localB);
         return gap <= LINEAR_SLOP && angle <= ANGULAR_SLOP;

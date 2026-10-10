@@ -1010,18 +1010,24 @@ public final class RigidBody {
      */
     void nudge(float px, float py, float pz, float tx, float ty, float tz) {
         if (invMass == 0f) return;
-        cx += px * invMass * lx;
-        cy += py * invMass * ly;
-        cz += pz * invMass * lz;
         Mat3 i = invInertiaWorld;
-        float dx = i.xx() * tx + i.xy() * ty + i.xz() * tz;
-        float dy = i.yx() * tx + i.yy() * ty + i.yz() * tz;
-        float dz = i.zx() * tx + i.zy() * ty + i.zz() * tz;
-        if (dx == 0f && dy == 0f && dz == 0f) return;
-        float nx = qx + 0.5f * (dx * qw + dy * qz - dz * qy);
-        float ny = qy + 0.5f * (dy * qw + dz * qx - dx * qz);
-        float nz = qz + 0.5f * (dz * qw + dx * qy - dy * qx);
-        float nw = qw - 0.5f * (dx * qx + dy * qy + dz * qz);
+        shift(px * invMass * lx, py * invMass * ly, pz * invMass * lz,
+                i.xx() * tx + i.xy() * ty + i.xz() * tz, i.yx() * tx + i.yy() * ty + i.yz() * tz, i.zx() * tx + i.zy() * ty + i.zz() * tz);
+    }
+
+    /**
+     * Moves the centre of mass by (dx, dy, dz) and turns the body by the angle-times-axis (ax, ay, az), without
+     * changing its velocity.
+     */
+    void shift(float dx, float dy, float dz, float ax, float ay, float az) {
+        cx += dx;
+        cy += dy;
+        cz += dz;
+        if (ax == 0f && ay == 0f && az == 0f) return;
+        float nx = qx + 0.5f * (ax * qw + ay * qz - az * qy);
+        float ny = qy + 0.5f * (ay * qw + az * qx - ax * qz);
+        float nz = qz + 0.5f * (az * qw + ax * qy - ay * qx);
+        float nw = qw - 0.5f * (ax * qx + ay * qy + az * qz);
         setOrientation(new Quat(nx, ny, nz, nw).normalized());
     }
 

@@ -126,10 +126,9 @@ therefore up to one step behind the bodies, which is invisible; read the body (`
 
 `setSubsteps(4)` runs each fixed step as four steps a quarter as long, each with its own collision detection and solving.
 Bodies then move a quarter as far between two looks at them, which is what a tall stack, a heavy weight on a light
-chain, and a thin stick spinning fast ask for. A stack of twenty boxes with a 200 kg one on top falls over with one
-step and stands with four; a 100 kg weight on six 0.5 kg chain links (200 to 1) stretches the chain by 0.6 m with one
-and by 0.01 m with eight. Try 2 to 4 before raising the solver's passes; it costs about as much more as there are
-substeps. Forces, the step handler and events still work on the whole step, so nothing else in a game changes.
+chain (past about 600 to 1; see [Joints](#joints)), and a thin stick spinning fast ask for. A stack of twenty boxes
+with a 200 kg one on top falls over with one step and stands with four. Try 2 to 4 before raising the solver's passes;
+it costs about as much more as there are substeps. Forces, the step handler and events still work on the whole step, so nothing else in a game changes.
 
 ## Bodies
 
@@ -421,10 +420,15 @@ A motor with a speed of 0 holds the joint still against whatever pushes it, up t
 brake. A spring's frequency is how many times a second it bounces, whatever the masses, and its damping ratio how quickly
 it stops (0 bounces forever, 1 settles without overshooting).
 
-Joined bodies sleep and wake together, like a stack. Keep the masses of joined bodies within about 10 to 1 of each
-other: a heavy weight on a chain of light links stretches it (a little at 40 to 1, half a metre at 200 to 1), and more
-velocity iterations help. Links should also be about as long as the gap they span; a small ball with joints far from it
-acts much lighter at them than its mass.
+Joined bodies sleep and wake together, like a stack. Ball joints, hinges and fixed joints (the "always on" part of
+each: the pivot, the hinge's axis, the weld) are solved exactly, all the joints of a connected tree at once, so a
+chain, a ragdoll or a door on a heavy block doesn't stretch whatever the masses: a 100 kg weight on six 0.5 kg links
+(200 to 1) holds the chain at its length, and the time grows in proportion to the number of joints. Joints that close
+a loop of bodies, sliders, ropes and springs, and the stops and motors of every joint, are solved a pass at a time with
+the contacts, so keep the masses behind those within about 10 to 1 (a stop under an 80 kg load on a 1 kg arm gives a few
+degrees), or use [substeps](#substeps). Past about 600 to 1 even a tree needs them: a taut chain whips faster than a
+step can follow (2 substeps hold 2000 to 1, 4 hold 10000 to 1). Links should also be about as long as the gap they span; a small ball with joints far from it acts much
+lighter at them than its mass.
 
 ## Characters
 
@@ -541,8 +545,9 @@ bodies at the surface and keeps a fast ball from passing through a thin wall, wi
 - A mesh joins its corners only where they are at exactly the same place unless you give it a weld distance
   (`new MeshShape(positions, indices, 0.002f)`, `MeshShape.of(node, 0.002f)`, or the collider's Weld in a scene file);
   a level whose pieces merely nearly meet keeps real edges along the gaps, which a sliding box can catch on, until welded.
-- Joined masses should stay within about 10 to 1 at one step; [substeps](#substeps) take that to 200 to 1 and more. The
-  solver is iterative, not direct: there is no exact solution for a tree of joints.
+- Joints that close a loop of bodies, sliders, ropes and springs, and every joint's stops and motors, are solved a pass
+  at a time with the contacts, so the masses behind them should stay within about 10 to 1 at one step ([substeps](#substeps)
+  take that further). Trees of ball joints, hinges and fixed joints are solved exactly, up to about 600 to 1 in one step.
 - A character isn't turned by a turning platform (it is carried round, facing the same way).
 - Fast spinning bodies are covered by growing the contact margin by how far their far end travels in a step, which is
   right for a stick hitting a wall or floor; a very long thin body spinning so fast that it turns a large angle in one

@@ -376,8 +376,7 @@ class JointTest {
     @Test
     void heavyLoadOnALightChainHolds() {
         assertEquals(3.85f, chainReach(5f), 0.02f);
-        assertEquals(3.85f, chainReach(20f), 0.15f, "40:1 stretches a little");
-        float extreme = chainReach(100f);
-        assertTrue(Float.isFinite(extreme) && extreme < 5f, "200:1 stretches but must hold, reached " + extreme);
+        assertEquals(3.85f, chainReach(20f), 0.02f, "40:1 holds");
+        assertEquals(3.85f, chainReach(100f), 0.03f, "so does 200:1");
     }
 }

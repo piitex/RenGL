@@ -239,6 +239,7 @@ public final class HingeJoint extends Joint {
             upperImpulse = Math.max(old - axialMass * (speed + Math.max(gap, 0f) / dt), 0f);
             applyAxial(old - upperImpulse);
         }
+        if (direct) return;
         Vec3 w = angularVelocity(a, b);
         float c1 = b1.dot(w), c2 = b2.dot(w);
         float l1 = -(k11 * c1 + k12 * c2), l2 = -(k12 * c1 + k22 * c2);
@@ -252,11 +253,52 @@ public final class HingeJoint extends Joint {
     }
 
     @Override
+    int directRows() {
+        return 5;
+    }
+
+    @Override
+    void directVelocityRows(Row[] rows) {
+        pointRows(rows, 0, a, ra, b, rb);
+        rows[3].angular(a, b, b1);
+        rows[4].angular(a, b, b2);
+    }
+
+    @Override
+    void directImpulses(double[] lambda, int at) {
+        pointImpulse = pointImpulse.add(new Vec3((float) lambda[at], (float) lambda[at + 1], (float) lambda[at + 2]));
+        impulse1 += (float) lambda[at + 3];
+        impulse2 += (float) lambda[at + 4];
+    }
+
+    @Override
+    boolean directPositionRows(Row[] rows, float[] error) {
+        Vec3 pa = offset(a, localA), pb = offset(b, localB);
+        Vec3 gap = center(b).add(pb).sub(center(a).add(pa));
+        float length = gap.length();
+        if (length > MAX_LINEAR_CORRECTION) gap = gap.mul(MAX_LINEAR_CORRECTION / length);
+        pointRows(rows, 0, a, pa, b, pb);
+        error[0] = gap.x();
+        error[1] = gap.y();
+        error[2] = gap.z();
+        Vec3 axisOnA = a.getRotation().rotate(axisA), axisOnB = b.getRotation().rotate(axisB);
+        Vec3 drift = axisOnA.cross(axisOnB);
+        float turn = drift.length();
+        if (turn > MAX_ANGULAR_CORRECTION) drift = drift.mul(MAX_ANGULAR_CORRECTION / turn);
+        Vec3[] across = perpendiculars(axisOnA);
+        rows[3].angular(a, b, across[0]);
+        rows[4].angular(a, b, across[1]);
+        error[3] = across[0].dot(drift);
+        error[4] = across[1].dot(drift);
+        return length <= LINEAR_SLOP && turn <= ANGULAR_SLOP;
+    }
+
+    @Override
     boolean solvePosition() {
         // Line the axes up again: B's axis has drifted from A's by about their cross product.
         Vec3 axisOnA = a.getRotation().rotate(axisA), axisOnB = b.getRotation().rotate(axisB);
         Vec3 drift = axisOnA.cross(axisOnB);
-        float angularError = drift.length();
+        float angularError = direct ? 0f : drift.length();
         if (angularError > 1e-7f) {
             Vec3[] across = perpendiculars(axisOnA);
             Mat3 k = angularMass(a, b);
@@ -279,6 +321,7 @@ public final class HingeJoint extends Joint {
                 angularError = Math.max(angularError, Math.abs(c));
             }
         }
+        if (direct) return angularError <= ANGULAR_SLOP;
         float gap = solvePoint(a, localA, b, localB);
         return gap <= LINEAR_SLOP && angularError <= ANGULAR_SLOP;
     }
