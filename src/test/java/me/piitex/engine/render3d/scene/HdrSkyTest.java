@@ -89,4 +89,24 @@ class HdrSkyTest {
         assertSame(sky, scene.getSkybox());
         assertNotNull(scene.preload(sky), "an HDR sky has a picture to upload, unlike a gradient");
     }
+
+    @Test
+    void theSunIsWhereTheBrightestPartIs() {
+        int w = 64, h = 32;
+        float[] rgba = new float[w * h * 4];
+        java.util.Arrays.fill(rgba, 0.2f);
+        // A sun a quarter of the way across, at the horizon: u = 0.75 looks along +X.
+        int sun = (16 * w + 48) * 4;
+        rgba[sun] = rgba[sun + 1] = rgba[sun + 2] = 500f;
+        var d = new HdrTextureData(w, h, rgba).sunDirection();
+        assertEquals(1f, d.x(), 0.1f);
+        assertEquals(0f, d.y(), 0.1f);
+        assertEquals(0f, d.z(), 0.1f);
+        // And in the middle of the picture, high up, it looks along -Z and up.
+        java.util.Arrays.fill(rgba, 0.2f);
+        int high = (4 * w + 32) * 4;
+        rgba[high] = rgba[high + 1] = rgba[high + 2] = 500f;
+        d = new HdrTextureData(w, h, rgba).sunDirection();
+        assertTrue(d.y() > 0.8f && d.z() < -0.3f, d.toString());
+    }
 }

@@ -304,6 +304,9 @@ scene.setExposure(0.8f);
 - The sun still doesn't cast shadows: add a directional light pointing the same way for that. To find which way, note that
   the middle of the panorama looks along -Z, a quarter of the way across (u = 0.75) along +X, and the edges along +Z; the
   top row is straight up. A real 1k photograph, checked on both Vulkan and OpenGL, puts its sun where this says.
+  `HdrTextureData.sunDirection()` finds the brightest spot for you, so
+  `Light.directional(sky.sunDirection().negate(), color, intensity)` lines the light up with the sun in the picture (a
+  directional light's direction is the way it travels). `HdrSkyDemo` does exactly this.
 - Only the Radiance `.hdr` format (RGBE) loads, flat or run-length coded; OpenEXR doesn't.
 - In a [scene file](scene-files.md), choose a panorama whose path ends in `.hdr`.
 - Needs a GPU that can sample 16-bit float textures, which every OpenGL 3.3 and Vulkan device can.
