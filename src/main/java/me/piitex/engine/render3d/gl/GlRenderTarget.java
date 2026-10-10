@@ -13,7 +13,7 @@ import static org.lwjgl.opengl.GL30C.*;
 
 public final class GlRenderTarget implements RenderTarget {
     private final int width, height, samples;
-    private final boolean depth, sampled;
+    private final boolean depth, sampled, hdr;
     private GlTexture texture;
     /**
      * The framebuffer holding the finished picture: the texture. Skia wraps this one.
@@ -28,25 +28,27 @@ public final class GlRenderTarget implements RenderTarget {
     private int depthBuffer, msaaColor;
 
     GlRenderTarget(int width, int height, boolean depth, int samples) {
-        this(width, height, depth, samples, false, true);
+        this(width, height, depth, samples, false, true, false);
     }
 
     /**
-     * @param sampled the picture is read by later passes, so it needs no multisampling and the filter is the caller's
-     *                choice
+     * @param sampled the picture is read by later passes, so the filter is the caller's choice; a multisampled one is
+     *                resolved into the texture when the pass ends
+     * @param hdr     16-bit floating point colour instead of 8-bit
      */
-    GlRenderTarget(int width, int height, boolean depth, int samples, boolean sampled, boolean linear) {
+    GlRenderTarget(int width, int height, boolean depth, int samples, boolean sampled, boolean linear, boolean hdr) {
         this.width = Math.max(1, width);
         this.height = Math.max(1, height);
         this.depth = depth;
-        this.samples = sampled ? 1 : samples;
+        this.samples = samples;
         this.sampled = sampled;
-        samples = this.samples;
+        this.hdr = hdr;
 
         int previous = glGetInteger(GL_FRAMEBUFFER_BINDING);
         colorTexture = glGenTextures();
         glBindTexture(GL_TEXTURE_2D, colorTexture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, this.width, this.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+        glTexImage2D(GL_TEXTURE_2D, 0, hdr ? GL_RGBA16F : GL_RGBA8, this.width, this.height, 0, GL_RGBA,
+                hdr ? GL_FLOAT : GL_UNSIGNED_BYTE, (ByteBuffer) null);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, linear ? GL_LINEAR : GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, linear ? GL_LINEAR : GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -74,7 +76,7 @@ public final class GlRenderTarget implements RenderTarget {
             glBindFramebuffer(GL_FRAMEBUFFER, drawFramebuffer);
             msaaColor = glGenRenderbuffers();
             glBindRenderbuffer(GL_RENDERBUFFER, msaaColor);
-            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, this.width, this.height);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, hdr ? GL_RGBA16F : GL_RGBA8, this.width, this.height);
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, msaaColor);
             if (depth) {
                 glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);

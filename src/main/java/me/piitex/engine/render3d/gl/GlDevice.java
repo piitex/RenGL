@@ -105,8 +105,8 @@ public final class GlDevice implements GpuDevice {
     }
 
     @Override
-    public RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear) {
-        return new GlRenderTarget(width, height, depth, 1, true, linear);
+    public RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear, boolean hdr, int samples) {
+        return new GlRenderTarget(width, height, depth, Math.min(floorPowerOfTwo(Math.max(1, samples)), maxSamples), true, linear, hdr);
     }
 
     @Override

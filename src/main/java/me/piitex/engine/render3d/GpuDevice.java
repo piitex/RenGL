@@ -100,7 +100,20 @@ public interface GpuDevice extends AutoCloseable {
      * @param linear filter the texture linearly when it is read, or take the nearest pixel (what a map of packed
      *               values such as depth needs)
      */
-    RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear);
+    default RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear) {
+        return createSampledTarget(width, height, depth, linear, false, 1);
+    }
+
+    /**
+     * A sampled target (see {@link #createSampledTarget(int, int, boolean, boolean)}) that can hold light brighter than
+     * white, and be multisampled.
+     *
+     * @param hdr     keep 16-bit floating point colour instead of 8-bit, so values above 1 survive until a later pass reads
+     *                them. It cannot be read back with {@link RenderTarget#readPixels()}
+     * @param samples anti-aliasing samples per pixel, as for {@link #createRenderTarget(int, int, boolean, int)}; the
+     *                resolved single-sample picture is what {@link RenderTarget#texture()} reads
+     */
+    RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear, boolean hdr, int samples);
 
     /**
      * The most samples a render target can have on this GPU: at least 1, at most 8.

@@ -167,6 +167,14 @@ class SceneGpuTest {
                 new Scenario("a skin of 400 joints", SceneGpuTest::bigSkin, null, (scene, b, a, px, r) -> bigSkinCheck(a, px, r)),
                 new Scenario("no bloom", () -> lamp(0f), null, (scene, b, a, px, r) -> lampCheck(false, px, r)),
                 new Scenario("bloom", () -> lamp(0.8f), null, (scene, b, a, px, r) -> lampCheck(true, px, r)),
+                new Scenario("bloom of a lamp at white", () -> brightLamp(1f), null, (scene, b, a, px, r) -> brightLampCheck(1f, px, r)),
+                new Scenario("bloom of a lamp at eight times white", () -> brightLamp(8f), null, (scene, b, a, px, r) -> brightLampCheck(8f, px, r)),
+                new Scenario("reinhard tone mapping under bloom", () -> tonedUnderBloom(ToneMapping.REINHARD, 1f), null,
+                        (scene, b, a, px, r) -> toneCheck("reinhard under bloom", px, r, 195, 235)),
+                new Scenario("aces tone mapping under bloom", () -> tonedUnderBloom(ToneMapping.ACES, 1f), null,
+                        (scene, b, a, px, r) -> toneCheck("aces under bloom", px, r, 236, 254)),
+                new Scenario("exposure under bloom", () -> tonedUnderBloom(ToneMapping.NONE, 0.25f), null,
+                        (scene, b, a, px, r) -> toneCheck("exposure under bloom", px, r, 195, 225)),
                 new Scenario("an HDR sky seen", () -> hdrSky(false, true), null, (scene, b, a, px, r) -> hdrSeen(px, r)),
                 new Scenario("an HDR sky with a sun lights a sphere", () -> hdrSky(true, false), null, (scene, b, a, px, r) -> hdrLit(true, px, r)),
                 new Scenario("an HDR sky without a sun lights it less", () -> hdrSky(false, false), null, (scene, b, a, px, r) -> hdrLit(false, px, r)),
@@ -351,7 +359,7 @@ class SceneGpuTest {
      */
     private static Scene3D lamp(float bloom) {
         Scene3D scene = base();
-        scene.setBloom(bloom).setBloomThreshold(0.5f);
+        scene.setBloom(bloom).setBloomThreshold(0.5f).setBloomRadius(6f);
         Node3D lamp = new Node3D("lamp", Mesh.cube(0.6f), new Material(Color.WHITE).setUnlit(true));
         scene.add(lamp);
         scene.camera().lookAt(new Vec3(0, 0, 10), new Vec3(0, 0, 0)).setFovYDegrees(40);
@@ -366,6 +374,44 @@ class SceneGpuTest {
             r.check(name + " (far away it is dark)", far < 30, "far " + far);
             r.check(name, bloom ? near > 60 : near < 30, "just beside the lamp " + near);
         });
+    }
+
+    /**
+     * A lamp that is {@code power} times brighter than white (its surface is black and glows by itself), with a threshold
+     * low enough that all of it glows.
+     */
+    private static Scene3D brightLamp(float power) {
+        Scene3D scene = base();
+        scene.setBloom(0.8f).setBloomThreshold(0.5f).setBloomRadius(6f);
+        Node3D lamp = new Node3D("lamp", Mesh.cube(0.6f), new Material(Color.BLACK).setEmissive(power, power, power));
+        scene.add(lamp);
+        scene.camera().lookAt(new Vec3(0, 0, 10), new Vec3(0, 0, 0)).setFovYDegrees(40);
+        return scene;
+    }
+
+    /**
+     * Light brighter than white keeps its extra brightness until the glow is worked out, so a lamp at eight times white
+     * spreads further than one at white. The shown pixel itself is white for both.
+     */
+    private static void brightLampCheck(float power, Pixels px, GpuHarness.Recorder r) {
+        String name = "bloom of a lamp at " + (int) power + " times white";
+        r.guard(name, () -> {
+            int centre = px.luma(0f, 0f, 0f), near = px.luma(0.55f, 0f, 0f), mid = px.luma(0.8f, 0f, 0f);
+            r.check(name + " (the lamp itself)", centre > 700, "centre " + centre);
+                        if (power <= 1f) {
+                r.check(name + " (a faint glow)", near > 40 && near < 330 && mid < 200, "near " + near + ", mid " + mid);
+            } else {
+                r.check(name + " (a strong, wide glow)", near > 330 && mid > 200, "near " + near + ", mid " + mid);
+            }
+        });
+    }
+
+    /**
+     * The tone mapping scene with bloom on but a threshold so high that nothing glows: the picture must look as it does
+     * without bloom, tone mapped once.
+     */
+    private static Scene3D tonedUnderBloom(ToneMapping mapping, float exposure) {
+        return toned(mapping, exposure).setBloom(0.8f).setBloomThreshold(50f);
     }
 
     // ---- more than 256 joints ----------------------------------------------------------------------------------------

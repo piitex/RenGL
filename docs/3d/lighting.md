@@ -210,15 +210,15 @@ scene.setBloomThreshold(0.8f);   // how bright, as a share of white, a pixel mus
 scene.setBloomRadius(1f);        // how far the glow spreads
 ```
 
-It works on the finished picture, after tone mapping and exposure, so with a tone mapper only real highlights pass the
-threshold. Give a material an [emissive](scenes.md#material) colour above 1 and it glows without any light on it.
+The scene is drawn in linear light into a 16-bit floating point target, so the threshold is judged before tone mapping and
+a lamp eight times brighter than white glows more than one at white. The tone mapper and gamma are applied once, at the
+end, to the picture and its glow together (gradient and cube skies included). Give a material an
+[emissive](scenes.md#material) colour above 1 and it glows without any light on it.
 
 - **Cost:** the scene draws into a target of its own and through a few full-screen passes at half and quarter size: a few
-  percent of the frame and two small textures.
-- **No multisampling while it is on.** The glow has to read the picture, which a multisampled one can't be without a
-  resolve step, so edges are rougher. Raise the viewport's `setResolutionScale` to 1.5 or 2 to smooth them.
-- It is a post effect on the picture, not on light itself: it does not see brightness the tone mapper has already
-  squeezed to white, so a very bright sun and a white wall glow the same.
+  percent of the frame and a few textures. The target is multisampled like the viewport, so edges stay smooth.
+- **The radius is a share of the picture's height**, so the glow looks the same on a high-density display as on a plain
+  one, and in a small viewport as a full-screen one.
 - A radius above about 3 shows the blur's taps as faint copies of the light.
 - In a [scene file](scene-files.md) they are the world's `bloom`, `bloomThreshold` and `bloomRadius`.
 

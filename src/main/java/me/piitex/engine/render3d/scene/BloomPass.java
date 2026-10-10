@@ -17,11 +17,12 @@ import java.nio.ByteOrder;
 /**
  * Bloom: light bleeding out of the brightest parts of the picture, as a bright lamp or a glint does in a camera.
  * <p>
- * The scene is drawn into an offscreen target of its own instead of the one the viewport shows, and then this takes the
- * picture through a few full-screen passes: keep only what is brighter than a threshold, blur that at half the size and
- * again at a quarter of it (a wide soft glow and a tight one), and draw the picture and both glows added together into the
- * viewport's target. The blurs are separable (a row pass, then a column pass), nine taps each. The glow is worked out in
- * linear light and stored with the gamma curve on, so the 8-bit targets keep their dark values.
+ * The scene is drawn into an offscreen target of its own instead of the one the viewport shows, in linear light and in
+ * 16-bit floating point, so a lamp ten times brighter than white is still ten times brighter when this reads it. The
+ * target is multisampled like the viewport's and resolved when the scene is done. Then this takes the picture through a few
+ * full-screen passes: keep only what is brighter than a threshold, blur that at half the size and again at a quarter of it
+ * (a wide soft glow and a tight one), and draw the picture and both glows added together into the viewport's target, tone
+ * mapped and gamma encoded there. The blurs are separable (a row pass, then a column pass), nine taps each.
  * <p>
  * One of these belongs to each render call of a scene (like the buffers the scene fills every frame), so a scene shown by
  * two viewports in a frame doesn't have one overwrite what the other is about to read.
@@ -43,8 +44,6 @@ final class BloomPass {
             };
             layout(set = 0, binding = 1) uniform sampler2D src;
             layout(location = 0) out vec4 outColor;
-            vec3 decode(vec3 c) { return pow(c, vec3(2.2)); }
-            vec3 encode(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)); }
             """;
 
     /**
@@ -53,12 +52,13 @@ final class BloomPass {
      */
     private static final String BRIGHT = HEAD + """
             void main() {
-                vec3 c = decode(texture(src, gl_FragCoord.xy * a.xy).rgb);
+                // Capped so one blinding pixel (a sun, a specular spike) doesn't flood the whole glow.
+                vec3 c = min(texture(src, gl_FragCoord.xy * a.xy).rgb, vec3(64.0));
                 float peak = max(c.r, max(c.g, c.b));
                 float soft = clamp(peak - a.z + a.w, 0.0, 2.0 * a.w);
                 soft = soft * soft / (4.0 * a.w + 1e-5);
                 float keep = max(soft, peak - a.z) / max(peak, 1e-4);
-                outColor = vec4(encode(c * keep), 1.0);
+                outColor = vec4(c * keep, 1.0);
             }
             """;
 
@@ -68,32 +68,34 @@ final class BloomPass {
     private static final String BLUR = HEAD + """
             void main() {
                 vec2 uv = gl_FragCoord.xy * a.xy;
-                vec3 sum = decode(texture(src, uv).rgb) * 0.227027;
-                sum += (decode(texture(src, uv + b.xy).rgb) + decode(texture(src, uv - b.xy).rgb)) * 0.1945946;
-                sum += (decode(texture(src, uv + b.xy * 2.0).rgb) + decode(texture(src, uv - b.xy * 2.0).rgb)) * 0.1216216;
-                sum += (decode(texture(src, uv + b.xy * 3.0).rgb) + decode(texture(src, uv - b.xy * 3.0).rgb)) * 0.054054;
-                sum += (decode(texture(src, uv + b.xy * 4.0).rgb) + decode(texture(src, uv - b.xy * 4.0).rgb)) * 0.016216;
-                outColor = vec4(encode(sum), 1.0);
+                vec3 sum = texture(src, uv).rgb * 0.227027;
+                sum += (texture(src, uv + b.xy).rgb + texture(src, uv - b.xy).rgb) * 0.1945946;
+                sum += (texture(src, uv + b.xy * 2.0).rgb + texture(src, uv - b.xy * 2.0).rgb) * 0.1216216;
+                sum += (texture(src, uv + b.xy * 3.0).rgb + texture(src, uv - b.xy * 3.0).rgb) * 0.054054;
+                sum += (texture(src, uv + b.xy * 4.0).rgb + texture(src, uv - b.xy * 4.0).rgb) * 0.016216;
+                outColor = vec4(sum, 1.0);
             }
             """;
 
     /**
-     * The picture and the two glows added in linear light: a.z is the strength of the glow.
+     * The picture and the two glows added in linear light, then tone mapped like the scene shader does it (the exposure is
+     * already in) and gamma encoded: a.z is the strength of the glow, a.w the tone mapper (see {@code Scene3D#setToneMapping}).
      */
     private static final String COMPOSITE = HEAD.replace("layout(location = 0) out", """
             layout(set = 0, binding = 2) uniform sampler2D wide;
             layout(set = 0, binding = 3) uniform sampler2D tight;
-            layout(location = 0) out""") + """
+            layout(location = 0) out""") + SceneShaders.TONE_MAP + """
             void main() {
                 vec2 uv = gl_FragCoord.xy * a.xy;
-                vec3 c = decode(texture(src, uv).rgb);
-                vec3 glow = decode(texture(wide, uv).rgb) + decode(texture(tight, uv).rgb);
-                outColor = vec4(encode(c + glow * a.z), 1.0);
+                vec3 c = texture(src, uv).rgb;
+                vec3 glow = texture(wide, uv).rgb + texture(tight, uv).rgb;
+                outColor = vec4(pow(max(toneMap(c + glow * a.z, int(a.w + 0.5)), vec3(0.0)), vec3(1.0 / 2.2)), 1.0);
             }
             """;
 
     private static final int UNIFORM_BYTES = 32;
     private static final int PASSES = 7;
+    private static final float REFERENCE_HEIGHT = 1080f;
 
     private final GpuDevice device;
     private final GpuBuffer triangle;
@@ -101,7 +103,7 @@ final class BloomPass {
     private final GpuBuffer[] uniforms = new GpuBuffer[PASSES];
     private final ByteBuffer scratch = MemoryUtil.memAlloc(UNIFORM_BYTES).order(ByteOrder.nativeOrder());
     private RenderTarget scene, half1, half2, quarter1, quarter2;
-    private int width, height;
+    private int width, height, samples;
 
     BloomPass(GpuDevice device, GpuBuffer fullScreenTriangle) {
         this.device = device;
@@ -114,22 +116,23 @@ final class BloomPass {
     }
 
     /**
-     * The target the scene is drawn into, the size of the one it will be shown in. It has no multisampling: the picture is
-     * read back by shaders, and an anti-aliased one would have to be resolved first. A viewport's resolution scale above 1
-     * (see {@code Viewport3D#setResolutionScale}) smooths the edges again.
+     * The target the scene is drawn into, the size of the one it will be shown in, with floating point colour and the
+     * same multisampling (the GPU's limit permitting). Its picture, resolved to one sample per pixel, is what the later
+     * passes read.
      */
-    RenderTarget sceneTarget(int width, int height) {
-        if (scene == null || this.width != width || this.height != height) {
+    RenderTarget sceneTarget(int width, int height, int samples) {
+        if (scene == null || this.width != width || this.height != height || this.samples != samples) {
             closeTargets();
             this.width = width;
             this.height = height;
-            scene = device.createSampledTarget(width, height, true, true);
+            this.samples = samples;
+            scene = device.createSampledTarget(width, height, true, true, true, samples);
             int hw = Math.max(1, (width + 1) / 2), hh = Math.max(1, (height + 1) / 2);
             int qw = Math.max(1, (hw + 1) / 2), qh = Math.max(1, (hh + 1) / 2);
-            half1 = device.createSampledTarget(hw, hh, false, true);
-            half2 = device.createSampledTarget(hw, hh, false, true);
-            quarter1 = device.createSampledTarget(qw, qh, false, true);
-            quarter2 = device.createSampledTarget(qw, qh, false, true);
+            half1 = device.createSampledTarget(hw, hh, false, true, true, 1);
+            half2 = device.createSampledTarget(hw, hh, false, true, true, 1);
+            quarter1 = device.createSampledTarget(qw, qh, false, true, true, 1);
+            quarter2 = device.createSampledTarget(qw, qh, false, true, true, 1);
         }
         return scene;
     }
@@ -137,22 +140,25 @@ final class BloomPass {
     /**
      * Turns the scene target's picture into the shown picture with its glow.
      *
-     * @param threshold how bright, in linear light, a pixel has to be to glow (1 is white)
-     * @param radius    how far the glow spreads, 1 for the usual
+     * @param threshold how bright, in linear light before tone mapping, a pixel has to be to glow (1 is white)
+     * @param radius    how far the glow spreads, 1 for the usual (the same share of the picture at any resolution)
+     * @param toneMap   the scene's tone mapper, by its number in the shader
      */
-    void apply(RenderTarget output, float strength, float threshold, float radius) {
+    void apply(RenderTarget output, float strength, float threshold, float radius, int toneMap) {
         int pass = 0;
         float shoulder = 0.5f * Math.max(threshold, 0.05f);
         // Bright parts, at half size.
         fullScreen(half1, bright, uniforms[pass++], 1f / half1.width(), 1f / half1.height(), threshold, shoulder, 0f, 0f, scene.texture(), null, null);
         // A soft glow at half size, then a wide one at a quarter.
-        float step = radius;
+        // The spread is a share of the picture's height, not a count of pixels: the same glow on a high-density display
+        // as on a plain one, and in a small viewport as in a full-screen one. A 1080 pixel high picture has a step of one texel.
+        float step = radius * Math.clamp(output.height() / REFERENCE_HEIGHT, 0.1f, 4f);
         fullScreen(half2, blur, uniforms[pass++], 1f / half2.width(), 1f / half2.height(), 0f, 0f, step / half1.width(), 0f, half1.texture(), null, null);
         fullScreen(half1, blur, uniforms[pass++], 1f / half1.width(), 1f / half1.height(), 0f, 0f, 0f, step / half2.height(), half2.texture(), null, null);
-        fullScreen(quarter2, blur, uniforms[pass++], 1f / quarter2.width(), 1f / quarter2.height(), 0f, 0f, 2f * step / half1.width(), 0f, half1.texture(), null, null);
-        fullScreen(quarter1, blur, uniforms[pass++], 1f / quarter1.width(), 1f / quarter1.height(), 0f, 0f, 0f, 2f * step / quarter2.height(), quarter2.texture(), null, null);
+        fullScreen(quarter2, blur, uniforms[pass++], 1f / quarter2.width(), 1f / quarter2.height(), 0f, 0f, step / quarter2.width(), 0f, half1.texture(), null, null);
+        fullScreen(quarter1, blur, uniforms[pass++], 1f / quarter1.width(), 1f / quarter1.height(), 0f, 0f, 0f, step / quarter2.height(), quarter2.texture(), null, null);
         // And the picture with both glows added.
-        fullScreen(output, composite, uniforms[pass++], 1f / output.width(), 1f / output.height(), strength, 0f, 0f, 0f, scene.texture(), half1.texture(), quarter1.texture());
+        fullScreen(output, composite, uniforms[pass++], 1f / output.width(), 1f / output.height(), strength, toneMap, 0f, 0f, scene.texture(), half1.texture(), quarter1.texture());
     }
 
     private void fullScreen(RenderTarget into, Pipeline pipeline, GpuBuffer uniform, float invWidth, float invHeight, float c, float d,

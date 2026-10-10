@@ -332,12 +332,13 @@ public class Scene3D implements Viewport3D.Content {
     /**
      * How much light bleeds out of the brightest parts of the picture (0, off, by default): a glow round a lamp, a glint on
      * metal, the sun in a window. Try 0.3 to 1. Everything brighter than the {@link #setBloomThreshold threshold} glows,
-     * after tone mapping and exposure, so with an ACES tone mapper only real highlights do.
+     * judged in linear light after exposure and before tone mapping, so a lamp eight times brighter than white glows
+     * more than one at white.
      * <p>
-     * Bloom draws the scene into a target of its own and then through a few full-screen passes, which costs a few percent of
-     * the frame and two small textures; and the scene is no longer multisampled (the glow needs to read the picture, which
-     * a multisampled one can't be without a resolve step), so edges are rougher: raise the viewport's
-     * {@code setResolutionScale} to 1.5 or 2 to smooth them again.
+     * Bloom draws the scene in 16-bit floating point into a target of its own (multisampled like the viewport, so edges
+     * stay smooth) and then through a few full-screen passes, which costs a few percent of the frame and a few textures.
+     * The tone mapper and gamma are applied once, at the end, to the picture and its glow together; that includes
+     * gradient and cube skies, which are tone mapped under bloom like everything else.
      */
     public Scene3D setBloom(float strength) {
         this.bloom = Math.max(0f, strength);
@@ -349,8 +350,8 @@ public class Scene3D implements Viewport3D.Content {
     }
 
     /**
-     * How bright, as a share of white, a pixel has to be before it glows (0.8 by default; 1 is white, and only things the
-     * tone mapper leaves at full white glow).
+     * How bright, as a share of white in linear light before tone mapping, a pixel has to be before it glows (0.8 by
+     * default; 1 is white, and only things brighter than that glow).
      */
     public Scene3D setBloomThreshold(float threshold) {
         this.bloomThreshold = Math.max(0f, threshold);
@@ -362,8 +363,9 @@ public class Scene3D implements Viewport3D.Content {
     }
 
     /**
-     * How far the glow spreads, 1 by default; 2 is about twice as wide, 0.5 half. A wide glow of more than about 3 shows
-     * its taps as faint copies of the light.
+     * How far the glow spreads, 1 by default; 2 is about twice as wide, 0.5 half. It is a share of the picture's height, so
+     * the glow looks the same at any resolution or display density (1 is a few pixels' blur on a 1080 pixel high picture).
+     * A wide glow of more than about 3 shows its taps as faint copies of the light.
      */
     public Scene3D setBloomRadius(float radius) {
         this.bloomRadius = Math.clamp(radius, 0.1f, 8f);

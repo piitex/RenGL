@@ -26,7 +26,7 @@ final class VkPass implements RenderPass {
     VkPass(VkGpuDevice device, VkTarget target, float r, float g, float b, float a) {
         this.device = device;
         this.target = target;
-        this.renderPass = device.renderPass(target.hasDepth(), target.samples(), target.sampled());
+        this.renderPass = device.renderPass(target.hasDepth(), target.samples(), target.sampled(), target.hdr());
         cmd = device.allocateFrameCommandBuffer();
         try (MemoryStack stack = stackPush()) {
             VkGpuDevice.check(vkBeginCommandBuffer(cmd, VkCommandBufferBeginInfo.calloc(stack).sType$Default()

@@ -23,7 +23,8 @@ public final class VkTarget implements RenderTarget {
 
     private final VkGpuDevice device;
     private final int width, height, samples;
-    private final boolean depth, sampled;
+    private final boolean depth, sampled, hdr;
+    private final int colorFormat;
     private final long sampler;
     private VkTex texture;
     /**
@@ -40,23 +41,25 @@ public final class VkTarget implements RenderTarget {
      * @param sampled the colour is read by shaders in later passes: the pass leaves it in the layout they read and the
      *                target is single-sample
      * @param linear  with {@code sampled}, how the texture is filtered
+     * @param hdr     16-bit floating point colour instead of 8-bit
      */
-    VkTarget(VkGpuDevice device, int width, int height, boolean depth, int samples, boolean sampled, boolean linear) {
+    VkTarget(VkGpuDevice device, int width, int height, boolean depth, int samples, boolean sampled, boolean linear, boolean hdr) {
         this.device = device;
         this.width = Math.max(1, width);
         this.height = Math.max(1, height);
         this.depth = depth;
-        this.samples = sampled ? 1 : samples;
+        this.samples = samples;
         this.sampled = sampled;
+        this.hdr = hdr;
+        this.colorFormat = hdr ? VkGpuDevice.HDR_FORMAT : VkGpuDevice.COLOR_FORMAT;
         this.sampler = linear ? device.clampLinearSampler : device.clampNearestSampler;
-        samples = this.samples;
 
-        color = device.createImage(this.width, this.height, VkGpuDevice.COLOR_FORMAT, COLOR_USAGE);
-        colorView = device.createImageView(color.handle(), VkGpuDevice.COLOR_FORMAT, VK_IMAGE_ASPECT_COLOR_BIT);
+        color = device.createImage(this.width, this.height, colorFormat, COLOR_USAGE);
+        colorView = device.createImageView(color.handle(), colorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
         if (samples > 1) {
-            msaaColor = device.createImage(this.width, this.height, VkGpuDevice.COLOR_FORMAT,
+            msaaColor = device.createImage(this.width, this.height, colorFormat,
                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 1, samples);
-            msaaColorView = device.createImageView(msaaColor.handle(), VkGpuDevice.COLOR_FORMAT, VK_IMAGE_ASPECT_COLOR_BIT);
+            msaaColorView = device.createImageView(msaaColor.handle(), colorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
         } else {
             msaaColor = null;
             msaaColorView = VK_NULL_HANDLE;
@@ -77,7 +80,7 @@ public final class VkTarget implements RenderTarget {
             if (depth) attachments.put(depthView);
             attachments.flip();
             VkFramebufferCreateInfo info = VkFramebufferCreateInfo.calloc(stack).sType$Default()
-                    .renderPass(device.renderPass(depth, samples, sampled)).pAttachments(attachments)
+                    .renderPass(device.renderPass(depth, samples, sampled, hdr)).pAttachments(attachments)
                     .width(this.width).height(this.height).layers(1);
             LongBuffer out = stack.mallocLong(1);
             VkGpuDevice.check(vkCreateFramebuffer(device.device, info, null, out), "create a framebuffer");
@@ -87,6 +90,10 @@ public final class VkTarget implements RenderTarget {
 
     boolean sampled() {
         return sampled;
+    }
+
+    boolean hdr() {
+        return hdr;
     }
 
     /**
@@ -114,7 +121,7 @@ public final class VkTarget implements RenderTarget {
     }
 
     public int format() {
-        return VkGpuDevice.COLOR_FORMAT;
+        return colorFormat;
     }
 
     public int imageUsage() {
@@ -160,6 +167,7 @@ public final class VkTarget implements RenderTarget {
 
     @Override
     public ByteBuffer readPixels() {
+        if (hdr) throw new UnsupportedOperationException("A floating point target can not be read back as 8-bit pixels");
         long bytes = (long) width * height * 4;
         VkGpuDevice.Alloc staging = device.createBuffer(bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
