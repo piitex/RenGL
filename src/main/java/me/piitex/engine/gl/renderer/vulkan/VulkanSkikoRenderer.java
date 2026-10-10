@@ -30,6 +30,8 @@ public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
     private BackendRenderTarget renderTarget;
     private Surface surface;
     private boolean imageAcquired;
+    /** Skia read this frame back (the dump aid), which leaves the image as a transfer source. */
+    private boolean readBack;
     private boolean reportedSurfaceFailure;
     private final java.util.List<Runnable> disposeListeners = new java.util.ArrayList<>();
     private boolean disposed;
@@ -185,9 +187,13 @@ public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
         if (frameValid) {
             canvas.restore();
             directContext.flushAndSubmit(surface, false);
-            if (DUMP_PATH != null && ++framesDrawn == DUMP_AFTER_FRAMES) dumpFrame();
+            if (DUMP_PATH != null && ++framesDrawn == DUMP_AFTER_FRAMES) {
+                dumpFrame();
+                readBack = true;
+            }
         }
-        vulkan.endFrame();
+        vulkan.endFrame(readBack);
+        readBack = false;
 
         if (surface != null) surface.close();
         if (renderTarget != null) renderTarget.close();

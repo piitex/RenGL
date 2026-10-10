@@ -76,7 +76,7 @@ System properties for the Vulkan backend:
 |---|---|
 | `rengl.vulkan.validation=true` | Turns on the Khronos validation layer. On macOS also pass `-Dorg.lwjgl.vulkan.libname=/usr/local/lib/libvulkan.1.dylib`, because LWJGL otherwise loads MoltenVK directly and layers can't attach. If the layer is missing the engine logs that and carries on |
 | `rengl.vulkan.gpu=<text>` | Picks the GPU whose name contains the text, instead of the engine's choice |
-| `rengl.vulkan.dump=<file.png>` | Writes one frame (frame 90), read back from the GPU. It makes the validation layer report one image-layout warning afterwards, which is only the dump's doing |
+| `rengl.vulkan.dump=<file.png>` | Writes one frame (frame 90), read back from the GPU. |
 | `rengl.vulkan.mvkLog=true` | Brings back MoltenVK's own logging, see below |
 
 On macOS the engine tells MoltenVK to log only errors, because Skia's pipelines make it print a harmless "Metal does
