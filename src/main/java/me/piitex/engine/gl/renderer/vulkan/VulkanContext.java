@@ -315,12 +315,29 @@ public final class VulkanContext implements AutoCloseable {
      * Presents the image of the current frame. Call after Skia's work for the frame has been submitted.
      */
     public void endFrame() {
+        endFrame(false);
+    }
+
+    /**
+     * Presents the image of the current frame.
+     *
+     * @param readBack Skia read the picture back to the CPU this frame, which leaves the image as a transfer source
+     *                 instead of a colour attachment
+     */
+    public void endFrame(boolean readBack) {
         try (MemoryStack stack = stackPush()) {
             VkCommandBuffer cmd = postBuffers[slot];
-            record(stack, cmd, images[imageIndex],
-                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0);
+            if (readBack) {
+                record(stack, cmd, images[imageIndex],
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                        0, 0);
+            } else {
+                record(stack, cmd, images[imageIndex],
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0);
+            }
             VkSubmitInfo submit = VkSubmitInfo.calloc(stack).sType$Default()
                     .pCommandBuffers(stack.pointers(cmd))
                     .pSignalSemaphores(stack.longs(renderFinished[imageIndex]));

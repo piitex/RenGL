@@ -149,10 +149,10 @@ Run it with `-XstartOnFirstThread` on macOS. `-Drengl.demo.api=VULKAN|OPENGL` ov
 
 | Check | Result |
 |---|---|
-| Vulkan UI on macOS (Apple M5, MoltenVK) | Works. Validation layer clean apart from one layout warning that only the `rengl.vulkan.dump` debug aid causes. |
+| Vulkan UI on macOS (Apple M5, MoltenVK) | Works. Validation layer clean, with the `rengl.vulkan.dump` aid on too. |
 | 3D on Vulkan, real engine window | Two viewports sharing a device, UI over and behind, rounded corners, resize, second-window close. Clean. |
 | 3D on GL 3.3 (macOS harness with `-Dskiko.macos.opengl.enabled=true`) | Visually identical to Vulkan, upright, Skia draws fine after the 3D pass. |
-| `Background3DDemo` on Vulkan | A frame dump shows the 3D filling the window with the UI over it. The same validation layout error as the dump aid appears once after frame 90. Input forwarding was tested without a window by feeding the engine's `Input` press, move, wheel and key events: it produced hover, drag start, drag, wheel, drag end and key events as designed. Real mouse clicks were not driven. |
+| `Background3DDemo` on Vulkan | A frame dump shows the 3D filling the window with the UI over it. Input forwarding was tested without a window by feeding the engine's `Input` press, move, wheel and key events: it produced hover, drag start, drag, wheel, drag end and key events as designed. Real mouse clicks were not driven. |
 | `Scene3DDemo` | Default scene dumped as a frame on Vulkan and checked by eye. The file dialog, sliders, check boxes, drag and scroll were **not** driven. Not run on GL. |
 | Update handler once per frame, `setContinuous(false)` | Vulkan, validation layer on: two viewports sharing a scene ran the handler 120 times in 2 s at 60 fps (once per frame); a non-continuous viewport drew 0 times while idle and once after `requestRender()`, and its picture stayed on screen. No validation errors. Not run on GL, and the input-triggered redraw path was not driven with a real mouse |
 | Picking | 22 headless checks (no GPU): cube and scaled+rotated box distances against a brute-force march, culled and double-sided from inside, a mirrored node, a sphere under a scaled parent, `setPickable`, visibility, `pickAll` order, `screenRay` at the centre and edges, the far clip, `Mat4.inverse`. Plus, on a real window, picking at each object's projected centre hit that object and the rendered pixel there had its colour |
@@ -183,7 +183,7 @@ Useful switches: `-Drengl.vulkan.validation=true` (with `-Dorg.lwjgl.vulkan.libn
    draws that share a material merge.
 5. 32-bit indices only, 16 vertex attributes at most, no push constants.
 6. A `Viewport3D` and a `Background3D` re-render every frame by default. `setContinuous(false)` draws only on request, but the content must call `requestRender()` after changing a scene from code (input to the listener counts as a request). An animation player advances only when the viewport draws.
-7. The `rengl.vulkan.dump` aid causes one validation layout warning. This is cosmetic.
+7. Fixed: the `rengl.vulkan.dump` aid left the swapchain image as a transfer source, which the closing barrier didn't expect, so the validation layer reported a layout error. The barrier now starts from the layout the image is in.
 8. Found and fixed in this stage: `TextureData.decode` copied the decoded pixels with a relative `ByteBuffer.get`, which moved the buffer position, so `stbi_image_free` (which frees `address + position`) freed the wrong pointer and corrupted LWJGL's heap. Any model with embedded textures, or a few images in a row, crashed the JVM. Absolute `get(0, bytes)` fixes it. Window icons were not affected.
 9. Found and fixed in this stage: a scene shown by two viewports wrote its frame uniform data twice in one frame into the same buffer, so the first viewport could draw with the second's projection. The scene renderer now keeps a resource set per render call within a frame.
 
