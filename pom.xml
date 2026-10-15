@@ -12,6 +12,8 @@
         <lwjgl.version>3.4.3</lwjgl.version>
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
+        <!-- The sources are UTF-8. Without this, a build whose default charset is not UTF-8 (a Windows console on code page 437 or 1252, for one) misreads them. -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Skiko 0.154.0 is the first release with Vulkan support. It is published to the Compose dev repository below, not Maven Central. -->
         <skiko.version>0.154.0</skiko.version>
         <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
