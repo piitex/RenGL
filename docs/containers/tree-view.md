@@ -240,9 +240,7 @@ tree.setTextColor(Color.WHITE); tree.setDimTextColor(Color.GRAY); tree.setSelect
 tree.dispose(); // frees the font
 ```
 
-## Gotchas
-
-- `onMouseClick` on the tree is safe to use: the tree's own right-click row selection runs first, then your handler.
+## Limits
 - A row's text that reaches the tree's right edge ends with an ellipsis (`setEllipsize(false)` cuts it instead); the tree does not scroll sideways.
 - Multi-select is off by default, so a tree that reads `getSelected()` behaves as before. A context menu that acts on
   `getSelected()` should read `getSelectedItems()` once multi-select is on.
