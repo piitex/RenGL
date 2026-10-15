@@ -459,16 +459,20 @@ public final class VulkanContext implements AutoCloseable {
         return new VkInstance(pInstance.get(0), info);
     }
 
-    // The extension and layer lists can run to hundreds of entries, more than fits in the shared 64 KB stack, so each
-    // query gets its own frame.
+    // The extension and layer lists can run to hundreds of entries, more than fits in the shared 64 KB stack (NVIDIA's
+    // Windows driver lists enough device extensions to overflow it by itself), so the lists are heap buffers.
     private static Set<String> instanceExtensions() {
         Set<String> names = new HashSet<>();
         try (MemoryStack stack = stackPush()) {
             IntBuffer count = stack.mallocInt(1);
             vkEnumerateInstanceExtensionProperties((ByteBuffer) null, count, null);
-            VkExtensionProperties.Buffer props = VkExtensionProperties.malloc(count.get(0), stack);
-            vkEnumerateInstanceExtensionProperties((ByteBuffer) null, count, props);
-            for (VkExtensionProperties p : props) names.add(p.extensionNameString());
+            VkExtensionProperties.Buffer props = VkExtensionProperties.malloc(count.get(0));
+            try {
+                vkEnumerateInstanceExtensionProperties((ByteBuffer) null, count, props);
+                for (VkExtensionProperties p : props) names.add(p.extensionNameString());
+            } finally {
+                props.free();
+            }
         }
         return names;
     }
@@ -478,9 +482,13 @@ public final class VulkanContext implements AutoCloseable {
         try (MemoryStack stack = stackPush()) {
             IntBuffer count = stack.mallocInt(1);
             vkEnumerateDeviceExtensionProperties(device, (ByteBuffer) null, count, null);
-            VkExtensionProperties.Buffer props = VkExtensionProperties.malloc(count.get(0), stack);
-            vkEnumerateDeviceExtensionProperties(device, (ByteBuffer) null, count, props);
-            for (VkExtensionProperties p : props) names.add(p.extensionNameString());
+            VkExtensionProperties.Buffer props = VkExtensionProperties.malloc(count.get(0));
+            try {
+                vkEnumerateDeviceExtensionProperties(device, (ByteBuffer) null, count, props);
+                for (VkExtensionProperties p : props) names.add(p.extensionNameString());
+            } finally {
+                props.free();
+            }
         }
         return names;
     }
@@ -489,10 +497,14 @@ public final class VulkanContext implements AutoCloseable {
         try (MemoryStack stack = stackPush()) {
             IntBuffer count = stack.mallocInt(1);
             vkEnumerateInstanceLayerProperties(count, null);
-            VkLayerProperties.Buffer layers = VkLayerProperties.malloc(count.get(0), stack);
-            vkEnumerateInstanceLayerProperties(count, layers);
-            for (VkLayerProperties layer : layers) {
-                if (name.equals(layer.layerNameString())) return true;
+            VkLayerProperties.Buffer layers = VkLayerProperties.malloc(count.get(0));
+            try {
+                vkEnumerateInstanceLayerProperties(count, layers);
+                for (VkLayerProperties layer : layers) {
+                    if (name.equals(layer.layerNameString())) return true;
+                }
+            } finally {
+                layers.free();
             }
         }
         return false;
