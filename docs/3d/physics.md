@@ -107,6 +107,7 @@ want crates you can push around easily, give them a smaller mass: what matters f
 | `setStepHandler(StepHandler)` | Runs before every step: the place for forces that act over time |
 | `setVelocityIterations(int)` / `setPositionIterations(int)` | How hard the solver works (10 and 4). 10 holds a stack of ten boxes; 20 holds fifteen. Joints get twice the position passes |
 | `setSubsteps(int)` | Cuts each step into smaller ones (1; up to 32), [below](#substeps) |
+| `setSolverThreads(int)` | Extra threads for collision tests and for solving separate piles of bodies (up to 7, fewer on a smaller CPU; 0 keeps everything on the calling thread). The result is identical whatever the number. Many scattered bodies scale with the cores; one big heap still solves on one thread |
 | `setSleeping(boolean)` | Whether resting bodies may fall asleep (on) |
 | `addJoint(Joint)` / `removeJoint(Joint)` / `joints()` | The [joints](#joints). Add the bodies first |
 | `addCharacter(CharacterController)` / `removeCharacter(...)` / `characters()` | The [characters](#characters) |
