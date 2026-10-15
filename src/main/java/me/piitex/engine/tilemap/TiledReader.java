@@ -104,7 +104,7 @@ final class TiledReader {
         }
         try {
             int start = 0;
-            while (start < text.length() && (Character.isWhitespace(text.charAt(start)) || text.charAt(start) == '﻿')) start++;
+            while (start < text.length() && (Character.isWhitespace(text.charAt(start)) || text.charAt(start) == '\uFEFF')) start++;
             if (start < text.length() && text.charAt(start) == '<') return TmxConverter.convert(text.substring(start));
             if (Json.parse(text.substring(start)) instanceof Map<?, ?> json) return cast(json);
             throw new IllegalArgumentException("not a Tiled file: expected a JSON object or XML");
