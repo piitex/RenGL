@@ -1,0 +1,74 @@
+# LineChartOverlay
+
+[Documentation](../README.md) › [Charts](README.md)
+
+`me.piitex.engine.ui.charts.LineChartOverlay` draws each series as a line through its values, over category labels and a
+value axis with round-number ticks. Read [Charts](README.md) first for the data, legend, colors, formats and
+interaction every chart shares.
+
+```java
+LineChartOverlay chart = new LineChartOverlay(640, 360);
+chart.setTitle("Visitors per day");
+chart.setCategories("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun");
+chart.addSeries("Web", 120, 180, 150, 240, 210, 300, 260);
+chart.addSeries("App", 80, 95, 140, 130, 190, 170, 220);
+layout.addElement(chart);
+```
+
+## The value axis
+
+The axis fits the data and rounds its ends to numbers a person would pick: data from 3.2 to 47.9 gets an axis of 0 to 50
+in tens. Unlike a bar chart, a line chart does not have to include zero, so a price that moves between 112 and 118 is
+drawn across the whole height. It re-fits, with an ease, whenever the data or the visible series change.
+
+```java
+chart.setBeginAtZero(true);       // always include zero
+chart.setValueRange(0, 100);      // fix both ends...
+chart.setValueMax(100);           // ...or only one (NaN goes back to fitting)
+chart.setShowGrid(false);         // no lines across the plot
+chart.setValueAxisTitle("Visitors");      // written beside the axis, turned
+chart.setCategoryAxisTitle("Day");        // written under it
+```
+
+The labels along the bottom are thinned out when they would overlap.
+
+## Look
+
+```java
+chart.setSmooth(true);        // curves instead of straight segments
+chart.setFillArea(true);      // a faint wash under each line
+chart.setShowMarkers(false);  // a dot on each value is the default
+chart.setLineWidth(3f);       // default 2.5
+```
+
+`setSmooth` uses a monotone curve: between two points it never swings above the higher one or below the lower one, so
+the curve never shows a peak that is not in the data.
+
+A **gap** (`NaN`) breaks the line. A value with a gap on each side is drawn as its marker alone, so with markers off it does not show.
+
+```java
+chart.addSeries("API", 40, 60, 55, 90, 85, Double.NaN, 120);
+```
+
+## Pointing and clicking
+
+Pointing at the chart draws a guide line at the nearest category with a larger dot on each series there, and a tooltip
+that lists every visible series' value. A click reports the series closest to the pointer at that category, through
+[`onPointClick`](README.md#interaction).
+
+## Method reference
+
+| Method | Description |
+|---|---|
+| `LineChartOverlay(double width, double height)` | |
+| `isSmooth()` / `setSmooth(boolean)` | Curved lines |
+| `isFillArea()` / `setFillArea(boolean)` | Fill between each line and the zero line |
+| `isShowMarkers()` / `setShowMarkers(boolean)` | A dot on each value |
+| `getLineWidth()` / `setLineWidth(float)` | Line thickness in points |
+| `addSeries(...)`, `getSeries(...)`, `removeSeries`, `clearSeries` | [Series](README.md#data) |
+| `setBeginAtZero(boolean)` / `setValueMin(double)` / `setValueMax(double)` / `setValueRange(double, double)` | The value axis' range |
+| `getAxisRange()` | The range drawn this frame, as `{min, max}` |
+| `setShowGrid(boolean)` | Grid lines at each tick |
+| `setValueAxisTitle(String)` / `setCategoryAxisTitle(String)` | Axis titles |
+
+Everything in [Charts](README.md) (title, categories, legend, palette, formats, animation) applies too.

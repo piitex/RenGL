@@ -56,6 +56,7 @@ public class Hello {
 | | |
 |---|---|
 | **UI toolkit** | Text, text fields and areas, a rich text editor with offline spell checking, buttons, sliders, dropdowns, color and date pickers, trees, tabs, menus, tooltips, modals, scroll and split containers, and more. [Every widget](docs/overlays/README.md) has its own page. |
+| **Charts** | Line, bar, pie and donut [charts](docs/charts/README.md) drawn by the engine: live data that eases into place, tooltips, a legend that hides series, and the theme's colors. |
 | **Layouts** | Vertical, horizontal, grid, stack, flow and dock layouts, with relative sizing and weights. A screen can also be loaded from JSON. |
 | **Resizable and draggable containers** | Containers that follow the window, scale their contents and fonts, and can be dragged or resized by the user. |
 | **Styling** | Backgrounds, borders, gradients, animated paints, themes, custom fonts, SVG icons, and animated backgrounds behind elements. |
