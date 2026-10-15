@@ -6,11 +6,17 @@ import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Moves {@link RigidBody rigid bodies}: gravity, forces, spin and inertia. Give it to a scene and it runs once per
@@ -75,6 +81,17 @@ public final class PhysicsWorld {
     private int substeps = 1;
     private boolean sleeping = true;
     private int[] islands = new int[0];
+    private int solverThreads = Math.min(SolverThreads.MAX, 7);
+
+    /**
+     * Fewer contacts than this are solved on one thread: handing them out would cost more than it saves.
+     */
+    private static final int PARALLEL_MIN_CONTACTS = 256;
+
+    /**
+     * The narrow phase is handed out in blocks of this many pairs, and not at all for fewer than the minimum.
+     */
+    private static final int PAIRS_PER_BLOCK = 4, PARALLEL_MIN_PAIRS = 16;
 
     /**
      * How slow a body has to be, in metres (and radians) per second, and for how long, before it may sleep.
@@ -438,6 +455,21 @@ public final class PhysicsWorld {
         return this;
     }
 
+    public int getSolverThreads() {
+        return solverThreads;
+    }
+
+    /**
+     * How many extra threads solve contacts (up to 7 by default, fewer on a machine with fewer cores; 0 keeps it all on
+     * the calling thread). Separate piles of bodies are solved at the same time, so a scene of many small piles
+     * scales with the cores and one big heap does not. The result is the same whatever the number: islands share
+     * nothing, so threads only change how long a step takes.
+     */
+    public PhysicsWorld setSolverThreads(int threads) {
+        this.solverThreads = Math.clamp(threads, 0, SolverThreads.MAX);
+        return this;
+    }
+
     public boolean isSleeping() {
         return sleeping;
     }
@@ -549,18 +581,12 @@ public final class PhysicsWorld {
         for (Contact contact : contacts) if (ContactSolver.active(contact)) solving.add(contact);
         List<Joint> holding = new ArrayList<>(joints.size());
         for (Joint joint : joints) if (joint.active()) holding.add(joint);
-        ContactSolver.prepare(solving, dt);
-        jointTree.build(holding);
-        for (Joint joint : holding) joint.prepare(dt);
-        jointTree.prepare();
-        // Joints first, so the contacts have the last word and joined bodies don't get pulled into the ground.
-        for (int i = 0; i < velocityIterations; i++) {
-            for (Joint joint : holding) joint.solveVelocity();
-            jointTree.solveVelocity();
-            ContactSolver.solveVelocities(solving, dt, i % 2 == 1);
+        List<List<Contact>> bins = solverThreads > 0 && solving.size() >= PARALLEL_MIN_CONTACTS ? splitIslands(solving, holding) : null;
+        if (bins == null) {
+            solveJoined(solving, holding, dt);
+        } else {
+            solveSplit(bins, holding, dt);
         }
-        ContactSolver.applyRestitution(solving, dt);
-        for (int i = 0; i < positionIterations; i++) ContactSolver.solvePositions(solving, dt, i % 2 == 1);
         List<Joint> broken = null;
         for (Joint joint : holding) {
             if (!joint.checkBreak()) continue;
@@ -587,6 +613,137 @@ public final class PhysicsWorld {
         }
         if (last) for (RigidBody body : bodies) if (!body.settled()) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries
         return broken;
+    }
+
+    /**
+     * The velocity and position solve with joints and contacts together, on this thread. Joints go first in each pass,
+     * so the contacts have the last word and joined bodies don't get pulled into the ground.
+     */
+    private void solveJoined(List<Contact> solving, List<Joint> holding, float dt) {
+        ContactSolver.prepare(solving, dt);
+        jointTree.build(holding);
+        for (Joint joint : holding) joint.prepare(dt);
+        jointTree.prepare();
+        for (int i = 0; i < velocityIterations; i++) {
+            for (Joint joint : holding) joint.solveVelocity();
+            jointTree.solveVelocity();
+            ContactSolver.solveVelocities(solving, dt, i % 2 == 1);
+        }
+        ContactSolver.applyRestitution(solving, dt);
+        for (int i = 0; i < positionIterations; i++) ContactSolver.solvePositions(solving, dt, i % 2 == 1);
+    }
+
+    /**
+     * Cuts the contacts into piles of islands that can be solved at the same time, or returns null when that isn't
+     * worth it. Islands are the groups of touching bodies {@link #updateSleep} found; two of them share no body that
+     * the solver changes, so each gives the same result whichever thread runs it. An island with a joint stays on this
+     * thread with the joint tree (the first list); the rest are dealt out largest first to whichever pile is lightest.
+     *
+     * @return the contacts of the joined islands, then one list for each pile, or null
+     */
+    private List<List<Contact>> splitIslands(List<Contact> solving, List<Joint> holding) {
+        int n = bodies.size();
+        boolean[] joined = new boolean[n];
+        for (Joint joint : holding) {
+            RigidBody a = joint.getBodyA(), b = joint.getBodyB();
+            if (a.isDynamic()) joined[find(a.islandIndex)] = true;
+            if (b != null && b.isDynamic()) joined[find(b.islandIndex)] = true;
+        }
+        int[] slot = new int[n];
+        Arrays.fill(slot, -1);
+        List<Contact> serial = new ArrayList<>();
+        List<List<Contact>> groups = new ArrayList<>();
+        for (Contact c : solving) {
+            RigidBody dynamic = c.getBodyA().isDynamic() ? c.getBodyA() : c.getBodyB();
+            int root = find(dynamic.islandIndex);
+            if (joined[root]) {
+                serial.add(c);
+                continue;
+            }
+            int g = slot[root];
+            if (g < 0) {
+                g = groups.size();
+                slot[root] = g;
+                groups.add(new ArrayList<>());
+            }
+            groups.get(g).add(c);
+        }
+        if (groups.size() < 2) return null;
+        groups.sort((x, y) -> Integer.compare(y.size(), x.size()));
+        if (groups.getFirst().size() * 10 >= solving.size() * 9) return null; // one pile does nearly all the work
+        int count = Math.min(solverThreads + 1, groups.size());
+        List<List<Contact>> piles = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) piles.add(new ArrayList<>());
+        for (List<Contact> group : groups) {
+            List<Contact> lightest = piles.getFirst();
+            for (List<Contact> pile : piles) if (pile.size() < lightest.size()) lightest = pile;
+            lightest.addAll(group);
+        }
+        List<List<Contact>> result = new ArrayList<>(count + 1);
+        result.add(serial);
+        result.addAll(piles);
+        return result;
+    }
+
+    /**
+     * Solves what {@link #splitIslands} cut: the joined islands and the first pile here, the other piles on the
+     * solver threads, and returns when all are done.
+     */
+    private void solveSplit(List<List<Contact>> parts, List<Joint> holding, float dt) {
+        int velocity = velocityIterations, position = positionIterations;
+        List<Future<?>> pending = new ArrayList<>(parts.size());
+        for (int i = 2; i < parts.size(); i++) {
+            List<Contact> pile = parts.get(i);
+            pending.add(SolverThreads.pool().submit(() -> ContactSolver.solveIslands(pile, dt, velocity, position)));
+        }
+        RuntimeException failure = null;
+        try {
+            solveJoined(parts.get(0), holding, dt);
+            ContactSolver.solveIslands(parts.get(1), dt, velocity, position);
+        } catch (RuntimeException e) {
+            failure = e;
+        }
+        failure = await(pending, failure);
+        if (failure != null) throw failure;
+    }
+
+    /**
+     * Waits for every task, even after one has failed: a thread still working would race with whatever comes next.
+     *
+     * @return the first failure, or null
+     */
+    private static RuntimeException await(List<Future<?>> pending, RuntimeException failure) {
+        for (Future<?> future : pending) {
+            try {
+                future.get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                if (failure == null) failure = new IllegalStateException("Interrupted while the physics solver was running", e);
+            } catch (ExecutionException e) {
+                if (failure == null) failure = new IllegalStateException("The physics solver failed", e.getCause());
+            }
+        }
+        return failure;
+    }
+
+    /**
+     * The threads the solver shares between worlds, started the first time a world needs them.
+     */
+    private static final class SolverThreads {
+        static final int MAX = Math.min(Math.max(Runtime.getRuntime().availableProcessors() - 1, 0), 15);
+        private static ExecutorService pool;
+
+        static synchronized ExecutorService pool() {
+            if (pool == null) {
+                AtomicInteger number = new AtomicInteger();
+                pool = Executors.newFixedThreadPool(Math.max(MAX, 1), task -> {
+                    Thread thread = new Thread(task, "Physics-Solver-" + number.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                });
+            }
+            return pool;
+        }
     }
 
     /**
@@ -663,39 +820,106 @@ public final class PhysicsWorld {
             if (!a.isActive() && !b.isActive() && (a.isSleeping() || b.isSleeping())) found.put(entry.getKey(), c);
         }
         for (Contact c : contacts) if (found.containsKey(keyOf(c))) list.add(c);
+        List<BodyPair> pairs = new ArrayList<>();
         broadphase.findPairs(bodies, tree, (a, b) -> {
             if (!a.joints.isEmpty() && !b.joints.isEmpty() && jointedApart(a, b)) return;
-            float margin = a.speculative + b.speculative - CONTACT_MARGIN;
-            for (int i = 0; i < a.shapeCount(); i++) {
-                for (int j = 0; j < b.shapeCount(); j++) {
-                    if (!Broadphase.overlap(a.shapeBounds(i), b.shapeBounds(j))) continue;
-                    Shape sa = a.collisionShape(i), sb = b.collisionShape(j);
-                    if (sa instanceof MeshShape || sb instanceof MeshShape) {
-                        // One contact per triangle touched, each remembered on its own.
-                        int si = i, sj = j;
-                        collideMesh(a, i, b, j, margin, (triangle, m) -> {
-                            PairKey key = new PairKey(a, si, b, sj, triangle);
-                            Contact contact = previous.get(key);
-                            if (contact == null) contact = new Contact(a, si, b, sj, triangle);
-                            contact.update(m);
-                            found.put(key, contact);
-                            list.add(contact);
-                            return true;
-                        });
-                        continue;
-                    }
-                    if (!Narrowphase.collide(sa, a.shapePose(i), sb, b.shapePose(j), margin, manifold)) continue;
-                    PairKey key = new PairKey(a, i, b, j, -1);
-                    Contact contact = previous.get(key);
-                    if (contact == null) contact = new Contact(a, i, b, j, -1);
-                    contact.update(manifold);
-                    found.put(key, contact);
-                    list.add(contact);
-                }
-            }
+            pairs.add(new BodyPair(a, b));
         });
+        List<PairKey> keys = new ArrayList<>();
+        List<Contact> fresh = new ArrayList<>();
+        narrowphase(pairs, previous, keys, fresh);
+        for (int i = 0; i < fresh.size(); i++) {
+            found.put(keys.get(i), fresh.get(i));
+            list.add(fresh.get(i));
+        }
         contactMap = found;
         contacts = list;
+    }
+
+    /**
+     * What one run of the narrow phase found: the key of each contact and the contact itself, in the order found.
+     */
+    private record Found(List<PairKey> keys, List<Contact> contacts) {
+        Found() {
+            this(new ArrayList<>(), new ArrayList<>());
+        }
+    }
+
+    /**
+     * The exact test of every pair, in blocks of pairs handed out to this thread and the solver threads. Each block
+     * keeps its own results and they are joined in block order, so the contacts come out in the order of the pairs
+     * whatever thread ran what. A pair only touches contacts of its own shapes, so the blocks share nothing they change.
+     */
+    private void narrowphase(List<BodyPair> pairs, Map<PairKey, Contact> previous, List<PairKey> keys, List<Contact> fresh) {
+        int n = pairs.size();
+        int blocks = (n + PAIRS_PER_BLOCK - 1) / PAIRS_PER_BLOCK;
+        int helpers = Math.min(solverThreads, blocks - 1);
+        if (helpers <= 0 || n < PARALLEL_MIN_PAIRS) {
+            for (BodyPair pair : pairs) narrow(pair.a(), pair.b(), manifold, previous, keys, fresh);
+            return;
+        }
+        Found[] results = new Found[blocks];
+        AtomicInteger next = new AtomicInteger();
+        Runnable work = () -> {
+            Manifold scratch = new Manifold();
+            for (int block = next.getAndIncrement(); block < blocks; block = next.getAndIncrement()) {
+                Found found = new Found();
+                for (int i = block * PAIRS_PER_BLOCK, end = Math.min(n, i + PAIRS_PER_BLOCK); i < end; i++) {
+                    BodyPair pair = pairs.get(i);
+                    narrow(pair.a(), pair.b(), scratch, previous, found.keys(), found.contacts());
+                }
+                results[block] = found;
+            }
+        };
+        List<Future<?>> pending = new ArrayList<>(helpers);
+        for (int i = 0; i < helpers; i++) pending.add(SolverThreads.pool().submit(work));
+        RuntimeException failure = null;
+        try {
+            work.run();
+        } catch (RuntimeException e) {
+            failure = e;
+        }
+        failure = await(pending, failure);
+        if (failure != null) throw failure;
+        for (Found found : results) {
+            keys.addAll(found.keys());
+            fresh.addAll(found.contacts());
+        }
+    }
+
+    /**
+     * All the contacts between the shapes of two bodies, updated from last step's where there was one. {@code scratch}
+     * is the manifold this thread may write to.
+     */
+    private static void narrow(RigidBody a, RigidBody b, Manifold scratch, Map<PairKey, Contact> previous, List<PairKey> keys, List<Contact> fresh) {
+        float margin = a.speculative + b.speculative - CONTACT_MARGIN;
+        for (int i = 0; i < a.shapeCount(); i++) {
+            for (int j = 0; j < b.shapeCount(); j++) {
+                if (!Broadphase.overlap(a.shapeBounds(i), b.shapeBounds(j))) continue;
+                Shape sa = a.collisionShape(i), sb = b.collisionShape(j);
+                if (sa instanceof MeshShape || sb instanceof MeshShape) {
+                    // One contact per triangle touched, each remembered on its own.
+                    int si = i, sj = j;
+                    collideMesh(a, i, b, j, margin, (triangle, m) -> {
+                        PairKey key = new PairKey(a, si, b, sj, triangle);
+                        Contact contact = previous.get(key);
+                        if (contact == null) contact = new Contact(a, si, b, sj, triangle);
+                        contact.update(m);
+                        keys.add(key);
+                        fresh.add(contact);
+                        return true;
+                    });
+                    continue;
+                }
+                if (!Narrowphase.collide(sa, a.shapePose(i), sb, b.shapePose(j), margin, scratch)) continue;
+                PairKey key = new PairKey(a, i, b, j, -1);
+                Contact contact = previous.get(key);
+                if (contact == null) contact = new Contact(a, i, b, j, -1);
+                contact.update(scratch);
+                keys.add(key);
+                fresh.add(contact);
+            }
+        }
     }
 
     private static PairKey keyOf(Contact c) {

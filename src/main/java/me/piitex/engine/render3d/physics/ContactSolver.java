@@ -32,6 +32,18 @@ final class ContactSolver {
     private ContactSolver() {
     }
 
+    /**
+     * The whole contact solve for contacts that share no body with any joint: prepare, the velocity passes, bounce and
+     * the position passes. Contacts of separate islands touch separate bodies (static and kinematic ones are only read),
+     * so separate islands can run this at the same time and get exactly what one thread would.
+     */
+    static void solveIslands(List<Contact> contacts, float dt, int velocityIterations, int positionIterations) {
+        prepare(contacts, dt);
+        for (int i = 0; i < velocityIterations; i++) solveVelocities(contacts, dt, i % 2 == 1);
+        applyRestitution(contacts, dt);
+        for (int i = 0; i < positionIterations; i++) solvePositions(contacts, dt, i % 2 == 1);
+    }
+
     static boolean active(Contact contact) {
         return !contact.isTrigger() && (contact.getBodyA().isAwakeDynamic() || contact.getBodyB().isAwakeDynamic()) && !standsOn(contact);
     }
