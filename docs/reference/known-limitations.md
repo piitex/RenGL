@@ -20,9 +20,12 @@ something not listed, please add it.
 The 2D UI looks the same on every [rendering API](../core/rendering-apis.md). These limits are about Vulkan and the
 optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) has the reasons and the plans.
 
-- **Vulkan has only been run on one machine:** macOS on Apple silicon, through MoltenVK. Windows and Linux are untested.
-- **The demos have never run on OpenGL** on a platform where the engine really uses it (Windows or Linux). The OpenGL
-  path of the 3D layer was only tested through a macOS harness.
+- **Vulkan and OpenGL have been run on two machines:** macOS on Apple silicon (Vulkan through MoltenVK, OpenGL only in
+  a harness) and Windows 11 on an NVIDIA RTX 4090 (both natively). Linux, AMD and Intel GPUs, and arm64 Windows are
+  untested.
+- **On Windows,** the 3D and 2D demos, the GPU tests and several apps were run on both APIs with no errors in the logs
+  (see the [3D status document](../3d-status.md#verification-so-far)). Only a few of them were looked at by eye, and
+  nobody has driven the demos with a real mouse and keyboard there.
 - **Light from the sky is an approximation.** [Environment lighting](../3d/lighting.md#light-from-the-sky) lights surfaces
   from nine spherical-harmonic terms and blurs reflections with the sky's mipmaps instead of filtering a real
   environment map, and the sky pictures are 8-bit, so there is no bright sun in them and a sharp reflection of a small

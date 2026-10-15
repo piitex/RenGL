@@ -122,7 +122,7 @@ The repo has two runnable examples in `me.piitex.examples.demo`, which also show
 | `HdrSkyDemo` | An HDR sky lighting chrome, gold, plastic and matte spheres, with a shadow-casting sun light aimed by `HdrTextureData.sunDirection()`; sliders for exposure, sky lighting, bloom and sun, a tone mapping switch, and "Load sky..." (or `-Drengl.demo.sky=file.hdr`) for any Radiance file. It makes its own sky when none is given |
 
 All pick Vulkan on macOS and OpenGL elsewhere, and `-Drengl.demo.api=VULKAN` or `OPENGL` overrides that. The OpenGL
-path of the demos has not been run on Windows or Linux yet.
+path of the demos has been run on Windows (both APIs) but not on Linux yet.
 
 ## Limits at a glance
 
@@ -130,7 +130,7 @@ The scene layer is a forward renderer with classic and physically based material
 and emissive maps), shadows from several lights at once (directional with cascades, spot and point), a skybox that can light and be reflected, instancing,
 skinned animation, morph targets (blend shapes), frustum culling, mipmapped and anisotropically filtered textures, 4x
 anti-aliasing by default, and ray [picking](scenes.md#picking). It has **no variable-width soft shadows and no
-post-processing**. It was written and tested on one machine so far: macOS on Apple silicon, with Vulkan
-(MoltenVK) and, in a harness, OpenGL 3.3; Windows and Linux are untested. The full list, with the reasons, is in
+post-processing**. It was written and tested on macOS on Apple silicon (Vulkan through MoltenVK and, in a harness,
+OpenGL 3.3) and on Windows 11 with an NVIDIA GPU (native Vulkan and OpenGL); Linux is untested. The full list, with the reasons, is in
 [Known limitations](../reference/known-limitations.md#rendering-and-3d). The code that checks it all is in `src/test`: run
 `./mvnw test`, which skips the GPU tests when the machine has no usable GPU.
