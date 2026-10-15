@@ -40,6 +40,16 @@ Every widget in RenGL is an [`Overlay`](../core/overlay.md) (an [`Element`](../c
 | [`LoadingSpinnerOverlay`](loading-spinner-overlay.md) | A ring of dots that chases around a circle |
 | [`SeparatorOverlay`](separator-overlay.md) | A thin dividing line, horizontal or vertical |
 
+## Charts
+
+| Widget | What it is |
+|---|---|
+| [`LineChartOverlay`](../charts/line-chart.md) | Lines through values over categories, with smooth curves and filled areas |
+| [`BarChartOverlay`](../charts/bar-chart.md) | Grouped, stacked or horizontal bars |
+| [`PieChartOverlay`](../charts/pie-chart.md) | A pie or a donut, with the total in the middle |
+
+They live in `me.piitex.engine.ui.charts`. See [Charts](../charts/README.md).
+
 ## Images
 
 | Widget | What it is |
