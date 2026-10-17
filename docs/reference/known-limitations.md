@@ -71,8 +71,13 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 ## Video
 
-- **There is no Windows decoder for H.264, HEVC and AAC.** They play only on macOS, where the system decoder reads
-  them. A Windows backend (Media Foundation) is not written yet.
+- **On Windows the system decoder is new and lightly tested.** H.264 and AAC play through Media Foundation; the
+  tests ran only on small clips (640x360 and 320x180) on one machine, and speed on 1080p and 4K was not measured.
+  Decoding is done by the CPU: the reader is not given a GPU device, so Windows' hardware decoders are not used.
+  **HEVC plays only where Windows has the HEVC Video Extensions** (a free Store add-on that some editions lack); without
+  them the file fails to open with the usual conversion hint. A machine without Media Foundation (a Windows "N"
+  edition without the Media Feature Pack) has no system decoder at all.
+- **There is no Linux decoder for H.264, HEVC and AAC.** They play only on macOS and Windows.
 - **A seek restarts the sound,** which leaves a brief gap while the decoder fills the first part (about 25 ms at 1080p,
   85 ms at 4K). Looping has no gap.
 - **Tested with files the engine's own test writer produces,** covering all three AVI index layouts, not yet with

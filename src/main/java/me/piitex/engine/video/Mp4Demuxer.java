@@ -561,6 +561,14 @@ final class Mp4Demuxer implements Demuxer {
         return MJPEG.contains(video.codec) && !audioDropped;
     }
 
+    /**
+     * What the edit list adds to the picture times (usually a small negative number that removes the composition
+     * delay of B-frames), for a reader that does not apply it.
+     */
+    double videoEditShift() {
+        return video.delay - video.mediaStart / (double) video.timescale;
+    }
+
     /** Logs that the soundtrack is being left out, when this is the reader that ends up used. */
     void warnIfDegraded() {
         if (audioDropped) log.warn("{}: the '{}' soundtrack is not supported; playing without sound.", name, droppedAudio);

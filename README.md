@@ -127,7 +127,7 @@ used RenEngine, except that a layout is now a subclass of `Container` and there 
 
 RenGL is actively developed and used for my own apps and games. It is not on Maven Central yet, and the API can still
 change. Development happens mostly on macOS (Metal), so Windows and Linux are less tested, and Vulkan has only been run
-on macOS. The video player decodes H.264, HEVC and AAC on macOS only. Elsewhere it plays the formats RenGL decodes
+on macOS. The video player decodes H.264, HEVC and AAC through the system on macOS and Windows, and not on Linux. Elsewhere it plays the formats RenGL decodes
 itself. See [known limitations](docs/reference/known-limitations.md) for the full list.
 
 There is a test suite of several hundred tests, run with `./mvnw test`.

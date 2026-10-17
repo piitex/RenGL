@@ -11,16 +11,16 @@ import java.nio.file.Files;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The files here were written by Apple's own encoder (H.264, HEVC, AAC), so they exercise the system decoder for
- * real. Frame {@code i} is solid {@code AviBuilder.COLORS[i % 8]}. Skipped where there is no system decoder.
+ * The files here were written by real encoders (Apple's for H.264, HEVC and AAC, Chromium's for the quadrants clip),
+ * so they exercise the system decoder (AVFoundation on macOS, Media Foundation on Windows) for real. Frame {@code i} is solid {@code AviBuilder.COLORS[i % 8]}. Skipped where there is no system decoder.
  */
-class MacMediaSourceTest {
+class SystemMediaSourceTest {
     @TempDir
     File dir;
 
     @BeforeEach
     void needSystemDecoder() {
-        Assumptions.assumeTrue(MacMediaSource.available(), "no system media framework on this OS");
+        Assumptions.assumeTrue(MediaFiles.systemAvailable(), "no system media framework on this OS");
     }
 
     static File fixture(String name) {
@@ -91,9 +91,49 @@ class MacMediaSourceTest {
         }
     }
 
+    /** Whether the pixel at (x, y) of a BGRA picture is near the colour, each channel as 0 or 255. */
+    private static boolean pixelIs(VideoFrame f, int x, int y, int r, int g, int b) {
+        int o = (y * f.width() + x) * 4;
+        byte[] px = f.pixels();
+        return Math.abs((px[o] & 0xFF) - b) < 40 && Math.abs((px[o + 1] & 0xFF) - g) < 40 && Math.abs((px[o + 2] & 0xFF) - r) < 40
+                && (px[o + 3] & 0xFF) == 255;
+    }
+
+    @Test
+    void picturesAreUprightAndTheRightColoursAndCropped() throws Exception {
+        // Written by Chromium's H.264 encoder: red top-left, green bottom-right, blue elsewhere, 180 rows coded as 192.
+        try (Demuxer d = MediaFiles.open(fixture("h264-quadrants-320x180.mp4"))) {
+            assertEquals(320, d.info().width());
+            assertEquals(180, d.info().height());
+            assertTrue(d.info().frameRate() > 25 && d.info().frameRate() < 35, "frame rate " + d.info().frameRate());
+            FrameDecoder video = d.videoDecoder();
+            Packet p;
+            int checked = 0;
+            while ((p = d.next()) != null) {
+                if (p.stream() != d.videoStream()) continue;
+                VideoFrame f = video.decode(p);
+                assertEquals(320 * 180 * 4, f.pixels().length);
+                if (checked++ < 3) continue;
+                assertTrue(pixelIs(f, 80, 45, 255, 0, 0), "top-left is red");
+                assertTrue(pixelIs(f, 240, 135, 0, 255, 0), "bottom-right is green");
+                assertTrue(pixelIs(f, 240, 45, 0, 0, 255), "top-right is blue");
+                assertTrue(pixelIs(f, 80, 135, 0, 0, 255), "bottom-left is blue");
+                return;
+            }
+            fail("fewer than four pictures");
+        }
+    }
+
     @Test
     void decodesHevc() throws Exception {
-        try (Demuxer d = MediaFiles.open(fixture("hevc-640x360.mp4"))) {
+        Demuxer opened;
+        try {
+            opened = MediaFiles.open(fixture("hevc-640x360.mp4"));
+        } catch (UnsupportedOperationException e) {
+            Assumptions.abort("this machine has no HEVC decoder (Windows ships it as a separate extension): " + e.getMessage());
+            return;
+        }
+        try (Demuxer d = opened) {
             assertEquals("H.265", d.info().videoCodec());
             FrameDecoder video = d.videoDecoder();
             int frames = 0;
