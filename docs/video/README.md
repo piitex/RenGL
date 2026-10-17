@@ -25,11 +25,16 @@ instantly and costs no more memory than a short clip.
 The container and codec are recognised from the file's bytes, not its extension. There are two routes, and the
 player picks one for you:
 
-**The system decoder (macOS).** Any file macOS can play, which includes **H.264 and HEVC in MP4 and MOV** with
-**AAC** sound, plays through Apple's AVFoundation. The video is decoded by the machine's hardware video engine, so
-the engine contains no H.264 or AAC decoder of its own, and the licence for those codecs is the operating system's.
-Nothing is installed or shipped: the engine calls the system frameworks directly. A video the file marks as turned (a
-phone held upright) is shown upright, and its width and height are the turned ones.
+**The system decoder (macOS and Windows).** Any file the operating system can play, which includes **H.264 and HEVC
+in MP4 and MOV** with **AAC** sound, plays through the system's media framework: Apple's AVFoundation on macOS and
+Media Foundation on Windows. On macOS the video is decoded by the machine's hardware video engine; on Windows it is
+decoded on the CPU. Either way the engine contains no H.264 or AAC decoder of its own, and the licence for those codecs
+is the operating system's. Nothing is installed or shipped: the engine calls the system frameworks directly. A video the
+file marks as turned (a phone held upright) is shown upright, and its width and height are the turned ones.
+
+On Windows, HEVC needs Microsoft's *HEVC Video Extensions* (some editions lack them), and a Windows "N" edition
+without the Media Feature Pack has no Media Foundation, so only the engine's own readers play there. Windows can
+also read other containers such as MKV and WMV when it has the codec, which the engine's readers cannot.
 
 **The engine's own readers.** These work on every platform and need nothing from the system:
 
@@ -40,7 +45,7 @@ phone held upright) is shown upright, and its width and height are the turned on
 | Audio | **PCM**: 8, 16, 24 and 32-bit integer, or 32-bit float (in MP4: `sowt`, `twos`, `in24`, `in32`, `fl32`, `ipcm`). Mono and stereo; extra channels are dropped |
 
 A file the engine can read itself always uses its own reader, so it plays the same everywhere. Anything else uses
-the system decoder where there is one. **On Windows and Linux there is no system decoder yet**, so there only the
+the system decoder where there is one. **On Linux there is no system decoder yet**, so there only the
 table above plays. A file that cannot play fails to open with an `UnsupportedOperationException` that names the
 codec and gives an FFmpeg command that converts it:
 
@@ -50,12 +55,12 @@ ffmpeg -i frames/%04d.png -r 30 -c:v rawvideo -pix_fmt bgr24 -c:a pcm_s16le out.
 ```
 
 Motion JPEG and uncompressed video store every frame whole, which is what makes them quick to seek and cheap to
-decode, and why they suit pre-rendered animation. They are not small files; a game that ships on Windows or Linux
+decode, and why they suit pre-rendered animation. They are not small files; a game that ships on Linux
 should ship those, or convert its videos once at build time.
 
 ### Speed of the system decoder
 
-Measured on an Apple M-series MacBook Air, decoding H.264 and copying each frame into the engine's pixel format
+These figures are for macOS; the Windows decoder has not been timed on large files. Measured on an Apple M-series MacBook Air, decoding H.264 and copying each frame into the engine's pixel format
 (the work the decode thread does; playback needs 1x):
 
 | Video | Decode speed | CPU used by the engine's process |

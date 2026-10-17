@@ -26,29 +26,35 @@ final class MediaFiles {
             if (AviDemuxer.matches(head)) return new AviDemuxer(file);
             if (Mp4Demuxer.matches(head)) {
                 Mp4Demuxer own = new Mp4Demuxer(file);
-                if (own.fullySupported() || !MacMediaSource.available()) {
+                if (own.fullySupported() || !systemAvailable()) {
                     own.warnIfDegraded();
                     return own;
                 }
+                double shift = own.videoEditShift();
                 own.close();
-                Demuxer os = openWithSystem(file);
+                Demuxer os = openWithSystem(file, shift);
                 return os != null ? os : reopen(file);
             }
-            Demuxer os = openWithSystem(file);
+            Demuxer os = openWithSystem(file, 0);
             if (os != null) return os;
             throw new UnsupportedOperationException("Unsupported video format: " + file.getName() + " is " + container(head)
-                    + ". RenGL plays AVI and MP4 files with Motion JPEG or uncompressed video and PCM audio, and on macOS any file the system can play. "
+                    + ". RenGL plays AVI and MP4 files with Motion JPEG or uncompressed video and PCM audio, and on macOS and Windows any file the system can play. "
                     + convertHint(file.getName()));
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read video file: " + file, e);
         }
     }
 
+    /** Whether this machine has a system decoder: AVFoundation on macOS, Media Foundation on Windows. */
+    static boolean systemAvailable() {
+        return MacMediaSource.available() || WinMediaSource.available();
+    }
+
     /** The operating system's decoder, when there is one and it accepts the file. Null otherwise. */
-    private static Demuxer openWithSystem(File file) throws IOException {
-        if (!MacMediaSource.available()) return null;
+    private static Demuxer openWithSystem(File file, double editShift) throws IOException {
+        if (!systemAvailable()) return null;
         try {
-            return new MacMediaSource(file);
+            return MacMediaSource.available() ? new MacMediaSource(file) : new WinMediaSource(file, editShift);
         } catch (UnsupportedOperationException e) {
             log.debug("The system cannot play {}: {}", file.getName(), e.getMessage());
             return null;

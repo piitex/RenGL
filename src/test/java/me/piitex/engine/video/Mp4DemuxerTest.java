@@ -166,7 +166,7 @@ class Mp4DemuxerTest {
     @Test
     void readsFilesWrittenByAppleEncoder() throws Exception {
         // Real H.264 with B-frames, an edit list and an AAC soundtrack: only the container is read, nothing decoded.
-        try (Mp4Demuxer d = new Mp4Demuxer(MacMediaSourceTest.fixture("h264-aac-640x360.mp4"))) {
+        try (Mp4Demuxer d = new Mp4Demuxer(SystemMediaSourceTest.fixture("h264-aac-640x360.mp4"))) {
             MediaInfo info = d.info();
             assertEquals("H.264", info.videoCodec());
             assertEquals(640, info.width());
