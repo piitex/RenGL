@@ -22,6 +22,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 |---|---|
 | [Getting started](getting-started.md) | Requirements, building, running, your first window |
 | [Architecture](architecture.md) | Threads, the frame loop, coordinates, how events reach elements |
+| [Modules](modules.md) | The Maven artifacts, what each one brings, and which to depend on |
 | [Vulkan and 3D status](3d-status.md) | Progress, known issues and next steps for the Vulkan backend and the optional 3D layer |
 | **[Core](core/README.md)** | Engine, Window, Element, Overlay |
 | [Engine](core/engine.md) | Starting the engine and what it does every frame |
