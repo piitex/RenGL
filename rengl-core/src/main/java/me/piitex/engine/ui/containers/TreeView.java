@@ -67,9 +67,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     /**
      * Where a dragged item was dropped: under {@code parent} (null for the top level), at {@code index} among its
      * children. The index is the gap the user dropped into, counting the children as they are now, the item itself
-     * included if it is already there. That is how {@link me.piitex.engine.entity.Entity#addChild(
-     * me.piitex.engine.entity.Entity, int) Entity.addChild} and {@link me.piitex.engine.entity.EntityScene#add(
-     * me.piitex.engine.entity.Entity, int) EntityScene.add} count too, so the index can be passed straight to them.
+     * included if it is already there. That is how {@code Entity.addChild} and {@code EntityScene.add} count too, so the index can be passed straight to them.
      */
     public record Drop<T>(T item, T parent, int index) {
     }
