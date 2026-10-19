@@ -1,5 +1,6 @@
 package me.piitex.engine.gl.renderer.vulkan;
 
+import me.piitex.engine.gl.renderer.RenderBackend;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.PointerBuffer;
@@ -43,7 +44,7 @@ import static org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1;
  * every method except {@link #close()} belongs to the render thread; {@code close()} runs on the main thread once the
  * render thread has released the renderer, and before the GLFW window is destroyed.
  */
-public final class VulkanContext implements AutoCloseable {
+public final class VulkanContext implements RenderBackend.Context {
     private static final Logger log = LogManager.getLogger("Engine");
 
     private static final int FRAMES_IN_FLIGHT = 2;
@@ -201,6 +202,7 @@ public final class VulkanContext implements AutoCloseable {
         return apiVersion;
     }
 
+    @Override
     public String gpuName() {
         return gpuName;
     }
@@ -251,6 +253,18 @@ public final class VulkanContext implements AutoCloseable {
      * Turns vsync on (FIFO) or off (IMMEDIATE, else MAILBOX). The swapchain is rebuilt on the next frame if the present
      * mode has to change.
      */
+    /**
+     * The window's Skia renderer on this device: opens Skia's Vulkan context and sizes it. Render thread, once.
+     */
+    @Override
+    public VulkanSkikoRenderer createRenderer(int logicalWidth, int logicalHeight) {
+        VulkanSkikoRenderer renderer = new VulkanSkikoRenderer(this);
+        renderer.init();
+        renderer.onResize(logicalWidth, logicalHeight);
+        return renderer;
+    }
+
+    @Override
     public void setVsync(boolean vsync) {
         if (this.vsync == vsync) return;
         this.vsync = vsync;

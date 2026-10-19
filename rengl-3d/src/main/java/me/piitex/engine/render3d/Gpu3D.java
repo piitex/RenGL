@@ -2,6 +2,7 @@ package me.piitex.engine.render3d;
 
 import me.piitex.engine.RenderAPI;
 import me.piitex.engine.gl.renderer.GpuInterop;
+import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
 import me.piitex.engine.render3d.gl.GlDevice;
 import me.piitex.engine.render3d.vk.VkGpuDevice;
 import org.apache.logging.log4j.LogManager;
@@ -43,7 +44,7 @@ final class Gpu3D {
         }
 
         GpuDevice device = interop.gpuApi() == RenderAPI.VULKAN
-                ? new VkGpuDevice(interop.vulkanContext(), interop::frameNumber)
+                ? new VkGpuDevice((VulkanContext) interop.backendContext(), interop::frameNumber)
                 : new GlDevice(interop::frameNumber);
         Gpu3D created = new Gpu3D(interop, device);
         BY_RENDERER.put(interop, created);

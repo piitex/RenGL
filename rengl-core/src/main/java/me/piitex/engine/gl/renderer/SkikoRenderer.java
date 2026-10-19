@@ -1,7 +1,6 @@
 package me.piitex.engine.gl.renderer;
 
 import me.piitex.engine.RenderAPI;
-import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -66,7 +65,7 @@ public class SkikoRenderer extends SkiaRenderer implements GpuInterop {
     }
 
     @Override
-    public VulkanContext vulkanContext() {
+    public RenderBackend.Context backendContext() {
         return null;
     }
 
