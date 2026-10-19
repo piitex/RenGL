@@ -8,6 +8,14 @@
     <artifactId>RenGL</artifactId>
     <version>1.0-SNAPSHOT</version>
 
+    <licenses>
+        <license>
+            <name>RenGL Open-Source-Game License 1.0</name>
+            <url>https://github.com/piitex/RenGL/blob/main/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <properties>
         <lwjgl.version>3.4.3</lwjgl.version>
         <maven.compiler.source>25</maven.compiler.source>

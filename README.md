@@ -132,6 +132,18 @@ itself. See [known limitations](docs/reference/known-limitations.md) for the ful
 
 There is a test suite of several hundred tests, run with `./mvnw test`.
 
+## License
+
+RenGL is source-available under the [RenGL Open-Source-Game License](LICENSE). In short:
+
+- **Free for non-commercial use**, open or closed source.
+- **Free for commercial games and apps whose source code is public.** Sell it, put it on Steam, add ads; just
+  publish the source.
+- **Closed-source commercial products need a Commercial License.** Get in touch.
+- **RenGL itself is not for sale.** No paid forks, paid hosting, or commercial engines and frameworks built on it.
+
+This summary is not the license; the [LICENSE](LICENSE) file is.
+
 ## AI transparency
 
 OpenGL, Skia and Metal are hard to learn, and AI was used to speed up development: for functions, ideas and structures.
