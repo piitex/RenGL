@@ -23,6 +23,9 @@
     <modules>
         <module>rengl-bom</module>
         <module>rengl-core</module>
+        <module>rengl-audio</module>
+        <module>rengl-video</module>
+        <module>rengl-examples</module>
     </modules>
 
     <properties>

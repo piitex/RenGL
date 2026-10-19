@@ -1,6 +1,5 @@
 package me.piitex.engine;
 
-import me.piitex.engine.audio.Audio;
 import me.piitex.engine.game.GameTime;
 import me.piitex.engine.gl.GLFWindow;
 import me.piitex.engine.gl.NativeMenuBar;
@@ -67,6 +66,8 @@ import me.piitex.engine.utils.flags.GeneratedFragments;
 public class Engine {
     private static final Logger log = LogManager.getLogger("Engine");
     private static volatile Engine current;
+    /** Cleanup that optional modules (audio, ...) register, run when the engine ends. */
+    private static final List<Runnable> shutdownHooks = new CopyOnWriteArrayList<>();
 
     private final List<Host> hosts = new CopyOnWriteArrayList<>();
     private final Queue<Window> toOpen = new ConcurrentLinkedQueue<>();
@@ -277,8 +278,26 @@ public class Engine {
         main.window.notifyClosing();
 
         FileDialog.shutdown();
-        Audio.shutdown();
+        for (Runnable hook : shutdownHooks) {
+            try {
+                hook.run();
+            } catch (Throwable t) {
+                log.warn("A shutdown hook failed", t);
+            }
+        }
         Scheduler.shutdown();
+    }
+
+    /**
+     * Registers cleanup to run when the engine ends, after the windows have closed. This is how a module that owns a
+     * native resource (the audio device, for one) is closed without the core knowing about it. Adding the same
+     * hook twice does nothing, and a hook stays registered for later engines in the same process, so it should be safe
+     * to run when there is nothing to clean up. A hook that throws is logged and does not stop the others.
+     *
+     * @param hook what to run
+     */
+    public static void addShutdownHook(Runnable hook) {
+        if (hook != null && !shutdownHooks.contains(hook)) shutdownHooks.add(hook);
     }
 
     /**

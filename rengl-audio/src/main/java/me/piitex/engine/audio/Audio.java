@@ -1,5 +1,6 @@
 package me.piitex.engine.audio;
 
+import me.piitex.engine.Engine;
 import me.piitex.engine.utils.flags.GeneratedClass;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -59,6 +60,8 @@ public final class Audio {
 
     private static long device = NULL, context = NULL;
     private static boolean initTried, available;
+    /** One instance, so registering it with the engine again after a {@link #shutdown} adds nothing. */
+    private static final Runnable SHUTDOWN_HOOK = Audio::shutdown;
     private static Thread thread;
 
     private static final List<Playback> active = new ArrayList<>();
@@ -655,6 +658,8 @@ public final class Audio {
         synchronized (LOCK) {
             if (initTried) return available;
             initTried = true;
+            // The core engine knows nothing about audio; it just runs the hooks modules register when it ends.
+            Engine.addShutdownHook(SHUTDOWN_HOOK);
             try {
                 device = preferredDevice == null ? NULL : alcOpenDevice(preferredDevice);
                 if (device == NULL && preferredDevice != null) log.warn("Could not open the audio device {}; using the default", preferredDevice);
