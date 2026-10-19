@@ -228,6 +228,26 @@ public final class Config {
     }
 
     /**
+     * The float at {@code path}, or null if missing or not a number.
+     */
+    public Float getFloat(String path) {
+        Object v = get(path);
+        if (v instanceof Number n) return n.floatValue();
+        if (v instanceof String s) {
+            try {
+                return Float.parseFloat(s.strip());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return null;
+    }
+
+    public double getFloat(String path, double def) {
+        Float v = getFloat(path);
+        return v == null ? def : v;
+    }
+
+    /**
      * The boolean at {@code path}, or null if missing or not {@code true}/{@code false}.
      */
     public Boolean getBoolean(String path) {
