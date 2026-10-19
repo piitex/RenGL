@@ -76,6 +76,16 @@
             <artifactId>rengl-ui-file</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!--
+          The Skiko native library for the platform being built. rengl-core declares it optional, which Maven does not
+          pass on, so it is declared here too for the natives bundle to find it (optional except in a release build).
+        -->
+        <dependency>
+            <groupId>org.jetbrains.skiko</groupId>
+            <artifactId>${skiko.runtime.artifact}</artifactId>
+            <version>${skiko.version}</version>
+            <optional>${skiko.runtime.optional}</optional>
+        </dependency>
     </dependencies>
 
     <build>
