@@ -16,6 +16,39 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <!-- The core must stay light: what the other modules own must not creep back in, directly or through another dependency. -->
+                    <execution>
+                        <id>keep-the-core-light</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <searchTransitive>true</searchTransitive>
+                                    <excludes>
+                                        <exclude>me.piitex.engine:*</exclude>
+                                        <exclude>org.lwjgl:lwjgl-openal</exclude>
+                                        <exclude>org.lwjgl:lwjgl-opus</exclude>
+                                        <exclude>com.googlecode.soundlibs:*</exclude>
+                                        <exclude>org.lwjgl:lwjgl-vulkan</exclude>
+                                        <exclude>org.lwjgl:lwjgl-assimp</exclude>
+                                        <exclude>org.lwjgl:lwjgl-shaderc</exclude>
+                                        <exclude>org.lwjgl:lwjgl-spvc</exclude>
+                                        <exclude>org.lwjgl:lwjgl-vma</exclude>
+                                        <exclude>org.lwjgl:lwjgl-zstd</exclude>
+                                        <exclude>org.apache.lucene:*</exclude>
+                                    </excludes>
+                                    <message>rengl-core must not depend on a library that another RenGL module owns (see docs/modules.md).</message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Skiko's Java API (org.jetbrains.skia.*) is bundled into the rengl-core jar, so consumers do not need the
                  Compose dev repository it is published to. The dependency below is optional, which Maven does not pass
                  on, and the published pom stays as it is (a dependency-reduced pom would bake in the build machine's

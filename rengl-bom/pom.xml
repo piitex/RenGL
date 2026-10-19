@@ -78,6 +78,11 @@
                 <artifactId>rengl-ui-file</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>RenGL</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
