@@ -5,8 +5,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>me.piitex.engine</groupId>
-    <artifactId>RenGL</artifactId>
+    <artifactId>rengl-parent</artifactId>
     <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>RenGL parent</name>
+    <description>Shared versions, plugin configuration and native-library profiles for the RenGL modules.</description>
 
     <licenses>
         <license>
@@ -15,6 +19,11 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
+
+    <modules>
+        <module>rengl-bom</module>
+        <module>rengl-core</module>
+    </modules>
 
     <properties>
         <lwjgl.version>3.4.3</lwjgl.version>
@@ -28,6 +37,11 @@
         <junit.version>5.10.2</junit.version>
         <!-- JVM arguments for the test JVM. The macOS profile below adds -XstartOnFirstThread, which GLFW needs for the GPU tests. -->
         <rengl.test.jvmargs>--enable-native-access=ALL-UNNAMED</rengl.test.jvmargs>
+
+        <!-- The natives bundle (see the release profiles below) is only built when a natives-bundle-* profile turns this off. -->
+        <natives.bundle.skip>true</natives.bundle.skip>
+        <!-- The Skiko runtime (native library) is optional in a dev build, so it never reaches a consumer; a release build makes it a normal dependency so the bundle can pick it up. -->
+        <skiko.runtime.optional>true</skiko.runtime.optional>
     </properties>
 
     <profiles>
@@ -42,6 +56,22 @@
                 <rengl.test.jvmargs>-XstartOnFirstThread --enable-native-access=ALL-UNNAMED</rengl.test.jvmargs>
             </properties>
         </profile>
+
+        <!--
+          The six dev profiles below resolve natives for whichever platform is BUILDING the
+          project: fine for local dev and for running the demos, but useless to a downstream
+          consumer. Maven does not evaluate a dependency's own <profiles> when another
+          project just adds a dependency, so none of that activation logic reaches them.
+
+          They only set properties. A module that owns native libraries declares its natives
+          with <classifier>${lwjgl.natives}</classifier>, and the module that owns Skiko
+          declares the Skiko runtime as ${skiko.runtime.artifact}. A module with extra natives
+          for one platform only (the MoltenVK natives in rengl-vulkan, macOS only) adds its own
+          profile; see that module's pom.
+
+          -DskipAutoNatives turns the auto-detection off, so a release build can pick a
+          platform explicitly with -P (see the release profiles).
+        -->
         <profile>
             <id>lwjgl-natives-linux-amd64</id>
             <activation>
@@ -50,22 +80,14 @@
                     <name>linux</name>
                     <arch>amd64</arch>
                 </os>
-                <!-- Lets a release build (-DskipAutoNatives) select one platform explicitly via -P without this auto-detected profile also activating and fighting over lwjgl.natives. -->
                 <property>
                     <name>!skipAutoNatives</name>
                 </property>
             </activation>
             <properties>
                 <lwjgl.natives>natives-linux</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-linux-x64</skiko.runtime.artifact>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-linux-x64</artifactId>
-                    <version>${skiko.version}</version>
-                    <optional>true</optional>
-                </dependency>
-            </dependencies>
         </profile>
         <profile>
             <id>lwjgl-natives-linux-aarch64</id>
@@ -81,15 +103,8 @@
             </activation>
             <properties>
                 <lwjgl.natives>natives-linux-arm64</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-linux-arm64</skiko.runtime.artifact>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-linux-arm64</artifactId>
-                    <version>${skiko.version}</version>
-                    <optional>true</optional>
-                </dependency>
-            </dependencies>
         </profile>
         <profile>
             <id>lwjgl-natives-macos-x86_64</id>
@@ -104,20 +119,8 @@
             </activation>
             <properties>
                 <lwjgl.natives>natives-macos</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-macos-x64</skiko.runtime.artifact>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.lwjgl</groupId>
-                    <artifactId>lwjgl-vulkan</artifactId>
-                    <classifier>natives-macos</classifier>
-                </dependency>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-macos-x64</artifactId>
-                    <version>${skiko.version}</version>
-                    <optional>true</optional>
-                </dependency>
-            </dependencies>
         </profile>
         <profile>
             <id>lwjgl-natives-macos-aarch64</id>
@@ -132,20 +135,8 @@
             </activation>
             <properties>
                 <lwjgl.natives>natives-macos-arm64</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-macos-arm64</skiko.runtime.artifact>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.lwjgl</groupId>
-                    <artifactId>lwjgl-vulkan</artifactId>
-                    <classifier>natives-macos-arm64</classifier>
-                </dependency>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-macos-arm64</artifactId>
-                    <version>${skiko.version}</version>
-                    <optional>true</optional>
-                </dependency>
-            </dependencies>
         </profile>
         <profile>
             <id>lwjgl-natives-windows-amd64</id>
@@ -160,15 +151,8 @@
             </activation>
             <properties>
                 <lwjgl.natives>natives-windows</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-windows-x64</skiko.runtime.artifact>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-windows-x64</artifactId>
-                    <version>${skiko.version}</version>
-                    <optional>true</optional>
-                </dependency>
-            </dependencies>
         </profile>
         <profile>
             <id>lwjgl-natives-windows-aarch64</id>
@@ -183,434 +167,183 @@
             </activation>
             <properties>
                 <lwjgl.natives>natives-windows-arm64</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-windows-arm64</skiko.runtime.artifact>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-windows-arm64</artifactId>
-                    <version>${skiko.version}</version>
-                    <optional>true</optional>
-                </dependency>
-            </dependencies>
         </profile>
 
         <!--
-          The six profiles above resolve natives for whichever platform is BUILDING this
-          project: fine for local dev/running the Demo, but useless to a downstream
-          consumer. Maven does not evaluate a dependency's own <profiles> when another
-          project just adds <dependency>RenGL</dependency>, so none of that activation
-          logic reaches them.
+          The six profiles below are the actual release mechanism. Each is activated manually
+          (-P) and picks exactly one platform. A module that owns natives (see its pom) then
+          shades ONLY those natives, with no RenGL classes and no LWJGL or Skiko API classes,
+          into one small jar attached to that module under a "natives-<platform>" classifier,
+          matching LWJGL's own naming convention. The module's natives are listed in the
+          "natives-bundle" execution in its own pom; this file only supplies the platform.
 
-          The six profiles below are the actual release mechanism: each is manually
-          activated (via -P), pulls in exactly one platform's LWJGL + Skiko native
-          artifacts unconditionally, and shades ONLY those (no RenGL classes, no LWJGL
-          or Skiko API classes; consumers already get those transitively from the plain
-          RenGL dependency) into one small jar attached to this same project's
-          groupId:artifactId:version under a "natives-<platform>" classifier, matching
-          LWJGL's own naming convention. A consumer targeting one platform adds two
-          dependencies: the plain RenGL jar, plus this classifier for their platform,
-          instead of hand-declaring every individual LWJGL native module themselves.
+          A consumer targeting one platform adds, for each RenGL module it uses that has
+          natives, the module plus that classifier. The RenGL aggregate artifact collects every
+          module's natives into a single natives-<platform> jar, so depending on RenGL and its
+          classifier still works the way it did before the split.
 
-          Each one sets lwjgl.natives itself (reusing the SAME property the six dev
-          profiles use, just to a fixed value instead of an OS-detected one) so the big
-          unconditional ${lwjgl.natives}-classified dependency list further down doesn't
-          need duplicating per platform. Because of that shared property, these can't be
-          combined in one -P list (whichever profile's value "wins" would silently apply
-          to all of them); run one platform per invocation instead, and pass
-          -DskipAutoNatives so the host machine's own OS-detected dev profile doesn't
-          also activate and contend for the same property:
+          These share the lwjgl.natives property with the dev profiles above, so they can't be
+          combined in one -P list (whichever profile's value "wins" would silently apply to all
+          of them). Run one platform per invocation, and pass -DskipAutoNatives so the host
+          machine's own OS-detected dev profile doesn't also activate:
             mvn -DskipAutoNatives -P natives-bundle-linux-amd64 package
             mvn -DskipAutoNatives -P natives-bundle-linux-aarch64 package
             mvn -DskipAutoNatives -P natives-bundle-macos-x86_64 package
             mvn -DskipAutoNatives -P natives-bundle-macos-aarch64 package
             mvn -DskipAutoNatives -P natives-bundle-windows-amd64 package
             mvn -DskipAutoNatives -P natives-bundle-windows-aarch64 package
-          This only resolves and repackages already-published artifacts, so all six can
-          be run from any single host OS: no cross-compilation, no target-platform
-          execution needed.
+          This only resolves and repackages already-published artifacts, so all six can be run
+          from any single host OS: no cross-compilation, no target-platform execution needed.
         -->
         <profile>
             <id>natives-bundle-linux-amd64</id>
             <properties>
                 <lwjgl.natives>natives-linux</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-linux-x64</skiko.runtime.artifact>
+                <natives.classifier>natives-linux</natives.classifier>
+                <natives.bundle.skip>false</natives.bundle.skip>
+                <skiko.runtime.optional>false</skiko.runtime.optional>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-linux-x64</artifactId>
-                    <version>${skiko.version}</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-shade-plugin</artifactId>
-                        <version>${maven-shade-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>natives-bundle-linux-amd64</id>
-                                <phase>package</phase>
-                                <goals><goal>shade</goal></goals>
-                                <configuration>
-                                    <shadedArtifactAttached>true</shadedArtifactAttached>
-                                    <shadedClassifierName>natives-linux</shadedClassifierName>
-                                    <createDependencyReducedPom>false</createDependencyReducedPom>
-                                    <artifactSet>
-                                        <includes>
-                                            <include>org.lwjgl:*:*:${lwjgl.natives}</include>
-                                            <include>org.jetbrains.skiko:skiko-awt-runtime-linux-x64</include>
-                                        </includes>
-                                    </artifactSet>
-                                    <filters>
-                                        <filter>
-                                            <artifact>me.piitex.engine:RenGL</artifact>
-                                            <excludes>
-                                                <exclude>**</exclude>
-                                            </excludes>
-                                        </filter>
-                                        <filter>
-                                            <artifact>*:*</artifact>
-                                            <excludes>
-                                                <exclude>META-INF/*.SF</exclude>
-                                                <exclude>META-INF/*.DSA</exclude>
-                                                <exclude>META-INF/*.RSA</exclude>
-                                                <exclude>META-INF/MANIFEST.MF</exclude>
-                                                <exclude>META-INF/INDEX.LIST</exclude>
-                                                <exclude>META-INF/versions/**</exclude>
-                                                <exclude>module-info.class</exclude>
-                                            </excludes>
-                                        </filter>
-                                    </filters>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
         </profile>
         <profile>
             <id>natives-bundle-linux-aarch64</id>
             <properties>
                 <lwjgl.natives>natives-linux-arm64</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-linux-arm64</skiko.runtime.artifact>
+                <natives.classifier>natives-linux-arm64</natives.classifier>
+                <natives.bundle.skip>false</natives.bundle.skip>
+                <skiko.runtime.optional>false</skiko.runtime.optional>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-linux-arm64</artifactId>
-                    <version>${skiko.version}</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-shade-plugin</artifactId>
-                        <version>${maven-shade-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>natives-bundle-linux-aarch64</id>
-                                <phase>package</phase>
-                                <goals><goal>shade</goal></goals>
-                                <configuration>
-                                    <shadedArtifactAttached>true</shadedArtifactAttached>
-                                    <shadedClassifierName>natives-linux-arm64</shadedClassifierName>
-                                    <createDependencyReducedPom>false</createDependencyReducedPom>
-                                    <artifactSet>
-                                        <includes>
-                                            <include>org.lwjgl:*:*:${lwjgl.natives}</include>
-                                            <include>org.jetbrains.skiko:skiko-awt-runtime-linux-arm64</include>
-                                        </includes>
-                                    </artifactSet>
-                                    <filters>
-                                        <filter>
-                                            <artifact>me.piitex.engine:RenGL</artifact>
-                                            <excludes>
-                                                <exclude>**</exclude>
-                                            </excludes>
-                                        </filter>
-                                        <filter>
-                                            <artifact>*:*</artifact>
-                                            <excludes>
-                                                <exclude>META-INF/*.SF</exclude>
-                                                <exclude>META-INF/*.DSA</exclude>
-                                                <exclude>META-INF/*.RSA</exclude>
-                                                <exclude>META-INF/MANIFEST.MF</exclude>
-                                                <exclude>META-INF/INDEX.LIST</exclude>
-                                                <exclude>META-INF/versions/**</exclude>
-                                                <exclude>module-info.class</exclude>
-                                            </excludes>
-                                        </filter>
-                                    </filters>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
         </profile>
         <profile>
             <id>natives-bundle-macos-x86_64</id>
             <properties>
                 <lwjgl.natives>natives-macos</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-macos-x64</skiko.runtime.artifact>
+                <natives.classifier>natives-macos</natives.classifier>
+                <natives.bundle.skip>false</natives.bundle.skip>
+                <skiko.runtime.optional>false</skiko.runtime.optional>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.lwjgl</groupId>
-                    <artifactId>lwjgl-vulkan</artifactId>
-                    <classifier>natives-macos</classifier>
-                </dependency>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-macos-x64</artifactId>
-                    <version>${skiko.version}</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-shade-plugin</artifactId>
-                        <version>${maven-shade-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>natives-bundle-macos-x86_64</id>
-                                <phase>package</phase>
-                                <goals><goal>shade</goal></goals>
-                                <configuration>
-                                    <shadedArtifactAttached>true</shadedArtifactAttached>
-                                    <shadedClassifierName>natives-macos</shadedClassifierName>
-                                    <createDependencyReducedPom>false</createDependencyReducedPom>
-                                    <artifactSet>
-                                        <includes>
-                                            <include>org.lwjgl:*:*:${lwjgl.natives}</include>
-                                            <include>org.jetbrains.skiko:skiko-awt-runtime-macos-x64</include>
-                                        </includes>
-                                    </artifactSet>
-                                    <filters>
-                                        <filter>
-                                            <artifact>me.piitex.engine:RenGL</artifact>
-                                            <excludes>
-                                                <exclude>**</exclude>
-                                            </excludes>
-                                        </filter>
-                                        <filter>
-                                            <artifact>*:*</artifact>
-                                            <excludes>
-                                                <exclude>META-INF/*.SF</exclude>
-                                                <exclude>META-INF/*.DSA</exclude>
-                                                <exclude>META-INF/*.RSA</exclude>
-                                                <exclude>META-INF/MANIFEST.MF</exclude>
-                                                <exclude>META-INF/INDEX.LIST</exclude>
-                                                <exclude>META-INF/versions/**</exclude>
-                                                <exclude>module-info.class</exclude>
-                                            </excludes>
-                                        </filter>
-                                    </filters>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
         </profile>
         <profile>
             <id>natives-bundle-macos-aarch64</id>
             <properties>
                 <lwjgl.natives>natives-macos-arm64</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-macos-arm64</skiko.runtime.artifact>
+                <natives.classifier>natives-macos-arm64</natives.classifier>
+                <natives.bundle.skip>false</natives.bundle.skip>
+                <skiko.runtime.optional>false</skiko.runtime.optional>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.lwjgl</groupId>
-                    <artifactId>lwjgl-vulkan</artifactId>
-                    <classifier>natives-macos-arm64</classifier>
-                </dependency>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-macos-arm64</artifactId>
-                    <version>${skiko.version}</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-shade-plugin</artifactId>
-                        <version>${maven-shade-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>natives-bundle-macos-aarch64</id>
-                                <phase>package</phase>
-                                <goals><goal>shade</goal></goals>
-                                <configuration>
-                                    <shadedArtifactAttached>true</shadedArtifactAttached>
-                                    <shadedClassifierName>natives-macos-arm64</shadedClassifierName>
-                                    <createDependencyReducedPom>false</createDependencyReducedPom>
-                                    <artifactSet>
-                                        <includes>
-                                            <include>org.lwjgl:*:*:${lwjgl.natives}</include>
-                                            <include>org.jetbrains.skiko:skiko-awt-runtime-macos-arm64</include>
-                                        </includes>
-                                    </artifactSet>
-                                    <filters>
-                                        <filter>
-                                            <artifact>me.piitex.engine:RenGL</artifact>
-                                            <excludes>
-                                                <exclude>**</exclude>
-                                            </excludes>
-                                        </filter>
-                                        <filter>
-                                            <artifact>*:*</artifact>
-                                            <excludes>
-                                                <exclude>META-INF/*.SF</exclude>
-                                                <exclude>META-INF/*.DSA</exclude>
-                                                <exclude>META-INF/*.RSA</exclude>
-                                                <exclude>META-INF/MANIFEST.MF</exclude>
-                                                <exclude>META-INF/INDEX.LIST</exclude>
-                                                <exclude>META-INF/versions/**</exclude>
-                                                <exclude>module-info.class</exclude>
-                                            </excludes>
-                                        </filter>
-                                    </filters>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
         </profile>
         <profile>
             <id>natives-bundle-windows-amd64</id>
             <properties>
                 <lwjgl.natives>natives-windows</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-windows-x64</skiko.runtime.artifact>
+                <natives.classifier>natives-windows</natives.classifier>
+                <natives.bundle.skip>false</natives.bundle.skip>
+                <skiko.runtime.optional>false</skiko.runtime.optional>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-windows-x64</artifactId>
-                    <version>${skiko.version}</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-shade-plugin</artifactId>
-                        <version>${maven-shade-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>natives-bundle-windows-amd64</id>
-                                <phase>package</phase>
-                                <goals><goal>shade</goal></goals>
-                                <configuration>
-                                    <shadedArtifactAttached>true</shadedArtifactAttached>
-                                    <shadedClassifierName>natives-windows</shadedClassifierName>
-                                    <createDependencyReducedPom>false</createDependencyReducedPom>
-                                    <artifactSet>
-                                        <includes>
-                                            <include>org.lwjgl:*:*:${lwjgl.natives}</include>
-                                            <include>org.jetbrains.skiko:skiko-awt-runtime-windows-x64</include>
-                                        </includes>
-                                    </artifactSet>
-                                    <filters>
-                                        <filter>
-                                            <artifact>me.piitex.engine:RenGL</artifact>
-                                            <excludes>
-                                                <exclude>**</exclude>
-                                            </excludes>
-                                        </filter>
-                                        <filter>
-                                            <artifact>*:*</artifact>
-                                            <excludes>
-                                                <exclude>META-INF/*.SF</exclude>
-                                                <exclude>META-INF/*.DSA</exclude>
-                                                <exclude>META-INF/*.RSA</exclude>
-                                                <exclude>META-INF/MANIFEST.MF</exclude>
-                                                <exclude>META-INF/INDEX.LIST</exclude>
-                                                <exclude>META-INF/versions/**</exclude>
-                                                <exclude>module-info.class</exclude>
-                                            </excludes>
-                                        </filter>
-                                    </filters>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
         </profile>
         <profile>
             <id>natives-bundle-windows-aarch64</id>
             <properties>
                 <lwjgl.natives>natives-windows-arm64</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-windows-arm64</skiko.runtime.artifact>
+                <natives.classifier>natives-windows-arm64</natives.classifier>
+                <natives.bundle.skip>false</natives.bundle.skip>
+                <skiko.runtime.optional>false</skiko.runtime.optional>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.jetbrains.skiko</groupId>
-                    <artifactId>skiko-awt-runtime-windows-arm64</artifactId>
-                    <version>${skiko.version}</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-shade-plugin</artifactId>
-                        <version>${maven-shade-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>natives-bundle-windows-aarch64</id>
-                                <phase>package</phase>
-                                <goals><goal>shade</goal></goals>
-                                <configuration>
-                                    <shadedArtifactAttached>true</shadedArtifactAttached>
-                                    <shadedClassifierName>natives-windows-arm64</shadedClassifierName>
-                                    <createDependencyReducedPom>false</createDependencyReducedPom>
-                                    <artifactSet>
-                                        <includes>
-                                            <include>org.lwjgl:*:*:${lwjgl.natives}</include>
-                                            <include>org.jetbrains.skiko:skiko-awt-runtime-windows-arm64</include>
-                                        </includes>
-                                    </artifactSet>
-                                    <filters>
-                                        <filter>
-                                            <artifact>me.piitex.engine:RenGL</artifact>
-                                            <excludes>
-                                                <exclude>**</exclude>
-                                            </excludes>
-                                        </filter>
-                                        <filter>
-                                            <artifact>*:*</artifact>
-                                            <excludes>
-                                                <exclude>META-INF/*.SF</exclude>
-                                                <exclude>META-INF/*.DSA</exclude>
-                                                <exclude>META-INF/*.RSA</exclude>
-                                                <exclude>META-INF/MANIFEST.MF</exclude>
-                                                <exclude>META-INF/INDEX.LIST</exclude>
-                                                <exclude>META-INF/versions/**</exclude>
-                                                <exclude>module-info.class</exclude>
-                                            </excludes>
-                                        </filter>
-                                    </filters>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
         </profile>
     </profiles>
 
+    <repositories>
+        <repository>
+            <id>compose-dev</id>
+            <url>https://redirector.kotlinlang.org/maven/compose-dev</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+        <repository>
+            <id>central-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.lwjgl</groupId>
+                <artifactId>lwjgl-bom</artifactId>
+                <version>${lwjgl.version}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <build>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <excludes>
-                    <!-- Sample data for the demos, which read it from the source tree by path, not from the classpath. -->
-                    <exclude>demo/**</exclude>
-                </excludes>
-            </resource>
-        </resources>
+        <pluginManagement>
+            <plugins>
+                <!--
+                  The release natives bundle. A module that owns natives declares this plugin and the
+                  "natives-bundle" execution with an artifactSet listing exactly those natives, e.g.
+                    <include>org.lwjgl:lwjgl-openal:*:${lwjgl.natives}</include>
+                  Without a natives-bundle-* profile the execution is skipped.
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>${maven-shade-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>natives-bundle</id>
+                            <phase>package</phase>
+                            <goals><goal>shade</goal></goals>
+                            <configuration>
+                                <skip>${natives.bundle.skip}</skip>
+                                <shadedArtifactAttached>true</shadedArtifactAttached>
+                                <shadedClassifierName>${natives.classifier}</shadedClassifierName>
+                                <createDependencyReducedPom>false</createDependencyReducedPom>
+                                <filters>
+                                    <filter>
+                                        <artifact>me.piitex.engine:*</artifact>
+                                        <excludes>
+                                            <exclude>**</exclude>
+                                        </excludes>
+                                    </filter>
+                                    <filter>
+                                        <artifact>*:*</artifact>
+                                        <excludes>
+                                            <exclude>META-INF/*.SF</exclude>
+                                            <exclude>META-INF/*.DSA</exclude>
+                                            <exclude>META-INF/*.RSA</exclude>
+                                            <exclude>META-INF/MANIFEST.MF</exclude>
+                                            <exclude>META-INF/INDEX.LIST</exclude>
+                                            <exclude>META-INF/versions/**</exclude>
+                                            <exclude>module-info.class</exclude>
+                                        </excludes>
+                                    </filter>
+                                </filters>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -635,42 +368,6 @@
                     <reuseForks>true</reuseForks>
                     <trimStackTrace>false</trimStackTrace>
                 </configuration>
-            </plugin>
-            <!-- Skiko's Java API (org.jetbrains.skia.*) is bundled into the RenGL jar, so consumers do not need the
-                 Compose dev repository it is published to. The dependency below is optional, which Maven does not pass
-                 on, and the published pom stays as it is (a dependency-reduced pom would bake in the build machine's
-                 platform profiles). The platform natives are in the natives-* jars (see the release profiles). -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>${maven-shade-plugin.version}</version>
-                <executions>
-                    <execution>
-                        <id>bundle-skiko</id>
-                        <phase>package</phase>
-                        <goals><goal>shade</goal></goals>
-                        <configuration>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <artifactSet>
-                                <includes>
-                                    <include>org.jetbrains.skiko:skiko-awt</include>
-                                </includes>
-                            </artifactSet>
-                            <filters>
-                                <filter>
-                                    <artifact>org.jetbrains.skiko:skiko-awt</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/MANIFEST.MF</exclude>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                        <exclude>module-info.class</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -708,450 +405,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <repositories>
-        <repository>
-            <id>compose-dev</id>
-            <url>https://redirector.kotlinlang.org/maven/compose-dev</url>
-            <releases><enabled>true</enabled></releases>
-            <snapshots><enabled>false</enabled></snapshots>
-        </repository>
-        <repository>
-            <id>central-snapshots</id>
-            <url>https://central.sonatype.com/repository/maven-snapshots</url>
-            <releases><enabled>false</enabled></releases>
-            <snapshots><enabled>true</enabled></snapshots>
-        </repository>
-    </repositories>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.lwjgl</groupId>
-                <artifactId>lwjgl-bom</artifactId>
-                <version>${lwjgl.version}</version>
-                <scope>import</scope>
-                <type>pom</type>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
-
-    <dependencies>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <!-- Pure-Java Hunspell engine for the offline spell checker (HunspellChecker). -->
-        <dependency>
-            <groupId>org.apache.lucene</groupId>
-            <artifactId>lucene-analysis-common</artifactId>
-            <version>10.2.2</version>
-        </dependency>
-        <!-- Pure-Java MP3 decoder for the audio system (LGPL). -->
-        <dependency>
-            <groupId>com.googlecode.soundlibs</groupId>
-            <artifactId>jlayer</artifactId>
-            <version>1.0.1-1</version>
-            <exclusions>
-                <!-- jlayer declares junit at compile scope for its own tests; nothing here needs it at runtime. -->
-                <exclusion>
-                    <groupId>junit</groupId>
-                    <artifactId>junit</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-api</artifactId>
-            <version>2.26.1</version>
-        </dependency>
-        <!--
-          Deliberately API only. log4j-core resolves the machine hostname at startup
-          (InetAddress.getLocalHost), which blocks ~5s on hosts whose name does not resolve.
-          The API's built-in simple logger is used instead; see log4j2.simplelog.properties.
-        -->
-        <!--
-          Platform-independent Java API classes (org.jetbrains.skia.*): needed on every
-          platform, unlike the native runtime, which is why this is unconditional rather
-          than living in one of the per-platform profiles below. They are shaded into the
-          RenGL jar, so the dependency is optional and consumers never resolve it.
-        -->
-        <dependency>
-            <groupId>org.jetbrains.skiko</groupId>
-            <artifactId>skiko-awt</artifactId>
-            <version>${skiko.version}</version>
-            <!-- Optional: it is shaded into the RenGL jar (bundle-skiko below), so consumers must not resolve it. -->
-            <optional>true</optional>
-        </dependency>
-        <!-- What skiko-awt needs at runtime. Optional dependencies bring no transitive ones, so they are declared here. -->
-        <dependency>
-            <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-stdlib</artifactId>
-            <version>2.3.20</version>
-        </dependency>
-        <dependency>
-            <groupId>org.jetbrains.kotlinx</groupId>
-            <artifactId>kotlinx-coroutines-core-jvm</artifactId>
-            <version>1.8.0</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.jetbrains.runtime</groupId>
-            <artifactId>jbr-api</artifactId>
-            <version>1.5.0</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-assimp</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-bgfx</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-egl</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-fmod</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-freetype</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-glfw</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-harfbuzz</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-hwloc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-jawt</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-jemalloc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-ktx</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-llvm</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-lmdb</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-lz4</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-meshoptimizer</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-mimalloc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-msdfgen</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-nanovg</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-nfd</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-nuklear</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-odbc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-openal</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-opencl</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-opengl</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-opengles</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-openxr</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-opus</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-par</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-renderdoc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-rpmalloc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-sdl</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-shaderc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-spng</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-spvc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-stb</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-tinyexr</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-tinyfd</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-vma</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-vulkan</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-xxhash</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-yoga</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-zstd</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-assimp</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-bgfx</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-freetype</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-glfw</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-harfbuzz</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-hwloc</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-jemalloc</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-ktx</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-llvm</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-lmdb</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-lz4</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-meshoptimizer</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-mimalloc</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-msdfgen</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-nanovg</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-nfd</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-nuklear</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-openal</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-opengl</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-opengles</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-opus</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-par</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-rpmalloc</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-sdl</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-shaderc</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-spng</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-spvc</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-stb</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-tinyexr</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-tinyfd</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-vma</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-xxhash</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-yoga</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-zstd</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-    </dependencies>
-
-
 </project>
