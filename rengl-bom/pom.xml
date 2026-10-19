@@ -53,6 +53,31 @@
                 <artifactId>rengl-spellcheck</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>rengl-tilemap</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>rengl-entity</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>rengl-charts</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>rengl-downloads</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>rengl-ui-file</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>

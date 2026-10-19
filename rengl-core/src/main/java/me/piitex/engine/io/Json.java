@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * A small JSON reader, as used by {@link me.piitex.engine.graphics.TextureAtlas} and
- * {@link me.piitex.engine.tilemap.TileMap}. Objects become {@link LinkedHashMap}s, keeping their key order, arrays
+ * {@code TileMap}. Objects become {@link LinkedHashMap}s, keeping their key order, arrays
  * {@link List}s, numbers {@link Double}s, and the rest {@link String}, {@link Boolean} or null.
  * <pre>{@code
  * Map<?, ?> level = (Map<?, ?>) Json.parse(Files.readString(path));
