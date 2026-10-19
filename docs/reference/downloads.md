@@ -2,6 +2,8 @@
 
 [Documentation](../README.md) › [Reference](README.md)
 
+> Needs the `rengl-downloads` [module](../modules.md).
+
 RenGL can download files over HTTP(S) on background threads and show the progress in several ways. The work is
 split in two so you can mix them freely:
 

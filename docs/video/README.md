@@ -2,6 +2,8 @@
 
 [Documentation](../README.md) › Video
 
+> Needs the `rengl-video` (with `rengl-audio`) [module](../modules.md).
+
 RenGL plays video files in the UI. A `VideoOverlay` is an element like any other: give it a file and a size, add it to
 a container, and it plays.
 

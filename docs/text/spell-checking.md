@@ -4,7 +4,8 @@
 
 [`RichTextAreaOverlay`](../overlays/rich-text-area-overlay.md) can underline misspelled words and offer
 corrections, **entirely offline**. There is no HTTP API, no account, and nothing leaves the machine. The
-dictionary is bundled inside the engine's jar.
+dictionary is bundled inside the `rengl-spellcheck` [module](../modules.md), so add that dependency to use it. Programs
+that don't check spelling never carry the dictionary or Lucene.
 
 ```java
 RichTextAreaOverlay area = new RichTextAreaOverlay(20, 20, 400, 200);

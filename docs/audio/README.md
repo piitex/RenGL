@@ -2,6 +2,8 @@
 
 [Documentation](../README.md) › Audio
 
+> Needs the `rengl-audio` [module](../modules.md).
+
 RenGL plays sound through OpenAL (LWJGL). Everything is in `me.piitex.engine.audio` and needs no setup: the audio
 device opens the first time something plays, and the engine closes it when the window closes.
 
@@ -120,7 +122,7 @@ the device. Only call it yourself if you use audio without an `Engine`. Audio ca
 
 ## Try it
 
-[`AudioDemo`](../../src/main/java/me/piitex/examples/demo/AudioDemo.java) needs no audio files (it generates tones).
+[`AudioDemo`](../../rengl-examples/src/main/java/me/piitex/examples/demo/AudioDemo.java) needs no audio files (it generates tones).
 Pass an `.ogg`, `.mp3` or `.wav` path as the first argument to try music crossfades.
 
 ## Audio reference

@@ -67,13 +67,28 @@ public class Hello {
 | **3D (optional)** | PBR materials, shadows, glTF/OBJ/FBX models, skeletal animation, instancing and a built-in physics engine, shown in a viewport or behind the whole UI. Programs that don't use it never pay for it. |
 | **App plumbing** | Multiple windows, file dialogs, a scheduler, background loading, downloads, config files, an input action map with rebinding, and an asset manager. |
 
+## Modules
+
+RenGL is split into Maven modules, so a project depends on what it uses. `rengl-core` is the window, UI toolkit, input
+and 2D game framework; audio, video, Vulkan, 3D, spell checking, tile maps, entities, charts, downloads and UI files are
+separate artifacts. `me.piitex.engine:RenGL` pulls in all of them, as the single jar did before. See
+[Modules](docs/modules.md) for what each brings and which to pick.
+
+```xml
+<dependency>
+    <groupId>me.piitex.engine</groupId>
+    <artifactId>rengl-core</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
 ## Requirements
 
 - **JDK 25**
 - **Maven** (a wrapper is included: `./mvnw`)
 - A GPU that supports **Metal** (macOS) or **OpenGL 3.3** (Windows, Linux). Vulkan 1.1 is an optional alternative.
 
-Native libraries (LWJGL and Skiko) are selected automatically for Windows, Linux and macOS on x86-64 and arm64.
+Native libraries (LWJGL and Skiko) are selected automatically for Windows, Linux and macOS on x86-64 and arm64, and each module brings only its own.
 
 ## Building and running
 
@@ -88,7 +103,7 @@ the first thread:
 -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
 ```
 
-The [demos](src/main/java/me/piitex/examples/demo) are the quickest way to see what it can do. Start with `Demo`, then try
+The [demos](rengl-examples/src/main/java/me/piitex/examples/demo) (in the `rengl-examples` module; run them with it as the working directory) are the quickest way to see what it can do. Start with `Demo`, then try
 `FireworksDemo`, `Studio3DDemo`, `GameLoopDemo`, `SpriteDemo`, `ResizableContainerDemo`, `Scene3DDemo`, `HdrSkyDemo`, `PhysicsDemo` or `VideoDemo`.
 
 ## Documentation
