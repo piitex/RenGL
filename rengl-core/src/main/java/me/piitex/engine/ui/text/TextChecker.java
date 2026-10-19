@@ -6,7 +6,7 @@ import java.util.List;
 /**
  * Finds spelling/grammar problems in a {@link me.piitex.engine.ui.overlays.RichTextAreaOverlay}'s
  * text. This is an interface so the engine core does not depend on any one checking
- * library. {@link HunspellChecker} is the bundled offline implementation, and a grammar
+ * library. {@code HunspellChecker} is the bundled offline implementation, and a grammar
  * checker can be dropped in the same way.
  * <p>
  * Always called off the render thread (debounced after edits), so it may be slow, but it
@@ -28,7 +28,7 @@ public interface TextChecker {
 
     /**
      * Whether {@link #check} judges each issue from the text around it alone, so it can be given just the part of a
-     * text that was edited. True for a checker that looks at words one by one, such as {@link HunspellChecker}: after
+     * text that was edited. True for a checker that looks at words one by one, such as {@code HunspellChecker}: after
      * an edit the overlay then checks only the words that changed, which keeps a big document cheap. A checker whose
      * answer for one place depends on text far away, such as a grammar checker reading whole sentences, leaves this
      * false (the default) and always gets the whole text. A fragment starts and ends at whitespace or at an end of

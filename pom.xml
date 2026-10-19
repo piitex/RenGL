@@ -197,20 +197,30 @@
           classifier still works the way it did before the split.
 
           These share the lwjgl.natives property with the dev profiles above, so they can't be
-          combined in one -P list (whichever profile's value "wins" would silently apply to all
+          combined in one list (whichever profile's value "wins" would silently apply to all
           of them). Run one platform per invocation, and pass -DskipAutoNatives so the host
-          machine's own OS-detected dev profile doesn't also activate:
-            mvn -DskipAutoNatives -P natives-bundle-linux-amd64 package
-            mvn -DskipAutoNatives -P natives-bundle-linux-aarch64 package
-            mvn -DskipAutoNatives -P natives-bundle-macos-x86_64 package
-            mvn -DskipAutoNatives -P natives-bundle-macos-aarch64 package
-            mvn -DskipAutoNatives -P natives-bundle-windows-amd64 package
-            mvn -DskipAutoNatives -P natives-bundle-windows-aarch64 package
+          machine's own OS-detected dev profile doesn't also activate. The platform is chosen
+          with -Dnatives.platform=<platform> rather than -P: Maven reads the poms of the other
+          modules in the build as dependencies, and only a -D property reaches those poms, so
+          the ${lwjgl.natives} in them resolves to the same platform:
+            mvn -DskipAutoNatives -Dnatives.platform=linux-amd64 package
+            mvn -DskipAutoNatives -Dnatives.platform=linux-aarch64 package
+            mvn -DskipAutoNatives -Dnatives.platform=macos-x86_64 package
+            mvn -DskipAutoNatives -Dnatives.platform=macos-aarch64 package
+            mvn -DskipAutoNatives -Dnatives.platform=windows-amd64 package
+            mvn -DskipAutoNatives -Dnatives.platform=windows-aarch64 package
+          (-P natives-bundle-<platform> still works for a single module.)
           This only resolves and repackages already-published artifacts, so all six can be run
           from any single host OS: no cross-compilation, no target-platform execution needed.
         -->
         <profile>
             <id>natives-bundle-linux-amd64</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>linux-amd64</value>
+                </property>
+            </activation>
             <properties>
                 <lwjgl.natives>natives-linux</lwjgl.natives>
                 <skiko.runtime.artifact>skiko-awt-runtime-linux-x64</skiko.runtime.artifact>
@@ -221,6 +231,12 @@
         </profile>
         <profile>
             <id>natives-bundle-linux-aarch64</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>linux-aarch64</value>
+                </property>
+            </activation>
             <properties>
                 <lwjgl.natives>natives-linux-arm64</lwjgl.natives>
                 <skiko.runtime.artifact>skiko-awt-runtime-linux-arm64</skiko.runtime.artifact>
@@ -231,6 +247,12 @@
         </profile>
         <profile>
             <id>natives-bundle-macos-x86_64</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>macos-x86_64</value>
+                </property>
+            </activation>
             <properties>
                 <lwjgl.natives>natives-macos</lwjgl.natives>
                 <skiko.runtime.artifact>skiko-awt-runtime-macos-x64</skiko.runtime.artifact>
@@ -241,6 +263,12 @@
         </profile>
         <profile>
             <id>natives-bundle-macos-aarch64</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>macos-aarch64</value>
+                </property>
+            </activation>
             <properties>
                 <lwjgl.natives>natives-macos-arm64</lwjgl.natives>
                 <skiko.runtime.artifact>skiko-awt-runtime-macos-arm64</skiko.runtime.artifact>
@@ -251,6 +279,12 @@
         </profile>
         <profile>
             <id>natives-bundle-windows-amd64</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>windows-amd64</value>
+                </property>
+            </activation>
             <properties>
                 <lwjgl.natives>natives-windows</lwjgl.natives>
                 <skiko.runtime.artifact>skiko-awt-runtime-windows-x64</skiko.runtime.artifact>
@@ -261,6 +295,12 @@
         </profile>
         <profile>
             <id>natives-bundle-windows-aarch64</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>windows-aarch64</value>
+                </property>
+            </activation>
             <properties>
                 <lwjgl.natives>natives-windows-arm64</lwjgl.natives>
                 <skiko.runtime.artifact>skiko-awt-runtime-windows-arm64</skiko.runtime.artifact>
