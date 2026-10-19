@@ -5,10 +5,9 @@ import me.piitex.engine.gl.GLFWindow;
 import me.piitex.engine.gl.NativeMenuBar;
 import me.piitex.engine.gl.renderer.metal.MetalContext;
 import me.piitex.engine.gl.renderer.metal.MetalSkikoRenderer;
+import me.piitex.engine.gl.renderer.RenderBackend;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.SkikoRenderer;
-import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
-import me.piitex.engine.gl.renderer.vulkan.VulkanSkikoRenderer;
 import me.piitex.engine.input.Clipboard;
 import me.piitex.engine.input.CursorManager;
 import me.piitex.engine.input.FileDialog;
@@ -98,7 +97,7 @@ public class Engine {
         final RenderAPI requested;       // what WindowOptions asked for when the window was created
         final InputProcessor inputProcessor = new InputProcessor();
         MetalContext metalContext;   // Metal only; created on the main thread, closed there after the renderer is released
-        VulkanContext vulkanContext; // Vulkan only; same lifetime, but closed before the GLFW window is destroyed
+        RenderBackend.Context backendContext; // Vulkan only (a backend from its own module); same lifetime, but closed before the GLFW window is destroyed
         Renderer renderer;         // render thread
         volatile int logicalW, logicalH, fbW, fbH;
         volatile boolean sizeDirty;
@@ -212,7 +211,7 @@ public class Engine {
         String gpu;
         switch (main.backend) {
             case METAL -> gpu = SystemInfo.gpuFromMetalDevice(main.metalContext.getDevice());
-            case VULKAN -> gpu = main.vulkanContext.gpuName();
+            case VULKAN -> gpu = main.backendContext.gpuName();
             default -> {
                 main.glfWindow.initOpenGLContext();
                 gpu = SystemInfo.gpuFromGL();
@@ -459,7 +458,7 @@ public class Engine {
             case METAL -> host.metalContext = new MetalContext(windowHandle);
             case VULKAN -> {
                 try {
-                    host.vulkanContext = new VulkanContext(windowHandle);
+                    host.backendContext = RenderBackend.find(RenderAPI.VULKAN).createContext(windowHandle);
                 } catch (RuntimeException e) {
                     // Past the startup probe the device still failed (no surface support, out of memory): the window
                     // is already a context-less one, so there is nothing to fall back to.
@@ -518,7 +517,7 @@ public class Engine {
             host.window.notifyClosing();
         }
         CursorManager.detach(host.handle);
-        if (host.vulkanContext != null) host.vulkanContext.close(); // its surface belongs to the GLFW window
+        if (host.backendContext != null) host.backendContext.close(); // its surface belongs to the GLFW window
         host.glfWindow.destroy();
         if (host.metalContext != null) host.metalContext.close();
         if (host.swapping) recreate(host);
@@ -563,7 +562,7 @@ public class Engine {
                             host.metalContext.resize(host.fbW, host.fbH);
                             ((MetalSkikoRenderer) host.renderer).onResize(host.logicalW, host.logicalH, host.fbW, host.fbH);
                         }
-                        case VULKAN -> ((VulkanSkikoRenderer) host.renderer).onResize(host.logicalW, host.logicalH);
+                        case VULKAN -> ((RenderBackend.BackendRenderer) host.renderer).onResize(host.logicalW, host.logicalH);
                         default -> {
                             makeContextCurrent(host);
                             ((SkikoRenderer) host.renderer).recreateSurface(host.handle);
@@ -721,12 +720,7 @@ public class Engine {
                 metalRenderer.onResize(host.logicalW, host.logicalH, host.fbW, host.fbH);
                 host.renderer = metalRenderer;
             }
-            case VULKAN -> {
-                VulkanSkikoRenderer vulkanRenderer = new VulkanSkikoRenderer(host.vulkanContext);
-                vulkanRenderer.init();
-                vulkanRenderer.onResize(host.logicalW, host.logicalH);
-                host.renderer = vulkanRenderer;
-            }
+            case VULKAN -> host.renderer = host.backendContext.createRenderer(host.logicalW, host.logicalH);
             default -> {
                 host.glfWindow.initOpenGLContext();
                 currentContext = host.handle;
@@ -744,7 +738,7 @@ public class Engine {
         if (host.renderer != null) {
             switch (host.backend) {
                 case METAL -> ((MetalSkikoRenderer) host.renderer).dispose();
-                case VULKAN -> ((VulkanSkikoRenderer) host.renderer).dispose();
+                case VULKAN -> ((RenderBackend.BackendRenderer) host.renderer).dispose();
                 default -> {
                     makeContextCurrent(host);
                     ((SkikoRenderer) host.renderer).dispose();
@@ -778,7 +772,7 @@ public class Engine {
         if (host.appliedVsync != null && host.appliedVsync == vsync) return;
         switch (host.backend) {
             case METAL -> host.metalContext.setVsync(vsync);
-            case VULKAN -> host.vulkanContext.setVsync(vsync);
+            case VULKAN -> host.backendContext.setVsync(vsync);
             default -> {
                 makeContextCurrent(host);
                 host.glfWindow.setVsync(vsync);

@@ -43,6 +43,11 @@
                 <artifactId>rengl-3d</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>rengl-vulkan</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>

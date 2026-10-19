@@ -2,6 +2,7 @@ package me.piitex.engine.gl.renderer.vulkan;
 
 import me.piitex.engine.RenderAPI;
 import me.piitex.engine.gl.renderer.GpuInterop;
+import me.piitex.engine.gl.renderer.RenderBackend;
 import me.piitex.engine.gl.renderer.SkiaRenderer;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
@@ -22,7 +23,7 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_TILING_OPTIMAL;
  * Threading: construct {@link VulkanContext} on the main thread, then call everything here on the render thread.
  */
 @GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
-public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
+public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop, RenderBackend.BackendRenderer {
     private static final Logger log = LogManager.getLogger("Engine");
 
     private final VulkanContext vulkan;
@@ -104,7 +105,7 @@ public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
     }
 
     @Override
-    public VulkanContext vulkanContext() {
+    public VulkanContext backendContext() {
         return vulkan;
     }
 
@@ -123,6 +124,7 @@ public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
      * The window changed size. The swapchain is rebuilt on the next frame, and the canvas scale follows the new
      * image size then.
      */
+    @Override
     public void onResize(int logicalWidth, int logicalHeight) {
         this.logicalWidth = Math.max(1, logicalWidth);
         this.logicalHeight = Math.max(1, logicalHeight);
@@ -226,6 +228,7 @@ public class VulkanSkikoRenderer extends SkiaRenderer implements GpuInterop {
      * Frees the Skia objects, waiting for work already sent to finish. Render thread, between frames. The renderer
      * can't be used afterwards; the {@link VulkanContext} is left for its owner to close, after this.
      */
+    @Override
     public void dispose() {
         vulkan.waitIdle();
         disposed = true;

@@ -1,7 +1,6 @@
 package me.piitex.engine.gl.renderer;
 
 import me.piitex.engine.RenderAPI;
-import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
 import org.jetbrains.skia.DirectContext;
 
 /**
@@ -24,9 +23,11 @@ public interface GpuInterop {
     DirectContext skiaContext();
 
     /**
-     * The window's Vulkan device, queue and instance for {@link RenderAPI#VULKAN}, and null for OpenGL.
+     * What the window's {@link RenderBackend} keeps for it, and null for OpenGL, which is part of the core. For
+     * {@link RenderAPI#VULKAN} this is the {@code VulkanContext} (device, queue and instance) from the rengl-vulkan
+     * module, which code that renders with Vulkan casts it to.
      */
-    VulkanContext vulkanContext();
+    RenderBackend.Context backendContext();
 
     /**
      * Framebuffer pixels per logical point: 2 on a retina display. A picture drawn at {@code width * pixelScale()}

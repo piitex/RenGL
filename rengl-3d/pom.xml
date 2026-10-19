@@ -20,6 +20,11 @@
             <artifactId>rengl-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-vulkan</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!--
           The Skia API is shaded into the rengl-core jar, not passed on as a dependency, so the modules that compile
           against it need it to build. It stays out of the published dependencies.

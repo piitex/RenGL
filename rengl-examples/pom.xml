@@ -35,6 +35,11 @@
             <artifactId>rengl-3d</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-vulkan</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- The Skia API is shaded into the rengl-core jar, so a module that compiles against it declares it to build. -->
         <dependency>
             <groupId>org.jetbrains.skiko</groupId>

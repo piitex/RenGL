@@ -4,8 +4,7 @@ import me.piitex.engine.RenderAPI;
 import me.piitex.engine.WindowOptions;
 import me.piitex.engine.WindowStyle;
 import me.piitex.engine.gl.renderer.SkikoRenderer;
-import me.piitex.engine.gl.renderer.vulkan.VulkanContext;
-import me.piitex.engine.gl.renderer.vulkan.VulkanSkikoRenderer;
+import me.piitex.engine.gl.renderer.RenderBackend;
 import me.piitex.engine.input.InputManager;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
@@ -15,13 +14,11 @@ import org.lwjgl.glfw.GLFWErrorCallback;
 import org.jetbrains.skia.EncodedImageFormat;
 import org.jetbrains.skia.Image;
 import org.lwjgl.glfw.GLFWImage;
-import org.lwjgl.glfw.GLFWVulkan;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.vulkan.VK;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -46,7 +43,7 @@ import static org.lwjgl.system.MemoryUtil.NULL;
  * {@link #initOpenGLContext()} to bind it before drawing with {@link SkikoRenderer}.
  * <p>
  * With {@link RenderAPI#VULKAN} the window has no client API at all ({@code GLFW_NO_API}); the engine creates a
- * {@link VulkanContext} surface for it instead.
+ * Vulkan surface for it instead, through the {@link RenderBackend} that the rengl-vulkan module provides.
  * <p>
  * On macOS the window is intentionally created with {@code GLFW_CLIENT_API =
  * GLFW_NO_API}, so GLFW backs it with a plain {@code NSView} rather than an
@@ -112,8 +109,9 @@ public class GLFWindow {
             }
         }).set();
 
-        if (requested == RenderAPI.VULKAN || RenderAPI.resolve(requested) == RenderAPI.VULKAN) {
-            initVulkanLoader();
+        RenderBackend vulkan = RenderBackend.find(RenderAPI.VULKAN);
+        if (vulkan != null && (requested == RenderAPI.VULKAN || RenderAPI.resolve(requested) == RenderAPI.VULKAN)) {
+            vulkan.beforeGlfwInit();
         }
 
         if (!glfwInit()) {
@@ -121,13 +119,14 @@ public class GLFWindow {
         }
 
         RenderAPI resolved = RenderAPI.resolve(requested);
-        if (resolved == RenderAPI.VULKAN && !VulkanSkikoRenderer.skikoHasVulkan()) {
-            log.warn("Vulkan was requested, but the Skiko on the classpath ({}) has no Vulkan support; it needs a build that includes JetBrains/skiko#1201 (0.999.0-SNAPSHOT). Using {} instead.",
-                    VulkanSkikoRenderer.skikoVersion(), RenderAPI.platformDefault());
-            resolved = RenderAPI.platformDefault();
-        } else if (resolved == RenderAPI.VULKAN && !VulkanContext.isSupported()) {
-            log.warn("Vulkan was requested but isn't usable here, using {} instead.", RenderAPI.platformDefault());
-            resolved = RenderAPI.platformDefault();
+        if (resolved == RenderAPI.VULKAN) {
+            String problem = vulkan == null
+                    ? "the rengl-vulkan module is not on the classpath (add the me.piitex.engine:rengl-vulkan dependency)"
+                    : vulkan.unsupportedReason();
+            if (problem != null) {
+                log.warn("Vulkan was requested, but {}. Using {} instead.", problem, RenderAPI.platformDefault());
+                resolved = RenderAPI.platformDefault();
+            }
         }
         this.backend = resolved;
         log.info("Render API: {}", backend);
@@ -142,19 +141,6 @@ public class GLFWindow {
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        }
-    }
-
-    /**
-     * Makes GLFW use the Vulkan library LWJGL loads (the bundled MoltenVK on macOS, the system loader elsewhere), so the
-     * surface GLFW creates and the instance the engine creates come from the same driver. A failure only means Vulkan
-     * isn't there, which {@link VulkanContext#isSupported()} reports.
-     */
-    private static void initVulkanLoader() {
-        try {
-            GLFWVulkan.glfwInitVulkanLoader(VK.getFunctionProvider().getFunctionAddress("vkGetInstanceProcAddr"));
-        } catch (Throwable t) {
-            log.debug("Could not hand GLFW the Vulkan loader: {}", t.toString());
         }
     }
 
