@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>me.piitex.engine</groupId>
+        <artifactId>rengl-parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>rengl-video</artifactId>
+    <name>RenGL video</name>
+    <description>Video playback: the VideoOverlay element, AVI/MJPEG and MP4/H.264 decoding, and the system decoders on Windows and macOS.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- The soundtrack plays through the audio module. -->
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-audio</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+          The Skia API (org.jetbrains.skia.*) is shaded into the rengl-core jar, not passed on as a dependency, so the
+          modules that compile against it need it to build. It stays out of the published dependencies.
+        -->
+        <dependency>
+            <groupId>org.jetbrains.skiko</groupId>
+            <artifactId>skiko-awt</artifactId>
+            <version>${skiko.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- The Skia native library, so the tests that draw can run. -->
+        <dependency>
+            <groupId>org.jetbrains.skiko</groupId>
+            <artifactId>${skiko.runtime.artifact}</artifactId>
+            <version>${skiko.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

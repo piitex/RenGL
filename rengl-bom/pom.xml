@@ -28,6 +28,16 @@
                 <artifactId>rengl-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>rengl-audio</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>me.piitex.engine</groupId>
+                <artifactId>rengl-video</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
