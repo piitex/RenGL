@@ -27,6 +27,7 @@
         <module>rengl-video</module>
         <module>rengl-vulkan</module>
         <module>rengl-3d</module>
+        <module>rengl-spellcheck</module>
         <module>rengl-examples</module>
     </modules>
 

@@ -67,12 +67,6 @@
     </build>
 
     <dependencies>
-        <!-- Pure-Java Hunspell engine for the offline spell checker (HunspellChecker). -->
-        <dependency>
-            <groupId>org.apache.lucene</groupId>
-            <artifactId>lucene-analysis-common</artifactId>
-            <version>10.2.2</version>
-        </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
