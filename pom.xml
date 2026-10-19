@@ -25,6 +25,7 @@
         <module>rengl-core</module>
         <module>rengl-audio</module>
         <module>rengl-video</module>
+        <module>rengl-3d</module>
         <module>rengl-examples</module>
     </modules>
 
