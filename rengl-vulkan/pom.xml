@@ -64,6 +64,12 @@
         <!-- The release bundles for macOS (activated by id from the command line, see the parent pom). -->
         <profile>
             <id>natives-bundle-macos-x86_64</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>macos-x86_64</value>
+                </property>
+            </activation>
             <properties>
                 <natives.bundle.skip>false</natives.bundle.skip>
             </properties>
@@ -77,6 +83,12 @@
         </profile>
         <profile>
             <id>natives-bundle-macos-aarch64</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>macos-aarch64</value>
+                </property>
+            </activation>
             <properties>
                 <natives.bundle.skip>false</natives.bundle.skip>
             </properties>
