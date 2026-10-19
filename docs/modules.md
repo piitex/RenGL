@@ -126,8 +126,9 @@ platform goes in `natives.platform`:
 The values are `linux-amd64`, `linux-aarch64`, `macos-x86_64`, `macos-aarch64`, `windows-amd64` and `windows-aarch64`.
 This only repackages already-published native artifacts, so all six can be built from one machine.
 
-On Windows `rengl-core`'s jar holds 14 DLLs, `rengl-audio`'s 6, `rengl-3d`'s 13 and `rengl-tilemap`'s 2; the `RenGL`
-jar holds all 35. (Before the split the one jar held 95, most of them for libraries the engine never used.)
+On Windows `rengl-core`'s jar holds 6 DLLs (one of them Skiko), `rengl-audio`'s 2, `rengl-3d`'s 5 and `rengl-tilemap`'s
+1; the `RenGL` jar holds all 14. (Before the split the one jar held far more, most of them for libraries the engine
+never used.)
 
 ## Running the examples
 
