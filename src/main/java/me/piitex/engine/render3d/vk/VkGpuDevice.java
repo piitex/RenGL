@@ -84,6 +84,12 @@ public final class VkGpuDevice implements GpuDevice {
     private final LongSupplier frames;
     private final long uploadPool;
     private final long[] commandPools = new long[FRAMES];
+    /**
+     * The command buffers each slot's pool has handed out. Resetting a pool returns its buffers to the initial state but does
+     * not free them, so they are kept and handed out again instead of allocating new ones every frame, which leaked.
+     */
+    private final java.util.List<java.util.List<VkCommandBuffer>> frameBuffers = new java.util.ArrayList<>();
+    private final int[] frameBuffersUsed = new int[FRAMES];
     private final java.util.List<java.util.List<Long>> descriptorPools = new java.util.ArrayList<>(); // per slot
     private final int[] activePool = new int[FRAMES];
     private VkCommandBuffer pendingUploads;
@@ -247,6 +253,7 @@ public final class VkGpuDevice implements GpuDevice {
         check(vkWaitForFences(device, fences[slot], true, Long.MAX_VALUE), "wait for the frame fence");
         check(vkResetFences(device, fences[slot]), "reset the frame fence");
         check(vkResetCommandPool(device, commandPools[slot], 0), "reset the command pool");
+        frameBuffersUsed[slot] = 0;
         for (long pool : descriptorPools.get(slot)) check(vkResetDescriptorPool(device, pool, 0), "reset a descriptor pool");
         activePool[slot] = 0;
         // Frames up to counter-FRAMES are finished now (this slot's fence covered the one before).
@@ -363,12 +370,18 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     VkCommandBuffer allocateFrameCommandBuffer() {
+        while (frameBuffers.size() < FRAMES) frameBuffers.add(new java.util.ArrayList<>());
+        java.util.List<VkCommandBuffer> owned = frameBuffers.get(slot);
+        if (frameBuffersUsed[slot] < owned.size()) return owned.get(frameBuffersUsed[slot]++);
         try (MemoryStack stack = stackPush()) {
             VkCommandBufferAllocateInfo info = VkCommandBufferAllocateInfo.calloc(stack).sType$Default()
                     .commandPool(commandPools[slot]).level(VK_COMMAND_BUFFER_LEVEL_PRIMARY).commandBufferCount(1);
             PointerBuffer out = stack.mallocPointer(1);
             check(vkAllocateCommandBuffers(device, info, out), "allocate a command buffer");
-            return new VkCommandBuffer(out.get(0), device);
+            VkCommandBuffer cmd = new VkCommandBuffer(out.get(0), device);
+            owned.add(cmd);
+            frameBuffersUsed[slot]++;
+            return cmd;
         }
     }
 
