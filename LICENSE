@@ -1,0 +1,190 @@
+RenGL Open-Source-Game License (RSGL) 1.0
+
+Copyright (c) 2026 [LICENSOR NAME] ("Licensor")
+
+RenGL is free to use for games and applications whose source code is public, and for
+non-commercial work. Closed-source commercial products need a Commercial License. Nobody
+may sell or otherwise commercialize RenGL itself.
+
+This is a source-available license. It is not an OSI-approved open-source license.
+
+
+1. DEFINITIONS
+
+"RenGL" means this software: its source code, binaries, documentation, build files and
+bundled resources that the Licensor owns, in any version released under this License.
+
+"Modified Version" means RenGL after you have changed, extended, translated or forked it,
+or any work that contains copied portions of RenGL's source code.
+
+"Application" means a program, game or other work that uses RenGL, whether by calling it,
+linking to it or bundling it, and that is not itself a Modified Version or an Engine
+Product.
+
+"Engine Product" means a product or service whose main purpose is to give developers
+functionality similar to RenGL's: a game engine, rendering or UI framework, widget
+toolkit, library, SDK, editor, or asset pipeline. Whether it is made by modifying RenGL or
+by wrapping or re-exporting it, if developers are meant to build on it, it is an Engine
+Product.
+
+"Public Source" means the complete source code of an Application (everything needed to
+build and run it, other than the items in Section 3.3), made available to the general
+public: online, free of charge, without registration, for as long as the Application is
+distributed or offered, under a license that lets anyone at least read, copy, build and
+modify it for their own use.
+
+"Open Application" means an Application whose Public Source is available as required by
+Section 3.
+
+"Commercial Use" means any use of RenGL, or of an Application, that is intended to produce
+or does produce revenue or other compensation, directly or indirectly. That includes
+selling copies, subscriptions, in-app purchases, advertising, sponsored placement,
+paid services, use inside a product a company sells, and use by a company for client
+work. It does not include voluntary donations that do not give the donor access to
+anything the public cannot get. Use of RenGL in teaching, research, hobby projects and
+free software released without any revenue is not Commercial Use.
+
+"Commercial License" means a separate written agreement signed or issued by the Licensor.
+
+
+2. FREE USE
+
+Subject to this License, you may use, copy, and run RenGL, and create and distribute
+Applications, free of charge, for any purpose that is not Commercial Use.
+
+You may do this with closed source for non-commercial work. You do not have to publish
+the source of an Application you do not commercialize.
+
+
+3. COMMERCIAL USE OF OPEN APPLICATIONS
+
+3.1  You may make Commercial Use of an Application, including selling it, without a
+     Commercial License and without paying the Licensor, if and only if it is an Open
+     Application.
+
+3.2  You must publish the Public Source when you first distribute or offer the Application
+     commercially, and keep it current: each released version must have matching Public
+     Source available no later than the release. You may choose the license for your own
+     source code, provided it satisfies the Public Source definition. You do not have to
+     license your Application under this License.
+
+3.3  The Public Source does not have to include (a) art, audio, video, fonts, story and
+     other creative content that is not code, (b) code you do not have the right to
+     publish, such as a platform holder's SDK, and (c) server-side code that never leaves
+     your servers. If you leave something out, the Application must still build and run
+     with substitutes.
+
+3.4  You may bundle RenGL, in unmodified or modified form, in the distribution of an Open
+     Application, subject to Section 5. The parts of RenGL you bundle stay under this
+     License; the rest of your Application stays under yours.
+
+
+4. COMMERCIAL USE OF CLOSED APPLICATIONS
+
+If an Application is not an Open Application, you need a Commercial License before you
+make any Commercial Use of it. Contact the Licensor at [CONTACT EMAIL OR URL]. The
+Licensor decides the fee and terms of a Commercial License and may refuse to grant one.
+
+Making Commercial Use without a Commercial License, or after a Commercial License has
+ended, is a violation of this License.
+
+
+5. NO COMMERCIALIZING RENGL ITSELF
+
+Whether or not you publish your source, you may not, without a Commercial License:
+
+(a) sell, license, rent, lease or otherwise charge for RenGL or a Modified Version, alone
+    or as part of a bundle, or charge for access to it (this includes paid forks, paid
+    mirrors, paid builds, and packaging it for sale on a marketplace);
+(b) offer RenGL or a Modified Version as a paid, ad-supported or otherwise monetized
+    service, such as hosted or managed use, where the service is substantially RenGL;
+(c) distribute an Engine Product commercially;
+(d) sublicense RenGL to anyone for a fee, or let a third party do any of the above.
+
+You may charge for an Open Application, and for work done in making one for a client,
+provided the Public Source requirement is met. You may recover the reasonable cost of
+physical media. You may be paid for teaching, writing about or supporting RenGL as long
+as you do not hand over RenGL as the thing being paid for.
+
+Engine Products that are free of charge and under this License are allowed.
+
+
+6. MODIFIED VERSIONS
+
+6.1  You may modify RenGL and share your Modified Version publicly, provided that you:
+     (a) license the whole Modified Version, as far as you have the right to, under this
+         License, and make its source code available;
+     (b) mark your changes and the date you made them, so they are not mistaken for the
+         Licensor's work;
+     (c) keep every copyright, license and attribution notice;
+     (d) do not use the name "RenGL" in a way that suggests your version is the Licensor's
+         official release. You may say it is "based on RenGL".
+
+6.2  Sections 3, 4 and 5 apply to a Modified Version. A Modified Version bundled in an
+     Open Application is covered by Section 3.4.
+
+
+7. NOTICES AND ATTRIBUTION
+
+When you distribute RenGL or an Application containing it, include this License and the
+third-party notices that come with RenGL, in the distribution, on a documentation page, or
+inside the Application's about or credits screen. You do not have to show a logo or splash
+screen.
+
+
+8. CONTRIBUTIONS
+
+If you submit code, documentation or other material to the Licensor's repository for
+inclusion in RenGL, you grant the Licensor a perpetual, worldwide, irrevocable,
+non-exclusive, royalty-free license to use, modify, sublicense and distribute it under
+this License or any other license, including a Commercial License. You keep ownership of
+your contribution. You confirm that you have the right to grant this license.
+
+
+9. THIRD-PARTY COMPONENTS
+
+RenGL depends on and bundles third-party components (for example LWJGL, Skiko, Kotlin,
+Lucene, Log4j, JLayer, Roboto and Feather icons). Each is under its own license, which is
+included with it or documented by its authors. This License does not change those licenses
+and does not grant any rights in them. Where such a license gives you rights, for example
+the right to replace an LGPL library, those rights continue.
+
+
+10. VERSIONS AND CHANGES
+
+The Licensor may publish new versions of this License. A version of RenGL you received
+under a particular license text stays under that text for you, unless you choose to accept
+a later one. Versions of RenGL that were released and received under a different license
+before this License was adopted remain available under that license to those who
+received them.
+
+
+11. TERMINATION
+
+If you violate this License, your rights under it end automatically. They are reinstated
+provisionally when you stop the violation, and permanently if the Licensor has not
+notified you of it within 60 days after you stop. If this is the first time the Licensor
+notifies you of a violation and you stop it within 30 days of receiving the notice, they
+are reinstated permanently. Reinstatement does not excuse past Commercial Use: you remain
+liable for that, and the Licensor may offer a Commercial License to cover it.
+
+Persons who received copies from you stay licensed as long as they follow this License.
+
+
+12. NO WARRANTY, LIMITATION OF LIABILITY
+
+RENGL IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+IN NO EVENT SHALL THE LICENSOR OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH RENGL OR ITS USE OR OTHER DEALINGS IN IT.
+
+
+13. GENERAL
+
+This License is governed by the laws of [JURISDICTION], without regard to its conflict
+of laws rules. If a part of this License is unenforceable, the rest remains in force and
+that part is applied to the extent allowed. No rights are granted except those written
+here; the Licensor keeps everything else, including the rights to trademarks, and to offer
+RenGL under other terms to anyone. Failure to enforce a part of this License is not a
+waiver of it.

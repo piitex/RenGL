@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>me.piitex.engine</groupId>
+        <artifactId>rengl-parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <!--
+      The whole engine in one dependency, as RenGL was before it was split into modules. It has no code of its own: the
+      jar holds a marker file, and the dependencies bring every module. It stays a jar (not a pom) so that an existing
+      <dependency> on me.piitex.engine:RenGL, which does not say <type>pom</type>, keeps resolving.
+      A project that wants less depends on the modules it uses instead; see docs/modules.md.
+    -->
+    <artifactId>RenGL</artifactId>
+    <name>RenGL</name>
+    <description>The whole RenGL engine: every module except the examples, as one dependency.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-audio</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-video</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-vulkan</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-3d</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-spellcheck</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-tilemap</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-entity</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-charts</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-downloads</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-ui-file</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+          The Skiko native library for the platform being built. rengl-core declares it optional, which Maven does not
+          pass on, so it is declared here too for the natives bundle to find it (optional except in a release build).
+        -->
+        <dependency>
+            <groupId>org.jetbrains.skiko</groupId>
+            <artifactId>${skiko.runtime.artifact}</artifactId>
+            <version>${skiko.version}</version>
+            <optional>${skiko.runtime.optional}</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <!--
+                      Release only: one natives-<platform> jar with the natives of every module, so depending on RenGL and
+                      its natives classifier works as it always did. The modules' own natives jars hold the same files.
+                    -->
+                    <execution>
+                        <id>natives-bundle</id>
+                        <configuration>
+                            <artifactSet>
+                                <includes>
+                                    <include>org.lwjgl:*:*:${lwjgl.natives}</include>
+                                    <include>org.jetbrains.skiko:${skiko.runtime.artifact}</include>
+                                </includes>
+                            </artifactSet>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -14,7 +14,9 @@ notarization, are the standard `jpackage` and Apple tools and were **not** run h
 ## What goes in the input folder
 
 `jpackage` takes a folder of jars. Put your app jar and every dependency jar in it, including the LWJGL and Skiko
-`natives-*` jars for the platform you are building on.
+`natives-*` jars for the platform you are building on. With the RenGL [modules](../modules.md), that is the
+`natives-<platform>` jar of each module you use that has natives (or the one `RenGL` jar's, if you depend on that).
+`rengl-core`'s includes the Skiko runtime.
 
 ```bash
 mvn package dependency:copy-dependencies -DoutputDirectory=target/input
