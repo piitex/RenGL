@@ -87,6 +87,16 @@ public class Engine {
     private static final long IMPLAUSIBLY_FAST_FRAME_NANOS = 2_000_000L;
 
     /**
+     * How long the main thread waits for an OS event before it serves its queues anyway.
+     */
+    private static final double MAIN_LOOP_WAIT_SECONDS = 0.005;
+
+    /**
+     * The frame rate while every window is minimized.
+     */
+    private static final int MINIMIZED_FPS = 10;
+
+    /**
      * One open OS window: the {@link Window} and everything native the engine keeps for it.
      */
     private static final class Host {
@@ -242,7 +252,9 @@ public class Engine {
                     host.shown = true;
                 }
             }
-            glfwWaitEventsTimeout(0.001);
+            // Wakes at once for any OS event; the timeout only bounds how late the queues polled below are served.
+            // At 1 ms this thread woke a thousand times a second doing nothing, which keeps the CPU out of its idle states.
+            glfwWaitEventsTimeout(MAIN_LOOP_WAIT_SECONDS);
 
             glfwPollEvents();
             for (Host host : hosts) {
@@ -256,7 +268,6 @@ public class Engine {
             CursorManager.pump();
             NativeMenuBar.pump();
             FileDialog.pump();
-            Thread.onSpinWait();
         }
 
         running = false;
@@ -617,7 +628,11 @@ public class Engine {
             // Vsync on: the display paces it, except when that isn't happening (see the constant).
             Host pacer = pacingHost();
             WindowOptions pacing = pacer != null ? pacer.window.getWindowOptions() : live.isEmpty() ? null : live.get(0).window.getWindowOptions();
-            if (pacing != null && (!pacing.isVsync() || System.nanoTime() - now < IMPLAUSIBLY_FAST_FRAME_NANOS)) {
+            if (!live.isEmpty() && live.stream().allMatch(h -> h.window.isMinimized())) {
+                frameLimiter.limit(MINIMIZED_FPS); // nothing is visible, so don't redraw at full rate
+            } else if (pacing != null && pacing.getBackgroundFPS() > 0 && live.stream().noneMatch(h -> h.window.isFocused())) {
+                frameLimiter.limit(pacing.getBackgroundFPS()); // in the background: the display's rate isn't needed
+            } else if (pacing != null && (!pacing.isVsync() || System.nanoTime() - now < IMPLAUSIBLY_FAST_FRAME_NANOS)) {
                 frameLimiter.limit(pacing.getMaxFPS());
             }
         }
