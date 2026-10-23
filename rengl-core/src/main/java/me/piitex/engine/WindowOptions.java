@@ -30,6 +30,7 @@ public class WindowOptions {
     private volatile boolean resizable = true;
     private volatile RenderAPI renderer = RenderAPI.AUTO;
     private volatile int maxFPS = 60;
+    private volatile int backgroundFPS = 30;
     private volatile String iconPath = null;
     private volatile Image icon = null;
 
@@ -230,6 +231,17 @@ public class WindowOptions {
     }
 
     /**
+     * The frame rate cap while no window of the application has focus (default 30), vsync or not. A background
+     * window redraws less often, which saves power and heat; it speeds up again the moment a window is focused.
+     * Zero or negative means no cap of its own: the usual vsync or {@link #setMaxFPS} pacing applies. The cap is read from
+     * the window that paces the loop, and the render loop picks up a change on the next frame.
+     */
+    public WindowOptions setBackgroundFPS(int backgroundFPS) {
+        this.backgroundFPS = backgroundFPS;
+        return this;
+    }
+
+    /**
      * When on, keyboard focus is cleared as the OS window loses focus (default off). Checked every frame.
      */
     public WindowOptions setHandleFocus(boolean handleFocus) {
@@ -322,6 +334,10 @@ public class WindowOptions {
 
     public int getMaxFPS() {
         return maxFPS;
+    }
+
+    public int getBackgroundFPS() {
+        return backgroundFPS;
     }
 
     public boolean isHandleFocus() {
