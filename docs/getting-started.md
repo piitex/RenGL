@@ -8,6 +8,19 @@
 - **Maven.** IntelliJ ships one, or install your own.
 - **A GPU/driver that supports OpenGL 3.3 core** (Windows/Linux) or **Metal** (macOS). Vulkan 1.1 is an optional alternative on any of them, see [Rendering APIs](core/rendering-apis.md). The optional [3D layer](3d/README.md) needs OpenGL or Vulkan, so on macOS a 3D program asks for Vulkan.
 
+## Dependencies
+
+RenGL is a set of Maven modules. Start with `rengl-core` and add the others when you need them (audio, video, Vulkan,
+3D, spell checking, ...), or depend on `me.piitex.engine:RenGL` for all of them. [Modules](modules.md) lists them.
+
+```xml
+<dependency>
+    <groupId>me.piitex.engine</groupId>
+    <artifactId>rengl-core</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
 ## Building
 
 ```bash
@@ -17,11 +30,11 @@ mvn compile
 The native libraries (LWJGL and Skiko) are picked automatically by OS and architecture through Maven
 profiles (`lwjgl-natives-<os>-<arch>`). Supported: Linux, macOS and Windows, each on x86-64 and arm64.
 
-To publish a jar that other apps can depend on, the `natives-bundle-*` profiles build one small
-"natives" jar per platform. Run one platform per invocation:
+To publish jars that other apps can depend on, the `natives.platform` property builds one small "natives" jar per
+platform for every module that has natives. Run one platform per invocation:
 
 ```bash
-mvn -DskipAutoNatives -P natives-bundle-macos-aarch64 package
+mvn -DskipAutoNatives -Dnatives.platform=macos-aarch64 package
 ```
 
 ## Running

@@ -2,6 +2,8 @@
 
 [Documentation](../README.md) › [Game](README.md)
 
+> Needs the `rengl-entity` [module](../modules.md).
+
 An `EntityScene` (`me.piitex.engine.entity`) is a [scene](scenes.md) made of entities with components, which can be
 saved to a JSON file and loaded from one. A game written this way describes its levels as data: the file says what
 is where, and the components, Java classes in the game, say what each thing does. This is what the RenGL editor will

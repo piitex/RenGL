@@ -2,6 +2,8 @@
 
 [Documentation](../README.md) › 3D
 
+> Needs the `rengl-3d` [module](../modules.md).
+
 An **optional** layer for showing 3D inside a RenGL program, in `me.piitex.engine.render3d`. The UI stays 2D and
 Skia-drawn. The 3D layer renders into an offscreen picture with OpenGL or Vulkan, and the UI draws that picture like
 an image, so 3D can sit in a panel, behind the whole window, or under any UI you put over it.
@@ -132,5 +134,5 @@ skinned animation, morph targets (blend shapes), frustum culling, mipmapped and 
 anti-aliasing by default, and ray [picking](scenes.md#picking). It has **no variable-width soft shadows and no
 post-processing**. It was written and tested on macOS on Apple silicon (Vulkan through MoltenVK and, in a harness,
 OpenGL 3.3) and on Windows 11 with an NVIDIA GPU (native Vulkan and OpenGL); Linux is untested. The full list, with the reasons, is in
-[Known limitations](../reference/known-limitations.md#rendering-and-3d). The code that checks it all is in `src/test`: run
+[Known limitations](../reference/known-limitations.md#rendering-and-3d). The code that checks it all is in `rengl-3d/src/test`: run
 `./mvnw test`, which skips the GPU tests when the machine has no usable GPU.
