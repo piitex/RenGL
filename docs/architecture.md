@@ -147,16 +147,19 @@ You never call these directly, but it helps to know what draws your UI:
 - **Metal** backs Skia on macOS (`MetalSkikoRenderer`). macOS windows are created without an OpenGL
   context.
 - **Vulkan** is opt-in on every platform (`VulkanSkikoRenderer`, with `VulkanContext` owning the instance, GPU,
-  swapchain and synchronization). On macOS it runs on MoltenVK, bundled with LWJGL.
+  swapchain and synchronization). On macOS it runs on MoltenVK, bundled with LWJGL. It lives in its own artifact,
+  `rengl-vulkan`: the core finds it through a `RenderBackend` service (`java.util.ServiceLoader`), so a program
+  without the module carries no Vulkan code or libraries.
 
 All three share one drawing implementation (`SkiaRenderer`); a backend only decides what the Skia canvas draws to.
 Pick one per window with `WindowOptions.setRenderer(RenderAPI.VULKAN)`, or for any app with
 `-Drengl.backend=vulkan`. A request the machine can't meet falls back to the platform default with a warning, and
-`Window.getRenderer()` tells you what you really got. The choices, the fallbacks, and the Vulkan debugging switches are
+`Window.getRenderer()` tells you what you really got. That includes the case where `rengl-vulkan` is not on the
+classpath: the warning says so and the window opens on the platform default. The choices, the fallbacks, and the Vulkan debugging switches are
 on [Rendering APIs](core/rendering-apis.md).
 
 The OpenGL and Vulkan renderers also implement `GpuInterop`, the one hook the optional [3D layer](3d/README.md) uses to
-share Skia's GPU context: 3D renders into an offscreen picture and Skia draws it like an image, in a
+share Skia's GPU context (`backendContext()` gives the Vulkan device to it, and is null on OpenGL): 3D renders into an offscreen picture and Skia draws it like an image, in a
 [`Viewport3D`](3d/viewport-3d.md) element or behind the window as a [`Background3D`](3d/background-3d.md). The Metal
 renderer and the CPU renderer behind [snapshots](core/snapshots.md) don't implement it, so 3D needs OpenGL or Vulkan.
 Nothing in the core knows about 3D: a program that never uses it never starts it.

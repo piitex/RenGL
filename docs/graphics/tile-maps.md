@@ -2,6 +2,8 @@
 
 [Documentation](../README.md) › [Graphics](README.md)
 
+> Needs the `rengl-tilemap` [module](../modules.md).
+
 A `TileMap` (`me.piitex.engine.tilemap`) is a level made of tiles, usually drawn in the free
 [Tiled](https://www.mapeditor.org) map editor: layers of tiles, layers of placed objects such as spawn points and
 doors, background pictures, and the custom properties set on all of them. The engine loads Tiled's files, draws the

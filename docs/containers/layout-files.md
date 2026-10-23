@@ -2,6 +2,8 @@
 
 [Documentation](../README.md) › [Containers](README.md) › Layout files
 
+> Needs the `rengl-ui-file` [module](../modules.md).
+
 A **layout file** holds a tree of containers and elements as JSON, so a screen can be designed in the RenGL Editor and
 loaded by the app. `UiFile` (in `me.piitex.engine.ui.file`) reads and writes them.
 

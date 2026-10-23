@@ -2,6 +2,8 @@
 
 [Documentation](../README.md) › Charts
 
+> Needs the `rengl-charts` [module](../modules.md).
+
 RenGL draws its own charts: lines, bars, pies and donuts, from plain numbers, with no other library. A chart is an
 ordinary [`Overlay`](../core/overlay.md), so it goes in a layout or a container, sits in a
 [`ScrollContainer`](../containers/scroll-container.md), follows the [theme](../styling/theming.md), and can be

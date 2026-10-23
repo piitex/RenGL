@@ -53,6 +53,7 @@ Most requests that can't be met fall back to the platform default with a logged 
 |---|---|
 | `METAL` off macOS | OpenGL |
 | `OPENGL` on macOS | **None: throws `IllegalStateException`** ("OpenGL is not available on macOS ... Use RenderAPI.VULKAN"). Use `VULKAN` (required for [3D](../3d/README.md)), or `AUTO` for Metal (2D only). This includes `-Drengl.backend=opengl` |
+| `VULKAN` and the `rengl-vulkan` [module](../modules.md) is not on the classpath | The platform default |
 | `VULKAN` and the Skiko on the classpath has no Vulkan support | The platform default |
 | `VULKAN` and the machine has no usable Vulkan GPU | The platform default |
 
@@ -61,7 +62,8 @@ at start-up.
 
 ## Getting Vulkan working
 
-Vulkan needs a Skiko build with Vulkan support. If the Skiko on the classpath has none, a `VULKAN` request logs
+Vulkan needs the `me.piitex.engine:rengl-vulkan` dependency (the [3D layer](../3d/README.md) brings it) and a Skiko build
+with Vulkan support. If the Skiko on the classpath has none, a `VULKAN` request logs
 `the Skiko on the classpath (...) has no Vulkan support` and the window uses the platform default.
 
 On **macOS** run with `-XstartOnFirstThread`, as for any window. The Vulkan loader is MoltenVK from the LWJGL natives,

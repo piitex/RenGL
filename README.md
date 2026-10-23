@@ -67,13 +67,28 @@ public class Hello {
 | **3D (optional)** | PBR materials, shadows, glTF/OBJ/FBX models, skeletal animation, instancing and a built-in physics engine, shown in a viewport or behind the whole UI. Programs that don't use it never pay for it. |
 | **App plumbing** | Multiple windows, file dialogs, a scheduler, background loading, downloads, config files, an input action map with rebinding, and an asset manager. |
 
+## Modules
+
+RenGL is split into Maven modules, so a project depends on what it uses. `rengl-core` is the window, UI toolkit, input
+and 2D game framework; audio, video, Vulkan, 3D, spell checking, tile maps, entities, charts, downloads and UI files are
+separate artifacts. `me.piitex.engine:RenGL` pulls in all of them, as the single jar did before. See
+[Modules](docs/modules.md) for what each brings and which to pick.
+
+```xml
+<dependency>
+    <groupId>me.piitex.engine</groupId>
+    <artifactId>rengl-core</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
 ## Requirements
 
 - **JDK 25**
 - **Maven** (a wrapper is included: `./mvnw`)
 - A GPU that supports **Metal** (macOS) or **OpenGL 3.3** (Windows, Linux). Vulkan 1.1 is an optional alternative.
 
-Native libraries (LWJGL and Skiko) are selected automatically for Windows, Linux and macOS on x86-64 and arm64.
+Native libraries (LWJGL and Skiko) are selected automatically for Windows, Linux and macOS on x86-64 and arm64, and each module brings only its own.
 
 ## Building and running
 
@@ -88,7 +103,7 @@ the first thread:
 -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
 ```
 
-The [demos](src/main/java/me/piitex/examples/demo) are the quickest way to see what it can do. Start with `Demo`, then try
+The [demos](rengl-examples/src/main/java/me/piitex/examples/demo) (in the `rengl-examples` module; run them with it as the working directory) are the quickest way to see what it can do. Start with `Demo`, then try
 `FireworksDemo`, `Studio3DDemo`, `GameLoopDemo`, `SpriteDemo`, `ResizableContainerDemo`, `Scene3DDemo`, `HdrSkyDemo`, `PhysicsDemo` or `VideoDemo`.
 
 ## Documentation
@@ -131,6 +146,18 @@ on macOS. The video player decodes H.264, HEVC and AAC through the system on mac
 itself. See [known limitations](docs/reference/known-limitations.md) for the full list.
 
 There is a test suite of several hundred tests, run with `./mvnw test`.
+
+## License
+
+RenGL is source-available under the [RenGL Open-Source-Game License](LICENSE). In short:
+
+- **Free for non-commercial use**, open or closed source.
+- **Free for commercial games and apps whose source code is public.** Sell it, put it on Steam, add ads; just
+  publish the source.
+- **Closed-source commercial products need a Commercial License.** Get in touch.
+- **RenGL itself is not for sale.** No paid forks, paid hosting, or commercial engines and frameworks built on it.
+
+This summary is not the license; the [LICENSE](LICENSE) file is.
 
 ## AI transparency
 
