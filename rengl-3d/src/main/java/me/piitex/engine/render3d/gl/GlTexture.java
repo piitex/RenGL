@@ -18,6 +18,7 @@ final class GlTexture implements GpuTexture {
      */
     final int target;
     private final boolean owned;
+    private boolean floatPixels;
     int id;
 
     /**
@@ -53,6 +54,7 @@ final class GlTexture implements GpuTexture {
         this.height = height;
         this.target = GL_TEXTURE_2D;
         this.owned = true;
+        this.floatPixels = true;
         this.mipLevels = mipmaps ? 32 - Integer.numberOfLeadingZeros(Math.max(width, height)) : 1;
         id = glGenTextures();
         glBindTexture(GL_TEXTURE_2D, id);
@@ -106,6 +108,20 @@ final class GlTexture implements GpuTexture {
         this.owned = false;
         this.mipLevels = 1;
         this.id = existing;
+    }
+
+    @Override
+    public void update(ByteBuffer rgba) {
+        if (!owned || target != GL_TEXTURE_2D || floatPixels) throw new UnsupportedOperationException("This texture can not be updated");
+        if (rgba.remaining() < width * height * 4) throw new IllegalArgumentException("Not enough pixel data");
+        // A pass binds its textures as it goes and this runs between two of them, so put back what the active unit had.
+        int previous = glGetInteger(GL_TEXTURE_BINDING_2D);
+        glBindTexture(GL_TEXTURE_2D, id);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        if (mipLevels > 1) glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, previous);
     }
 
     static void applyAnisotropy(int target, float level) {
