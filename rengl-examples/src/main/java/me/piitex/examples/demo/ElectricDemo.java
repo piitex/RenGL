@@ -33,7 +33,7 @@ public class ElectricDemo {
     static void main() {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
         Window window = new Window(new WindowOptions("Electric node").setDimensions(1000, 620));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         Container root = new Container(1000, 620);

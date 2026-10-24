@@ -35,7 +35,7 @@ public class VideoDemo {
             return;
         }
         Window window = new Window(new WindowOptions("Video demo").setDimensions(W, H));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         Container root = new Container(W, H);

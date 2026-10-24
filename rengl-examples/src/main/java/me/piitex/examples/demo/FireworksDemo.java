@@ -78,7 +78,7 @@ public class FireworksDemo {
         // To reduce console spam add these jvm flags
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Window window = new Window(new WindowOptions("Fireworks Demo").setDimensions(1400, 800));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         // Each palette has its own recipes, one for the colored sparks and one for the small white core.
