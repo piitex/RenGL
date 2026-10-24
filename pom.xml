@@ -34,6 +34,7 @@
         <module>rengl-downloads</module>
         <module>rengl-ui-file</module>
         <module>rengl-all</module>
+        <module>rengl-packager</module>
         <module>rengl-examples</module>
     </modules>
 
