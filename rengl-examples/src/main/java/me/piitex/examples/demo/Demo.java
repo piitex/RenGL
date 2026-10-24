@@ -49,7 +49,7 @@ public class Demo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
 
         Window window = new Window(new WindowOptions("Tab containers").setDimensions(1280, 720));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         // Full-window root; transparent so the window background shows through.

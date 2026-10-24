@@ -43,7 +43,7 @@ from 0 to 1, or `"#RRGGBB"`; positions, directions and scales are `[x, y, z]`; e
 
 | Part | What it holds |
 |---|---|
-| `world` | The background color; the sky (`skyKind` `NONE`, `GRADIENT`, `PANORAMA` or `CUBE`, with its colors or pictures; a `PANORAMA` ending in `.hdr` is an HDR sky); ambient light and sky lighting; `toneMapping` and `exposure`; `bloom`, `bloomThreshold` and `bloomRadius`; fog; the default size, distance, bias and softness of shadows; `gravity`, the solver's `velocityIterations` and `substeps` |
+| `world` | The background color; the sky (`skyKind` `NONE`, `GRADIENT`, `PANORAMA` or `CUBE`, with its colors or pictures; a `PANORAMA` ending in `.hdr` is an HDR sky); ambient light and sky lighting; `toneMapping` and `exposure`; `bloom`, `bloomThreshold` and `bloomRadius`; `ambientOcclusion` and `ambientOcclusionRadius`; the colour grade (`saturation`, `contrast`, `shadowTint`, `highlightTint`); `chromaticAberration` and `vignette`; fog; the default size, distance, bias and softness of shadows; `gravity`, the solver's `velocityIterations` and `substeps` |
 | `camera` | `position`, `target`, `fov` (degrees), `near`, `far` |
 | `lights` | A `type` of `DIRECTIONAL`, `POINT` or `SPOT`, a `name`, `color`, `intensity`, and what the type needs: a `direction`, a `position`, a `range`, a cone (`innerAngle`, `outerAngle`), a `falloff`, and `shadows` (`OFF`, `SCENE` for the scene's settings, or `LOW` to `ULTRA`) |
 | `nodes` | A tree. Each has a `name`, `position`, `rotation`, `scale`, `visible`, `pickable`, `castShadow` and `receiveShadow`, a `shape`, a `material` for shapes that draw something, `children`, and a `body` with its settings if physics moves it (see [Physics](#physics)) |

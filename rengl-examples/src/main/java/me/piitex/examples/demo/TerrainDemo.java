@@ -60,7 +60,7 @@ public class TerrainDemo {
     static void main() {
         // -XstartOnFirstThread is required on macOS.
         Window window = new Window(new WindowOptions("Terrain Demo").setDimensions(1100, 700).setRenderer(chooseApi()));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         Container root = new Container(1100, 700);

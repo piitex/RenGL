@@ -1,6 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/rengl-3d/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-3d/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-all/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-all/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-audio/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-audio/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-charts/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-charts/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-core/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-core/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-downloads/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-downloads/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-entity/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-entity/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-examples/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-examples/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-packager/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-packager/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-spellcheck/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-spellcheck/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-tilemap/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-tilemap/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-ui-file/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-ui-file/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-video/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-video/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-vulkan/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-vulkan/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
   </component>

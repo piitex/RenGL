@@ -52,7 +52,7 @@ resolve to the same file.
 `AppEnvironment.detectMode()` decides in this order:
 
 1. The system property `-Drengl.mode=dev` or `-Drengl.mode=release`, if set.
-2. `RELEASE` if a jpackage launcher started the process (`jpackage.app-path` is set).
+2. `RELEASE` if a jpackage launcher or a [RenGL packager](packaging.md#the-rengl-packager) launcher started the process (`jpackage.app-path` is set; both set it).
 3. Otherwise, where **your application's code** was loaded from: the first class on the call stack outside
    `AppEnvironment` (the one that called `create` or `detectMode`). A jar file means `RELEASE`, a folder of classes
    (as in the IDE or `mvn`) means `DEV`, and `DEV` if the location cannot be found.

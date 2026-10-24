@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.scene;
 
+import me.piitex.engine.math.Vec2;
 import me.piitex.engine.render3d.math.Mat4;
 import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
@@ -101,15 +102,36 @@ final class Picking {
         Vec3 d = inverse.transformDirection(ray.direction());
         Bvh.Result result = new Bvh.Result();
         result.distance = maxDistance;
-        (own != null ? own : mesh.bvh()).nearest(o.x(), o.y(), o.z(), d.x(), d.y(), d.z(), frontOnly, result);
+        Bvh bvh = own != null ? own : mesh.bvh();
+        bvh.nearest(o.x(), o.y(), o.z(), d.x(), d.y(), d.z(), frontOnly, result);
         if (result.triangle < 0) return null;
-        return hit(node, world, ray, result, instance);
+        // The point on the triangle in the mesh's own space, which is where its corners are.
+        Vec2 uv = uv(mesh, bvh, result.triangle, o.x() + d.x() * result.distance, o.y() + d.y() * result.distance, o.z() + d.z() * result.distance);
+        return hit(node, world, ray, result, instance, uv);
     }
 
-    private static Hit hit(Node3D node, Mat4 world, Ray ray, Bvh.Result result, int instance) {
+    private static Hit hit(Node3D node, Mat4 world, Ray ray, Bvh.Result result, int instance, Vec2 uv) {
         Vec3 normal = world.normalMatrix().transformDirection(new Vec3(result.nx, result.ny, result.nz)).normalized();
         if (normal.dot(ray.direction()) > 0f) normal = normal.negate();
-        return new Hit(node, result.distance * ray.direction().length(), ray.at(result.distance), normal, result.triangle, instance);
+        return new Hit(node, result.distance * ray.direction().length(), ray.at(result.distance), normal, result.triangle, instance, uv);
+    }
+
+    /**
+     * The mesh's texture coordinates at a point on one of its triangles, blended by where the point is between the
+     * corners. {@code bvh} holds the corners wherever they were posed, {@code px, py, pz} is in that same space.
+     */
+    private static Vec2 uv(Mesh mesh, Bvh bvh, int triangle, float px, float py, float pz) {
+        float[] weights = bvh.barycentric(triangle, px, py, pz);
+        if (weights == null) return null;
+        float[] v = mesh.vertices();
+        int[] indices = mesh.indices();
+        float u = 0f, t = 0f;
+        for (int corner = 0; corner < 3; corner++) {
+            int o = indices[triangle * 3 + corner] * Mesh.FLOATS_PER_VERTEX;
+            u += weights[corner] * v[o + 6];
+            t += weights[corner] * v[o + 7];
+        }
+        return new Vec2(u, t);
     }
 
     /**
@@ -135,7 +157,8 @@ final class Picking {
         if (result.triangle < 0) return null;
         Vec3 normal = new Vec3(result.nx, result.ny, result.nz).normalized();
         if (normal.dot(d) > 0f) normal = normal.negate();
-        return new Hit(node, result.distance * d.length(), ray.at(result.distance), normal, result.triangle, -1);
+        Vec2 uv = uv(mesh, posed.bvh, result.triangle, o.x() + d.x() * result.distance, o.y() + d.y() * result.distance, o.z() + d.z() * result.distance);
+        return new Hit(node, result.distance * d.length(), ray.at(result.distance), normal, result.triangle, -1, uv);
     }
 
     /**

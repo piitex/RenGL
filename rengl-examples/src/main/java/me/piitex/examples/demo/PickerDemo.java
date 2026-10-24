@@ -38,7 +38,7 @@ public class PickerDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
 
         Window window = new Window(new WindowOptions("Pickers").setDimensions(900, 640));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         Container root = new Container(900, 640);

@@ -440,6 +440,24 @@ public final class SceneKinds {
                 .omitWhen(0.8f).range(0, 2).step(0.05).when(s -> s.getBloom() > 0f).tip("How bright something has to be to glow. 1 is white");
         prop(WORLD, "bloomRadius", "Bloom Radius", Float.class, gLight, Scene3D::getBloomRadius, (s, x, b) -> s.setBloomRadius(f(x)))
                 .omitWhen(1f).range(0.1, 8).step(0.1).when(s -> s.getBloom() > 0f).tip("How far the glow spreads");
+        prop(WORLD, "ambientOcclusion", "Ambient Occlusion", Float.class, gLight, Scene3D::getAmbientOcclusion, (s, x, b) -> s.setAmbientOcclusion(f(x)))
+                .omitWhen(0f).range(0, 4).step(0.05).tip("Darkens creases, corners and the gaps under things. 0 turns it off. "
+                        + "It draws the solid objects a second time, so it costs more than bloom");
+        prop(WORLD, "ambientOcclusionRadius", "Occlusion Radius", Float.class, gLight, Scene3D::getAmbientOcclusionRadius,
+                (s, x, b) -> s.setAmbientOcclusionRadius(f(x))).omitWhen(0.5f).range(0.01, 20).step(0.05).when(s -> s.getAmbientOcclusion() > 0f)
+                .tip("How far, in world units, a surface can be darkened by another. Match it to the size of the detail");
+        prop(WORLD, "saturation", "Saturation", Float.class, gLight, Scene3D::getSaturation, (s, x, b) -> s.setSaturation(f(x))).omitWhen(1f)
+                .range(0, 4).step(0.05).tip("How vivid the picture is. 0 is black and white");
+        prop(WORLD, "contrast", "Contrast", Float.class, gLight, Scene3D::getContrast, (s, x, b) -> s.setContrast(f(x))).omitWhen(1f)
+                .range(0, 4).step(0.05).tip("Pushes the picture away from middle grey");
+        prop(WORLD, "shadowTint", "Shadow Tint", Color.class, gLight, Scene3D::getShadowTint, (s, x, b) -> s.setShadowTint(c(x))).omitWhen(Color.WHITE)
+                .tip("Colours the dark parts of the picture. White changes nothing; teal is the cold side of a neon street");
+        prop(WORLD, "highlightTint", "Highlight Tint", Color.class, gLight, Scene3D::getHighlightTint, (s, x, b) -> s.setHighlightTint(c(x))).omitWhen(Color.WHITE)
+                .tip("Colours the bright parts of the picture. White changes nothing");
+        prop(WORLD, "chromaticAberration", "Color Fringe", Float.class, gLight, Scene3D::getChromaticAberration, (s, x, b) -> s.setChromaticAberration(f(x)))
+                .omitWhen(0f).range(0, 0.05).step(0.001).tip("Splits red and blue apart toward the edges like a cheap lens. 0.003 is subtle");
+        prop(WORLD, "vignette", "Vignette", Float.class, gLight, Scene3D::getVignette, (s, x, b) -> s.setVignette(f(x))).omitWhen(0f)
+                .range(0, 2).step(0.05).tip("Darkens the corners of the picture");
         prop(WORLD, "fogColor", "Color", Color.class, gFog, Scene3D::getFogColor, (s, x, b) -> s.setFog(c(x), s.getFogDensity(), s.getFogHeightFalloff()))
                 .omitWhen(Color.WHITE).tip("What distant things fade into. Match it to the horizon");
         prop(WORLD, "fogDensity", "Density", Float.class, gFog, Scene3D::getFogDensity,

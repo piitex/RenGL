@@ -61,7 +61,7 @@ public class DownloadDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
 
         Window window = new Window(new WindowOptions("Downloads").setDimensions(720, 420));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         root = new Container(720, 420);
