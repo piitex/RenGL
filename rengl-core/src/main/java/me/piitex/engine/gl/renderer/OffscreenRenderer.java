@@ -79,6 +79,38 @@ public class OffscreenRenderer implements Renderer, AutoCloseable {
         return surface.makeImageSnapshot();
     }
 
+    /**
+     * What has been drawn so far as {@code width * height * 4} bytes of RGBA8 with the top row first, colours not
+     * multiplied by their alpha (the layout of an image file). Call after {@link #end()}.
+     */
+    public byte[] readPixels() {
+        int w = surface.getWidth();
+        int h = surface.getHeight();
+        ImageInfo info = new ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL);
+        Bitmap bitmap = new Bitmap();
+        try {
+            if (!bitmap.allocPixels(info) || !surface.readPixels(bitmap, 0, 0)) {
+                throw new IllegalStateException("Could not read back the " + w + "x" + h + " surface");
+            }
+            byte[] pixels = bitmap.readPixels(info, w * 4, 0, 0);
+            if (pixels == null) throw new IllegalStateException("Could not read back the " + w + "x" + h + " surface");
+            return pixels;
+        } finally {
+            bitmap.close();
+        }
+    }
+
+    /**
+     * Width of the surface in pixels: the logical width times the scale.
+     */
+    public int getPixelWidth() {
+        return surface.getWidth();
+    }
+
+    public int getPixelHeight() {
+        return surface.getHeight();
+    }
+
     @Override
     public void close() {
         surface.close();
