@@ -8,7 +8,7 @@ surface answers the light, not in what the light is.
 
 ## How lights add up
 
-A scene uses its first 8 lights. Each is **directional** (the sun: parallel rays from one direction, no position), a
+A scene shades up to 64 lights at once (`Scene3D.MAX_LIGHTS`). Each is **directional** (the sun: parallel rays from one direction, no position), a
 **point** light (a bulb: a position, fading to nothing at its range) or a **spot** light (a point light that only shines
 inside a cone, like a torch or a hearth opening onto a room). The surface receives the **ambient**
 light from every side, plus each light's share by the angle between the surface and the light, and a highlight.
@@ -36,6 +36,62 @@ scene.lights().add(torch);
 Inside the **inner** angle the light is at full strength; it fades smoothly to nothing at the **outer** angle (at most
 85 degrees) and fades with distance to nothing at `range`, like a point light. `setDirection`, `setCone(inner, outer)`,
 `setVector` (the position), `setRange` and the rest can be changed every frame.
+
+## Blinking lights
+
+A `LightAnimation` makes lights and glowing surfaces blink, pulse or flicker. A `LightPattern` says how bright they
+are at each moment, from `0` (off) to `1` (full strength), and the animation applies it to the lights and materials it
+was given, so a lamp and the bulb you see in it stay in step:
+
+```java nocompile
+Light lamp = Light.point(new Vec3(2, 3, 0), Color.RED, 6f, 8f);
+scene.lights().add(lamp);
+Material bulb = new Material(Color.BLACK).setEmissive(Color.RED, 4f);
+lampNode.setMaterial(bulb);
+
+scene.animate(LightAnimation.of(LightPattern.blink(1f)).light(lamp).glow(bulb));
+```
+
+Whatever strength the light or the material has when you add it is its **full strength**; the animation scales it
+between nothing and that. So set the intensity and the emissive first, and add them before the animation runs. A
+material with no emissive glow is left alone, and so is everything the animation was not given.
+
+| Pattern | What it does |
+|---|---|
+| `LightPattern.steady()` | Always full |
+| `blink(period)` | On for half the period and off for half, starting on: a status LED |
+| `blink(onSeconds, offSeconds)` | The same with unequal times: a quick flash and a long wait |
+| `pulse(period)` | Rises smoothly to full and back, starting off: something breathing |
+| `flicker(rate, depth, seed)` | `rate` times a second picks a new brightness between `1 - depth` and 1: a tube on a bad supply |
+| `faulty(period, seed)` | Steady, with a burst of fast stutters in about one slot of `period` seconds in three: a dying neon sign |
+| `sequence(step, levels...)` | Steps through the levels, `step` seconds each, and loops: `sequence(0.25f, 1, 0, 1, 0, 0, 0)` is two flashes and a pause |
+
+A pattern is a function of time, so your own is a lambda: `LightPattern heartbeat = time -> ...` returning 0 to 1. The
+random-looking ones are worked out from the time and the seed, so the same moment always gives the same brightness;
+give lights different seeds so they do not flicker together.
+
+| Method | What it does |
+|---|---|
+| `light(Light)` / `glow(Material)` | Add a light's intensity, or a material's emissive glow. One animation can drive several of each |
+| `setMinimum(share)` | The lowest brightness as a share of full: `0.1` leaves a dim LED instead of a dark one |
+| `setSpeed(factor)` | `2` runs the pattern twice as fast |
+| `setTime(seconds)` | Where in the pattern it starts; give each animation a different one to put them out of step |
+| `setPlaying(boolean)` | Pause and resume. A paused animation leaves the lights where they are |
+| `getLevel()` | The brightness right now, from the minimum up to 1, to drive a sound or a sprite |
+
+Things to know:
+
+- **Added to a scene** with `scene.animate(animation)` it advances once per frame, before the update handler, and a
+  viewport that only draws when something changes keeps drawing while an animation plays. `scene.stopAnimating`
+  removes it. Without a scene, call `animation.update(delta)` yourself each frame.
+- **A light at `0` costs nothing**: a dark light takes no room in the [64](#gotchas), so a blinking light is not
+  counted while it is off.
+- **A light at `0` casts no shadow** either: the scene skips its shadow views while it is off. How blinking a
+  shadow-casting light affects frame time has not been measured.
+- **Not saved in scene files.** The animation changes the lights and materials directly, so build it in code after
+  loading, and do not also change those lights by hand.
+- **Emissive glow is not light.** The bulb shines on screen but does not light the wall; that is the lamp's job, which is
+  why the animation drives both. Glow does feed [bloom](#bloom), so a bright blinking bulb blooms.
 
 ## Shadows
 
@@ -222,6 +278,41 @@ end, to the picture and its glow together (gradient and cube skies included). Gi
 - A radius above about 3 shows the blur's taps as faint copies of the light.
 - In a [scene file](scene-files.md) they are the world's `bloom`, `bloomThreshold` and `bloomRadius`.
 
+## Ambient occlusion, colour grade and lens effects
+
+These finish the picture the way bloom does, in the same pass, and each is off by default. Together they are most of the
+difference between a flat render and a moody one: grounded corners, teal shadows and magenta highlights, a little lens
+fringing, dark edges.
+
+```java nocompile
+scene.setAmbientOcclusion(1f);            // 0 (off) to about 2: how dark creases and corners get
+scene.setAmbientOcclusionRadius(0.5f);    // world units: how far one surface can darken another
+
+scene.setSaturation(1.2f);                // 1 is as drawn, 0 is black and white
+scene.setContrast(1.15f);                 // 1 is as drawn
+scene.setShadowTint(new Color(0.55f, 0.85f, 1f, 1f));      // multiplies the dark parts; white changes nothing
+scene.setHighlightTint(new Color(1f, 0.7f, 0.9f, 1f));     // multiplies the bright parts
+
+scene.setChromaticAberration(0.003f);     // red and blue pulled apart toward the edges, as a share of the width
+scene.setVignette(0.4f);                  // darker corners
+```
+
+- **Occlusion is screen-space.** It draws the solid objects a second time from the camera, stores their depth, and
+  darkens each point by how much of the space above it is filled by other surfaces. That needs no setup, but it only
+  knows what is on screen: it can't see behind an object, and a thin object in front of a far wall can leave a faint halo.
+  Transparent surfaces and lines are not part of it.
+- **It darkens everything**, direct light too, because it is applied to the finished picture. A strength of 0.5 to 1 reads
+  as grounding; higher looks like a dirty lens. Set the radius to the size of the detail: 0.2 for the gaps between props,
+  1 for walls and furniture. A radius smaller than a few pixels at the distance you look from does nothing.
+- **The grade is applied after tone mapping**, to the picture as it will be seen. The tints multiply, so white is
+  "no tint"; the shadow tint fades into the highlight tint with brightness. Only the colours' red, green and blue count.
+- **The colour fringe** is zero in the middle and grows toward the edges; 0.003 is subtle, 0.01 is loud.
+- **Cost:** any of these turns on the offscreen path bloom uses (a 16-bit target, resolved before the last pass). Occlusion
+  adds the depth pass over the solid objects and three small passes at half size. The rest is a few more texture reads in
+  the last pass.
+- In a [scene file](scene-files.md) they are the world's `ambientOcclusion`, `ambientOcclusionRadius`, `saturation`,
+  `contrast`, `shadowTint`, `highlightTint`, `chromaticAberration` and `vignette`.
+
 ## Fog
 
 ```java nocompile
@@ -315,7 +406,13 @@ scene.setExposure(0.8f);
 
 - **The sky doesn't light the scene** unless you call [`setEnvironmentLighting`](#light-from-the-sky). Otherwise set the
   ambient light and the lights to match it.
-- **Only the first 8 lights count,** and a light that casts shadows must be among them, or it is ignored.
+- **At most 64 lights are shaded in a frame.** A scene with more still draws: each frame the directional lights are
+  kept and then the point and spot lights whose reach is in the camera's view, nearest first, and the rest are left out
+  (a warning is logged once). A light switched off (intensity `0`) takes no room when that choice has to be made, so
+  blinking lights can be switched off instead of removed. Every pixel is tested against every light, with a cheap
+  distance check that skips the full shading of lights that do not reach it, so lights with small ranges cost far less
+  than lights with large ones: give each lamp the smallest `range` that looks right.
+  Only up to 8 lights cast shadows, whichever of the 64 they are.
 - **Shadows cost a pass per view:** a point light is six, a directional light one per cascade. Check
   `scene.getStats().shadowViews()` if a shadow is missing or the frame is slow.
 - **Shadow memory adds up:** the shadow atlas is one per scene and device, shared by its viewports, and a 4096 square is

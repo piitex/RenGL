@@ -23,6 +23,7 @@ final class VkTex implements GpuTexture {
      */
     final long sampler;
     private final boolean owned;
+    private final int format, pixelBytes;
     private boolean closed;
 
     /**
@@ -46,6 +47,8 @@ final class VkTex implements GpuTexture {
         this.layers = layers;
         this.sampler = device.sampler;
         this.owned = true;
+        this.format = format;
+        this.pixelBytes = pixelBytes;
         this.mipLevels = mipmaps ? 32 - Integer.numberOfLeadingZeros(Math.max(width, height)) : 1;
 
         // Mipmaps are made by shrinking each level into the next, so every level is both a source and a destination.
@@ -91,6 +94,34 @@ final class VkTex implements GpuTexture {
         this.view = view;
         this.sampler = sampler;
         this.owned = false;
+        this.format = VkGpuDevice.COLOR_FORMAT;
+        this.pixelBytes = 4;
+    }
+
+    @Override
+    public void update(ByteBuffer rgba) {
+        if (!owned || layers != 1 || format != VkGpuDevice.COLOR_FORMAT) throw new UnsupportedOperationException("This texture can not be updated");
+        long bytes = (long) width * height * pixelBytes;
+        if (rgba.remaining() < bytes) throw new IllegalArgumentException("Not enough pixel data");
+        VkGpuDevice.Alloc staging = device.createMappedBuffer(bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        device.upload(staging, rgba.duplicate().limit(rgba.position() + (int) bytes));
+        device.upload(cmd -> {
+            // Every level is rewritten (level 0 here, the rest by the blits), so the old contents are not kept. The
+            // source stages wait for earlier frames that are still reading the picture.
+            device.barrier(cmd, image.handle(), VK_IMAGE_ASPECT_COLOR_BIT,
+                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, mipLevels, 1);
+            try (MemoryStack stack = stackPush()) {
+                VkBufferImageCopy.Buffer region = VkBufferImageCopy.calloc(1, stack);
+                region.get(0).bufferOffset(0)
+                        .imageSubresource(s -> s.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT).baseArrayLayer(0).layerCount(1))
+                        .imageExtent(e -> e.width(width).height(height).depth(1));
+                vkCmdCopyBufferToImage(cmd, staging.handle(), image.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
+            }
+            if (mipLevels > 1) generateMipmaps(cmd);
+            else toShaderRead(cmd, 0, 1);
+        }, () -> vmaDestroyBuffer(device.allocator, staging.handle(), staging.allocation()));
     }
 
     /**
