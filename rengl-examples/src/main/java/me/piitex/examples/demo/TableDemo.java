@@ -52,7 +52,7 @@ public class TableDemo {
 
     static void main() {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
         Window window = new Window(new WindowOptions("Table Demo").setDimensions(860, 560));
 

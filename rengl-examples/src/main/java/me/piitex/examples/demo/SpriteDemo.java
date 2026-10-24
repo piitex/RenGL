@@ -69,10 +69,10 @@ public class SpriteDemo {
         // To reduce console spam add these jvm flags
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Window window = new Window(new WindowOptions("Sprite Demo").setDimensions(1100, 700));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
-        TextureAtlas atlas = TextureAtlas.load("src/main/resources/demo/sprites.json");
+        TextureAtlas atlas = TextureAtlas.load("rengl-examples/src/main/resources/demo/sprites.json");
         atlas.get("grass_0").getTexture().setSmooth(false); // pixel art: keep the pixels square when zoomed in
         window.getSceneManager().set(new WorldScene(atlas));
         new Engine().start(window);
@@ -148,10 +148,10 @@ public class SpriteDemo {
             generateMap();
             mapImage = drawMapImage();
 
-            sea = ShaderEffect.load("src/main/resources/demo/shaders/sea.sksl");
-            effects[1] = ShaderEffect.load("src/main/resources/demo/shaders/night.sksl");
-            effects[2] = ShaderEffect.load("src/main/resources/demo/shaders/underwater.sksl");
-            effects[3] = ShaderEffect.load("src/main/resources/demo/shaders/crt.sksl");
+            sea = ShaderEffect.load("rengl-examples/src/main/resources/demo/shaders/sea.sksl");
+            effects[1] = ShaderEffect.load("rengl-examples/src/main/resources/demo/shaders/night.sksl");
+            effects[2] = ShaderEffect.load("rengl-examples/src/main/resources/demo/shaders/underwater.sksl");
+            effects[3] = ShaderEffect.load("rengl-examples/src/main/resources/demo/shaders/crt.sksl");
             debug.setEnabled(false);
 
             player = new Slime(MAP * TILE / 2f, MAP * TILE / 2f, PLAYER_COLOR);

@@ -45,7 +45,7 @@ public class GameLoopDemo {
         // To reduce console spam add these jvm flags
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Window window = new Window(new WindowOptions("Game Loop Demo").setDimensions(960, 600));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         window.getSceneManager().set(new MenuScene());

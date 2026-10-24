@@ -33,7 +33,7 @@ public class ResizableContainerDemo {
     static void main() {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
         Window window = new Window(new WindowOptions("Resizable containers").setDimensions(1280, 720));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         // The full-window root goes first (drawn and hit-tested underneath); a full-window container added

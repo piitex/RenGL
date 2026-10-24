@@ -70,19 +70,19 @@
             <artifactId>rengl-ui-file</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- The Skia API is shaded into the rengl-core jar, so a module that compiles against it declares it to build. -->
+        <!-- rengl-core shades the Skia API into its jar and marks skiko-awt optional, so it is not passed on when rengl-core
+             is a module (the IDE, mvn) rather than the shaded jar. The demos declare it with normal scope: IDE run
+             configurations leave out provided-scope dependencies, which fails with NoClassDefFoundError on org.jetbrains.skia. -->
         <dependency>
             <groupId>org.jetbrains.skiko</groupId>
             <artifactId>skiko-awt</artifactId>
             <version>${skiko.version}</version>
-            <scope>provided</scope>
         </dependency>
         <!-- The Skia native library, so the demos run from the IDE or from the command line. -->
         <dependency>
             <groupId>org.jetbrains.skiko</groupId>
             <artifactId>${skiko.runtime.artifact}</artifactId>
             <version>${skiko.version}</version>
-            <scope>provided</scope>
         </dependency>
     </dependencies>
 </project>
