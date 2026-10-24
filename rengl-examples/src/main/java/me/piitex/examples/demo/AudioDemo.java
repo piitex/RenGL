@@ -35,7 +35,7 @@ public class AudioDemo {
     static void main(String[] args) {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
         Window window = new Window(new WindowOptions("Audio demo").setDimensions(520, 470));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         Container root = new Container(520, 470);

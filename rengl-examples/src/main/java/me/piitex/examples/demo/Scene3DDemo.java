@@ -53,14 +53,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code OPENGL}) to choose.
  */
 public class Scene3DDemo {
-    private static final String MODEL_DIR = "src/main/resources/demo/3d/";
+    private static final String MODEL_DIR = "rengl-examples/src/main/resources/demo/3d/";
     private static final float SHOWCASE_SIZE = 2f; // a loaded model is scaled so its longest side is this long
 
     static void main() throws IOException {
         // -XstartOnFirstThread is required on macOS. To reduce console spam also add
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Window window = new Window(new WindowOptions("3D Demo").setDimensions(1100, 700).setRenderer(chooseApi()));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         Container root = new Container(1100, 700);

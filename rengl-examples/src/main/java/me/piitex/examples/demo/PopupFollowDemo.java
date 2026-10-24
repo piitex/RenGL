@@ -42,7 +42,7 @@ public class PopupFollowDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
 
         Window window = new Window(new WindowOptions("Popups follow their element").setDimensions(1000, 680).setResizable(true));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 
         Container root = new Container(2560, 1600); // larger than the window, so it still covers it after a resize
