@@ -85,11 +85,22 @@ final class ShadowPlanner {
         return select(scene, eye, cameraPlanes, truncated, Scene3D.MAX_SHADOW_LIGHTS);
     }
 
+    static List<Candidate> select(Scene3D scene, List<Light> lights, Vec3 eye, float[] cameraPlanes, boolean[] truncated) {
+        return select(scene, lights, eye, cameraPlanes, truncated, Scene3D.MAX_SHADOW_LIGHTS);
+    }
+
     /**
      * As above with the limit given, to try the choosing with fewer lights than the scene allows.
      */
     static List<Candidate> select(Scene3D scene, Vec3 eye, float[] cameraPlanes, boolean[] truncated, int limit) {
-        List<Light> lights = scene.lights();
+        return select(scene, scene.lights(), eye, cameraPlanes, truncated, limit);
+    }
+
+    /**
+     * As above for the lights the frame shades (see {@link LightBudget}), whose positions in the list are the lights' numbers
+     * in the shader.
+     */
+    static List<Candidate> select(Scene3D scene, List<Light> lights, Vec3 eye, float[] cameraPlanes, boolean[] truncated, int limit) {
         List<Candidate> wanted = new ArrayList<>();
         for (int i = 0; i < Math.min(lights.size(), Scene3D.MAX_LIGHTS); i++) {
             Light light = lights.get(i);

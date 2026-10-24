@@ -165,6 +165,8 @@ final class SceneRenderer {
     private static final class GpuImage {
         final GpuTexture texture;
         long lastUsed;
+        /** The {@link TextureData#version} the GPU copy holds. */
+        long version;
 
         GpuImage(GpuTexture texture) {
             this.texture = texture;
@@ -182,7 +184,8 @@ final class SceneRenderer {
         final List<GpuBuffer> joints = new ArrayList<>();
         final List<GpuBuffer> morphBlocks = new ArrayList<>();
         final List<GpuBuffer> sortedIndices = new ArrayList<>();
-        BloomPass bloom;
+        PostPass post;
+        GpuBuffer depthView;
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
@@ -197,7 +200,8 @@ final class SceneRenderer {
             for (GpuBuffer b : joints) b.close();
             for (GpuBuffer b : morphBlocks) b.close();
             for (GpuBuffer b : sortedIndices) if (b != null) b.close();
-            if (bloom != null) bloom.close();
+            if (post != null) post.close();
+            if (depthView != null) depthView.close();
         }
     }
 
@@ -376,24 +380,35 @@ final class SceneRenderer {
         List<Group> blendedGroups = build(blended, res, cursor);
         uploadInstances(res, cursor[0]);
 
-        ShadowFrame shadowFrame = planShadows(scene, camera, aspect, planes, opaque);
+        boolean[] lightsCut = {false};
+        List<Light> lights = LightBudget.choose(scene.lights(), camera.getPosition(), planes, lightsCut);
+        if (lightsCut[0] && !warnedLights) {
+            warnedLights = true;
+            log.warn("A Scene3D shades at most {} lights at once; the ones farthest from the camera are left out of the frame.", Scene3D.MAX_LIGHTS);
+        }
+        ShadowFrame shadowFrame = planShadows(scene, lights, camera, aspect, planes, opaque);
         if (!shadowFrame.plans().isEmpty()) shadowPass(res, opaqueGroups, shadowFrame);
         Skybox sky = scene.getSkybox();
         int env = environmentKind(scene, sky);
-        int variant = variantFor(scene, shadowFrame, env);
-        boolean bloomed = scene.getBloom() > 0f;
-        writeFrameBlock(res.frame, scene, camera, viewProj, shadowFrame, env, variants.get(variant), bloomed);
+        int variant = variantFor(lights, shadowFrame, env);
+        boolean postProcessed = scene.usesPostProcessing();
+        writeFrameBlock(res.frame, scene, lights, camera, viewProj, shadowFrame, env, variants.get(variant), postProcessed);
         int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT);
-        if (sky != null) writeSky(res.sky, scene, camera, aspect, sky, bloomed);
+        if (sky != null) writeSky(res.sky, scene, camera, aspect, sky, postProcessed);
 
         Color bg = scene.getBackground();
         int drawCalls = 0, drawnRecords = 0;
-        // With bloom the scene goes into a target of its own first, in linear light, and the viewport's target gets it
-        // tone mapped, with the glow.
+        // With bloom, occlusion or the look the scene goes into a target of its own first, in linear light, and the
+        // viewport's target gets it tone mapped, with the effects.
         RenderTarget drawTarget = target;
-        if (bloomed) {
-            if (res.bloom == null) res.bloom = new BloomPass(device, skyTriangle);
-            drawTarget = res.bloom.sceneTarget(target.width(), target.height(), target.samples());
+        boolean hasDepth = false;
+        if (postProcessed) {
+            if (res.post == null) res.post = new PostPass(device, skyTriangle);
+            drawTarget = res.post.sceneTarget(target.width(), target.height(), target.samples());
+            if (scene.getAmbientOcclusion() > 0f) {
+                depthPass(res, opaqueGroups, viewProj, camera);
+                hasDepth = true;
+            }
         }
         try (RenderPass pass = device.beginPass(drawTarget, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
@@ -410,7 +425,7 @@ final class SceneRenderer {
                 }
             }
         }
-        if (bloomed) res.bloom.apply(target, scene.getBloom(), scene.getBloomThreshold(), scene.getBloomRadius(), scene.getToneMapping().ordinal());
+        if (postProcessed) res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth);
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
                 shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight()));
         if (frame % SWEEP_EVERY == 0) sweep();
@@ -441,6 +456,13 @@ final class SceneRenderer {
      * @param state        [0] the pipeline key in use, -1 for none
      */
     private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int fragmentBits, GpuBuffer shadowView) {
+        drawGroup(pass, res, group, state, lastMaterial, shadowPass, fragmentBits, shadowView, false);
+    }
+
+    /**
+     * @param viewOnly with {@code shadowPass}, draw only the records that are in view, not all of them: for a picture from the camera
+     */
+    private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int fragmentBits, GpuBuffer shadowView, boolean viewOnly) {
         int key = shadowPass ? (group.key & (KEY_SKINNED | KEY_MORPH)) | KEY_SHADOW : group.key | fragmentBits;
         GpuMesh mesh = gpuMesh(group.mesh);
         if (key != state[0]) {
@@ -471,7 +493,7 @@ final class SceneRenderer {
         if (mesh.skin != null && (key & KEY_SKINNED) != 0) pass.bindVertexBuffer(next++, mesh.skin);
         if (mesh.uv2 != null && (key & KEY_UV2) != 0 && !shadowPass) pass.bindVertexBuffer(next, mesh.uv2);
         pass.bindIndexBuffer(group.indices != null ? group.indices : mesh.indices);
-        pass.drawIndexed(mesh.indexCount, shadowPass ? group.count : group.viewCount, group.first);
+        pass.drawIndexed(mesh.indexCount, shadowPass && !viewOnly ? group.count : group.viewCount, group.first);
     }
 
     // ---- collecting and building the instance stream -----------------------------------------------------------
@@ -960,12 +982,12 @@ final class SceneRenderer {
     /**
      * Picks the lights that get shadows, gives each a tile size that fits the atlas, builds their views and lays the tiles out.
      */
-    private ShadowFrame planShadows(Scene3D scene, Camera camera, float aspect, float[] cameraPlanes, List<Draw> opaque) {
+    private ShadowFrame planShadows(Scene3D scene, List<Light> lights, Camera camera, float aspect, float[] cameraPlanes, List<Draw> opaque) {
         List<float[]> casters = new ArrayList<>();
         for (Draw d : opaque) if (d.cast) casters.add(d.sphere);
         if (casters.isEmpty()) return ShadowFrame.NONE;
         boolean[] truncated = {false};
-        List<ShadowPlanner.Candidate> candidates = ShadowPlanner.select(scene, camera.getPosition(), cameraPlanes, truncated);
+        List<ShadowPlanner.Candidate> candidates = ShadowPlanner.select(scene, lights, camera.getPosition(), cameraPlanes, truncated);
         if (truncated[0] && !warnedShadowLights) {
             warnedShadowLights = true;
             log.warn("A Scene3D draws the shadows of at most {} lights; the others, farthest from the camera first, cast none.", Scene3D.MAX_SHADOW_LIGHTS);
@@ -995,6 +1017,28 @@ final class SceneRenderer {
             plans.add(plan);
         }
         return new ShadowFrame(plans, target.width(), target.height(), target.isBottomLeftOrigin());
+    }
+
+    /**
+     * Draws the solid objects in view from the camera into the post pass's depth target, packed the way the shadow map is
+     * (the distance along the view axis between the near and far plane), for ambient occlusion to read. The same shader and
+     * geometry as the shadow pass, so skinned, morphed and instanced objects are all there.
+     */
+    private void depthPass(Resources res, List<Group> groups, Mat4 viewProj, Camera camera) {
+        if (res.depthView == null) res.depthView = device.createDynamicBuffer(BufferType.UNIFORM, SHADOW_BLOCK_SIZE);
+        scratch.clear();
+        viewProj.put(scratch);
+        scratch.putFloat(1f).putFloat(camera.getNear()).putFloat(camera.getFar()).putFloat(0f);
+        scratch.flip();
+        res.depthView.update(scratch);
+        try (RenderPass pass = device.beginPass(res.post.depthTarget(), 1f, 1f, 1f, 1f)) {
+            int[] state = {-1, 0};
+            Material[] lastMaterial = {null};
+            for (Group group : groups) {
+                if (!group.inView || group.viewCount == 0 || (group.key & KEY_LINES) != 0) continue;
+                drawGroup(pass, res, group, state, lastMaterial, true, 0, res.depthView, true);
+            }
+        }
     }
 
     /**
@@ -1038,13 +1082,12 @@ final class SceneRenderer {
      * The custom pieces this frame's lights use, as the index of the shader variant that holds them. A set that doesn't
      * compile is reported once and its lights fall back to the built-in filter and falloff.
      */
-    private int variantFor(Scene3D scene, ShadowFrame shadows, int env) {
+    private int variantFor(List<Light> lights, ShadowFrame shadows, int env) {
         java.util.TreeSet<CustomShadowFilter> filters = new java.util.TreeSet<>(Comparator.comparing(CustomShadowFilter::name).thenComparing(CustomShadowFilter::glsl));
         java.util.TreeSet<CustomLightFalloff> falloffs = new java.util.TreeSet<>(Comparator.comparing(CustomLightFalloff::name).thenComparing(CustomLightFalloff::glsl));
         for (ShadowPlanner.LightPlan plan : shadows.plans()) {
             if (plan.shadows().resolveFilter() instanceof CustomShadowFilter f) filters.add(f);
         }
-        List<Light> lights = scene.lights();
         for (int i = 0; i < Math.min(lights.size(), Scene3D.MAX_LIGHTS); i++) {
             if (lights.get(i).getType() != Light.Type.DIRECTIONAL && lights.get(i).getFalloff() instanceof CustomLightFalloff f) falloffs.add(f);
         }
@@ -1090,7 +1133,7 @@ final class SceneRenderer {
         return (float) Math.pow(Math.max(0f, srgb), 2.2);
     }
 
-    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput) {
+    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, List<Light> lights, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput) {
         scratch.clear();
         viewProj.put(scratch);
         Vec3 eye = camera.getPosition();
@@ -1101,11 +1144,6 @@ final class SceneRenderer {
         float ai = scene.getAmbientIntensity();
         scratch.putFloat(linear(ambient.getR()) * ai).putFloat(linear(ambient.getG()) * ai).putFloat(linear(ambient.getB()) * ai).putFloat(1f);
 
-        List<Light> lights = scene.lights();
-        if (lights.size() > Scene3D.MAX_LIGHTS && !warnedLights) {
-            warnedLights = true;
-            log.warn("A Scene3D uses at most {} lights; the other {} are ignored.", Scene3D.MAX_LIGHTS, lights.size() - Scene3D.MAX_LIGHTS);
-        }
         int count = Math.min(lights.size(), Scene3D.MAX_LIGHTS);
         scratch.putFloat(count).putFloat(0f).putFloat(0f).putFloat(0f);
         // The atlas's texel size, and whether its rows run from the bottom (OpenGL).
@@ -1293,13 +1331,25 @@ final class SceneRenderer {
     private GpuTexture gpuImage(TextureData data) {
         GpuImage image = images.get(data);
         if (image == null) {
-            ByteBuffer pixels = data.toBuffer();
+            long[] version = new long[1];
+            ByteBuffer pixels = data.toBuffer(version);
             try {
                 image = new GpuImage(device.createTexture(data.width(), data.height(), pixels, true));
+                image.version = version[0];
             } finally {
                 MemoryUtil.memFree(pixels);
             }
             images.put(data, image);
+        } else if (image.version != data.version()) {
+            // Changed since the last upload (an animated screen): send the new picture, mipmaps included.
+            long[] version = new long[1];
+            ByteBuffer pixels = data.toBuffer(version);
+            try {
+                image.texture.update(pixels);
+                image.version = version[0];
+            } finally {
+                MemoryUtil.memFree(pixels);
+            }
         }
         image.lastUsed = frame;
         return image.texture;

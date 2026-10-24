@@ -140,12 +140,18 @@ final class SceneShaders {
                 vec4 ambient;
                 vec4 params;
                 vec4 shadowGlobal;
-                vec4 lightVec[8];
-                vec4 lightColor[8];
-                vec4 lightDir[8];
-                vec4 lightCone[8];
-                vec4 lightShadow[8];
-                vec4 lightSplits[8];
+                vec4 lightVec[""" + Scene3D.MAX_LIGHTS + """
+            ];
+                vec4 lightColor[""" + Scene3D.MAX_LIGHTS + """
+            ];
+                vec4 lightDir[""" + Scene3D.MAX_LIGHTS + """
+            ];
+                vec4 lightCone[""" + Scene3D.MAX_LIGHTS + """
+            ];
+                vec4 lightShadow[""" + Scene3D.MAX_LIGHTS + """
+            ];
+                vec4 lightSplits[""" + Scene3D.MAX_LIGHTS + """
+            ];
                 ShadowView views[""" + MAX_SHADOW_VIEWS + """
             ];
                 vec4 fog;
@@ -499,10 +505,12 @@ final class SceneShaders {
             #else
                         lit = ambient.rgb * occlusion * (diffuseColor + f0 * mix(1.0, 0.3, roughness));
             #endif
-                        for (int i = 0; i < 8; i++) {
+                        for (int i = 0; i < """ + Scene3D.MAX_LIGHTS + """
+            ; i++) {
                             if (i >= count) break;
                             vec3 l;
                             float atten = lightAt(i, vWorldPos, l);
+                            if (atten <= 0.0) continue;
                             float nl = max(dot(n, l), 0.0);
                             if (nl <= 0.0) continue;
                             if (receives && lightShadow[i].y > 0.5) atten *= shadowFor(i, vWorldPos, n, l);
@@ -522,10 +530,12 @@ final class SceneShaders {
             #else
                         lit = ambient.rgb * albedo;
             #endif
-                        for (int i = 0; i < 8; i++) {
+                        for (int i = 0; i < """ + Scene3D.MAX_LIGHTS + """
+            ; i++) {
                             if (i >= count) break;
                             vec3 l;
                             float atten = lightAt(i, vWorldPos, l);
+                            if (atten <= 0.0) continue;
                             float ndl = max(dot(n, l), 0.0);
                             if (ndl <= 0.0) continue;
                             if (receives && lightShadow[i].y > 0.5) atten *= shadowFor(i, vWorldPos, n, l);

@@ -44,6 +44,23 @@ final class Bvh {
         build(root, 0, triangles, centroid);
     }
 
+    /**
+     * The barycentric weights {x: corner 0, y: corner 1, z: corner 2} of a point on a triangle's plane, or null for a
+     * triangle with no area. The point is in the same space as the vertices this hierarchy was built over.
+     */
+    float[] barycentric(int triangle, float px, float py, float pz) {
+        int a = indices[triangle * 3] * stride, b = indices[triangle * 3 + 1] * stride, c = indices[triangle * 3 + 2] * stride;
+        double e1x = vertices[b] - vertices[a], e1y = vertices[b + 1] - vertices[a + 1], e1z = vertices[b + 2] - vertices[a + 2];
+        double e2x = vertices[c] - vertices[a], e2y = vertices[c + 1] - vertices[a + 1], e2z = vertices[c + 2] - vertices[a + 2];
+        double epx = px - vertices[a], epy = py - vertices[a + 1], epz = pz - vertices[a + 2];
+        double d00 = e1x * e1x + e1y * e1y + e1z * e1z, d01 = e1x * e2x + e1y * e2y + e1z * e2z, d11 = e2x * e2x + e2y * e2y + e2z * e2z;
+        double d20 = epx * e1x + epy * e1y + epz * e1z, d21 = epx * e2x + epy * e2y + epz * e2z;
+        double denominator = d00 * d11 - d01 * d01;
+        if (Math.abs(denominator) < 1e-30) return null;
+        double v = (d11 * d20 - d01 * d21) / denominator, w = (d00 * d21 - d01 * d20) / denominator;
+        return new float[]{(float) (1.0 - v - w), (float) v, (float) w};
+    }
+
     private int newNode() {
         if (nodes == first.length) {
             first = java.util.Arrays.copyOf(first, nodes * 2);

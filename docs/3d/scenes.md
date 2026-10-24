@@ -11,7 +11,7 @@ materials, a camera, some lights, and one forward pass that shades them. `Scene3
 Scene3D ──┬── root Node3D ──┬── Node3D (mesh + material)
           │                 └── Node3D ── Node3D ...   children move with their parent
           ├── Camera
-          ├── lights (up to 8), up to 4 of them can cast shadows
+          ├── lights (up to 64 shaded at once), up to 8 of them can cast shadows
           ├── skybox, background colour, ambient light
           └── animation players, update handler
 ```
@@ -40,7 +40,7 @@ Call `scene.lights().clear()` for different lighting.
 | `root()` | The top of the node tree. Everything under it is drawn |
 | `add(Node3D)` | Shorthand for `root().add(node)`. Returns the scene, so calls chain |
 | `camera()` | The scene's [`Camera`](#camera) |
-| `lights()` | The live `List<Light>`: add and remove directly. Only the first `Scene3D.MAX_LIGHTS` (8) are used |
+| `lights()` | The live `List<Light>`: add and remove directly. Up to `Scene3D.MAX_LIGHTS` (64) are shaded in a frame; with more, the ones that matter are chosen, see [Lighting](lighting.md#gotchas) |
 | `setBackground(Color)` / `getBackground()` | The colour the picture is cleared to. Default dark blue-grey |
 | `setAmbient(Color, float intensity)` | Light that reaches every surface from every side, so nothing is pitch black. Intensity `0` turns it off |
 | `getAmbient()` / `getAmbientIntensity()` | Read them back |
@@ -52,6 +52,7 @@ Call `scene.lights().clear()` for different lighting.
 | `setEnvironmentLighting(float)` / `getEnvironmentLighting()` | Light and reflections from the skybox, `0` (off, the default) or more, see [Light from the sky](lighting.md#light-from-the-sky) |
 | `getStats()` | A `Scene3D.Stats(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight)` for the last time the scene was drawn, see [Frustum culling](#frustum-culling) and [Which lights get shadows](lighting.md#which-lights-get-shadows) |
 | `animate(AnimationPlayer)` / `stopAnimating(AnimationPlayer)` | Registers a player that advances once per frame, see [Animation](animation.md) |
+| `animate(LightAnimation)` / `stopAnimating(LightAnimation)` | Registers a blinking-light animation that advances once per frame, see [Blinking lights](lighting.md#blinking-lights) |
 | `setUpdateHandler(UpdateHandler)` | Runs once per frame before the scene is drawn, see below |
 | `preload(Node3D)` / `preload(Skybox)` | Uploads meshes and textures ahead of the frame that shows them, see [Preloading](#preloading) |
 | `setPreloadBudget(float)` / `getPreloadBudget()` | Milliseconds per frame spent on preloading, 4 by default |
@@ -259,6 +260,9 @@ so it can be loaded on any thread and shared freely. Colours are sRGB, as in any
 | `TextureData.checker(size, cells, colorA, colorB)` | A checkerboard, handy for seeing how a mesh is mapped. Colours are `{r, g, b}` |
 | `new TextureData(width, height, byte[] rgba)` | From raw pixels, copied |
 | `width()` / `height()` | Its size |
+| `update(byte[] rgba)` | Replaces every pixel with a copy of the array, which must be `width * height * 4` bytes. See [animated screens](#animated-screens) |
+| `edit(Consumer<byte[]>)` | Changes the pixels in place, with no array made per frame. The consumer gets the live RGBA8 array and must not keep it |
+| `version()` | How many times it has been changed with `update` or `edit`, `0` for a texture never changed |
 
 Textures are sampled with linear filtering and repeat wrapping. The scene makes **mipmaps** for them when it uploads
 them (smaller copies of the picture that are blended between by distance), so a detailed texture stays smooth on a
@@ -266,9 +270,176 @@ floor that runs off into the distance instead of shimmering. That costs a third 
 **anisotropically filtered** where the GPU can (up to 8x), which keeps a floor seen at a slant sharp instead of blurring it;
 the system property `rengl.3d.anisotropy` changes the level, and `1` turns it off.
 
+### Animated screens
+
+A `TextureData` can change while it is on screen. Change it with `update` or `edit`, and every scene that draws it sends
+the new picture to the GPU before its next frame, mipmaps included. A computer screen is one texture on a material, an
+emissive one so it glows with [bloom](lighting.md) and shows in the dark, rewritten whenever the picture should change:
+
+```java nocompile
+TextureData screen = new TextureData(256, 128, new byte[256 * 128 * 4]);
+Material glass = new Material(Color.BLACK).setEmissiveTexture(screen).setEmissive(Color.WHITE, 2f);
+terminal.setMaterial(glass);
+
+scene.setUpdateHandler((s, delta) -> screen.edit(px -> drawNextFrame(px, 256, 128)));
+```
+
+The size is fixed when the texture is made. Changing a texture costs one copy of the whole picture to the GPU plus
+rebuilding its mipmaps, so a few screens of a few hundred pixels updating every frame are cheap, and a texture that
+only changes now and then costs nothing in between. Nothing is uploaded for a frame in which it did not change, so
+update it only when the picture really changed. Cube-map and sky textures can not be changed this way.
+
+To show a RenGL `Container` (buttons, text, lists) on a screen, with hover and clicks, use
+[`UiScreen`](#an-interface-on-a-screen). To produce the pixels yourself, with your own drawing code, an image decoder or a
+video frame, pass them to `update` or `edit`.
+
+### Clicking on a screen
+
+A [`Hit`](#hit) carries `uv()`, the spot on the mesh's texture that was under the pointer, so a click on a screen can be
+turned into a click on the picture drawn there: multiply `uv().x()` and `uv().y()` by the texture's width and height.
+(For a picture drawn by a `Container`, `UiScreen` does this for you.)
+
+```java nocompile
+view.setInputListener(new Viewport3D.InputListener() {
+    @Override
+    public void clicked(double x, double y) {
+        Hit hit = scene.pick((float) x, (float) y, view.getWidth(), view.getHeight());
+        if (hit != null && hit.node() == terminal) {
+            int px = (int) (hit.uv().x() * screen.width());
+            int py = (int) (hit.uv().y() * screen.height());
+            terminalUi.click(px, py);   // your own code: which button of the picture is at that pixel
+        }
+    }
+});
+```
+
+### An interface on a screen
+
+`UiScreen` puts a [`Container`](../containers/container.md) on a surface in the scene: anything a window can show,
+buttons, text, lists, animated backgrounds. It draws the container into a `TextureData`, and the player hovers and clicks
+it by aiming at the surface. The drawing is done on the CPU by the renderer that takes a
+[snapshot](../core/snapshots.md), so it needs no window and works the same on every graphics API.
+
+```java nocompile
+Container ui = new Container(320, 200);                       // give it its size first
+ui.getStyling().setBackgroundColor(new Color(0.02f, 0.05f, 0.09f, 1f));
+ButtonOverlay open = new ButtonOverlay("Open the door", 200, 40);
+open.setX(60);
+open.setY(80);
+open.onMouseClick(e -> unlockDoor());                           // your own code
+ui.addElement(open);
+
+UiScreen screen = new UiScreen(ui, 2f);                         // a 640 x 400 texture
+terminal.setMaterial(new Material(Color.BLACK).setEmissiveTexture(screen.texture()).setEmissive(Color.WHITE, 2f));
+
+scene.setUpdateHandler((s, delta) -> screen.refresh(delta));    // draw it as it looks now
+
+view.setInputListener(new Viewport3D.InputListener() {
+    @Override
+    public void pointerMoved(double x, double y) {
+        screen.pointAt(scene.pick(x, y, view.getWidth(), view.getHeight()), terminal);   // hovers the button
+    }
+
+    @Override
+    public void pointerExited() {
+        screen.pointAway();
+    }
+
+    @Override
+    public void clicked(double x, double y) {
+        screen.click(scene.pick(x, y, view.getWidth(), view.getHeight()), terminal);
+    }
+
+    @Override
+    public void scrolled(double dx, double dy, double x, double y) {
+        screen.scroll(dx, dy);
+    }
+});
+```
+
+#### Typing on a screen
+
+A text field on a screen works like one in a window. Pressing it gives it the keyboard, with the caret where it was
+pressed, and holding and moving the pointer selects text. Your game then has to send it the keys: while
+`screen.hasFocus()` is true, typed characters and keys go to the screen instead of moving the player.
+
+```java nocompile
+ui.addElement(new TextFieldOverlay(20, 20, 280, 30));          // a field on the screen
+
+// in the same InputListener:
+@Override
+public void charTyped(int codepoint) {
+    if (screen.typeChar(codepoint)) screen.refresh();            // false when no field has the keyboard
+}
+
+@Override
+public void keyPressed(int key, int action, int mods) {
+    if (screen.key(key, action, mods)) {
+        screen.refresh();                                        // the field took the key
+    } else {
+        movePlayer(key, action);                                 // not a field's: the game's
+    }
+}
+```
+
+`key` returns true only for a press or repeat that a field used, so a movement key the player had already
+pressed still comes up for the game. Arrows, Home, End, Backspace, Delete, Enter (a field's `onSubmit` runs), select all,
+copy, cut, paste, undo and redo all work, as in a window. Tab and Shift+Tab move to the next and previous field on the
+screen (in the order a window uses, `setTabIndex` first, a disabled field skipped), and Escape lets go of the keyboard.
+Pressing anywhere else on the screen, or away from it, also lets go.
+
+| Method | Description |
+|---|---|
+| `hasFocus()` / `focused()` | Whether a field has the keyboard, and which one. A field disabled while it has it loses it |
+| `typeChar(codepoint)` | Types a character into the focused field. Returns whether a field had the keyboard |
+| `key(key, action, mods)` | Sends a key (`GLFW_PRESS`, `GLFW_REPEAT` or `GLFW_RELEASE`). Returns whether a field used it; a release is passed on but never reported as used |
+| `focus(Element)` / `clearFocus()` | Gives the keyboard to a field in code, for example to start typing when the player walks up to the terminal, or takes it away when they walk off |
+| `focusNext()` / `focusPrevious()` | Moves to the next or previous field in Tab order. With none focused, the first or the last |
+
+Things to know about typing:
+
+- **Call `refresh` after a key or character** (as above), and a few times a second while a field is focused, so the caret
+  blinks: `refresh(delta)` advances the blink.
+- **Tab with nothing focused is left to the game**, so Tab does not steal the keyboard from your controls. Use
+  `focusNext()` or `focus(field)` to start typing from code.
+- **Paste uses the window's clipboard**, so it works in a game running on the engine's main loop, as a field in a window does.
+- The text field is drawn flat on the surface: there is no input-method (IME) window for composing text, and no on-screen keyboard.
+
+| Method | Description |
+|---|---|
+| `new UiScreen(container)` / `new UiScreen(container, scale)` | Shows the container. The texture is its size times `scale` (texture pixels per point, `1` if left out): `2` for a screen seen from close up, `0.5` for a cheap one |
+| `texture()` | The `TextureData` to put on a material. The same object for the life of the screen |
+| `root()` | The container |
+| `setBackground(Color)` | What fills the texture behind the container. Opaque black by default, so a container with no background of its own is a dark screen, not a see-through one |
+| `refresh()` | Draws the container into the texture as it looks now |
+| `refresh(delta)` | The same, first advancing the container's own animations (hover fades, animated backgrounds) by `delta` seconds, as a window does every frame |
+| `pointAt(Hit, Node3D)` | Aims the pointer where a pick landed if it landed on that node, and hovers what is there. A hit on anything else, or none, takes the pointer away |
+| `pointAt(Vec2 uv)` / `pointAway()` | The same from a spot on the texture (top-left origin, 0 to 1), or taking the pointer away |
+| `click(Hit, Node3D)` | `pointAt`, then a left press and release. Returns whether it landed on something that takes clicks |
+| `press()` / `release()` (and `press(button)`, `release(button)`) | A press and a release apart, for a button that is held. `press` returns whether the press was used, so you know it was not the game's |
+| `scroll(dx, dy)` | Turns the wheel over whatever scrolls under the pointer. Returns whether something did |
+| `hovered()` / `isPointing()` | The element under the pointer, and whether the pointer is on the screen |
+| `close()` | Frees the drawing surface. The texture stays valid |
+
+Hover, clicks, the disabled state and scrolling follow the window's rules, because they are found by the same code
+(`UiHitTest`): a click goes to the nearest element at or above the one pointed at that listens for it, a button clicks when
+it is let go over, and letting go somewhere else cancels the click.
+
+Things to know:
+
+- **It costs a CPU draw and a texture upload each time you call `refresh`.** A screen with a clock or a scrolling list can
+  be refreshed a few times a second, not every frame. A screen that only changes when the player clicks needs a refresh
+  after the click and no more.
+- **The size is taken when the screen is made.** A container resized later is still drawn into the old texture size.
+- **Not done: dragging (other than selecting text), popups (a dropdown's list) and context menus.** A dropdown on a
+  screen shows but its list does not open.
+- **Use it from one thread**, as a window's interface is used: the render thread, in the handlers above.
+- The mesh needs texture coordinates covering the whole texture, and the surface must be pickable (the default). A hit on
+  a mesh without them gives no spot, so the pointer goes away.
+
 ## Light
 
-A scene uses its first 8 lights: directional, point or spot. They are made with factory methods, and the setters
+A scene shades up to 64 lights at once: directional, point or spot. They are made with factory methods, and the setters
 return the light.
 
 ```java nocompile
@@ -414,6 +585,7 @@ everything the ray crosses, one hit per node, nearest first, for picking through
 | `normal()` | The unit normal of the triangle in scene space, on the side the ray came from. It is the flat face normal, not the smoothed one lighting uses |
 | `triangle()` | The triangle's index in the mesh, three entries of `Mesh.indices()` each |
 | `instance()` | Which of the node's [instances](instancing.md) was hit, or `-1` for a node that is not instanced |
+| `uv()` | The mesh's texture coordinates at the hit (a `Vec2`, origin at the top-left of the image, `0` to `1` across it): the spot of a texture that was under the pointer, see [clicking on a screen](#clicking-on-a-screen). It is the mesh's raw coordinate, before the material's UV transform. `null` for a triangle with no area; `(0, 0)` for a mesh with no texture coordinates |
 
 ### How it decides
 
