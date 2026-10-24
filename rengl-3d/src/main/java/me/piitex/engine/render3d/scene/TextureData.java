@@ -9,17 +9,24 @@ import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 /**
  * A picture for a {@link Material}, held in ordinary memory as RGBA8 with the top row first. Like {@link Mesh} it is
  * uploaded to the GPU when first drawn, so it can be loaded on any thread and shared freely.
  * <p>
  * The colours are sRGB, as in any image file. PNG, JPEG, BMP, TGA and GIF load.
+ * <p>
+ * The size is fixed but the pixels are not: {@link #update(byte[])} and {@link #edit} change them, and every scene
+ * that draws the texture uploads the new picture before its next frame. That is what an animated screen is: one
+ * {@code TextureData} on a material's {@link Material#setEmissiveTexture emissive} (or colour) texture, rewritten as
+ * often as it should change.
  */
 public final class TextureData {
     private final int width;
     private final int height;
     private final byte[] rgba;
+    private long version;
 
     /**
      * @param rgba {@code width * height * 4} bytes, top row first; copied
@@ -48,10 +55,47 @@ public final class TextureData {
     }
 
     /**
+     * Replaces every pixel. The scenes drawing this texture show the new picture from their next frame.
+     *
+     * @param rgba {@code width * height * 4} bytes, top row first; copied
+     */
+    public synchronized void update(byte[] rgba) {
+        if (rgba.length != this.rgba.length) throw new IllegalArgumentException("Expected " + this.rgba.length + " bytes for " + width + "x" + height + ", got " + rgba.length);
+        System.arraycopy(rgba, 0, this.rgba, 0, rgba.length);
+        version++;
+    }
+
+    /**
+     * Changes the pixels in place, for drawing into the texture without making an array per frame. The editor gets
+     * the live {@code width * height * 4} byte array (RGBA8, top row first) and must not keep it past the call.
+     */
+    public synchronized void edit(Consumer<byte[]> editor) {
+        editor.accept(rgba);
+        version++;
+    }
+
+    /**
+     * Counts the changes made with {@link #update} and {@link #edit}, 0 for a texture never changed. A scene uploads
+     * the picture again when this is not the number it last saw.
+     */
+    public synchronized long version() {
+        return version;
+    }
+
+    /**
      * Fills a new direct buffer with the pixels, for the device to upload. The caller frees it with
      * {@link MemoryUtil#memFree}.
      */
     ByteBuffer toBuffer() {
+        return toBuffer(null);
+    }
+
+    /**
+     * As {@link #toBuffer()}, also writing the {@link #version} the buffer holds into {@code versionOut[0]}, read under
+     * the same lock as the copy so the two always agree.
+     */
+    synchronized ByteBuffer toBuffer(long[] versionOut) {
+        if (versionOut != null) versionOut[0] = version;
         ByteBuffer buffer = MemoryUtil.memAlloc(rgba.length);
         buffer.put(rgba).flip();
         return buffer;

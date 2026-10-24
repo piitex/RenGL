@@ -28,7 +28,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * </pre>
  * and models come from {@link Model#load}. Everything is drawn with one forward renderer: classic (Lambert and
  * Blinn-Phong) or physically based shading with normal, metallic-roughness, occlusion and emissive maps, up to
- * {@link #MAX_LIGHTS} lights, {@link Light#setCastShadow shadows} from a directional or spot light, {@link #setFog fog}, a {@link Skybox},
+ * {@link #MAX_LIGHTS} lights at once, {@link Light#setCastShadow shadows} from a directional or spot light, {@link #setFog fog}, a {@link Skybox},
  * mipmapped and anisotropically filtered textures, {@link Instances instanced} drawing, {@link Skin skinned} meshes
  * moved by {@link AnimationPlayer}s, alpha and additive blending, {@link #setEnvironmentLighting light and reflections from the
  * skybox}, depth testing, back-face culling and frustum culling; the viewport anti-aliases the edges. {@link #pick} finds
@@ -43,12 +43,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class Scene3D implements Viewport3D.Content {
     /**
-     * The most lights drawn; the first ones in {@link #lights()}.
+     * The most lights shaded in one frame. A scene with more keeps drawing: each frame the lights that matter most are
+     * chosen, directional ones first and then the point and spot lights whose reach is in the camera's view, nearest first.
+     * Lights switched off (intensity 0) take no room when the choice has to be made.
      */
-    public static final int MAX_LIGHTS = 8;
+    public static final int MAX_LIGHTS = 64;
 
     /**
-     * The most lights whose shadows are drawn in one frame: the ones nearest the camera among the first {@link #MAX_LIGHTS}.
+     * The most lights whose shadows are drawn in one frame: the ones nearest the camera among the {@link #MAX_LIGHTS}
+     * that are shaded.
      */
     public static final int MAX_SHADOW_LIGHTS = 8;
 
@@ -85,7 +88,12 @@ public class Scene3D implements Viewport3D.Content {
     private ToneMapping toneMapping = ToneMapping.NONE;
     private float exposure = 1f;
     private float bloom, bloomThreshold = 0.8f, bloomRadius = 1f;
+    private float saturation = 1f, contrast = 1f;
+    private Color shadowTint = Color.WHITE, highlightTint = Color.WHITE;
+    private float chromaticAberration, vignette;
+    private float ambientOcclusion, ambientOcclusionRadius = 0.5f;
     private final List<AnimationPlayer> animators = new ArrayList<>();
+    private final List<LightAnimation> lightAnimations = new CopyOnWriteArrayList<>();
 
     private final Map<GpuDevice, Shared> renderers = new IdentityHashMap<>();
     private final List<Preload> preloads = new CopyOnWriteArrayList<>();
@@ -372,6 +380,130 @@ public class Scene3D implements Viewport3D.Content {
         return this;
     }
 
+    public float getSaturation() {
+        return saturation;
+    }
+
+    /**
+     * How vivid the picture is (1 by default): 0 is black and white, 1.3 pushes neon harder, 0.6 washes it out. Part of the
+     * look applied to the finished picture, with {@link #setContrast contrast} and the {@link #setShadowTint tints}; see
+     * {@link #setBloom} for what turning any of them on costs.
+     */
+    public Scene3D setSaturation(float saturation) {
+        this.saturation = Math.clamp(saturation, 0f, 4f);
+        return this;
+    }
+
+    public float getContrast() {
+        return contrast;
+    }
+
+    /**
+     * Pushes the picture away from middle grey (1 by default): above 1 darkens shadows and brightens highlights, below 1
+     * flattens them.
+     */
+    public Scene3D setContrast(float contrast) {
+        this.contrast = Math.clamp(contrast, 0f, 4f);
+        return this;
+    }
+
+    public Color getShadowTint() {
+        return shadowTint;
+    }
+
+    /**
+     * Multiplies the dark parts of the picture by a colour (white, no change, by default): a teal or blue here is the
+     * cold shadows of a neon street. The tint fades into the {@link #setHighlightTint highlight tint} with brightness.
+     * Only the colour's red, green and blue count.
+     */
+    public Scene3D setShadowTint(Color tint) {
+        this.shadowTint = tint == null ? Color.WHITE : tint;
+        return this;
+    }
+
+    public Color getHighlightTint() {
+        return highlightTint;
+    }
+
+    /**
+     * Multiplies the bright parts of the picture by a colour (white, no change, by default): a warm magenta or orange
+     * here, against teal shadows, is the cyberpunk split.
+     */
+    public Scene3D setHighlightTint(Color tint) {
+        this.highlightTint = tint == null ? Color.WHITE : tint;
+        return this;
+    }
+
+    public float getChromaticAberration() {
+        return chromaticAberration;
+    }
+
+    /**
+     * Splits red and blue apart toward the edges of the picture, like a cheap lens (0, off, by default). The value is how
+     * far, as a share of the picture's width, the colours are pulled apart at a corner: 0.003 is subtle, 0.01 is loud.
+     * The centre is untouched.
+     */
+    public Scene3D setChromaticAberration(float amount) {
+        this.chromaticAberration = Math.clamp(amount, 0f, 0.05f);
+        return this;
+    }
+
+    public float getVignette() {
+        return vignette;
+    }
+
+    /**
+     * Darkens the corners of the picture (0, off, by default; 0.4 is noticeable, 1 is heavy).
+     */
+    public Scene3D setVignette(float strength) {
+        this.vignette = Math.clamp(strength, 0f, 2f);
+        return this;
+    }
+
+    public float getAmbientOcclusion() {
+        return ambientOcclusion;
+    }
+
+    /**
+     * Darkens creases, corners and the gaps under things, where light would not reach (0, off, by default; try 0.5 to 1).
+     * It is screen-space: it looks at the depth of what the camera sees, so it needs no setup but also can't see what is
+     * behind an object or off screen, and a thin object in front of a far wall can leave a faint halo.
+     * <p>
+     * It is applied to the finished picture, so it darkens direct light as well as ambient light, and a moderate strength
+     * looks better than a high one. It costs a second pass over the scene's solid objects and a few full-screen passes; see
+     * {@link #setBloom} for what the offscreen picture means for anti-aliasing. Transparent surfaces and lines are not part
+     * of it.
+     */
+    public Scene3D setAmbientOcclusion(float strength) {
+        this.ambientOcclusion = Math.clamp(strength, 0f, 4f);
+        return this;
+    }
+
+    public float getAmbientOcclusionRadius() {
+        return ambientOcclusionRadius;
+    }
+
+    /**
+     * How far, in world units, occlusion reaches from a surface (0.5 by default). Match it to the size of the detail you
+     * want grounded: 0.2 for the gaps between props, 1 for walls and furniture.
+     */
+    public Scene3D setAmbientOcclusionRadius(float radius) {
+        this.ambientOcclusionRadius = Math.clamp(radius, 0.01f, 20f);
+        return this;
+    }
+
+    /**
+     * True when the scene needs the offscreen path (bloom, the look, lens effects or occlusion).
+     */
+    boolean usesPostProcessing() {
+        return bloom > 0f || ambientOcclusion > 0f || chromaticAberration > 0f || vignette > 0f
+                || saturation != 1f || contrast != 1f || !isWhite(shadowTint) || !isWhite(highlightTint);
+    }
+
+    private static boolean isWhite(Color c) {
+        return c.getR() == 1f && c.getG() == 1f && c.getB() == 1f;
+    }
+
     public float getShadowBias() {
         return shadowBias;
     }
@@ -395,6 +527,21 @@ public class Scene3D implements Viewport3D.Content {
 
     public Scene3D stopAnimating(AnimationPlayer player) {
         animators.remove(player);
+        return this;
+    }
+
+    /**
+     * Registers a blinking-light animation, which then advances once per frame, after the animation players and before
+     * the update handler. While one is playing the scene asks its viewport for frames, so the lights keep blinking even
+     * in a viewport that is not {@linkplain Viewport3D#setContinuous continuous}.
+     */
+    public Scene3D animate(LightAnimation animation) {
+        if (!lightAnimations.contains(animation)) lightAnimations.add(animation);
+        return this;
+    }
+
+    public Scene3D stopAnimating(LightAnimation animation) {
+        lightAnimations.remove(animation);
         return this;
     }
 
@@ -507,7 +654,11 @@ public class Scene3D implements Viewport3D.Content {
 
     @Override
     public boolean needsFrames() {
-        return !preloads.isEmpty();
+        if (!preloads.isEmpty()) return true;
+        for (LightAnimation animation : lightAnimations) {
+            if (animation.isPlaying()) return true;
+        }
+        return false;
     }
 
     private void runPreloads(GpuDevice device, Shared shared) {
@@ -547,6 +698,7 @@ public class Scene3D implements Viewport3D.Content {
         if (shared.updatedFrame != frame) {
             if (!preloads.isEmpty()) runPreloads(device, shared);
             for (AnimationPlayer player : new ArrayList<>(animators)) player.update(delta);
+            for (LightAnimation animation : lightAnimations) animation.update(delta);
             if (physics != null) physics.update(delta);
             if (updateHandler != null) updateHandler.update(this, delta);
         }

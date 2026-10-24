@@ -26,9 +26,9 @@ first time something draws 3D, and closed with the window.
 |---|---|
 | [Viewport3D](viewport-3d.md) | The element that shows 3D in a rectangle of the UI: its `Content`, input, resolution and lifetime |
 | [Background3D](background-3d.md) | 3D behind the whole window, with the UI over it: `window.setBackground(...)` |
-| [Scenes](scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material` (classic and PBR), `Light`, `Camera`, `TextureData`, `OrbitControls`, picking and the math types: a ready-made scene to put in a viewport |
+| [Scenes](scenes.md) | `Scene3D`, `Node3D`, `Mesh`, `Material` (classic and PBR), `Light`, `Camera`, `TextureData`, `UiScreen` (a `Container` on a surface in the scene), `OrbitControls`, picking and the math types: a ready-made scene to put in a viewport |
 | [Scene files](scene-files.md) | `Scene3DFile`: a scene built in the editor, saved as JSON and loaded by the game |
-| [Lighting](lighting.md) | How lights add up, **shadows**, and the **skybox** |
+| [Lighting](lighting.md) | How lights add up, **blinking lights**, **shadows**, and the **skybox** |
 | [Models](models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files, and what carries over |
 | [Animation](animation.md) | Clips, `AnimationPlayer`, and skinned meshes that bend with a skeleton |
 | [Physics](physics.md) | Rigid bodies: gravity, velocity, mass and inertia, forces, collisions with friction and bounce, sleeping, raycasts and trigger zones, mesh and hull colliders, joints, a character controller |

@@ -1185,20 +1185,11 @@ public class Window implements Themeable {
                 collectFocusTraversalOrder(container, stops);
             }
         }
-        stops.sort(Comparator.comparingInt(e -> e.getTabIndex() < 0 ? Integer.MAX_VALUE : e.getTabIndex()));
+        me.piitex.engine.input.UiHitTest.sortTabOrder(stops);
         return stops;
     }
 
     private void collectFocusTraversalOrder(Container container, List<Element> out) {
-        if (!container.isEnabled() || container.isDisabled()) return;
-        for (Element child : container.getElements().values()) {
-            if (!child.isEnabled() || child.isDisabled()) continue;
-            if (child.isFocusTraversable() && child instanceof Focusable) {
-                out.add(child);
-            }
-            if (child instanceof Container childContainer) {
-                collectFocusTraversalOrder(childContainer, out);
-            }
-        }
+        me.piitex.engine.input.UiHitTest.collectFocusStops(container, out);
     }
 }

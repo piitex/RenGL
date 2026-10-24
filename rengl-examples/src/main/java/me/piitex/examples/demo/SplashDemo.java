@@ -44,7 +44,7 @@ public class SplashDemo {
                 .setStyle(WindowStyle.BORDERLESS)
                 .setAlwaysOnTop(true)
                 .setResizable(false));
-        Font.setDefaultFont(new File("src/main/resources/Roboto-Regular.ttf"));
+        Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new CrimsonTheme());
 
         splash = buildSplash();

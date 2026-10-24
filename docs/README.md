@@ -113,7 +113,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Writing custom elements](reference/custom-elements.md) | Subclassing [`Element`](core/element.md) / [`Overlay`](core/overlay.md) |
 | [Utilities](reference/utilities.md) | `FormID`, `AssetManager`, `FileUtil`, `ProcessUtil`, the AI-disclosure annotations |
 | [Browser](reference/browser.md) | Open a web address in the OS default browser, or open and reveal a file or folder, with `Browser` |
-| [Packaging](reference/packaging.md) | Ship an installable app with jpackage: JVM flags, icon, version, file types, signing and notarization |
+| [Packaging](reference/packaging.md) | Ship an app for Windows, macOS and Linux: the RenGL packager (no jpackage, builds every platform and a Windows setup.exe or Linux .deb from one machine), or jpackage for .msi and .dmg |
 | [AppEnvironment](reference/app-environment.md) | Dev vs release file locations, chosen automatically |
 | [Downloads](reference/downloads.md) | Background HTTP downloads with progress, speed and ETA displays |
 | [Config](reference/config.md) | Settings files with flat and nested values |

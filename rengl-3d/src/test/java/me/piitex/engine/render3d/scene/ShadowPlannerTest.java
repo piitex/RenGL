@@ -170,16 +170,26 @@ class ShadowPlannerTest {
     }
 
     @Test
-    void everyLightOfTheSceneCanCastShadows() {
-        assertEquals(Scene3D.MAX_LIGHTS, Scene3D.MAX_SHADOW_LIGHTS);
+    void everyShadowSlotCanBeUsed() {
         Scene3D scene = new Scene3D();
         scene.lights().clear();
-        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) {
+        for (int i = 0; i < Scene3D.MAX_SHADOW_LIGHTS; i++) {
             scene.lights().add(Light.point(new Vec3(i - 3, 1, 5), Color.WHITE, 1f, 20f).setCastShadow(true));
         }
         boolean[] truncated = {false};
-        assertEquals(8, select(scene, truncated).size());
+        assertEquals(Scene3D.MAX_SHADOW_LIGHTS, select(scene, truncated).size());
         assertFalse(truncated[0]);
+    }
+
+    @Test
+    void aShadowCasterBeyondTheFirstFewLightsStillGetsShadows() {
+        Scene3D scene = new Scene3D();
+        scene.lights().clear();
+        for (int i = 0; i < 20; i++) scene.lights().add(Light.point(new Vec3(0, 1, 5), Color.WHITE, 1f, 20f)); // no shadows
+        scene.lights().add(Light.point(new Vec3(0, 1, 5), Color.WHITE, 1f, 20f).setCastShadow(true));
+        List<ShadowPlanner.Candidate> chosen = select(scene, new boolean[]{false});
+        assertEquals(1, chosen.size());
+        assertEquals(20, chosen.get(0).index());
     }
 
     @Test
