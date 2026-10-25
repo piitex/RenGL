@@ -52,7 +52,7 @@ public final class Packager {
               --jdk <platform>=<path>  Use this JDK for a platform instead of downloading Corretto's jmods; repeat
               --installer              Write an installer instead of the .zip / .tar.gz where there is one: a setup.exe
                                        for Windows (folder, desktop and Start menu shortcuts, uninstaller; run it with
-                                       /S for a silent install) and a .deb for Linux. macOS keeps its .tar.gz
+                                       /S for a silent install) and a .deb and an .rpm for Linux. macOS keeps its .tar.gz
               --installer-ui <dir>     Like --installer, and the Windows setup shows a RenGL window instead of the plain
                                        Windows one. <dir> is the folder of jars the rengl-packager module builds
                                        (rengl-packager/target/ui-input). The window runs on the app's own Java runtime
@@ -157,6 +157,7 @@ public final class Packager {
                 }
             } else if (archive && installer && platform.os() == Platform.Os.LINUX) {
                 System.out.println("  Package: " + DebPackage.build(app, platform, image, output));
+                System.out.println("  Package: " + RpmPackage.build(app, platform, image, output));
             } else if (archive) {
                 System.out.println("  Archive: " + builder.archive(image, output));
             }

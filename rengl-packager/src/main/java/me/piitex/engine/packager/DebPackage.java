@@ -88,7 +88,7 @@ final class DebPackage {
         return Math.max(1, bytes / 1024);
     }
 
-    private static String desktopEntry(AppSpec app, String pkg, String home, boolean icon) {
+    static String desktopEntry(AppSpec app, String pkg, String home, boolean icon) {
         String exec = home + "/bin/" + app.name();
         // The Exec key needs a path with spaces in double quotes.
         if (exec.contains(" ")) exec = "\"" + exec + "\"";
