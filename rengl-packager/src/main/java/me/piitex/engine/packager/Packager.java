@@ -1,10 +1,14 @@
 package me.piitex.engine.packager;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -51,8 +55,10 @@ public final class Packager {
                                        /S for a silent install) and a .deb for Linux. macOS keeps its .tar.gz
               --installer-ui <dir>     Like --installer, and the Windows setup shows a RenGL window instead of the plain
                                        Windows one. <dir> is the folder of jars the rengl-packager module builds
-                                       (rengl-packager/target/ui-input). The setup falls back to the plain window on a
-                                       computer that cannot open it
+                                       (rengl-packager/target/ui-input). The window runs on the app's own Java runtime
+                                       when the app is built from the same RenGL jars; otherwise it carries a runtime of
+                                       its own, about 50 MB more. The setup falls back to the plain window on a computer
+                                       that cannot open it
               --no-archive             Leave the folders; do not write the .zip / .tar.gz files (or installers)
               --help
             """.formatted(Platform.all());
@@ -140,12 +146,12 @@ public final class Packager {
             if (archive && installer && platform.os() == Platform.Os.WINDOWS) {
                 Path uiDir = null;
                 try {
-                    Path uiImage = null;
+                    WindowsSetup.Window window = null;
                     if (installerUi != null) {
                         uiDir = output.resolve(platform.id() + ".ui");
-                        uiImage = installerUiImage(app, installerUi, platform, jdkFinder, uiDir);
+                        window = installerWindow(app, installerUi, platform, jars, modules, jdkFinder, uiDir);
                     }
-                    System.out.println("  Setup:   " + WindowsSetup.build(app, platform, image, uiImage, output));
+                    System.out.println("  Setup:   " + WindowsSetup.build(app, platform, image, window, output));
                 } finally {
                     if (uiDir != null) deleteTree(uiDir);
                 }
@@ -160,7 +166,6 @@ public final class Packager {
 
     // ---- the installer window -------------------------------------------------------------------------------------
 
-    private static final String INSTALLER_MAIN_CLASS = "me.piitex.engine.installer.InstallerMain";
     private static final String INSTALLER_JAR_SUFFIX = "-ui.jar";   // rengl-packager-<version>-ui.jar
 
     private static Path installerUi(Map<String, List<String>> options) {
@@ -183,20 +188,66 @@ public final class Packager {
     }
 
     /**
-     * Builds the installer window's own app-image, a small RenGL app with its own jlink runtime, into {@code dir}. The setup
-     * program carries it beside the app and runs it from the temp folder.
+     * The installer window's files. When the app is built from the very jars the window needs (a RenGL app, with the same
+     * engine build) and its runtime has the modules the window needs, the window runs on the app's own runtime and the
+     * setup carries only its launcher and jar. Otherwise it gets an app-image of its own, with a Java runtime of its own,
+     * which makes the setup about 50 MB bigger.
      */
-    private static Path installerUiImage(AppSpec app, Path input, Platform platform, Jdks jdkFinder, Path dir) throws Exception {
+    private static WindowsSetup.Window installerWindow(AppSpec app, Path input, Platform platform, List<Path> appJars, List<String> appModules,
+                                                       Jdks jdkFinder, Path dir) throws Exception {
         String mainJar = installerJar(input);
-        AppSpec ui = new AppSpec(WindowsSetup.UI_NAME, app.version(), app.vendor(), app.name() + " Setup", app.identifier() + ".installer",
-                input, mainJar, INSTALLER_MAIN_CLASS, List.of(), Map.of(), List.of(), List.of());
         List<Path> allJars = jars(input, mainJar);
+        List<Path> uiJars = jarsFor(allJars, platform);
         List<String> modules = modules(Map.of(), allJars);
+
+        String problem = sharingProblem(uiJars, mainJar, appJars, modules, appModules);
+        if (problem == null) {
+            System.out.println("  Installer window: runs on the app's own Java runtime");
+            return WindowsSetup.Window.shared(input.resolve(mainJar), uiJars.stream().map(jar -> jar.getFileName().toString()).toList());
+        }
+        System.out.println("  Installer window: carries a Java runtime of its own (" + problem + ")");
+
+        AppSpec ui = new AppSpec(WindowsSetup.UI_NAME, app.version(), app.vendor(), app.name() + " Setup", app.identifier() + ".installer",
+                input, mainJar, WindowsSetup.INSTALLER_MAIN_CLASS, List.of(), Map.of(), List.of(), List.of());
         System.out.println("  Building the installer window's Java runtime (jlink): " + String.join(", ", modules));
         Path runtime = dir.resolveSibling(dir.getFileName() + "-runtime-tmp");
         deleteTree(runtime);
         Tools.jlink(jdkFinder.jmods(platform), modules, runtime);
-        return new ImageBuilder(ui, platform, jarsFor(allJars, platform), runtime).build(freshDir(dir));
+        return WindowsSetup.Window.own(new ImageBuilder(ui, platform, uiJars, runtime).build(freshDir(dir)));
+    }
+
+    /** Why the installer window cannot run on the app's runtime and jars, or null when it can. */
+    static String sharingProblem(List<Path> uiJars, String uiMainJar, List<Path> appJars, List<String> uiModules, List<String> appModules) {
+        for (Path jar : uiJars) {
+            String name = jar.getFileName().toString();
+            if (name.equals(uiMainJar)) continue;
+            Path same = appJars.stream().filter(candidate -> candidate.getFileName().toString().equals(name)).findFirst().orElse(null);
+            if (same == null) return name + " is not one of the app's jars";
+            try {
+                if (!sameContent(jar, same)) return name + " in the app is a different build";
+            } catch (IOException e) {
+                return name + " could not be compared: " + e.getMessage();
+            }
+        }
+        for (String module : uiModules) {
+            if (!appModules.contains(module)) return "the app's runtime has no " + module + " module";
+        }
+        return null;
+    }
+
+    private static boolean sameContent(Path a, Path b) throws IOException {
+        return Files.size(a) == Files.size(b) && Arrays.equals(sha256(a), sha256(b));
+    }
+
+    private static byte[] sha256(Path file) throws IOException {
+        try (InputStream in = Files.newInputStream(file)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[1 << 16];
+            for (int n; (n = in.read(buffer)) > 0; ) digest.update(buffer, 0, n);
+            return digest.digest();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     // ---- arguments ------------------------------------------------------------------------------------------------

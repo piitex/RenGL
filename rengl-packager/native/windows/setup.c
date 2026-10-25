@@ -46,6 +46,7 @@ static wchar_t appDesc[512];
 static wchar_t appId[256] = L"app";
 static wchar_t appExe[MAX_PATH] = L"App.exe";
 static wchar_t appUi[MAX_PATH];  /* the launcher of the RenGL setup program under ui/, when the payload carries one */
+static int uiShare;              /* ui-share=1: that program runs on the app's own runtime/ and app/*.jar, which are unpacked beside it */
 static int reportProgress;       /* /PROGRESS: say how the install is going on stdout, for the setup program that started us */
 
 static wchar_t selfPath[PATHLEN];
@@ -409,6 +410,9 @@ static int loadSettings(void) {
     iniValue((const char *) d, ini->usize, "id", appId, 256);
     iniValue((const char *) d, ini->usize, "exe", appExe, MAX_PATH);
     iniValue((const char *) d, ini->usize, "ui", appUi, MAX_PATH);
+    wchar_t share[8];
+    iniValue((const char *) d, ini->usize, "ui-share", share, 8);
+    uiShare = wcscmp(share, L"1") == 0;
     return 1;
 }
 
@@ -1004,13 +1008,28 @@ static void removeTree(const wchar_t *dir) {
     RemoveDirectoryW(dir);
 }
 
-/* Unpacks the ui/ entries into dir. */
+/*
+ * Where an entry goes when the RenGL setup program is unpacked, relative to its folder, or NULL if it is not part of it: the
+ * ui/ entries, and with ui-share also the app's runtime/ and its jars (the files directly in app/).
+ */
+static const wchar_t *uiPath(const wchar_t *name) {
+    if (isUiEntry(name)) return name[3] ? name + 3 : NULL;
+    if (!uiShare) return NULL;
+    if (wcsncmp(name, L"runtime/", 8) == 0) return name;
+    if (wcsncmp(name, L"app/", 4) == 0) {
+        size_t n = wcslen(name);
+        if (n > 8 && !wcschr(name + 4, L'/') && _wcsicmp(name + n - 4, L".jar") == 0) return name;
+    }
+    return NULL;
+}
+
+/* Unpacks the entries uiPath names into dir. */
 static int extractUi(const wchar_t *dir) {
     size_t biggest = 0;
     int found = 0;
     for (int i = 0; i < entryCount; i++) {
-        if (!isUiEntry(entries[i].name) || !entries[i].name[3]) continue;
-        found = 1;
+        if (!uiPath(entries[i].name)) continue;
+        if (isUiEntry(entries[i].name)) found = 1;
         if (entries[i].usize > biggest) biggest = entries[i].usize;
     }
     if (!found) return 0;
@@ -1020,8 +1039,8 @@ static int extractUi(const wchar_t *dir) {
     int ok = 1;
     for (int i = 0; i < entryCount && ok; i++) {
         Entry *e = &entries[i];
-        if (!isUiEntry(e->name) || !e->name[3]) continue;
-        const wchar_t *rel = e->name + 3;
+        const wchar_t *rel = uiPath(e->name);
+        if (!rel) continue;
         wchar_t path[PATHLEN];
         if (!safeName(rel)) { ok = 0; break; }
         joinPath(path, dir, rel);
