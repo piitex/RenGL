@@ -40,7 +40,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [ModalContainer](containers/modal-container.md) | Dialogs that block the rest of the UI |
 | [ReorderableGrid](containers/reorderable-grid.md) | Drag-to-rearrange grid of items |
 | [TreeView](containers/tree-view.md) | A tree of items, like an editor's hierarchy or a file browser |
-| [TableView](containers/table-view.md) | Rows and columns with a fixed header, click-to-sort and resizable columns, like an archive's listing |
+| [TableView](containers/table-view.md) | Rows and columns with a fixed header, click-to-sort and resizable columns, check boxes and cells that edit in place |
 | **[Layouts](layouts/README.md)** | Automatic positioning |
 | [Layouts overview](layouts/README.md) | How automatic positioning works |
 | [Layout files](containers/layout-files.md) | Load a screen designed in the editor from JSON |

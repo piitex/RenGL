@@ -44,6 +44,8 @@ not move rows needs no `refresh()`.
 | `setEllipsisInMiddle(boolean)` | Put the `…` in the middle so the end stays, such as a file name's extension. Off by default |
 | `setIconProvider(item -> IconAsset)` | An icon before the text, such as `Feather.FOLDER`, or null for none on that row |
 | `setIconColorProvider(item -> Color)` | The color of that icon, so a folder can be the accent; null, or null for a row, is the text color |
+| `setEditable((item, text) -> ...)` | Lets the user [edit the cells](#editing-cells) of this column in place. Null, the default, is read-only |
+| `setEditText(item -> String)` | What the field starts with, when that is not the text the cell shows |
 
 `getColumns()` lists them left to right, and `removeColumn(column)` removes one. After the user has resized a column,
 `column.getWidth()` has the new width, to save it. The **last column stretches** to fill the table when the columns
@@ -112,6 +114,58 @@ it, and Cmd/Ctrl+A selects every row. `getSelected()` is the lead row, which the
 The setters are silent: `onSelect` and `onSelectionChange` fire only for the user's own changes. A `refresh()` that finds
 a selected item gone drops it quietly.
 
+## Check boxes
+
+```java nocompile
+table.setCheckBoxes(true);
+table.onCheck((entry, on) -> updateTotal());
+List<Entry> toExtract = table.getCheckedItems();   // top to bottom
+```
+
+A column of boxes before the others, with one in the header, chooses rows apart from selecting them (the files to extract, the
+rows to delete). A click on a row's box, or Space on the lead row, ticks it; **ticking never changes the selection**. The
+header's box ticks every row, or clears them all when every row is ticked, and shows a dash while some are. The boxes are 30
+points wide and push the other columns right.
+
+| Method | What it does |
+|---|---|
+| `setCheckBoxes(boolean)` | Shows or hides the boxes. Off by default |
+| `isChecked(item)`, `getCheckedItems()` | What is ticked; the list is top to bottom |
+| `setChecked(item, on)` | Ticks or clears one. An item not in the table is ignored |
+| `setCheckedItems(items)`, `checkAll()`, `clearChecked()` | Tick exactly these, every row, or none |
+| `onCheck((item, on) -> ...)` | The user ticked or cleared a box. The header's box fires it for each row it changes |
+
+Ticks are kept by the items' `equals`, like the selection, and survive a sort. The setters are silent. A `refresh()` forgets the
+ticks of items that are gone, and `setItems` starts with none ticked unless the same items come back.
+
+## Editing cells
+
+```java nocompile
+table.addColumn("Name", Item::name).setEditable((item, text) -> item.rename(text));
+table.addColumn("Qty", i -> i.qty() + " pcs")
+        .setAlignment(TextAlign.RIGHT)
+        .setEditText(i -> String.valueOf(i.qty()))              // type 12, not "12 pcs"
+        .setEditable((item, text) -> item.setQty(Integer.parseInt(text.trim())));
+```
+
+A **double-click** on a cell of an editable column, or **F2** on the selected row (its first editable column), puts a text field
+over the cell with its text selected, in the cell's alignment. **Enter**, or a click anywhere else, ends the edit and calls the
+column's listener with the row's item and the new text, if the text changed; **Escape** cancels. Double-clicking a cell that is
+not editable still opens the row through `onActivate`, and Enter on the row still does.
+
+The table does **not change the model**: the listener does, and the cell shows the new text from the next frame. Call
+`refresh()` too when the column sorts, so the row moves. Text that cannot be used (a quantity that is not a number) is the
+listener's to refuse: ignore it, and the cell keeps what it showed.
+
+| Method | What it does |
+|---|---|
+| `startEdit(item, column)` | Starts an edit, such as from a context menu. Does nothing unless the column is editable and the item is in the table. Ends an edit already open, keeping its text |
+| `isEditing()`, `getEditingItem()` | Whether a cell is being edited, and which row |
+| `commitEdit()`, `cancelEdit()` | End the edit as Enter or Escape would |
+
+The field follows its row through a sort, and an edit ends without reporting when its row goes away (`refresh()` without it),
+when `setItems` brings new rows, when its column is removed or when the check boxes are switched on or off.
+
 ## Keys and context menu
 
 `onKey((key, mods) -> ...)` gets every key first, for keys the table has no use for (Delete, say); return true to use
@@ -149,8 +203,11 @@ table.dispose();               // frees the font
 
 - `onMouseClick` on the table is safe to use: the table's own right-click row selection runs first, then your handler.
 - Text that does not fit its cell ends with an ellipsis. Resize the column, give it a wider default, or turn `setEllipsisInMiddle` on to keep a file extension.
-- Rows cannot be dragged, reordered by the user or edited in place. For a hierarchy use [`TreeView`](tree-view.md).
+- Rows cannot be dragged or reordered by the user. For a hierarchy use [`TreeView`](tree-view.md).
+- Cell editing is a text field: there is no drop-down, number spinner or check box cell editor, and Tab does not move on to the
+  next cell. A check box column is the table-wide [boxes](#check-boxes), not one per column.
+- A double-click on an editable cell edits it instead of calling `onActivate`.
 - One `equals` per item: two entries that are equal are one selection. Use records or types with identity or a unique
   key.
-- There are no check boxes in a table. For choosing items apart from selecting them, see `TreeView`'s
-  [check boxes](tree-view.md#check-boxes).
+- The boxes are one column for the whole table. For a tree of items, see `TreeView`'s [check boxes](tree-view.md#check-boxes),
+  which can tick everything under a folder.
