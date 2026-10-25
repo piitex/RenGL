@@ -70,6 +70,14 @@ class ClusteredLightGpuTest {
         return scene;
     }
 
+    /** A white floor in the dark with a glowing cube on it and nothing else to light it. */
+    private static Scene3D glowing(float range) {
+        Scene3D scene = base();
+        scene.add(new Node3D("floor", Mesh.plane(40, 40), new Material(Color.WHITE)));
+        scene.add(new Node3D("lamp", Mesh.cube(1f), new Material(new Color(1f, 0.6f, 0.2f, 1f)).setEmissive(new Color(1f, 0.6f, 0.2f, 1f), 3f).setGlow(range)).setPosition(0, 1.5f, 0));
+        return scene;
+    }
+
     /** A spot light casting a shadow, with a crowd of faint local lights far from where the shadow falls. */
     private static Scene3D shadowed() {
         Scene3D scene = base();
@@ -206,6 +214,34 @@ class ClusteredLightGpuTest {
                 MemoryUtil.memFree(grid);
             }
         }));
+    }
+
+    private void glow(RenderAPI api) {
+        Scene3D lit = glowing(8f);
+        run(api, lit, (s, device, target, recorder) -> recorder.guard("a glowing surface lights its surroundings", () -> {
+            ByteBuffer on = draw(s, Scene3D.LightMode.AUTO, device, target);
+            int near = luma(on, target, s, 2.5f, 0f, 0f), far = luma(on, target, s, 11f, 0f, 0f);
+            int glowing = s.getStats().glowLights();
+            MemoryUtil.memFree(on);
+            s.root().getChildren().get(1).getMaterial().setGlow(0f);
+            ByteBuffer off = draw(s, Scene3D.LightMode.AUTO, device, target);
+            int offNear = luma(off, target, s, 2.5f, 0f, 0f);
+            MemoryUtil.memFree(off);
+            recorder.check("one glow light was made", glowing == 1, "glow lights " + glowing);
+            recorder.check("the floor beside the lamp is lit by it", near > 60, "near " + near);
+            recorder.check("and beyond its range it is dark", far < 10, "far " + far);
+            recorder.check("with the glow off the floor is dark again", offNear < 10, "off " + offNear);
+        }));
+    }
+
+    @Test
+    void glowVulkan() {
+        glow(RenderAPI.VULKAN);
+    }
+
+    @Test
+    void glowOpenGl() {
+        glow(RenderAPI.OPENGL);
     }
 
     @Test

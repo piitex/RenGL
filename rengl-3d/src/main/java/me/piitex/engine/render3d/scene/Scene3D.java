@@ -295,8 +295,18 @@ public class Scene3D implements Viewport3D.Content {
      */
     public static final int MAX_CLUSTERED_LIGHTS = LightClusters.MAX_LIGHTS;
 
+    /**
+     * The most lights made in one frame from glowing surfaces ({@link Material#setGlow}). Surfaces past it glow without
+     * lighting their surroundings.
+     */
+    public static final int MAX_GLOW_LIGHTS = 1024;
+
     private LightMode lightMode = LightMode.AUTO;
     private boolean occlusionCulling;
+
+    boolean hasGlow() {
+        return Material.anyGlow();
+    }
 
     public LightMode getLightMode() {
         return lightMode;
