@@ -3,6 +3,7 @@ package me.piitex.engine.ui.menu;
 import me.piitex.engine.Window;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.Element;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
@@ -224,7 +225,15 @@ public class PopupMenu {
      * any popup already open. Does nothing with no items or no window.
      */
     public void show(Window window, double x, double y) {
-        show(window, x, y, null);
+        show((PopupHost) window, x, y, null);
+    }
+
+    /**
+     * As {@link #show(Window, double, double)} on any {@link PopupHost}, such as the screen of a 3D scene, at a point in its
+     * coordinates.
+     */
+    public void show(PopupHost host, double x, double y) {
+        show(host, x, y, null);
     }
 
     /**
@@ -234,10 +243,10 @@ public class PopupMenu {
      * removed, disabled or scrolled out of view. The right-click context menu opens this way.
      */
     public void show(Element anchor, double x, double y) {
-        show(anchor.getWindow(), x, y, anchor);
+        show(anchor.getPopupHost(), x, y, anchor);
     }
 
-    private void show(Window window, double x, double y, Element anchor) {
+    private void show(PopupHost window, double x, double y, Element anchor) {
         if (window == null) return;
         if (onOpen != null) onOpen.accept(this); // may populate an empty menu, so run before the emptiness check
         if (items.isEmpty()) return;

@@ -169,6 +169,12 @@ characters, the same way [`TextFlowOverlay`](../overlays/text-flow-overlay.md) d
 - A floating popup you show with `Window.showPopup` is a top-level container, so position it in window
   coordinates: use `getAbsoluteX()`/`getAbsoluteY()` of the element it belongs to. Pass that element as the
   [anchor](../core/window.md#following-an-element) (`showPopup(popup, this, onDismiss)`) so the popup moves with it.
+- **Open it through `getPopupHost()`, not `getWindow()`.** A `PopupHost` is a window, or the screen of a 3D scene
+  (`UiScreen`) when the element is shown there, and has `showPopup`, `closePopup`, `getPopup`, `requestFocus` and
+  `getPopupArea()` (`{x, y, width, height}` to keep the popup inside). The built-in dropdown, menus, pickers and the
+  tree's and table's in-place editors do this. `getWindow()` is null on a screen.
+- Where a custom element reads `MouseTracker` to find the pointer (a hovered row, say), it gets the pointer on the screen while
+  it is drawn there, in the coordinates it was laid out in.
 
 ## A complete example: a toggle switch
 

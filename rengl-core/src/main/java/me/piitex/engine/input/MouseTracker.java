@@ -53,6 +53,37 @@ public final class MouseTracker {
         states.remove(window);
     }
 
+    /**
+     * Ends a {@link #lend} when closed.
+     */
+    public interface Loan extends AutoCloseable {
+        @Override
+        void close();
+    }
+
+    /**
+     * Lends the getters another pointer until the returned loan is closed, for a surface that shows a UI somewhere other than
+     * on the window, such as a screen in a 3D scene: while it draws and updates, an element that asks where the mouse is (a
+     * table's hovered row, a chart's tooltip, a dropdown list) is told where the pointer is on <em>that</em> surface, in the
+     * coordinates it was laid out in, and whether it is on it.
+     * <pre>{@code
+     * try (var loan = MouseTracker.lend(x, y, true)) {
+     *     container.update(delta);
+     *     container.render(renderer);
+     * }
+     * }</pre>
+     * Render thread only, like the rest of this class. Loans nest.
+     */
+    public static Loan lend(double x, double y, boolean inWindow) {
+        State previous = current;
+        State lent = new State();
+        lent.x = x;
+        lent.y = y;
+        lent.inWindow = inWindow;
+        current = lent;
+        return () -> current = previous;
+    }
+
     static void update(double x, double y) {
         State state = current;
         state.x = x;

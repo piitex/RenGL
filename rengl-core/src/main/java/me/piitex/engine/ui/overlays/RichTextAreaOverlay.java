@@ -1,6 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
-import me.piitex.engine.Window;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.containers.Container;
@@ -215,8 +215,8 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
      */
     private void openSuggestions(double x, double y) {
         TextChecker activeChecker = checker;
-        Window window = getWindow();
-        if (activeChecker == null || window == null) return;
+        PopupHost host = getPopupHost();
+        if (activeChecker == null || host == null) return;
 
         TextIssue issue = issueAt(x, y);
         if (issue == null) return;
@@ -229,10 +229,11 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         SuggestionPopup popup = new SuggestionPopup(issue, current.substring(issue.start(), issue.end()), suggestions, activeChecker);
         float w = popup.preferredWidth();
         float h = popup.preferredHeight();
-        float px = (float) Math.min(x, window.getWindowOptions().getWidth() - w);
-        float py = (float) Math.min(y, window.getWindowOptions().getHeight() - h);
-        popup.setBounds(Math.max(0, px), Math.max(0, py), w, h);
-        window.showPopup(popup, this, popup::closeFont);
+        double[] area = host.getPopupArea();
+        float px = (float) Math.min(x, area[0] + area[2] - w);
+        float py = (float) Math.min(y, area[1] + area[3] - h);
+        popup.setBounds(Math.max(area[0], px), Math.max(area[1], py), w, h);
+        host.showPopup(popup, this, popup::closeFont);
     }
 
     /**
@@ -297,7 +298,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
             onMouseClick(event -> {
                 int row = (int) Math.floor((event.getMouseY() - getY()) / ROW_HEIGHT) - headerRows();
                 if (!isClickable(row)) return;
-                Window window = getWindow();
+                PopupHost host = getPopupHost();
                 if (row < suggestionCount) {
                     String current = getText();
                     if (issue.end() <= current.length() && current.regionMatches(issue.start(), word, 0, word.length())) {
@@ -306,7 +307,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
                 } else {
                     actions.get(row - firstActionRow).run();
                 }
-                if (window != null) window.closePopup();
+                if (host != null) host.closePopup();
             });
         }
 

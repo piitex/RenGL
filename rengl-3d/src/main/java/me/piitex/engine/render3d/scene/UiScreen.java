@@ -1,11 +1,14 @@
 package me.piitex.engine.render3d.scene;
 
 import me.piitex.engine.gl.renderer.OffscreenRenderer;
+import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.input.UiHitTest;
 import me.piitex.engine.math.Vec2;
 import me.piitex.engine.ui.Draggable;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
+import me.piitex.engine.ui.PopupHost;
+import me.piitex.engine.ui.PopupKeyListener;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.events.MouseClickEvent;
@@ -48,12 +51,23 @@ import java.util.List;
  *     else movePlayer(key, action);
  * }
  * }</pre>
- * Not done: dragging anything but text selection, popups such as a dropdown's list, and context menus.
+ * <h2>Dragging</h2>
+ * A press that lands on something that drags (a slider's thumb, a scrollbar, a split container's divider, a resizable or
+ * draggable container, a table's column edge, a text field's selection) is a drag until {@link #release}: every
+ * {@link #pointAt} in between moves it, by the window's own rules for which element takes the drag. A drag that goes off the
+ * screen holds at the last place on it (the pointer is {@linkplain #pointAway away}, but the drag goes on) and ends at
+ * the release.
+ * <h2>Popups</h2>
+ * A dropdown's list, a context menu (a right {@link #press(int)}), a color or date picker and a spell checker's suggestions open
+ * on the screen, over everything else on it, and are drawn into the texture. This screen is their {@link PopupHost}. While one is
+ * open, pointing, pressing, the wheel and keys go to it first, a press outside it closes it (and is used up), and Escape closes
+ * it too; a menu takes the arrow keys and Enter, so send keys to {@link #key} while {@link #hasFocus()}. A popup that is
+ * open but not wholly inside the container is moved to be inside it.
  * <p>
  * Not thread-safe: draw and point from one thread, the way a window's interface is used. Close the screen when it is no
  * longer shown; the texture it made stays valid.
  */
-public final class UiScreen implements AutoCloseable {
+public final class UiScreen implements AutoCloseable, PopupHost {
     private final Container root;
     private final TextureData texture;
     private final OffscreenRenderer renderer;
@@ -76,6 +90,20 @@ public final class UiScreen implements AutoCloseable {
      * The text field a left press landed on, which follows the pointer until the release to select text.
      */
     private Element dragTarget;
+    /**
+     * The draggable a press on a click-and-drag element is waiting to start dragging, once the pointer has moved
+     * {@link #DRAG_THRESHOLD} points, or null.
+     */
+    private Element pendingDrag;
+    private double pendingDragX, pendingDragY;
+    private static final double DRAG_THRESHOLD = 4.0;
+
+    // the open popup, which follows its anchor the way a window's does
+    private Container popup;
+    private Runnable popupDismiss;
+    private Element popupAnchor;
+    private double anchorStartX, anchorStartY, popupShiftX, popupShiftY, popupGap;
+    private int popupSide;
 
     /**
      * A screen at one texture pixel per point of the container.
@@ -96,6 +124,7 @@ public final class UiScreen implements AutoCloseable {
         int h = (int) Math.ceil(root.getHeight());
         if (w <= 0 || h <= 0) throw new IllegalArgumentException("Cannot show a container with no size: " + w + "x" + h);
         this.root = root;
+        root.setPopupHost(this);
         this.renderer = new OffscreenRenderer(w, h, scale);
         this.renderer.clear(0f, 0f, 0f, 1f);
         byte[] black = new byte[renderer.getPixelWidth() * renderer.getPixelHeight() * 4];
@@ -135,12 +164,17 @@ public final class UiScreen implements AutoCloseable {
      * changes slowly can be refreshed a few times a second instead of every frame.
      */
     public void refresh() {
-        renderer.begin();
-        // The container draws itself at its own x/y, so shift that to the corner of the texture.
-        renderer.pushTranslate((float) -root.getX(), (float) -root.getY());
-        root.renderWithTransitions(renderer);
-        renderer.popTranslate();
-        renderer.end();
+        // Whatever asks where the mouse is while it draws (a hovered row, a chart's tooltip) is told where the pointer is here.
+        try (MouseTracker.Loan loan = MouseTracker.lend(pointerX, pointerY, pointing)) {
+            followPopupAnchor();
+            renderer.begin();
+            // The container draws itself at its own x/y, so shift that to the corner of the texture.
+            renderer.pushTranslate((float) -root.getX(), (float) -root.getY());
+            root.renderWithTransitions(renderer);
+            if (popup != null) popup.renderWithTransitions(renderer);
+            renderer.popTranslate();
+            renderer.end();
+        }
         texture.update(renderer.readPixels());
     }
 
@@ -149,7 +183,10 @@ public final class UiScreen implements AutoCloseable {
      * {@code delta} seconds, as a window does every frame.
      */
     public void refresh(float delta) {
-        root.update(delta);
+        try (MouseTracker.Loan loan = MouseTracker.lend(pointerX, pointerY, pointing)) {
+            root.update(delta);
+            if (popup != null) popup.update(delta);
+        }
         refresh();
     }
 
@@ -165,8 +202,32 @@ public final class UiScreen implements AutoCloseable {
         pointing = true;
         pointerX = root.getX() + uv.x() * root.getWidth();
         pointerY = root.getY() + uv.y() * root.getHeight();
-        UiHitTest.applyHover(root, UiHitTest.findTopmostHit(root, pointerX, pointerY));
+        // A press on a clickable element that drags its container turns into that drag once the pointer has moved a few points.
+        if (pendingDrag != null && Math.hypot(pointerX - pendingDragX, pointerY - pendingDragY) >= DRAG_THRESHOLD) {
+            Element started = pendingDrag;
+            pendingDrag = null;
+            clickTargets.clear();
+            dragTarget = started;
+            ((Draggable) started).onDragStart(pendingDragX, pendingDragY);
+        }
+        applyHover(topmost());
         if (dragTarget instanceof Draggable draggable) draggable.onDragUpdate(pointerX, pointerY);
+    }
+
+    /**
+     * What is under the pointer: the popup's, if it is over the popup, else the container's.
+     */
+    private Element topmost() {
+        if (popup != null) {
+            Element inPopup = UiHitTest.findTopmostHit(popup, pointerX, pointerY);
+            if (inPopup != null) return inPopup;
+        }
+        return UiHitTest.findTopmostHit(root, pointerX, pointerY);
+    }
+
+    private void applyHover(Element hit) {
+        UiHitTest.applyHover(root, hit);
+        if (popup != null) UiHitTest.applyHover(popup, hit);
     }
 
     /**
@@ -182,7 +243,8 @@ public final class UiScreen implements AutoCloseable {
      */
     public void pointAway() {
         pointing = false;
-        UiHitTest.applyHover(root, null);
+        pendingDrag = null;
+        applyHover(null);
     }
 
     /**
@@ -197,7 +259,7 @@ public final class UiScreen implements AutoCloseable {
      * background.
      */
     public Element hovered() {
-        return pointing ? UiHitTest.findTopmostHit(root, pointerX, pointerY) : null;
+        return pointing ? topmost() : null;
     }
 
     /**
@@ -221,14 +283,22 @@ public final class UiScreen implements AutoCloseable {
             clickTargets.clear();
             disabledTarget = null;
             dragTarget = null;
+            pendingDrag = null;
         }
         // A press anywhere but on a field takes the keyboard away from it, as clicking away does in a window.
         if (!pointing) {
             clearFocus();
+            closePopup();
             return false;
         }
 
-        Element hit = UiHitTest.findTopmostHit(root, pointerX, pointerY);
+        // An open popup is modal-ish: a press outside it just dismisses it, and that press is used up.
+        if (popup != null && UiHitTest.findTopmostHit(popup, pointerX, pointerY) == null) {
+            closePopup();
+            return true;
+        }
+
+        Element hit = topmost();
         if (hit == null) {
             clearFocus();
             return false;
@@ -256,18 +326,58 @@ public final class UiScreen implements AutoCloseable {
             if (!e.isPropagateClicks()) break;
         }
 
+        // A right press opens the context menu of the hit element, or of the nearest ancestor that has one.
+        if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+            for (Element e = hit; e != null; e = e.owner) {
+                if (e.getContextMenu() != null) {
+                    e.getContextMenu().show(e, pointerX, pointerY);
+                    taken = true;
+                    break;
+                }
+            }
+        }
+
         // A field takes the keyboard when pressed; anything else lets it go. A click listener that moved the focus
         // itself keeps it there.
         if (focused == focusBefore || focused == null) {
             focus(hit instanceof Focusable ? hit : null);
         }
         if (hit instanceof Focusable) taken = true;
-        // The text field puts its caret where it was pressed and selects text as the pointer moves until the release.
-        if (left && hit instanceof Focusable && hit instanceof Draggable draggable) {
-            dragTarget = hit;
-            draggable.onDragStart(pointerX, pointerY);
+        if (!left) return taken;
+
+        // The press goes to the nearest Draggable at or above the hit element. A container that does not want the drag and a
+        // plain child that is not draggable hand it up to their owner. An element that listens for clicks is a control (a
+        // button, a clickable row) and keeps its press, unless it drags its container, when the press waits to see whether
+        // the pointer moves.
+        Element candidate = hit;
+        boolean throughClickable = false;
+        while (candidate != null && !acceptsDrag(candidate)) {
+            if (candidate.getMouseClickListenerConsumer() != null) {
+                if (!candidate.isDragsContainer()) {
+                    candidate = null;
+                    break;
+                }
+                throughClickable = true;
+            }
+            candidate = candidate.owner;
+        }
+        if (candidate instanceof Draggable draggable) {
+            if (throughClickable) {
+                pendingDrag = candidate;
+                pendingDragX = pointerX;
+                pendingDragY = pointerY;
+            } else {
+                dragTarget = candidate;
+                draggable.onDragStart(pointerX, pointerY);
+            }
+            taken = true;
         }
         return taken;
+    }
+
+    private boolean acceptsDrag(Element element) {
+        if (!(element instanceof Draggable)) return false;
+        return !(element instanceof Container container) || container.canDrag(pointerX, pointerY);
     }
 
     /**
@@ -290,6 +400,7 @@ public final class UiScreen implements AutoCloseable {
         disabledTarget = null;
         Element dragged = dragTarget;
         dragTarget = null;
+        pendingDrag = null;
         if (dragged instanceof Draggable draggable) draggable.onDragEnd(pointerX, pointerY);
         if (!pointing) return;
 
@@ -321,7 +432,9 @@ public final class UiScreen implements AutoCloseable {
      */
     public boolean scroll(double dx, double dy) {
         if (!pointing) return false;
-        Element target = UiHitTest.findScrollTarget(root, pointerX, pointerY, dx, dy);
+        Element target = null;
+        if (popup != null) target = UiHitTest.findScrollTarget(popup, pointerX, pointerY, dx, dy);
+        if (target == null) target = UiHitTest.findScrollTarget(root, pointerX, pointerY, dx, dy);
         if (target instanceof Scrollable scrollable) {
             scrollable.onScroll(dx, dy);
             return true;
@@ -343,7 +456,7 @@ public final class UiScreen implements AutoCloseable {
      * characters here ({@link #key}, {@link #typeChar}) instead of using them to move the player.
      */
     public boolean hasFocus() {
-        return focused() != null;
+        return focused() != null || popup instanceof PopupKeyListener;
     }
 
     /**
@@ -394,8 +507,17 @@ public final class UiScreen implements AutoCloseable {
      * @return whether a field had the keyboard and used the press or repeat; false means it is the game's
      */
     public boolean key(int key, int action, int mods) {
-        if (!(focused() instanceof Focusable field)) return false;
         boolean released = action == GLFW.GLFW_RELEASE;
+        // An open menu takes every key and keeps it; Escape closes any popup.
+        if (popup instanceof PopupKeyListener listener) {
+            if (!released) listener.onPopupKey(key, mods);
+            return !released;
+        }
+        if (popup != null && key == GLFW.GLFW_KEY_ESCAPE && action == GLFW.GLFW_PRESS) {
+            closePopup();
+            return true;
+        }
+        if (!(focused() instanceof Focusable field)) return false;
         if (key == GLFW.GLFW_KEY_TAB && !released) {
             if (field.wantsTab()) {
                 field.onKeyPressed(key, action, mods);
@@ -450,8 +572,134 @@ public final class UiScreen implements AutoCloseable {
         return false;
     }
 
+    // ---- popups ---------------------------------------------------------------------------------------------------
+
+    /**
+     * Opens {@code popup} over the container, closing any popup that is open. Done by the elements that have popups (a dropdown,
+     * a menu), not by the game; see {@link PopupHost}.
+     */
+    @Override
+    public void showPopup(Container popup, Element anchor, Runnable onDismiss) {
+        closePopup();
+        this.popup = popup;
+        popup.setPopupHost(this);
+        this.popupDismiss = onDismiss;
+        this.popupAnchor = anchor;
+        if (anchor != null) {
+            anchorStartX = anchor.getAbsoluteX();
+            anchorStartY = anchor.getAbsoluteY();
+            popupShiftX = 0;
+            popupShiftY = 0;
+            double anchorBottom = anchorStartY + anchor.getHeight();
+            double popupBottom = popup.getY() + popup.getHeight();
+            if (popup.getY() >= anchorBottom - 0.5) {
+                popupSide = 1;
+                popupGap = popup.getY() - anchorBottom;
+            } else if (popupBottom <= anchorStartY + 0.5) {
+                popupSide = -1;
+                popupGap = anchorStartY - popupBottom;
+            } else {
+                popupSide = 0;
+                popupGap = 0;
+            }
+        }
+        keepPopupInside();
+    }
+
+    @Override
+    public void closePopup() {
+        if (popup == null) return;
+        Container closing = popup;
+        Runnable listener = popupDismiss;
+        popup = null;
+        popupDismiss = null;
+        popupAnchor = null;
+        closing.setPopupHost(null);
+        if (listener != null) listener.run();
+        if (pointing) applyHover(topmost());
+    }
+
+    @Override
+    public Container getPopup() {
+        return popup;
+    }
+
+    /**
+     * The container's own rectangle: a popup is kept inside it.
+     */
+    @Override
+    public double[] getPopupArea() {
+        return new double[]{root.getX(), root.getY(), root.getWidth(), root.getHeight()};
+    }
+
+    @Override
+    public Element getFocusedElement() {
+        return focused();
+    }
+
+    @Override
+    public void requestFocus(Element element) {
+        focus(element);
+    }
+
+    /**
+     * Moves the popup to keep its offset from its anchor, flipped above or below it when it no longer fits, inside the
+     * container; closes it if the anchor is gone.
+     */
+    private void followPopupAnchor() {
+        Container open = popup;
+        Element anchor = popupAnchor;
+        if (open == null || anchor == null) return;
+        if (!isShowing(anchor)) {
+            closePopup();
+            return;
+        }
+        double baseX = open.getX() - popupShiftX, baseY = open.getY() - popupShiftY;
+        double width = open.getWidth(), height = open.getHeight();
+        double[] area = getPopupArea();
+        double top = area[1], bottom = area[1] + area[3];
+        double anchorTop = anchor.getAbsoluteY(), anchorBottom = anchorTop + anchor.getHeight();
+        double x = baseX + anchor.getAbsoluteX() - anchorStartX;
+        double y = baseY + anchorTop - anchorStartY;
+        if (popupSide > 0 && y + height > bottom && anchorTop - popupGap - height >= top) {
+            y = anchorTop - popupGap - height;
+        } else if (popupSide < 0 && y < top && anchorBottom + popupGap + height <= bottom) {
+            y = anchorBottom + popupGap;
+        }
+        x = Math.max(area[0], Math.min(x, area[0] + area[2] - width));
+        y = Math.max(top, Math.min(y, bottom - height));
+        popupShiftX = x - baseX;
+        popupShiftY = y - baseY;
+        if (x != open.getX()) open.setX(x);
+        if (y != open.getY()) open.setY(y);
+    }
+
+    private void keepPopupInside() {
+        if (popup == null) return;
+        double[] area = getPopupArea();
+        double x = Math.max(area[0], Math.min(popup.getX(), area[0] + area[2] - popup.getWidth()));
+        double y = Math.max(area[1], Math.min(popup.getY(), area[1] + area[3] - popup.getHeight()));
+        if (x != popup.getX()) popup.setX(x);
+        if (y != popup.getY()) popup.setY(y);
+    }
+
+    /**
+     * Whether {@code element} is still on this screen: in the container, enabled along with everything it is in.
+     */
+    private boolean isShowing(Element element) {
+        Element node = element;
+        while (node.owner != null) {
+            Container owner = node.owner;
+            if (!node.isEnabled() || !owner.getElements().containsValue(node)) return false;
+            node = owner;
+        }
+        return node == root && root.isEnabled();
+    }
+
     @Override
     public void close() {
+        closePopup();
+        root.setPopupHost(null);
         renderer.close();
     }
 }

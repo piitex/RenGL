@@ -5,6 +5,7 @@ import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.Focusable;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.color.LinearGradient;
@@ -699,8 +700,8 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         });
         placeRenameField();
         addElement(renameField);
-        Window window = getWindow();
-        if (window != null) window.requestFocus(renameField);
+        PopupHost host = getPopupHost(); // the window, or the screen the tree is shown on
+        if (host != null) host.requestFocus(renameField);
     }
 
     /**
@@ -721,8 +722,8 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         renameField = null;
         renaming = null;
         removeElement(field);
-        Window window = getWindow();
-        if (refocus && window != null) window.requestFocus(this);
+        PopupHost host = getPopupHost();
+        if (refocus && host != null) host.requestFocus(this);
         String name = field.getText();
         field.dispose();
         if (commit && onRename != null && !name.equals(renameOriginal)) onRename.accept(item, name);
