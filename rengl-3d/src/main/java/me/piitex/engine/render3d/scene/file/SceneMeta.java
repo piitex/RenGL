@@ -1,5 +1,6 @@
 package me.piitex.engine.render3d.scene.file;
 
+import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.scene.Instances;
 import me.piitex.engine.render3d.scene.Light;
@@ -37,6 +38,7 @@ final class SceneMeta {
     /** A node's own settings. */
     static final class NodeInfo {
         Shape shape = Shape.NONE;
+        boolean folder; // a group that only holds nodes, with no place, turn or size of its own
         float size = 1f, radius = 0.5f, width = 10f, depth = 10f, height = 1f, peak = 5f;
         int segments = 32, rings = 16, resolution = 64, copies = 1;
         Vec3 spacing = new Vec3(2f, 0f, 0f);
@@ -102,6 +104,23 @@ final class SceneMeta {
         return NODES.get(node);
     }
 
+    /** Whether the node is a folder: a group that holds nodes without moving, turning or sizing them. */
+    static boolean isFolder(Node3D node) {
+        NodeInfo info = NODES.get(node);
+        return info != null && info.folder && info.shape == Shape.NONE;
+    }
+
+    /** Makes the node a folder, or a group again. A folder has no place of its own, so it is put back at the origin, unturned and unscaled. */
+    static void setFolder(Node3D node, boolean folder) {
+        node(node).folder = folder;
+        if (folder) {
+            node.setPosition(Vec3.ZERO);
+            node.setRotation(Quat.IDENTITY);
+            node.setScale(Vec3.ONE);
+            node(node).euler = null;
+        }
+    }
+
     static MaterialInfo material(Material material) {
         return MATERIALS.computeIfAbsent(material, m -> new MaterialInfo());
     }
@@ -144,10 +163,7 @@ final class SceneMeta {
 
     /** Whether a node of this shape draws a mesh of its own that the file describes, so its material is the file's too. */
     static boolean drawsMesh(Shape shape) {
-        return switch (shape) {
-            case CUBE, SPHERE, PLANE, CYLINDER, CAPSULE, CONE, TERRAIN -> true;
-            case NONE, MODEL, PREFAB -> false;
-        };
+        return shape.hasMesh();
     }
 
     static void setShape(Node3D node, Shape shape, Path base) {
