@@ -126,16 +126,19 @@ class SystemMediaSourceTest {
 
     @Test
     void decodesHevc() throws Exception {
-        Demuxer opened;
+        Demuxer opened = null;
+        FrameDecoder video;
         try {
             opened = MediaFiles.open(fixture("hevc-640x360.mp4"));
+            // Opening can succeed where the decoder is missing: Windows reports it when the decoder is asked for.
+            video = opened.videoDecoder();
         } catch (UnsupportedOperationException e) {
+            if (opened != null) opened.close();
             Assumptions.abort("this machine has no HEVC decoder (Windows ships it as a separate extension): " + e.getMessage());
             return;
         }
         try (Demuxer d = opened) {
             assertEquals("H.265", d.info().videoCodec());
-            FrameDecoder video = d.videoDecoder();
             int frames = 0;
             Packet p;
             while ((p = d.next()) != null) {
