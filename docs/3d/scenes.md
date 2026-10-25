@@ -657,4 +657,5 @@ view volume, so a node just outside may still be drawn, and one inside is never 
 - **Many nodes are fine, many distinct materials cost more.** Nodes that share a mesh and a material draw together;
   each change of material binds its textures again. Use [`Instances`](instancing.md) for thousands of copies.
 - **Skinned meshes ignore their node's transform.** The joints place them, as in glTF; move the skeleton's nodes instead.
-- **Lights past the eighth are ignored.** Every one of the eight can cast shadows, at a pass each.
+- **A scene shades at most 64 lights at once,** the ones nearest the camera when it has more. Up to 8 of them can cast
+  shadows, at a pass each.

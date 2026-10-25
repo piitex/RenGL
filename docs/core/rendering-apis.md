@@ -68,7 +68,7 @@ with Vulkan support. If the Skiko on the classpath has none, a `VULKAN` request 
 
 On **macOS** run with `-XstartOnFirstThread`, as for any window. The Vulkan loader is MoltenVK from the LWJGL natives,
 so there is nothing to install. On **Windows and Linux** the system's Vulkan driver is used. The Vulkan backend has
-only been run on macOS (Apple silicon) so far, see [Known limitations](../reference/known-limitations.md#rendering-and-3d).
+been run on macOS (Apple silicon) and on Windows (an NVIDIA RTX 4090); Linux is untested, see [Known limitations](../reference/known-limitations.md#rendering-and-3d).
 
 ## Debugging switches
 
