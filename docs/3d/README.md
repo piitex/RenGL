@@ -131,8 +131,8 @@ path of the demos has been run on Windows (both APIs) but not on Linux yet.
 The scene layer is a forward renderer with classic and physically based materials (normal, metallic-roughness, occlusion
 and emissive maps), shadows from several lights at once (directional with cascades, spot and point), a skybox that can light and be reflected, instancing,
 skinned animation, morph targets (blend shapes), frustum culling, mipmapped and anisotropically filtered textures, 4x
-anti-aliasing by default, and ray [picking](scenes.md#picking). It has **no variable-width soft shadows and no
-post-processing**. It was written and tested on macOS on Apple silicon (Vulkan through MoltenVK and, in a harness,
+anti-aliasing by default, [bloom, ambient occlusion, a colour grade and lens effects](lighting.md#bloom), and ray
+[picking](scenes.md#picking). It has **no variable-width soft shadows, depth of field or motion blur**. It was written and tested on macOS on Apple silicon (Vulkan through MoltenVK and, in a harness,
 OpenGL 3.3) and on Windows 11 with an NVIDIA GPU (native Vulkan and OpenGL); Linux is untested. The full list, with the reasons, is in
 [Known limitations](../reference/known-limitations.md#rendering-and-3d). The code that checks it all is in `rengl-3d/src/test`: run
 `./mvnw test`, which skips the GPU tests when the machine has no usable GPU.

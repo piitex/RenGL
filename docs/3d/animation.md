@@ -191,11 +191,12 @@ player.play("spin");
 | `AnimationClip.Channel(target, path, times, values, interpolation)` | One property of one node: `TRANSLATION` (3 numbers a key), `ROTATION` (4, a unit quaternion), `SCALE` (3) or `WEIGHTS` (the node's [morph weights](#morph-targets): one number per shape, the same count at every key) |
 | `Interpolation.LINEAR` | Blends between keys (rotations by `slerp`, the short way round) |
 | `Interpolation.STEP` | Holds each key until the next |
+| `Interpolation.CUBICSPLINE` | A cubic Hermite curve between keys, from the in and out slopes at each key. Built with the channel constructor that takes the tangents |
 
 ## Limits
 
-- Clips from files are sampled **linearly**: Assimp keeps only the values of a glTF cubic-spline track and drops its
-  tangents, so those keys are used as plain keys. (Clips you build yourself are linear or step too.)
+- Clips from files keep their glTF interpolation: `STEP` and `CUBICSPLINE` tracks are read from the file's own JSON,
+  because Assimp turns both into plain blends.
 - **Morph targets** are blended on the GPU for up to 16 shapes switched on at a time; past that (or past about two million
   shape-vertices) the node falls back to blending on the CPU, which costs per vertex for every shape with a non-zero weight.
 - An animation changes the **local transforms** of the nodes it targets; a node animated by a clip and moved by your code
