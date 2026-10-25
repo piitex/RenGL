@@ -89,7 +89,7 @@ public class Engine {
     /**
      * How long the main thread waits for an OS event before it serves its queues anyway.
      */
-    private static final double MAIN_LOOP_WAIT_SECONDS = 0.005;
+    private static final double MAIN_LOOP_WAIT_SECONDS = 0.010;
 
     /**
      * The frame rate while every window is minimized.
