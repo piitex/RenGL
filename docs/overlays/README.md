@@ -46,6 +46,7 @@ Every widget in RenGL is an [`Overlay`](../core/overlay.md) (an [`Element`](../c
 |---|---|
 | [`LineChartOverlay`](../charts/line-chart.md) | Lines through values over categories, with smooth curves and filled areas |
 | [`BarChartOverlay`](../charts/bar-chart.md) | Grouped, stacked or horizontal bars |
+| [`ScatterChartOverlay`](../charts/scatter-chart.md) | Points and bubbles by two numbers, on linear, log or time axes |
 | [`PieChartOverlay`](../charts/pie-chart.md) | A pie or a donut, with the total in the middle |
 
 They live in `me.piitex.engine.ui.charts`. See [Charts](../charts/README.md).

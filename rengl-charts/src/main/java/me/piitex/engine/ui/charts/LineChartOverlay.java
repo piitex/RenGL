@@ -81,7 +81,7 @@ public class LineChartOverlay extends AxisChartOverlay {
             if (!s.isVisible()) continue;
             for (int i = 0; i < s.size(); i++) {
                 double v = s.get(i);
-                if (Double.isNaN(v)) continue;
+                if (!usable(v)) continue;
                 low = Math.min(low, v);
                 high = Math.max(high, v);
             }
@@ -107,10 +107,12 @@ public class LineChartOverlay extends AxisChartOverlay {
             int count = 0;
             for (int i = 0; i <= n; i++) {
                 double v = i < n ? s.shown(i) : Double.NaN;
-                if (!Double.isNaN(v)) {
+                // a value with no place on the axes (zero on a log axis, a point with no time) breaks the line like a gap
+                float px = Double.isNaN(v) ? Float.NaN : categoryPos(i), py = Double.isNaN(v) ? Float.NaN : valuePos(v);
+                if (!Float.isNaN(px) && !Float.isNaN(py)) {
                     if (count * 2 + 2 > points.length) points = java.util.Arrays.copyOf(points, points.length * 2);
-                    points[count * 2] = categoryPos(i);
-                    points[count * 2 + 1] = valuePos(v);
+                    points[count * 2] = px;
+                    points[count * 2 + 1] = py;
                     count++;
                 } else if (count > 0) {
                     drawRun(renderer, count, color);
@@ -152,6 +154,7 @@ public class LineChartOverlay extends AxisChartOverlay {
 
     private void drawCrosshair(Renderer renderer, int category) {
         float x = categoryPos(category);
+        if (Float.isNaN(x)) return;
         renderer.pushAlpha(tooltipAlpha());
         renderer.drawLine(x, plotY, x, plotY + plotH, text().withAlpha(0.3f), 1f);
         for (int si = 0; si < series.size(); si++) {
@@ -159,6 +162,7 @@ public class LineChartOverlay extends AxisChartOverlay {
             double v = s.shown(category);
             if (!s.isVisible() || Double.isNaN(v)) continue;
             float y = valuePos(v);
+            if (Float.isNaN(y)) continue;
             renderer.drawCircle(x, y, markerRadius + 3.5f, Color.WHITE.withAlpha(0.9f));
             renderer.drawCircle(x, y, markerRadius + 1.5f, seriesColor(si));
         }

@@ -4,7 +4,7 @@
 
 > Needs the `rengl-charts` [module](../modules.md).
 
-RenGL draws its own charts: lines, bars, pies and donuts, from plain numbers, with no other library. A chart is an
+RenGL draws its own charts: lines, bars, scatter and bubble plots, pies and donuts, from plain numbers, with no other library. A chart is an
 ordinary [`Overlay`](../core/overlay.md), so it goes in a layout or a container, sits in a
 [`ScrollContainer`](../containers/scroll-container.md), follows the [theme](../styling/theming.md), and can be
 [captured as an image](../core/snapshots.md) like any widget.
@@ -16,8 +16,9 @@ stack and turn on their side, a donut, and a ranking.
 
 | Chart | What it is for |
 |---|---|
-| [`LineChartOverlay`](line-chart.md) | Values that follow one another: a price over a year, the frame time of the last few seconds. Smooth curves, filled areas, gaps |
-| [`BarChartOverlay`](bar-chart.md) | Amounts compared across categories: grouped, stacked, or on their side |
+| [`LineChartOverlay`](line-chart.md) | Values that follow one another: a price over a year, the frame time of the last few seconds. Smooth curves, filled areas, gaps, a log axis, and a time axis that spaces points by when they happened |
+| [`BarChartOverlay`](bar-chart.md) | Amounts compared across categories: grouped, stacked, on their side, or on a log axis |
+| [`ScatterChartOverlay`](scatter-chart.md) | Points placed by two numbers; give them a size and it is a bubble plot. Each axis can be linear or logarithmic, and the horizontal one a time axis |
 | [`PieChartOverlay`](pie-chart.md) | Shares of a whole. Give it a hole and it is a donut with the total in the middle |
 
 They all live in `me.piitex.engine.ui.charts` and share the base class `ChartOverlay`.
@@ -49,6 +50,11 @@ chart.clearSeries();
 
 A chart with more values than labels numbers the rest from 1, and one with no labels at all is numbered throughout.
 `NaN` is a **gap**: a line breaks there and a bar is left out.
+
+The value axis can be [logarithmic](line-chart.md#a-logarithmic-value-axis) (`setLogScale(true)`), and a line chart can
+[place its values by time](line-chart.md#a-time-axis) (`setDates`, `setTimes`) instead of in equal steps. A
+[scatter chart](scatter-chart.md) has two numeric axes of its own, and its series are `ScatterSeries` (x, y and an optional size
+for each point) instead of `ChartSeries`. Both are `AxisScale`s: `LINEAR`, `LOG` or, for a horizontal axis, `TIME`.
 
 ### ChartSeries
 
@@ -107,8 +113,8 @@ chart.onPointClick(hit -> {
 ```
 
 `ChartHit` carries `series()`, `category()`, `seriesName()`, `categoryLabel()` and `value()`. A line chart reports the
-point nearest the pointer in the category it is over; a bar chart the bar under it, and a click on empty space reports
-nothing.
+point nearest the pointer in the category it is over; a bar chart the bar under it; a scatter chart the point under it (its
+index is `category()`, its x is `categoryLabel()`, its y is `value()`). A click on empty space reports nothing.
 
 The tooltip is the chart's own, not the [`setTooltip`](../input/tooltips.md) bubble, because it follows the pointer
 from point to point. It is drawn with the theme's tooltip colors. A chart is still free to have an ordinary tooltip of its own.
@@ -174,8 +180,12 @@ chart.finishAnimation();   // and the tooltip is fully in
 
 ## Limits
 
-- Numbers only: a category axis of labels, and a value axis. There is no date or time axis, no log scale, no second value
-  axis, and no scatter or bubble plot yet.
+- No second value axis (a price and a volume on their own scales in one chart), no log scale for a stacked bar chart, and no time
+  axis for bars: bars sit in category bands, so use category labels there.
+- A time axis is for one calendar at a time, and its tick steps are the usual ones (seconds to years). There are no custom ticks, no
+  minor ticks on a linear axis, and no break in the axis for a gap in time.
+- A log axis is base 10. A value of zero or less cannot be placed on it and is left out.
+- A scatter chart has no trend line, no error bars and no way to select a region of points; points are drawn as circles.
 - A chart does not pan or zoom, and cannot select a range. Feed it the range to show.
 - Category labels are never rotated. Ones that would overlap are skipped (every second, every third), so give a long list short labels or use a
   horizontal bar chart, which puts them down the side.
