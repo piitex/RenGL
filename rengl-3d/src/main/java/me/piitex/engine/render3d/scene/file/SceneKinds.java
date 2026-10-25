@@ -140,9 +140,13 @@ public final class SceneKinds {
         return SceneMeta.node(node);
     }
 
-    private static boolean shapeIs(Node3D node, Shape shape) {
+    private static boolean shapeIs(Node3D node, Shape... shapes) {
         NodeInfo info = SceneMeta.peek(node);
-        return (info == null ? Shape.NONE : info.shape) == shape;
+        Shape drawn = info == null ? Shape.NONE : info.shape;
+        for (Shape shape : shapes) {
+            if (drawn == shape) return true;
+        }
+        return false;
     }
 
     static {
@@ -165,23 +169,42 @@ public final class SceneKinds {
         prop(NODE, "radius", "Radius", Float.class, shape, n -> info(n).radius, (n, x, b) -> {
             info(n).radius = f(x);
             SceneMeta.rebuild(n);
-        }).omitWhen(0.5f).range(0.01, 1000).step(0.1).when(n -> shapeIs(n, Shape.SPHERE));
+        }).omitWhen(0.5f).range(0.01, 1000).step(0.1).when(n -> shapeIs(n, Shape.SPHERE, Shape.CYLINDER, Shape.CAPSULE, Shape.CONE));
         prop(NODE, "segments", "Segments", Integer.class, shape, n -> info(n).segments, (n, x, b) -> {
             info(n).segments = ((Number) x).intValue();
             SceneMeta.rebuild(n);
-        }).omitWhen(32).range(3, 128).when(n -> shapeIs(n, Shape.SPHERE)).tip("How many flat sides it has around");
+        }).omitWhen(32).range(3, 128).when(n -> shapeIs(n, Shape.SPHERE, Shape.CYLINDER, Shape.CAPSULE, Shape.CONE)).tip("How many flat sides it has around");
         prop(NODE, "rings", "Rings", Integer.class, shape, n -> info(n).rings, (n, x, b) -> {
             info(n).rings = ((Number) x).intValue();
             SceneMeta.rebuild(n);
-        }).omitWhen(16).range(2, 64).when(n -> shapeIs(n, Shape.SPHERE)).tip("How many flat bands it has from pole to pole");
+        }).omitWhen(16).range(2, 64).when(n -> shapeIs(n, Shape.SPHERE, Shape.CAPSULE)).tip("How many flat bands it has from pole to pole");
         prop(NODE, "width", "Width", Float.class, shape, n -> info(n).width, (n, x, b) -> {
             info(n).width = f(x);
             SceneMeta.rebuild(n);
-        }).omitWhen(10f).range(0.01, 10000).step(0.5).when(n -> shapeIs(n, Shape.PLANE)).tip("Along X");
+        }).omitWhen(10f).range(0.01, 10000).step(0.5).when(n -> shapeIs(n, Shape.PLANE, Shape.TERRAIN)).tip("Along X");
         prop(NODE, "depth", "Depth", Float.class, shape, n -> info(n).depth, (n, x, b) -> {
             info(n).depth = f(x);
             SceneMeta.rebuild(n);
-        }).omitWhen(10f).range(0.01, 10000).step(0.5).when(n -> shapeIs(n, Shape.PLANE)).tip("Along Z");
+        }).omitWhen(10f).range(0.01, 10000).step(0.5).when(n -> shapeIs(n, Shape.PLANE, Shape.TERRAIN)).tip("Along Z");
+        prop(NODE, "height", "Height", Float.class, shape, n -> info(n).height, (n, x, b) -> {
+            info(n).height = f(x);
+            SceneMeta.rebuild(n);
+        }).omitWhen(1f).range(0.01, 1000).step(0.1).when(n -> shapeIs(n, Shape.CYLINDER, Shape.CAPSULE, Shape.CONE))
+                .tip("From end to end. A capsule is at least twice its radius");
+        prop(NODE, "heightmap", "Height Map", String.class, shape, n -> info(n).heightmap, (n, x, b) -> SceneMeta.setHeightmap(n, s(x), b))
+                .omitWhen("").hint(Hint.IMAGE).when(n -> shapeIs(n, Shape.TERRAIN))
+                .tip("A picture whose white is high ground and black is low. With none, the ground is flat");
+        prop(NODE, "peak", "Peak", Float.class, shape, n -> info(n).peak, (n, x, b) -> {
+            info(n).peak = f(x);
+            SceneMeta.rebuild(n);
+        }).omitWhen(5f).range(0, 1000).step(0.5).when(n -> shapeIs(n, Shape.TERRAIN)).tip("How high the whitest point of the height map is");
+        prop(NODE, "resolution", "Detail", Integer.class, shape, n -> info(n).resolution, (n, x, b) -> {
+            info(n).resolution = ((Number) x).intValue();
+            SceneMeta.rebuild(n);
+        }).omitWhen(64).range(2, 512).when(n -> shapeIs(n, Shape.TERRAIN)).tip("How many points the ground has along each side");
+        prop(NODE, "prefab", "Scene File", String.class, shape, n -> info(n).prefab, (n, x, b) -> SceneMeta.setPrefab(n, s(x), b))
+                .omitWhen("").hint(Hint.SCENE).when(n -> shapeIs(n, Shape.PREFAB))
+                .tip("Another scene file in the project, whose nodes appear here. Its lights and sky are left out");
         prop(NODE, "model", "Model", String.class, shape, n -> info(n).model, (n, x, b) -> SceneMeta.setModel(n, s(x), b))
                 .omitWhen("").hint(Hint.MODEL).when(n -> shapeIs(n, Shape.MODEL))
                 .tip("A glTF, GLB, OBJ, FBX or Collada file in the project");
@@ -189,6 +212,16 @@ public final class SceneKinds {
                 .omitWhen("").hint(Hint.ANIMATION).when(n -> shapeIs(n, Shape.MODEL) && !Scene3DFile.animations(n).isEmpty())
                 .tip("An animation of the model that plays, over and over, when the game starts");
 
+        prop(NODE, "copies", "Copies", Integer.class, rendering, n -> info(n).copies, (n, x, b) -> {
+            info(n).copies = Math.max(1, ((Number) x).intValue());
+            SceneMeta.rebuild(n);
+        }).omitWhen(1).range(1, 10000).when(n -> SceneMeta.drawsMesh(info(n).shape))
+                .tip("Draws it again and again in a line, in one go, for fences, columns and rows of lights. The copies are only drawn: they don't collide and aren't picked");
+        prop(NODE, "spacing", "Spacing", Vec3.class, rendering, n -> info(n).spacing, (n, x, b) -> {
+            info(n).spacing = v(x);
+            SceneMeta.rebuild(n);
+        }).omitWhen(new Vec3(2f, 0f, 0f)).step(0.1).when(n -> SceneMeta.drawsMesh(info(n).shape) && info(n).copies > 1)
+                .tip("How far each copy is from the one before, in the node's own space");
         prop(NODE, "visible", "Visible", Boolean.class, rendering, Node3D::isVisible, (n, x, b) -> n.setVisible((Boolean) x))
                 .omitWhen(true).tip("A node that isn't visible hides everything in it too");
         prop(NODE, "pickable", "Pickable", Boolean.class, rendering, Node3D::isPickable, (n, x, b) -> n.setPickable((Boolean) x))
@@ -299,6 +332,11 @@ public final class SceneKinds {
         }
     }
 
+    private static boolean blinks(Light light) {
+        SceneMeta.Motion motion = SceneMeta.peekMotion(light);
+        return motion != null && motion.pattern != LightPatternKind.NONE;
+    }
+
     private static Falloff falloffOf(Light light) {
         LightFalloff falloff = light.getFalloff();
         if (falloff == LightFalloff.LINEAR) return Falloff.LINEAR;
@@ -343,6 +381,17 @@ public final class SceneKinds {
             }
             prop(list, "shadows", "Shadows", LightShadow.class, shadow, SceneKinds::shadowOf, (l, x, b) -> setShadow(l, (LightShadow) x))
                     .omitWhen(LightShadow.OFF).tip("At most four lights cast shadows at a time");
+            String motion = "Blinking";
+            prop(list, "pattern", "Pattern", LightPatternKind.class, motion, l -> SceneMeta.motion(l).pattern, (l, x, b) -> SceneMeta.motion(l).pattern = (LightPatternKind) x)
+                    .omitWhen(LightPatternKind.NONE).tip("How its brightness changes while the game runs. The editor shows it steady");
+            prop(list, "period", "Period", Float.class, motion, l -> SceneMeta.motion(l).period, (l, x, b) -> SceneMeta.motion(l).period = Math.max(0.01f, f(x)))
+                    .omitWhen(1f).range(0.05, 60).step(0.05).when(SceneKinds::blinks).tip("Seconds for one blink, breath or flicker");
+            prop(list, "minimum", "Dimmest", Float.class, motion, l -> SceneMeta.motion(l).minimum, (l, x, b) -> SceneMeta.motion(l).minimum = Math.clamp(f(x), 0f, 1f))
+                    .omitWhen(0f).range(0, 1).step(0.05).when(SceneKinds::blinks).tip("How bright it is at its lowest, as a share of full: 0 goes dark");
+            prop(list, "start", "Start", Float.class, motion, l -> SceneMeta.motion(l).start, (l, x, b) -> SceneMeta.motion(l).start = f(x))
+                    .omitWhen(0f).range(0, 60).step(0.1).when(SceneKinds::blinks).tip("Seconds into the pattern when the game starts, to put lights out of step");
+            prop(list, "glow", "Glowing Node", String.class, motion, l -> SceneMeta.motion(l).glow, (l, x, b) -> SceneMeta.motion(l).glow = s(x))
+                    .omitWhen("").when(SceneKinds::blinks).tip("The name of a node, such as the bulb, whose glow blinks with the light");
         }
     }
 

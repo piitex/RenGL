@@ -48,6 +48,37 @@ public final class TextureData {
     }
 
     /**
+     * The picture's brightness (0 for black, 1 for white) sampled on a grid of {@code columns} by {@code rows} points
+     * spread over the whole picture, row by row from the top: a height map for {@link Mesh#terrain}.
+     */
+    public synchronized float[] brightness(int columns, int rows) {
+        if (columns < 1 || rows < 1) throw new IllegalArgumentException("the grid needs at least one point");
+        float[] grid = new float[columns * rows];
+        for (int r = 0; r < rows; r++) {
+            float y = rows == 1 ? 0f : (float) r / (rows - 1) * (height - 1);
+            int y0 = (int) y, y1 = Math.min(height - 1, y0 + 1);
+            float fy = y - y0;
+            for (int c = 0; c < columns; c++) {
+                float x = columns == 1 ? 0f : (float) c / (columns - 1) * (width - 1);
+                int x0 = (int) x, x1 = Math.min(width - 1, x0 + 1);
+                float fx = x - x0;
+                float top = lerp(luma(x0, y0), luma(x1, y0), fx), bottom = lerp(luma(x0, y1), luma(x1, y1), fx);
+                grid[r * columns + c] = lerp(top, bottom, fy);
+            }
+        }
+        return grid;
+    }
+
+    private float luma(int x, int y) {
+        int i = (y * width + x) * 4;
+        return ((rgba[i] & 0xFF) * 0.2126f + (rgba[i + 1] & 0xFF) * 0.7152f + (rgba[i + 2] & 0xFF) * 0.0722f) / 255f;
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    /**
      * The pixels themselves, not a copy: read only.
      */
     byte[] pixels() {

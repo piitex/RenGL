@@ -193,7 +193,12 @@ final class ScenePhysics {
                     body.addShape(new BoxShape(meta.width / 2f, PLANE_THICKNESS / 2f, meta.depth / 2f), new Vec3(0f, -PLANE_THICKNESS / 2f, 0f));
                     return;
                 }
-                case MODEL -> kind = moves ? ColliderKind.HULL : ColliderKind.MESH;
+                case CAPSULE -> {
+                    body.addShape(CapsuleShape.ofHeight(Math.max(1e-3f, meta.radius), Math.max(2f * meta.radius, meta.height)));
+                    return;
+                }
+                case CYLINDER, CONE -> kind = ColliderKind.HULL;
+                case MODEL, TERRAIN -> kind = moves ? ColliderKind.HULL : ColliderKind.MESH;
                 default -> kind = ColliderKind.BOX;
             }
         }

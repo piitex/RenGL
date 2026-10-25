@@ -432,4 +432,160 @@ public final class Mesh {
                 new float[]{0, 1, 1, 1, 1, 0, 0, 0},
                 new int[]{0, 1, 2, 0, 2, 3});
     }
+
+    /**
+     * An upright cylinder centred on the origin, flat at both ends. The texture wraps once around the side.
+     *
+     * @param segments flat sides around it (at least 3)
+     */
+    public static Mesh cylinder(float radius, float height, int segments) {
+        return frustum(radius, radius, height, segments);
+    }
+
+    /**
+     * An upright cone centred on the origin, its point up and its flat base down.
+     *
+     * @param segments flat sides around it (at least 3)
+     */
+    public static Mesh cone(float radius, float height, int segments) {
+        return frustum(0f, radius, height, segments);
+    }
+
+    /**
+     * A capsule centred on the origin and standing along Y: a cylinder with a half sphere on each end. {@code height} is
+     * the whole of it, so at least twice the radius; a smaller one is a sphere.
+     *
+     * @param segments slices around it (at least 3)
+     * @param rings    slices in each half sphere (at least 1)
+     */
+    public static Mesh capsule(float radius, float height, int segments, int rings) {
+        segments = Math.max(3, segments);
+        rings = Math.max(1, rings);
+        float half = Math.max(0f, height - 2f * radius) / 2f;
+        int rows = 2 * (rings + 1), columns = segments + 1;
+        float[] positions = new float[rows * columns * 3], normals = new float[positions.length], uvs = new float[rows * columns * 2];
+        for (int row = 0; row < rows; row++) {
+            boolean top = row <= rings;
+            double phi = top ? Math.PI / 2 * row / rings : Math.PI / 2 + Math.PI / 2 * (row - rings - 1) / rings;
+            float y = (float) Math.cos(phi) * radius + (top ? half : -half);
+            for (int s = 0; s <= segments; s++) {
+                double theta = 2 * Math.PI * s / segments;
+                float nx = (float) (Math.sin(phi) * Math.cos(theta));
+                float ny = (float) Math.cos(phi);
+                float nz = (float) (Math.sin(phi) * Math.sin(theta));
+                int i = row * columns + s;
+                put(positions, normals, uvs, i, nx * radius, y, nz * radius, nx, ny, nz, (float) s / segments, (float) row / (rows - 1));
+            }
+        }
+        int[] indices = new int[(rows - 1) * segments * 6];
+        int o = 0;
+        for (int row = 0; row < rows - 1; row++) {
+            for (int s = 0; s < segments; s++) {
+                int a = row * columns + s, b = a + columns;
+                indices[o++] = a;
+                indices[o++] = a + 1;
+                indices[o++] = b;
+                indices[o++] = a + 1;
+                indices[o++] = b + 1;
+                indices[o++] = b;
+            }
+        }
+        return new Mesh(positions, normals, uvs, indices);
+    }
+
+    // A cylinder, or a cone when the top has no radius: the side as two rows of vertices, then a flat disc for each end that has a radius.
+    private static Mesh frustum(float topRadius, float bottomRadius, float height, int segments) {
+        segments = Math.max(3, segments);
+        int columns = segments + 1;
+        boolean topCap = topRadius > 0f, bottomCap = bottomRadius > 0f;
+        int vertices = 2 * columns + (topCap ? columns + 1 : 0) + (bottomCap ? columns + 1 : 0);
+        float[] positions = new float[vertices * 3], normals = new float[vertices * 3], uvs = new float[vertices * 2];
+        int[] indices = new int[segments * 6 + (topCap ? segments * 3 : 0) + (bottomCap ? segments * 3 : 0)];
+        float half = height / 2f;
+        float slope = bottomRadius - topRadius;
+        float length = (float) Math.sqrt(height * height + slope * slope);
+        int v = 0;
+        for (int row = 0; row < 2; row++) {
+            float radius = row == 0 ? topRadius : bottomRadius, y = row == 0 ? half : -half;
+            for (int s = 0; s <= segments; s++, v++) {
+                double theta = 2 * Math.PI * s / segments;
+                float cos = (float) Math.cos(theta), sin = (float) Math.sin(theta);
+                put(positions, normals, uvs, v, cos * radius, y, sin * radius, cos * height / length, slope / length, sin * height / length, (float) s / segments, row);
+            }
+        }
+        int o = 0;
+        for (int s = 0; s < segments; s++) {
+            int a = s, b = a + columns;
+            indices[o++] = a;
+            indices[o++] = a + 1;
+            indices[o++] = b;
+            indices[o++] = a + 1;
+            indices[o++] = b + 1;
+            indices[o++] = b;
+        }
+        for (int cap = 0; cap < 2; cap++) {
+            boolean top = cap == 0;
+            if (top ? !topCap : !bottomCap) continue;
+            float radius = top ? topRadius : bottomRadius, y = top ? half : -half, ny = top ? 1f : -1f;
+            int centre = v;
+            put(positions, normals, uvs, v++, 0f, y, 0f, 0f, ny, 0f, 0.5f, 0.5f);
+            int ring = v;
+            for (int s = 0; s <= segments; s++, v++) {
+                double theta = 2 * Math.PI * s / segments;
+                float cos = (float) Math.cos(theta), sin = (float) Math.sin(theta);
+                put(positions, normals, uvs, v, cos * radius, y, sin * radius, 0f, ny, 0f, 0.5f + cos * 0.5f, 0.5f + sin * 0.5f);
+            }
+            for (int s = 0; s < segments; s++) {
+                indices[o++] = centre;
+                indices[o++] = top ? ring + s + 1 : ring + s;
+                indices[o++] = top ? ring + s : ring + s + 1;
+            }
+        }
+        return new Mesh(positions, normals, uvs, indices);
+    }
+
+    private static void put(float[] positions, float[] normals, float[] uvs, int i, float x, float y, float z, float nx, float ny, float nz, float u, float v) {
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
+        normals[i * 3] = nx;
+        normals[i * 3 + 1] = ny;
+        normals[i * 3 + 2] = nz;
+        uvs[i * 2] = u;
+        uvs[i * 2 + 1] = v;
+    }
+
+    /**
+     * Ground made from a grid of heights, centred on the origin: {@code heights} holds {@code columns} by {@code rows}
+     * values from 0 to 1, row by row from the back (-Z) to the front, and each is multiplied by {@code height}. The
+     * texture covers the whole of it once, and the normals are smooth.
+     */
+    public static Mesh terrain(float width, float depth, float height, float[] heights, int columns, int rows) {
+        if (columns < 2 || rows < 2 || heights.length != columns * rows) throw new IllegalArgumentException("a terrain needs at least 2 by 2 heights");
+        float[] positions = new float[columns * rows * 3], uvs = new float[columns * rows * 2];
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < columns; c++) {
+                int i = r * columns + c;
+                positions[i * 3] = ((float) c / (columns - 1) - 0.5f) * width;
+                positions[i * 3 + 1] = heights[i] * height;
+                positions[i * 3 + 2] = ((float) r / (rows - 1) - 0.5f) * depth;
+                uvs[i * 2] = (float) c / (columns - 1);
+                uvs[i * 2 + 1] = (float) r / (rows - 1);
+            }
+        }
+        int[] indices = new int[(columns - 1) * (rows - 1) * 6];
+        int o = 0;
+        for (int r = 0; r < rows - 1; r++) {
+            for (int c = 0; c < columns - 1; c++) {
+                int a = r * columns + c, b = a + columns;
+                indices[o++] = a;
+                indices[o++] = b;
+                indices[o++] = a + 1;
+                indices[o++] = a + 1;
+                indices[o++] = b;
+                indices[o++] = b + 1;
+            }
+        }
+        return new Mesh(positions, null, uvs, indices);
+    }
 }

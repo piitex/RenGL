@@ -31,6 +31,8 @@ public final class SceneProperty<T> {
         NONE,
         /** A path to an image file in the project. */
         IMAGE,
+        /** A path to another scene file in the project. */
+        SCENE,
         /** A path to a model file in the project: glTF, GLB, OBJ, FBX or Collada. */
         MODEL,
         /** The name of one of the animations the node's model has, as {@link Scene3DFile#animations} lists. */
