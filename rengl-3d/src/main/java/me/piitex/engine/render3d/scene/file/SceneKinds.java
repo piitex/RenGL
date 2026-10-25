@@ -153,15 +153,21 @@ public final class SceneKinds {
         String node = "Node", transform = "Transform", shape = "Shape", rendering = "Rendering";
         prop(NODE, "name", "Name", String.class, node, Node3D::getName, (n, x, b) -> n.setName(s(x)))
                 .tip("What the game finds it by");
-        prop(NODE, "position", "Position", Vec3.class, transform, Node3D::getPosition, (n, x, b) -> n.setPosition(v(x)))
-                .omitWhen(Vec3.ZERO).step(0.1).tip("Where it is, relative to what it is in");
-        prop(NODE, "rotation", "Rotation", Vec3.class, transform, SceneMeta::euler, (n, x, b) -> SceneMeta.setEuler(n, v(x)))
-                .omitWhen(Vec3.ZERO).step(1).range(-360, 360).tip("Turn in degrees around X (nod), Y (turn) and Z (tilt)");
-        prop(NODE, "scale", "Scale", Vec3.class, transform, Node3D::getScale, (n, x, b) -> n.setScale(v(x)))
-                .omitWhen(Vec3.ONE).step(0.1).tip("How much bigger or smaller, along each axis");
+        prop(NODE, "position", "Position", Vec3.class, transform, Node3D::getPosition, (n, x, b) -> {
+            if (!SceneMeta.isFolder(n)) n.setPosition(v(x));
+        }).omitWhen(Vec3.ZERO).step(0.1).when(n -> !SceneMeta.isFolder(n)).tip("Where it is, relative to what it is in");
+        prop(NODE, "rotation", "Rotation", Vec3.class, transform, SceneMeta::euler, (n, x, b) -> {
+            if (!SceneMeta.isFolder(n)) SceneMeta.setEuler(n, v(x));
+        }).omitWhen(Vec3.ZERO).step(1).range(-360, 360).when(n -> !SceneMeta.isFolder(n)).tip("Turn in degrees around X (nod), Y (turn) and Z (tilt)");
+        prop(NODE, "scale", "Scale", Vec3.class, transform, Node3D::getScale, (n, x, b) -> {
+            if (!SceneMeta.isFolder(n)) n.setScale(v(x));
+        }).omitWhen(Vec3.ONE).step(0.1).when(n -> !SceneMeta.isFolder(n)).tip("How much bigger or smaller, along each axis");
 
         prop(NODE, "shape", "Shape", Shape.class, shape, n -> info(n).shape, (n, x, b) -> SceneMeta.setShape(n, (Shape) x, b))
                 .omitWhen(Shape.NONE).tip("What it draws. A group draws nothing and moves what is in it together");
+        prop(NODE, "folder", "Folder", Boolean.class, shape, n -> SceneMeta.isFolder(n), (n, x, b) -> SceneMeta.setFolder(n, (Boolean) x))
+                .omitWhen(false).when(n -> shapeIs(n, Shape.NONE))
+                .tip("A group that only holds nodes, to keep a scene tidy. It has no place, turn or size of its own, so nothing in it is moved by it");
         prop(NODE, "size", "Size", Float.class, shape, n -> info(n).size, (n, x, b) -> {
             info(n).size = f(x);
             SceneMeta.rebuild(n);
@@ -554,7 +560,7 @@ public final class SceneKinds {
     static {
         String physics = "Physics", collider = "Collider", character = "Character";
         prop(NODE, "body", "Body", BodyKind.class, physics, n -> seen(n).kind, (n, x, b) -> body(n).kind = (BodyKind) x)
-                .omitWhen(BodyKind.NONE).tip("How physics moves it: Static never moves, Dynamic falls and is pushed, Kinematic is moved "
+                .omitWhen(BodyKind.NONE).when(n -> !SceneMeta.isFolder(n)).tip("How physics moves it: Static never moves, Dynamic falls and is pushed, Kinematic is moved "
                         + "by the game and pushes what is in its way, and Character is walked by the game");
         prop(NODE, "collider", "Shape", ColliderKind.class, collider, n -> seen(n).collider, (n, x, b) -> body(n).collider = (ColliderKind) x)
                 .omitWhen(ColliderKind.AUTO).when(n -> seen(n).rigid())

@@ -56,6 +56,10 @@ is the whole of it, and it has `rings` in each half), `TERRAIN`, `PREFAB` or `MO
 in the scene, though a model node can have children of its own. Its `animation` names one of the model's clips, which
 `Scene3DFile.load` starts playing, over and over; `Scene3DFile.animations(node)` lists the names.
 
+A group with `"folder": true` is a folder: it only holds nodes, to keep a scene tidy, and has no `position`, `rotation`, `scale`
+or `body` of its own, so nothing in it is moved by it. A place given to a folder in a file is dropped, and setting one through its
+properties does nothing. It can still be hidden with `visible`. `Scene3DFile.isFolder(node)` says whether a node is one.
+
 A `material` has the properties of [`Material`](scenes.md#material): `color`, `texture`, `unlit`, `doubleSided`, `blend`,
 `additive`, `alphaCutoff`, `pbr`, `specular`, `shininess`, `metallic`, `roughness`, `normalTexture`, `normalScale`,
 `metallicRoughnessTexture`, `occlusionTexture`, `emissiveTexture`, and a glow as `emissiveColor` and `emissiveStrength`.

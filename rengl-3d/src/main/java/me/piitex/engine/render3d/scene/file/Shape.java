@@ -38,4 +38,15 @@ public enum Shape {
     public String getLabel() {
         return label;
     }
+
+    /**
+     * Whether a node of this shape draws a mesh the file describes, so that it has a material of its own to save: the
+     * cube, sphere, plane, cylinder, capsule, cone and terrain. A group, a model and a prefab show something else.
+     */
+    public boolean hasMesh() {
+        return switch (this) {
+            case CUBE, SPHERE, PLANE, CYLINDER, CAPSULE, CONE, TERRAIN -> true;
+            case NONE, MODEL, PREFAB -> false;
+        };
+    }
 }

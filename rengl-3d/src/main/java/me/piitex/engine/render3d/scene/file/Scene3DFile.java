@@ -343,6 +343,14 @@ public final class Scene3DFile {
         SceneMeta.setLightName(light, name);
     }
 
+    /**
+     * Whether the node is a folder: a group that only holds nodes, with no place, turn or size of its own, so a scene can be
+     * kept tidy without anything in it moving.
+     */
+    public static boolean isFolder(Node3D node) {
+        return SceneMeta.isFolder(node);
+    }
+
     /** What a node draws, as the file says. A node that was built in code is {@link Shape#NONE}. */
     public static Shape getShape(Node3D node) {
         NodeInfo info = SceneMeta.peek(node);
