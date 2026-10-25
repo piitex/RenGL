@@ -188,7 +188,7 @@ public final class Packager {
      */
     private static Path installerUiImage(AppSpec app, Path input, Platform platform, Jdks jdkFinder, Path dir) throws Exception {
         String mainJar = installerJar(input);
-        AppSpec ui = new AppSpec(WindowsSetup.UI_NAME, app.version(), "", "", app.identifier() + ".installer",
+        AppSpec ui = new AppSpec(WindowsSetup.UI_NAME, app.version(), app.vendor(), app.name() + " Setup", app.identifier() + ".installer",
                 input, mainJar, INSTALLER_MAIN_CLASS, List.of(), Map.of(), List.of(), List.of());
         List<Path> allJars = jars(input, mainJar);
         List<String> modules = modules(Map.of(), allJars);

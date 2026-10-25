@@ -62,16 +62,15 @@ final class ImageBuilder {
         }
 
         Path ico = app.icons().get("ico");
-        if (ico != null) {
-            if (WindowsIcon.available()) {
-                try {
-                    WindowsIcon.apply(exe, ico);
-                } catch (Throwable t) {
-                    throw new IOException("Could not set the icon: " + t.getMessage(), t);
-                }
-            } else {
-                System.out.println("  Note: the .exe icon can only be set when building on Windows; the default icon was left in place.");
+        if (WindowsIcon.available()) {
+            try {
+                if (ico != null) WindowsIcon.apply(exe, ico);
+                WindowsVersion.apply(exe, new WindowsVersion.Info(app.name(), app.version(), app.vendor(), app.description(), exe.getFileName().toString()));
+            } catch (Throwable t) {
+                throw new IOException("Could not set the icon and version of the .exe: " + t.getMessage(), t);
             }
+        } else {
+            System.out.println("  Note: the .exe icon and version can only be set when building on Windows; the defaults were left in place.");
         }
 
         StringBuilder cfg = new StringBuilder("main-class=").append(app.mainClass()).append('\n');
