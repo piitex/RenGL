@@ -9,6 +9,8 @@ import me.piitex.engine.render3d.physics.RigidBody;
 import me.piitex.engine.render3d.scene.AnimationClip;
 import me.piitex.engine.render3d.scene.AnimationPlayer;
 import me.piitex.engine.render3d.scene.Light;
+import me.piitex.engine.render3d.scene.LightAnimation;
+import me.piitex.engine.render3d.scene.LightPattern;
 import me.piitex.engine.render3d.scene.Material;
 import me.piitex.engine.render3d.scene.Node3D;
 import me.piitex.engine.render3d.scene.Scene3D;
@@ -157,6 +159,7 @@ public final class Scene3DFile {
         }
         if (animate) {
             startAnimations(scene);
+            startBlinking(scene);
             PhysicsWorld world = buildPhysics(scene);
             if (!world.bodies().isEmpty()) scene.setPhysics(world);
         }
@@ -226,13 +229,13 @@ public final class Scene3DFile {
         Map<String, Object> json = writeAll(SceneKinds.node(), node);
         NodeInfo info = SceneMeta.peek(node);
         Material material = node.getMaterial();
-        if (info != null && material != null && (info.shape == Shape.CUBE || info.shape == Shape.SPHERE || info.shape == Shape.PLANE)) {
+        if (info != null && material != null && SceneMeta.drawsMesh(info.shape)) {
             Map<String, Object> look = writeAll(SceneKinds.material(), material);
             if (!look.isEmpty()) json.put("material", look);
         }
         List<Object> children = new ArrayList<>();
         for (Node3D child : node.getChildren()) {
-            if (info == null || child != info.modelRoot) children.add(write(child));
+            if (info == null || (child != info.modelRoot && child != info.prefabRoot)) children.add(write(child));
         }
         if (!children.isEmpty()) json.put("children", children);
         return json;
@@ -353,7 +356,7 @@ public final class Scene3DFile {
     public static boolean isInternal(Node3D node) {
         for (Node3D n = node; n.getParent() != null; n = n.getParent()) {
             NodeInfo info = SceneMeta.peek(n.getParent());
-            if (info != null && info.modelRoot == n) return true;
+            if (info != null && (info.modelRoot == n || info.prefabRoot == n)) return true;
         }
         return false;
     }
@@ -366,7 +369,7 @@ public final class Scene3DFile {
         Node3D owner = node;
         for (Node3D n = node; n.getParent() != null; n = n.getParent()) {
             NodeInfo info = SceneMeta.peek(n.getParent());
-            if (info != null && info.modelRoot == n) owner = n.getParent();
+            if (info != null && (info.modelRoot == n || info.prefabRoot == n)) owner = n.getParent();
         }
         return owner;
     }
@@ -396,6 +399,23 @@ public final class Scene3DFile {
      */
     public static String skyProblem(Scene3D scene) {
         return SceneMeta.sky(scene).problem;
+    }
+
+    /**
+     * Why the nodes of a {@link Shape#PREFAB} node's scene file are not in the scene, or null if they are, or the node
+     * is not a prefab.
+     */
+    public static String prefabProblem(Node3D node) {
+        NodeInfo info = SceneMeta.peek(node);
+        return info == null || info.shape != Shape.PREFAB ? null : info.prefabProblem;
+    }
+
+    /**
+     * Why a {@link Shape#TERRAIN} node is flat although it names a height map, or null if it isn't.
+     */
+    public static String terrainProblem(Node3D node) {
+        NodeInfo info = SceneMeta.peek(node);
+        return info == null || info.shape != Shape.TERRAIN ? null : info.heightmapProblem;
     }
 
     // --- Physics ---------------------------------------------------------------------------------------------------
@@ -445,6 +465,26 @@ public final class Scene3DFile {
     }
 
     // --- Running ---------------------------------------------------------------------------------------------------
+
+    // Lights that blink get an animation of their own, with the glow of the node they name, so a lamp and its bulb stay in step.
+    private static void startBlinking(Scene3D scene) {
+        int seed = 0;
+        for (Light light : scene.lights()) {
+            seed++;
+            SceneMeta.Motion motion = SceneMeta.peekMotion(light);
+            if (motion == null || motion.pattern == LightPatternKind.NONE) continue;
+            LightAnimation animation = LightAnimation.of(switch (motion.pattern) {
+                case BLINK -> LightPattern.blink(motion.period);
+                case PULSE -> LightPattern.pulse(motion.period);
+                case FLICKER -> LightPattern.flicker(1f / motion.period, 0.6f, seed);
+                case FAULTY -> LightPattern.faulty(motion.period, seed);
+                case NONE -> LightPattern.steady();
+            }).light(light).setMinimum(motion.minimum).setTime(motion.start);
+            Node3D bulb = motion.glow.isEmpty() ? null : find(scene, motion.glow);
+            if (bulb != null && bulb.getMaterial() != null) animation.glow(bulb.getMaterial());
+            scene.animate(animation);
+        }
+    }
 
     private static void startAnimations(Scene3D scene) {
         scene.root().traverse(node -> {

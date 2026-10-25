@@ -1,6 +1,7 @@
 package me.piitex.engine.render3d.scene.file;
 
 import me.piitex.engine.render3d.math.Vec3;
+import me.piitex.engine.render3d.scene.Instances;
 import me.piitex.engine.render3d.scene.Light;
 import me.piitex.engine.render3d.scene.Material;
 import me.piitex.engine.render3d.scene.Mesh;
@@ -17,6 +18,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,9 +37,14 @@ final class SceneMeta {
     /** A node's own settings. */
     static final class NodeInfo {
         Shape shape = Shape.NONE;
-        float size = 1f, radius = 0.5f, width = 10f, depth = 10f;
-        int segments = 32, rings = 16;
-        String model = "", animation = "";
+        float size = 1f, radius = 0.5f, width = 10f, depth = 10f, height = 1f, peak = 5f;
+        int segments = 32, rings = 16, resolution = 64, copies = 1;
+        Vec3 spacing = new Vec3(2f, 0f, 0f);
+        String model = "", animation = "", heightmap = "", prefab = "";
+        Path base = Path.of(""); // where the height map is read from, for making the terrain again
+        Node3D prefabRoot; // the child that holds the nodes of a prefab's file
+        String prefabProblem; // why the prefab isn't there
+        String heightmapProblem;
         Vec3 euler; // the angles last given, which a rotation can be read back as without drifting
         Node3D modelRoot; // the child that holds a model's own nodes
         Model loaded;
@@ -67,6 +74,22 @@ final class SceneMeta {
     private static final Map<Material, MaterialInfo> MATERIALS = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Map<Scene3D, SkyInfo> SKIES = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Map<Light, String> LIGHT_NAMES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<Light, Motion> MOTIONS = Collections.synchronizedMap(new WeakHashMap<>());
+
+    /** How a light blinks while the game runs, and the node whose glow blinks with it. */
+    static final class Motion {
+        LightPatternKind pattern = LightPatternKind.NONE;
+        float period = 1f, minimum = 0f, start = 0f;
+        String glow = "";
+    }
+
+    static Motion motion(Light light) {
+        return MOTIONS.computeIfAbsent(light, l -> new Motion());
+    }
+
+    static Motion peekMotion(Light light) {
+        return MOTIONS.get(light);
+    }
 
     private SceneMeta() {
     }
@@ -119,27 +142,57 @@ final class SceneMeta {
 
     // --- Shapes and models ----------------------------------------------------------------------------------------
 
+    /** Whether a node of this shape draws a mesh of its own that the file describes, so its material is the file's too. */
+    static boolean drawsMesh(Shape shape) {
+        return switch (shape) {
+            case CUBE, SPHERE, PLANE, CYLINDER, CAPSULE, CONE, TERRAIN -> true;
+            case NONE, MODEL, PREFAB -> false;
+        };
+    }
+
     static void setShape(Node3D node, Shape shape, Path base) {
         NodeInfo info = node(node);
         info.shape = shape;
+        info.base = base;
         if (shape == Shape.MODEL) {
+            removePrefab(node, info);
             node.setMesh(null);
             loadModel(node, info, base);
             return;
         }
         removeModel(node, info);
+        if (shape == Shape.PREFAB) {
+            node.setMesh(null);
+            loadPrefab(node, info, base);
+            return;
+        }
+        removePrefab(node, info);
         if (shape == Shape.NONE) {
             node.setMesh(null);
+            node.setInstances(null);
             return;
         }
         node.setMesh(build(info));
         if (node.getMaterial() == null) node.setMaterial(new Material());
+        repeat(node, info);
+    }
+
+    /** Draws the node's mesh {@code copies} times, each {@code spacing} further along, in one draw call. */
+    static void repeat(Node3D node, NodeInfo info) {
+        if (info.copies <= 1 || !drawsMesh(info.shape)) {
+            node.setInstances(null);
+            return;
+        }
+        Instances instances = new Instances();
+        for (int i = 0; i < info.copies; i++) instances.add(info.spacing.mul(i));
+        node.setInstances(instances);
     }
 
     /** Makes the mesh again from the node's size, radius and so on, after one of them changed. */
     static void rebuild(Node3D node) {
         NodeInfo info = node(node);
-        if (info.shape == Shape.CUBE || info.shape == Shape.SPHERE || info.shape == Shape.PLANE) node.setMesh(build(info));
+        if (drawsMesh(info.shape)) node.setMesh(build(info));
+        repeat(node, info);
     }
 
     private static Mesh build(NodeInfo info) {
@@ -147,8 +200,76 @@ final class SceneMeta {
             case CUBE -> Mesh.cube(Math.max(0.001f, info.size));
             case SPHERE -> Mesh.sphere(Math.max(0.001f, info.radius), Math.max(3, info.segments), Math.max(2, info.rings));
             case PLANE -> Mesh.plane(Math.max(0.001f, info.width), Math.max(0.001f, info.depth));
+            case CYLINDER -> Mesh.cylinder(Math.max(0.001f, info.radius), Math.max(0.001f, info.height), Math.max(3, info.segments));
+            case CONE -> Mesh.cone(Math.max(0.001f, info.radius), Math.max(0.001f, info.height), Math.max(3, info.segments));
+            case CAPSULE -> Mesh.capsule(Math.max(0.001f, info.radius), Math.max(0.002f, info.height), Math.max(3, info.segments), Math.max(1, info.rings / 2));
+            case TERRAIN -> terrain(info);
             default -> null;
         };
+    }
+
+    private static Mesh terrain(NodeInfo info) {
+        int points = Math.clamp(info.resolution, 2, 512);
+        float[] heights = new float[points * points];
+        info.heightmapProblem = null;
+        if (!info.heightmap.isEmpty()) {
+            TextureData picture = Textures.load(info.heightmap, info.base);
+            if (picture == null) info.heightmapProblem = "The height map " + info.heightmap + " can't be read";
+            else heights = picture.brightness(points, points);
+        }
+        return Mesh.terrain(Math.max(0.001f, info.width), Math.max(0.001f, info.depth), Math.max(0f, info.peak), heights, points, points);
+    }
+
+    static void setHeightmap(Node3D node, String path, Path base) {
+        NodeInfo info = node(node);
+        info.heightmap = path;
+        info.base = base;
+        rebuild(node);
+    }
+
+    // --- Prefabs --------------------------------------------------------------------------------------------------
+
+    private static final ThreadLocal<java.util.Set<Path>> LOADING = ThreadLocal.withInitial(java.util.HashSet::new);
+
+    static void setPrefab(Node3D node, String path, Path base) {
+        NodeInfo info = node(node);
+        info.prefab = path;
+        info.base = base;
+        if (info.shape == Shape.PREFAB) loadPrefab(node, info, base);
+    }
+
+    private static void removePrefab(Node3D node, NodeInfo info) {
+        if (info.prefabRoot != null) node.remove(info.prefabRoot);
+        info.prefabRoot = null;
+        info.prefabProblem = null;
+    }
+
+    private static void loadPrefab(Node3D node, NodeInfo info, Path base) {
+        removePrefab(node, info);
+        if (info.prefab.isEmpty()) {
+            info.prefabProblem = "No scene file chosen";
+            return;
+        }
+        Path file = base.resolve(info.prefab).toAbsolutePath().normalize();
+        if (!LOADING.get().add(file)) {
+            info.prefabProblem = "The prefab " + info.prefab + " has itself inside it";
+            return;
+        }
+        try {
+            Scene3D loaded = Scene3DFile.load(file, base, false);
+            Node3D root = new Node3D("Prefab");
+            for (Node3D child : new ArrayList<>(loaded.root().getChildren())) {
+                loaded.root().remove(child);
+                root.add(child);
+            }
+            node.add(root);
+            info.prefabRoot = root;
+        } catch (RuntimeException e) {
+            info.prefabProblem = e.getMessage() == null ? e.toString() : e.getMessage();
+            log.warn("Could not load the prefab {}: {}", file, info.prefabProblem);
+        } finally {
+            LOADING.get().remove(file);
+        }
     }
 
     static void setModel(Node3D node, String path, Path base) {

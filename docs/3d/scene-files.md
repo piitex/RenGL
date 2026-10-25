@@ -50,7 +50,8 @@ from 0 to 1, or `"#RRGGBB"`; positions, directions and scales are `[x, y, z]`; e
 | `joints` | Joints between the nodes' bodies, each with a `type` of `BALL`, `HINGE`, `SLIDER`, `DISTANCE` or `FIXED` (see [Physics](#physics)) |
 
 A node's `shape` is `NONE` (a group, which draws nothing and moves what is in it), `CUBE` (`size`), `SPHERE` (`radius`,
-`segments`, `rings`), `PLANE` (`width`, `depth`) or `MODEL`. A model node loads the file named by `model`
+`segments`, `rings`), `PLANE` (`width`, `depth`), `CYLINDER`, `CONE` and `CAPSULE` (`radius`, `height`, `segments`; a capsule's `height`
+is the whole of it, and it has `rings` in each half), `TERRAIN`, `PREFAB` or `MODEL`. A model node loads the file named by `model`
 ([Models](models.md): glTF, GLB, OBJ, FBX or Collada) as the nodes inside it; they come from the file each time and are not saved
 in the scene, though a model node can have children of its own. Its `animation` names one of the model's clips, which
 `Scene3DFile.load` starts playing, over and over; `Scene3DFile.animations(node)` lists the names.
@@ -59,6 +60,27 @@ A `material` has the properties of [`Material`](scenes.md#material): `color`, `t
 `additive`, `alphaCutoff`, `pbr`, `specular`, `shininess`, `metallic`, `roughness`, `normalTexture`, `normalScale`,
 `metallicRoughnessTexture`, `occlusionTexture`, `emissiveTexture`, and a glow as `emissiveColor` and `emissiveStrength`.
 Every node has a material of its own.
+
+`TERRAIN` raises ground from a picture: `heightmap` is a path to an image whose white is high and black is low, `peak` is how
+high white is, `width` and `depth` are its size, and `resolution` is how many points it has along each side (up to 512).
+With no `heightmap` it is flat. It collides as its triangles when its body is `STATIC`
+([`Mesh.terrain`](scenes.md) builds the same from heights in code). `Scene3DFile.terrainProblem(node)` says why a height map
+that can't be read gave flat ground.
+
+`PREFAB` shows another scene file's `nodes` where it is, moved, turned and scaled by the node: `prefab` is the path, and
+that file's lights, sky and camera are left out. Like a model's nodes, the prefab's are not saved with the scene that uses it,
+so changing the prefab's file changes every use of it; they have bodies, and the game can find them by name
+(`Scene3DFile.find`). A prefab that holds itself is left empty. `Scene3DFile.prefabProblem(node)` says why one is.
+
+A node that draws a shape of its own can be drawn again in a line by setting `copies` and `spacing` (between each and the
+next, in the node's space): one draw call for any number, for fences, columns and rows of lights. The copies are drawn only:
+they have no bodies of their own and cannot be picked, and the node's children are not repeated. See [Instancing](instancing.md)
+for copies placed by code.
+
+A light blinks while the game runs when it has a `pattern` of `BLINK`, `PULSE`, `FLICKER` or `FAULTY`, with a `period`
+(seconds for a blink, a breath or a flicker), `minimum` (how dim it gets, 0 to 1), `start` (seconds into the pattern, to put
+lights out of step) and `glow`, the name of a node, such as a bulb, whose emissive glow blinks with it
+([Lighting](lighting.md#blinking-lights)). `Scene3DFile.load` starts them; an editor, loading without running, shows the lights steady.
 
 Picture and model paths are relative to the folder `load` is given (`Scene3DFile.load(path, base)`), the working folder
 for `load(String)`. One that can't be read is left out of the scene and its path kept when the file is saved again;
@@ -133,5 +155,6 @@ properties in the "Physics", "Collider" and "Character" groups.
 
 - `Scene3DFile` saves what it loaded, and what an editor made with it. A node built in code is saved as a group, since the
   file has no way to say what its mesh is, and a skybox built in code is not saved.
-- [Instancing](instancing.md), skins and morph weights of your own are not in the file; models bring their own.
+- Skins and morph weights of your own are not in the file; models bring their own. Instancing is `copies` and `spacing` only.
+- Custom light sequences (`LightPattern.sequence`) and your own patterns are code only.
 - A model's animations are only started when the scene loads. Start others from code with `Model.player()`.

@@ -88,8 +88,9 @@ Things to know:
   counted while it is off.
 - **A light at `0` casts no shadow** either: the scene skips its shadow views while it is off. How blinking a
   shadow-casting light affects frame time has not been measured.
-- **Not saved in scene files.** The animation changes the lights and materials directly, so build it in code after
-  loading, and do not also change those lights by hand.
+- **Scene files hold the simple patterns.** A light in a [scene file](scene-files.md) can have a `pattern` of blink, pulse,
+  flicker or faulty, with a glow node, and `Scene3DFile.load` makes the animation. A custom sequence or lambda is code
+  only: build it after loading, and do not also change those lights by hand.
 - **Emissive glow is not light.** The bulb shines on screen but does not light the wall; that is the lamp's job, which is
   why the animation drives both. Glow does feed [bloom](#bloom), so a bright blinking bulb blooms.
 

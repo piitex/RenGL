@@ -15,8 +15,18 @@ public enum Shape {
     SPHERE("Sphere"),
     /** {@link me.piitex.engine.render3d.scene.Mesh#plane}: a flat sheet, facing up. */
     PLANE("Plane"),
+    /** {@link me.piitex.engine.render3d.scene.Mesh#cylinder}: upright, flat at both ends. */
+    CYLINDER("Cylinder"),
+    /** {@link me.piitex.engine.render3d.scene.Mesh#capsule}: a cylinder with a half sphere on each end. */
+    CAPSULE("Capsule"),
+    /** {@link me.piitex.engine.render3d.scene.Mesh#cone}: its point up. */
+    CONE("Cone"),
+    /** {@link me.piitex.engine.render3d.scene.Mesh#terrain}: ground raised from a height map picture. */
+    TERRAIN("Terrain"),
     /** A model from a file, which comes with its own meshes, materials and nodes. */
-    MODEL("Model");
+    MODEL("Model"),
+    /** The nodes of another scene file, kept in one file and used again wherever it is wanted: a house, a tree, a lamp post. */
+    PREFAB("Prefab");
 
     private final String label;
 
