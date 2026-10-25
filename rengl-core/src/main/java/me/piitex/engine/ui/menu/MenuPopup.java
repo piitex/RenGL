@@ -1,7 +1,7 @@
 package me.piitex.engine.ui.menu;
 
 import me.piitex.engine.ui.text.FontMetricsCompat;
-import me.piitex.engine.Window;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
@@ -76,7 +76,7 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
     }
 
     private final PopupMenu menu;
-    private final Window win;
+    private final PopupHost win;
     private final List<Panel> panels = new ArrayList<>();
     private final org.jetbrains.skia.Font font;
     private boolean closed;
@@ -89,7 +89,7 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
     private int pendingPanel = -1, pendingRow = -1;
     private float pendingTime;
 
-    MenuPopup(PopupMenu menu, Window win, double x, double y) {
+    MenuPopup(PopupMenu menu, PopupHost win, double x, double y) {
         super(0, 0);
         this.menu = menu;
         this.win = win;
@@ -164,12 +164,12 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
                 + (panel.shortcutCol ? SHORTCUT_GAP + panel.shortcutW : 0f)
                 + (panel.arrowCol ? ARROW_COL : 0f));
 
-        double winW = win.getWindowOptions().getWidth();
-        double winH = win.getWindowOptions().getHeight();
+        double[] area = win.getPopupArea();
+        double winW = area[2], winH = area[3];
         // A menu taller than the window fills the window's height and scrolls.
         panel.h = (float) Math.min(panel.contentH, Math.max(winH - 2 * WINDOW_EDGE, 2 * menu.getItemHeight()));
-        panel.x = (float) Math.max(0, Math.min(x, winW - panel.w));
-        panel.y = (float) Math.max(0, Math.min(y, winH - panel.h));
+        panel.x = (float) Math.max(area[0], Math.min(x, area[0] + winW - panel.w));
+        panel.y = (float) Math.max(area[1], Math.min(y, area[1] + winH - panel.h));
         return panel;
     }
 
@@ -183,11 +183,12 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
         MenuItem item = parent.items.get(row);
         if (!item.hasSubmenu()) return;
 
-        double winW = win.getWindowOptions().getWidth();
+        double[] area = win.getPopupArea();
+        double areaRight = area[0] + area[2];
         double y = parent.y + parent.rowTop[row] - parent.scroll - PAD_Y;
         Panel child = layout(item.getChildren(), parent.x + parent.w - 2, y);
-        if (parent.x + parent.w - 2 + child.w > winW) {
-            child.x = Math.max(0, parent.x - child.w + 2); // no room on the right, so flip to the left
+        if (parent.x + parent.w - 2 + child.w > areaRight) {
+            child.x = (float) Math.max(area[0], parent.x - child.w + 2); // no room on the right, so flip to the left
         }
         if (selectFirst) child.active = step(child, -1, 1);
         panels.add(child);

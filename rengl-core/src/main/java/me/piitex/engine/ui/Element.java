@@ -645,6 +645,15 @@ public class Element {
     }
 
     /**
+     * Where this Element's floating panels open (a dropdown's list, a context menu, a picker): its {@link #getWindow()}, or
+     * the screen it is shown on if it is in a 3D scene. Null if it is on neither yet.
+     */
+    public PopupHost getPopupHost() {
+        Container c = this instanceof Container self ? self : owner;
+        return c == null ? null : c.resolvePopupHost();
+    }
+
+    /**
      * Text shown in a small floating bubble near the mouse once the cursor has rested
      * on this Element for {@link #getTooltipDelay()} seconds, or null (the default) for
      * none. This works on every Element, Containers included. A Container's tooltip

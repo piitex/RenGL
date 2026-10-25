@@ -12,6 +12,7 @@ import me.piitex.engine.ui.background.BackgroundKinds;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.ui.containers.ModalContainer;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.Paint;
@@ -45,7 +46,7 @@ import me.piitex.engine.utils.flags.GeneratedFragments;
  * themed property in this engine: the theme is only a baseline, and an explicit call
  * pins the background so later theme switches leave it alone. See {@link Overridable}.
  */
-public class Window implements Themeable {
+public class Window implements Themeable, PopupHost {
     private final WindowOptions windowOptions;
     private final ConcurrentSkipListMap<Integer, Container> containers = new ConcurrentSkipListMap<>();
     private final InputManager inputManager = new InputManager();
@@ -884,6 +885,14 @@ public class Window implements Themeable {
             }
         }
         addContainer(popup);
+    }
+
+    /**
+     * The whole window: popups are kept inside it.
+     */
+    @Override
+    public double[] getPopupArea() {
+        return new double[]{0, 0, windowOptions.getWidth(), windowOptions.getHeight()};
     }
 
     /**

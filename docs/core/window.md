@@ -364,6 +364,8 @@ window.showPopup(menu, () -> System.out.println("menu closed"));
   replacing it). Use it to reset your own state.
 - `closePopup()` closes it programmatically. `getPopup()` returns the current one or `null`.
 - Popups are not clipped by parent containers such as a [`ScrollContainer`](../containers/scroll-container.md).
+- A `Window` is a `PopupHost`, the interface the built-in dropdown, menus and pickers open through, so they work in the same
+  way on a [screen in a 3D scene](../3d/scenes.md#dragging-and-popups). Elements find theirs with `getPopupHost()`.
 
 ### Following an element
 

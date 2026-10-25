@@ -42,6 +42,7 @@ public class Container extends Element implements Themeable, Draggable {
 
     private Container parent;
     private Window window;
+    private me.piitex.engine.ui.PopupHost popupHost;
 
     private boolean draggable = false;
     private double dragAnchorMouseX, dragAnchorMouseY;
@@ -259,6 +260,26 @@ public class Container extends Element implements Themeable, Draggable {
             root = root.parent;
         }
         return root.window;
+    }
+
+    /**
+     * Makes {@code host} the place the popups of everything in this top-level Container open, in place of a Window: a screen in
+     * a 3D scene is one. Not meant to be called directly; {@code UiScreen} does it.
+     */
+    public void setPopupHost(me.piitex.engine.ui.PopupHost host) {
+        this.popupHost = host;
+    }
+
+    /**
+     * Walks up to the top-level Container and returns where its popups open: the host it was given with
+     * {@link #setPopupHost}, else the Window it was added to, or null if neither (yet).
+     */
+    public me.piitex.engine.ui.PopupHost resolvePopupHost() {
+        Container root = this;
+        while (root.parent != null) {
+            root = root.parent;
+        }
+        return root.popupHost != null ? root.popupHost : root.window;
     }
 
     /**

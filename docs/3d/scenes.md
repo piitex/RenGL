@@ -391,9 +391,64 @@ copy, cut, paste, undo and redo all work, as in a window. Tab and Shift+Tab move
 screen (in the order a window uses, `setTabIndex` first, a disabled field skipped), and Escape lets go of the keyboard.
 Pressing anywhere else on the screen, or away from it, also lets go.
 
+#### Dragging and popups
+
+A press that lands on something that drags is a drag until `release()`: a slider's thumb, a scrollbar, a split container's
+divider, a resizable or draggable container, a table's column edge. Every `pointAt` in between moves it, and the same rules as
+a window decide which element takes the drag (the nearest draggable at or above the one pressed; a button keeps its press;
+a clickable element that drags its container waits for the pointer to move 4 points first).
+
+```java nocompile
+// in the InputListener, a held button instead of clicked(): the viewport's own drag, passed on
+private boolean onScreen;
+
+@Override
+public void dragStarted(double x, double y) {
+    screen.pointAt(scene.pick(x, y, view.getWidth(), view.getHeight()), terminal);
+    onScreen = screen.press();        // true when the press was the screen's, not the camera's
+}
+
+@Override
+public void dragged(double x, double y, double dx, double dy) {
+    if (onScreen) screen.pointAt(scene.pick(x, y, view.getWidth(), view.getHeight()), terminal);   // moves the slider
+    else orbit(dx, dy);
+}
+
+@Override
+public void dragEnded(double x, double y) {
+    if (onScreen) screen.release();   // ends the drag, wherever the pointer is
+    onScreen = false;
+}
+```
+
+A drag that goes off the screen **holds at the last place on it** and ends at the release: the pointer is away, but the
+slider stays where it was dragged to. The screen does not project the ray onto the surface's plane, so a drag does not
+carry on past the edge.
+
+A **dropdown's list**, a **context menu** (a right `press(button)` on an element with `setContextMenu`), a **color or date
+picker** and a rich text area's spelling suggestions open on the screen, over everything else on it, and are drawn into the
+texture. The screen is their `PopupHost`, the same job a window does for the elements on it:
+
+- While one is open, pointing, pressing, the wheel and keys go to it first. **A press outside it closes it, and is used up**
+  (`press` returns true), so it does not also press a button underneath. **Escape** closes it.
+- A menu takes the arrow keys and Enter, so `hasFocus()` is true while one is open: send keys to `key` as you do for a text
+  field. When the menu is gone the keys are the game's again.
+- A popup is kept **inside the container**: a list near the bottom opens above its box, a menu at the edge is moved back, a long
+  list scrolls with the wheel. It follows the element that opened it, and closes if that element is removed.
+- Only one popup is open at a time, as in a window. Closing the screen closes it.
+- Call `refresh` after the press that opens one, and while it is open, as for anything that changes the picture.
+
 | Method | Description |
 |---|---|
-| `hasFocus()` / `focused()` | Whether a field has the keyboard, and which one. A field disabled while it has it loses it |
+| `getPopup()` | The open popup (a `Container`), or null. Same as a window's |
+| `closePopup()` | Closes it, as Escape or an outside press does |
+
+A custom element opens its own floating panel through `getPopupHost()` rather than `getWindow()`, so it works on a screen too:
+see [Custom elements](../reference/custom-elements.md).
+
+| Method | Description |
+|---|---|
+| `hasFocus()` / `focused()` | Whether a field has the keyboard (or a menu is open), and which one. A field disabled while it has it loses it |
 | `typeChar(codepoint)` | Types a character into the focused field. Returns whether a field had the keyboard |
 | `key(key, action, mods)` | Sends a key (`GLFW_PRESS`, `GLFW_REPEAT` or `GLFW_RELEASE`). Returns whether a field used it; a release is passed on but never reported as used |
 | `focus(Element)` / `clearFocus()` | Gives the keyboard to a field in code, for example to start typing when the player walks up to the terminal, or takes it away when they walk off |
@@ -434,8 +489,9 @@ Things to know:
   be refreshed a few times a second, not every frame. A screen that only changes when the player clicks needs a refresh
   after the click and no more.
 - **The size is taken when the screen is made.** A container resized later is still drawn into the old texture size.
-- **Not done: dragging (other than selecting text), popups (a dropdown's list) and context menus.** A dropdown on a
-  screen shows but its list does not open.
+- **A drag that leaves the screen holds at its last place on it** rather than carrying on past the edge; see
+  [Dragging and popups](#dragging-and-popups). Hover colors inside a popup follow the pointer on the screen, not the mouse on the
+  desktop, because `MouseTracker` is told where the pointer is while the screen draws.
 - **Use it from one thread**, as a window's interface is used: the render thread, in the handlers above.
 - The mesh needs texture coordinates covering the whole texture, and the surface must be pickable (the default). A hit on
   a mesh without them gives no spot, so the pointer goes away.

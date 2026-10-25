@@ -2,7 +2,7 @@ package me.piitex.engine.ui.overlays;
 
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.ui.text.FontScalable;
-import me.piitex.engine.Window;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.containers.Container;
@@ -203,30 +203,31 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
 
     public void open() {
         if (isOpen() || items.isEmpty()) return;
-        Window window = getWindow();
-        if (window == null) return;
+        PopupHost host = getPopupHost();
+        if (host == null) return;
 
         ListPopup p = new ListPopup();
         float rowH = (float) getHeight();
         int rows = Math.min(items.size(), maxVisibleRows);
         float h = rows * rowH;
-        // The popup is a top-level container, so it is positioned in window coordinates.
+        // The popup is a top-level container, so it is positioned in the host's coordinates.
+        double[] area = host.getPopupArea();
         double top = getAbsoluteY();
         float y = (float) (top + getHeight());
-        if (y + h > window.getWindowOptions().getHeight() && top - h >= 0) {
+        if (y + h > area[1] + area[3] && top - h >= area[1]) {
             y = (float) top - h; // not enough room below, so open upward
         }
         p.setBounds(getAbsoluteX(), y, getWidth(), h);
         p.scrollToRevealSelected();
         popup = p;
-        window.showPopup(p, this, () -> popup = null);
+        host.showPopup(p, this, () -> popup = null);
     }
 
     public void close() {
         if (popup == null) return;
-        Window window = getWindow();
-        if (window != null) {
-            window.closePopup(); // its dismiss callback clears `popup`
+        PopupHost host = getPopupHost();
+        if (host != null) {
+            host.closePopup(); // its dismiss callback clears `popup`
         }
         popup = null;
     }

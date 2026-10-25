@@ -1,7 +1,7 @@
 package me.piitex.engine.ui.overlays;
 
 import me.piitex.engine.ui.text.FontMetricsCompat;
-import me.piitex.engine.Window;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Focusable;
@@ -174,15 +174,15 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
 
     public void open() {
         if (isOpen()) return;
-        Window window = getWindow();
-        if (window == null) return;
+        PopupHost host = getPopupHost();
+        if (host == null) return;
 
         PickerPopup p = new PickerPopup();
-        float[] at = PopupPlacement.below(this, window, (float) p.getWidth(), (float) p.getHeight());
+        float[] at = PopupPlacement.below(this, host, (float) p.getWidth(), (float) p.getHeight());
         p.setPosition(at[0], at[1]);
         popup = p;
-        window.showPopup(p, this, () -> {
-            if (window.getFocusedElement() == p.hexField) window.requestFocus(null); // it is about to be disposed
+        host.showPopup(p, this, () -> {
+            if (host.getFocusedElement() == p.hexField) host.requestFocus(null); // it is about to be disposed
             p.dispose();
             if (popup == p) popup = null;
         });
@@ -191,9 +191,9 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
     public void close() {
         PickerPopup p = popup;
         if (p == null) return;
-        Window window = getWindow();
-        if (window != null && window.getPopup() == p) {
-            window.closePopup(); // the dismiss callback clears `popup`
+        PopupHost host = getPopupHost();
+        if (host != null && host.getPopup() == p) {
+            host.closePopup(); // the dismiss callback clears `popup`
         }
         popup = null;
     }

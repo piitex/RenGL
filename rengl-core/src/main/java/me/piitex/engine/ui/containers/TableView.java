@@ -5,6 +5,7 @@ import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Focusable;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.LinearGradient;
@@ -532,8 +533,8 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         });
         placeEditor();
         addElement(editField);
-        Window window = getWindow();
-        if (window != null) window.requestFocus(editField);
+        PopupHost host = getPopupHost(); // the window, or the screen the table is shown on
+        if (host != null) host.requestFocus(editField);
     }
 
     /**
@@ -582,8 +583,8 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         editing = null;
         editingColumn = null;
         removeElement(field);
-        Window window = getWindow();
-        if (refocus && window != null) window.requestFocus(this);
+        PopupHost host = getPopupHost();
+        if (refocus && host != null) host.requestFocus(this);
         String text = field.getText();
         field.dispose();
         if (commit && column.onEdit != null && !text.equals(editOriginal)) column.onEdit.accept(item, text);
