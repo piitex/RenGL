@@ -10,7 +10,7 @@ move is up to the game; the camera has helpers for following and shaking, and pa
 | [Camera](camera.md) | `Camera`: which part of the world is shown, zoomed and turned, in which part of the window; following, shaking and staying inside the level; converting mouse positions to world points |
 | [Sprites](sprites.md) | `Texture`, `TextureRegion` and `Sprite`: pictures placed, turned, scaled, mirrored and tinted; `SpriteBatch` to draw many in layer order, skipping those out of view, in few draw calls |
 | [Texture atlases](atlases.md) | `TextureAtlas`: named pictures from one packed image, read from the JSON that texture packers and Aseprite export, or built from a grid |
-| [Tile maps](tile-maps.md) | `TileMap`: levels made in the Tiled map editor, drawn in view only, with animated tiles and parallax; collision shapes for `Slide`; spawn points, triggers and other objects with their properties |
+| [Tile maps](tile-maps.md) | `TileMap`: levels made in the Tiled map editor (orthogonal, isometric, staggered and hexagonal), drawn in view only, with animated tiles and parallax; collision shapes for `Slide`; spawn points, triggers and other objects with their properties |
 | [Sprite animation](sprite-animation.md) | `Animation` and `AnimationPlayer`: frame-by-frame animation, loop modes, frame events |
 | [Particles](particles.md) | `ParticleSystem`, `ParticleEffect` and `ParticleEmitter`: sparks, smoke and debris, in bursts or steadily, reused and drawn in one batch |
 | [Shaders and post effects](shaders.md) | `ShaderEffect`: SkSL shaders that fill shapes, or post-process what's drawn, on the whole screen or one element |

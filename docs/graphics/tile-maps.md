@@ -41,7 +41,7 @@ throws an `IllegalArgumentException` that names the file and what is wrong with 
 
 | Read | |
 |---|---|
-| Maps | Orthogonal, fixed size or infinite; every tile layer format (CSV, base64 uncompressed, zlib, gzip or zstd, and XML) |
+| Maps | [Orthogonal](#isometric-staggered-and-hexagonal-maps) (fixed size or infinite), isometric, staggered and hexagonal; every tile layer format (CSV, base64 uncompressed, zlib, gzip or zstd, and XML) |
 | Layers | Tile layers, object layers, image layers and groups, with visibility, opacity, tint, blend mode, offset and parallax |
 | Tiles | Mirrored and turned tiles, tiles bigger than the grid, drawing offsets, animations, collision shapes, "Tile Render Size" and "Fill Mode" |
 | Tile sets | One image cut into a grid (with margin and spacing), or a collection of images, as files or embedded in a `.tmx`; a transparent color that is cut out |
@@ -50,7 +50,8 @@ throws an `IllegalArgumentException` that names the file and what is wrong with 
 
 Not supported:
 
-- **Isometric, staggered and hexagonal maps.** Loading one fails, saying so.
+- **Infinite isometric, staggered and hexagonal maps**, and the rotation of hexagonal tiles: see
+  [the other orientations](#isometric-staggered-and-hexagonal-maps).
 - **Images embedded in a JSON map.** Tiled can't write them there; only a `.tmx` holds them. They must be base64, plain or compressed.
 - **Fonts for text objects.** Every text object is drawn in the engine's [default font](../styling/fonts.md), whatever family
   Tiled shows. The family name is there to read (`getTextFormat().fontFamily()`).
@@ -148,8 +149,59 @@ Tile under = map.getTileLayer("ground").getTileAt(player.x, player.bottom() + 1)
 if (under != null && under.getType().equals("Ice")) friction = 0.1f;
 ```
 
-`TileMap.toTileX(worldX)` and `toTileY` give the cell a world point is in, and `getCellBounds(x, y)` the rectangle
-a cell covers.
+`TileMap.toTileX(worldX)` and `toTileY` give the cell a world point is in on an orthogonal map, and `getCellBounds(x, y)`
+the rectangle a cell covers. For the other orientations, and in general for picking, use `toCell` and `getCellShape`: see
+[below](#isometric-staggered-and-hexagonal-maps).
+
+## Isometric, staggered and hexagonal maps
+
+`map.getOrientation()` says how the grid is laid out, as Tiled's *Orientation* does:
+
+| `Orientation` | The grid |
+|---|---|
+| `ORTHOGONAL` | Rows and columns of rectangles. What the rest of this page assumes unless it says otherwise |
+| `ISOMETRIC` | A diamond of cells. Cell (0, 0) is at the top, **x** runs down and to the right and **y** down and to the left |
+| `STAGGERED` | Isometric diamonds in the rows (or columns) of a rectangular map, every other one shifted half a cell |
+| `HEXAGONAL` | Hexagons in rows (`StaggerAxis.Y`, pointed tops) or columns (`StaggerAxis.X`, flat tops), every other one shifted |
+
+`getStaggerAxis()`, `isStaggerOdd()` (whether the odd rows or columns are the shifted ones, rather than the even) and
+`getHexSideLength()` are Tiled's *Stagger Axis*, *Stagger Index* and *Tile Side Length*. They load from `.tmx` and `.tmj` like
+everything else, and a map can be built in code with `TileMap.isometric(...)`, `TileMap.staggered(...)` and
+`TileMap.hexagonal(...)`.
+
+**Cells are not at `x * tileWidth` any more**, so ask the map where they are and which one a point is in. These work on every
+orientation, and what is named *box* is the `tileWidth` by `tileHeight` rectangle the diamond or hexagon sits in:
+
+```java nocompile
+TileMap.Cell cell = map.toCell(mouseWorldX, mouseWorldY);       // the cell under the mouse, also outside the map
+Tile tile = map.getTileLayer("ground").getTile(cell.x(), cell.y());
+
+Shape outline = map.getCellShape(cell.x(), cell.y());           // a Polygon (a diamond or a hexagon), or a Rect on an orthogonal map
+float[] middle = map.getCellCenter(cell.x(), cell.y());         // where to put a unit standing on the cell
+Rect box = map.getCellBounds(cell.x(), cell.y());
+```
+
+| | Orthogonal | The others |
+|---|---|---|
+| `getBounds()` | width and height times the tile size | The area Tiled shows: for an isometric map `(width + height) * tileWidth / 2` across and `(width + height) * tileHeight / 2` down; the shifted rows or columns add half a cell |
+| `toCell`, `getTileAt` | Plain division | Looks at the few cells around the point and takes the one whose outline holds it, so a point near a corner is in the right cell |
+| `toTileX`, `toTileY` | The column and the row | Throw `UnsupportedOperationException`: with diamonds and hexagons each depends on both coordinates, so use `toCell` |
+| `layer.getSolidRects(...)` | Joined rectangles | Throws: use `layer.getSolidShapes(...)`, which gives joined rectangles on an orthogonal map and one diamond or hexagon for each solid cell on the others |
+| `layer.getCollisionShapes()` | Cells solid all over are joined | Each tile's own shapes are placed on its picture; nothing is joined |
+
+**Drawing** follows Tiled: tiles sit on the bottom of their cell's box, on the left of it, except on an isometric map where a tile
+narrower or wider than the cell is centred across it. Tiles are drawn bottom first (rows, or for staggered columns, whole columns, in
+the map's render order), so a tall tile overlaps the ones behind it as it should, and only the cells in view are drawn.
+
+**Objects on an isometric map** are saved by Tiled on a square grid whose unit is `tileHeight` and drawn as diamonds. They are read
+where they are drawn, in the same units as everything else: `getX()` and `getY()` of a point or a tile are screen pixels, a polygon or
+polyline has its points converted, a **rectangle** (or capsule) comes out as a `POLYGON` of four corners (the parallelogram it is),
+and an **ellipse** as a 16-sided `POLYGON`. Their rotation is dropped. A tile object's *Object Alignment* is *Bottom* by default there, as
+in Tiled, so it stands on its point. Objects on the other three orientations are in plain pixels and are read as they are.
+
+Not read: the 60 and 120 degree rotation flags of hexagonal tiles (a rotated hexagonal tile is drawn unrotated; mirrored ones are
+mirrored), and **infinite** maps that are not orthogonal, which fail to load saying so. Collision shapes drawn on a tile in an isometric
+*tile set* (whose grid Tiled shows as diamonds) are taken as measured on the tile's picture, as for any tile.
 
 ## Collision
 
