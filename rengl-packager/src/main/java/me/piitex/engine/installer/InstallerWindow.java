@@ -212,19 +212,22 @@ final class InstallerWindow {
     }
 
     private void finish() {
-        if (launchBox != null && launchBox.isChecked() && setupProgram != null) {
-            try {
-                new ProcessBuilder(Path.of(choices.folder(), info.exe()).toString())
-                        .directory(new File(choices.folder()))
-                        .redirectInput(ProcessBuilder.Redirect.DISCARD)
-                        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                        .redirectError(ProcessBuilder.Redirect.DISCARD)
-                        .start();
-            } catch (IOException e) {
-                // It is installed; the shortcut still starts it.
-            }
+        try {
+            if (launchBox != null && launchBox.isChecked() && setupProgram != null) launch();
+        } catch (IOException | RuntimeException e) {
+            // It is installed; the shortcut still starts it. Finishing must close the window whatever happens here.
+        } finally {
+            window.close();
         }
-        window.close();
+    }
+
+    private void launch() throws IOException {
+        new ProcessBuilder(Path.of(choices.folder(), info.exe()).toString())
+                .directory(new File(choices.folder()))
+                .redirectInput(ProcessBuilder.Redirect.from(new File("NUL")))   // DISCARD is for output only
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start();
     }
 
     // ---- small builders -------------------------------------------------------------------------------------------
