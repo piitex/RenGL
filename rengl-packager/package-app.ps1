@@ -15,7 +15,7 @@
 
     It builds the project with Maven, collects the jars and every platform's natives into target\input, and runs the RenGL
     packager. The result is in dist\app-images\ of the project: a folder and an archive per platform, or with
-    installer=true (or -Installer) a setup.exe (Windows) and a .deb (Linux) in place of the .zip and .tar.gz. macOS
+    installer=true (or -Installer true) a setup.exe (Windows) and a .deb (Linux) in place of the .zip and .tar.gz. macOS
     always gets a .tar.gz.
 
     Every setting is also a parameter of this script. A parameter wins over the file, so package.cmd -Platform linux-x64
@@ -47,7 +47,12 @@
     Comma separated: windows-x64, linux-x64, linux-arm64, macos-x64, macos-arm64, or all. Default: all. File setting: platform.
 
 .PARAMETER Installer
-    Write a setup.exe (Windows) and a .deb (Linux) instead of the .zip and .tar.gz. File setting: installer=true.
+    false (the default): a .zip and .tar.gz per platform.
+    true: a setup.exe (Windows) and a .deb (Linux) instead. The setup's window is a RenGL app (a folder, a progress bar,
+    your own look to change; see me.piitex.engine.installer in rengl-packager). It needs the RenGL folder built (mvnw install, step 1 above),
+    and falls back to the plain Windows window on a computer that cannot open the RenGL one.
+    plain: the same, but the setup uses the small plain Windows window, which makes it about 50 MB smaller.
+    File setting: installer.
 
 .PARAMETER NoArchive
     Leave the folders; write no archives or installers. File setting: noArchive=true.
@@ -85,7 +90,7 @@ param(
     [string]$Project = (Get-Location).Path,
     [string]$MainJar,
     [string]$Platform = 'all',
-    [switch]$Installer,
+    [ValidateSet('true', 'false', 'plain')][string]$Installer = 'false',
     [switch]$NoArchive,
     [string[]]$Icon = @(),
     [string]$Version = '1.0.0',
@@ -181,7 +186,9 @@ if ($Init) {
         '# Each platform other than this one downloads its Java modules the first time (about 85 MB each).',
         'platform=windows-x64',
         '',
-        '# true: a setup.exe for Windows and a .deb for Linux, instead of the .zip and .tar.gz.',
+        '# false: a .zip and .tar.gz per platform.',
+        '# true: a setup.exe for Windows (with a RenGL window) and a .deb for Linux, instead.',
+        '# plain: the same, with the small plain Windows window in the setup (about 50 MB smaller).',
         'installer=false',
         '',
         '# More settings, if you want them. Remove the # to use one.',
@@ -205,7 +212,7 @@ if ($Init) {
         $cmd = @(
             '@echo off',
             'rem Builds this project''s app with the RenGL packager. The settings are in rengl-package.properties.',
-            'rem Parameters pass through: package.cmd -Installer   or   package.cmd -Platform linux-x64',
+            'rem Parameters pass through: package.cmd -Installer true   or   package.cmd -Platform linux-x64',
             "powershell -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" %*",
             'exit /b %errorlevel%'
         )
@@ -231,15 +238,21 @@ if (Test-Path $configPath) {
         if ($eq -lt 1) { Fail "${ConfigName}, line ${number}: expected setting=value, found '$text'." }
         $key = $text.Substring(0, $eq).Trim().ToLower()
         $value = $text.Substring($eq + 1).Trim()
+        if ($key -eq 'installerui') {
+            Fail "${ConfigName}, line ${number}: installerUi is gone. installer=true now gives the setup with the RenGL window; installer=plain gives the small plain Windows window. Delete this line."
+        }
         if (-not $Settings.Contains($key)) {
             Fail "${ConfigName}, line ${number}: '$($text.Substring(0, $eq).Trim())' is not a setting. The settings are: name, mainClass, mainJar, platform, installer, noArchive, icon, version, vendor, description, identifier, addModules, content, output."
         }
         if (-not $value) { continue }
         $parameter = $Settings[$key]
         if ($bound.ContainsKey($parameter)) { continue }
-        if ($parameter -in 'Installer', 'NoArchive') {
-            if ($value -notmatch '^(true|false)$') { Fail "${ConfigName}, line ${number}: $($text.Substring(0, $eq).Trim()) must be true or false, not '$value'." }
-            Set-Variable -Name $parameter -Value ([switch]($value -eq 'true'))
+        if ($parameter -eq 'Installer') {
+            if ($value -notmatch '^(true|false|plain)$') { Fail "${ConfigName}, line ${number}: installer must be true, false or plain, not '$value'." }
+            $Installer = $value
+        } elseif ($parameter -eq 'NoArchive') {
+            if ($value -notmatch '^(true|false)$') { Fail "${ConfigName}, line ${number}: noArchive must be true or false, not '$value'." }
+            $NoArchive = [switch]($value -eq 'true')
         } else {
             Set-Variable -Name $parameter -Value $value
         }
@@ -312,7 +325,13 @@ foreach ($i in $Icon) { $packagerArgs += '--icon', $i }
 foreach ($c in $Content) { $packagerArgs += '--content', $c }
 # -XstartOnFirstThread is added for macOS by the packager, where it belongs.
 $packagerArgs += '--java-option', '--enable-native-access=ALL-UNNAMED'
-if ($Installer) { $packagerArgs += '--installer' }
+if ($Installer -eq 'true') {
+    $uiInput = Join-Path $RenglRoot 'rengl-packager\target\ui-input'
+    if (-not (Test-Path $uiInput)) { Fail "The setup's RenGL window is not built ($uiInput). In the RenGL folder run: .\mvnw.cmd install -DskipTests   (or use installer=plain for the small plain Windows window)" }
+    $packagerArgs += '--installer-ui', $uiInput
+} elseif ($Installer -eq 'plain') {
+    $packagerArgs += '--installer'
+}
 if ($NoArchive) { $packagerArgs += '--no-archive' }
 
 Write-Host "==> RenGL packager ($($platforms -join ', '))"

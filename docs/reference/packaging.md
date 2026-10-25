@@ -72,7 +72,7 @@ installer=false
 | `mainClass` | none, required | The class with `main`, package included |
 | `version` | `1.0.0` | The app's version |
 | `platform` | `all` | What to build, comma separated: `windows-x64`, `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`. `-Init` writes `windows-x64`, which is the quick one |
-| `installer` | `false` | `true` makes a `setup.exe` for Windows and a `.deb` for Linux instead of the `.zip` and `.tar.gz`. See [Installers](#installers) |
+| `installer` | `false` | `true` makes a `setup.exe` for Windows, with a RenGL window, and a `.deb` for Linux instead of the `.zip` and `.tar.gz`. `plain` makes the same with the small plain Windows window in the setup, about 50 MB smaller. See [Installers](#installers) and [A RenGL window for the setup](#a-rengl-window-for-the-setup) |
 | `icon` | none | The Windows, Linux and macOS icons: `MyApp.ico,MyApp.png,icns=MyApp-1024.png`. The last is made from a square 1024 px PNG |
 | `vendor`, `description` | none | Shown in the setup and the `.deb` |
 | `identifier` | `me.rengl.<name>` | The macOS bundle id, which also names the Windows uninstall entry |
@@ -94,7 +94,7 @@ It builds your project with Maven (replacing its `target` folder), collects the 
 packager. Anything on the command line wins over the file for that run, so you rarely edit the file to try something:
 
 ```powershell
-.\package.cmd -Installer
+.\package.cmd -Installer true
 .\package.cmd -Platform all
 .\package.cmd -Platform linux-x64,macos-arm64
 ```
@@ -113,7 +113,7 @@ dist\app-images\
     ...
 ```
 
-With `installer=true` or `-Installer`, the Windows `.zip` becomes `MyApp-1.0.0-windows-x64-setup.exe` and each Linux
+With `installer=true` or `-Installer true`, the Windows `.zip` becomes `MyApp-1.0.0-windows-x64-setup.exe` and each Linux
 `.tar.gz` becomes a `.deb`. macOS keeps its `.tar.gz`. The first build of another platform downloads that platform's Java
 modules once into `~/.rengl/jdks` (about 340 MB for the four platforms besides your own). Keep the project's path short:
 Windows fails on paths over about 260 characters.
@@ -208,6 +208,7 @@ no `--platform` it builds this computer's. Keep `--output` short: Windows paths 
 | `--file-association ext,mime,description` | Registers the type in the macOS `Info.plist`. Windows and Linux images cannot register types without `jpackage`, but a file passed on the command line arrives like any launch |
 | `--identifier` | The macOS bundle id; defaults to `me.rengl.<name>`. On Windows it also names the Apps & features entry |
 | `--installer` | A `setup.exe` for Windows and a `.deb` for Linux instead of the `.zip` and `.tar.gz`. See [Installers](#installers) |
+| `--installer-ui <dir>` | Like `--installer`, and the Windows setup shows a RenGL window instead of the plain Windows one. `<dir>` is `rengl-packager/target/ui-input`. See [A RenGL window for the setup](#a-rengl-window-for-the-setup) |
 | `--no-archive` | Leave the folders only; write no archives or installers |
 | `--jdk platform=path` | Use this JDK for a platform instead of downloading Corretto's modules |
 
@@ -239,10 +240,45 @@ C:\Tools\MyApp\uninstall.exe /S
 | `/DESKTOP=0` or `1` | Desktop shortcut (default 1) |
 | `/STARTMENU=0` or `1` | Start menu shortcut (default 1) |
 | `/LAUNCH` | Start the app when done |
+| `/PROGRESS` | Print `progress=<percent>` lines on stdout, and `error=<text>` if it fails. The [RenGL window](#a-rengl-window-for-the-setup) reads these |
+| `/NOUI` | Show the plain Windows wizard even when the setup carries a RenGL window |
 
 Installing over an older version replaces its files. Close the app first: files in use cannot be written or removed,
 and the setup and uninstaller say so. The uninstaller keeps its file list when that happens, so running it again after
 closing the app finishes the job. `--icon` with a `.ico` sets the setup's own icon too.
+
+#### A RenGL window for the setup
+
+The plain wizard is a small native program. With `installer=true` (`-Installer true` for `package-app.ps1`, or
+`--installer-ui` for the packager) the window you see is a RenGL app instead: the `me.piitex.engine.installer` package of the `rengl-packager` module, which
+you can restyle like any other RenGL UI. Its `InstallerWindow` builds its pages (options, progress, done, failed)
+from the ordinary overlays, and `mvnw install` rebuilds it into `rengl-packager/target/ui-input`, which is what the
+packager reads. Do that once, with step 1 of the quick start, on a Windows computer: the window only ever runs on
+`windows-x64`, and the folder holds that platform's natives.
+
+```powershell
+.\package.cmd -Installer true
+```
+
+For the small plain window instead, use `installer=plain` (or `-Installer plain`).
+
+How it fits together:
+
+- The setup is still one file. Besides the app's files it carries a second app-image, the installer window with its own
+  `jlink` runtime, under `ui/` in the same zip. `setup.ini` names its launcher (`ui=installer.exe`), and the `ui/` files
+  are never installed.
+- Run it, and the native setup unpacks `ui/` into `%TEMP%\rengl-setup-<pid>`, shows a small "Preparing ... Setup" box for
+  the second or two the window takes to start, runs the window and waits. The window asks for the folder and the
+  shortcuts, then runs the same setup program again with `/S /PROGRESS` and draws what it prints. All the installing,
+  the uninstaller and the Apps & features entry are the native code described above, so the two windows install the same
+  way and `/S` behaves the same with either.
+- If the window cannot open (no usable graphics driver, a remote session without OpenGL) it exits with code 3 and the
+  setup shows the plain wizard instead, so a computer that cannot show RenGL can still install. The temp folder is
+  removed either way.
+
+The cost is size. The window is a second Java runtime plus the engine: in a small test app it added about 51 MB (a
+51 MB setup became 102 MB), and the setup takes a second or two longer to show its window. For an app that is itself
+large it is a small share; for a small one, the plain wizard is the better trade.
 
 **Linux: `MyApp-1.0.0-linux-x64.deb`.** The image goes in `/opt/MyApp`, the launcher is linked as `/usr/bin/myapp`, and
 a `.desktop` file and the PNG icon give it an entry in the desktop's application menu. Install it with
@@ -282,6 +318,10 @@ compared with the image, and it was uninstalled, also while the app was running 
 other projects' scripts were run and built their images and installers, but those apps were not launched. The macOS
 arm64 image was run on a Mac and works. Not checked:
 
+- **The RenGL setup window** was tested on one Windows 11 computer: run through the real `setup.exe` (options, progress,
+  done), installed, shortcuts left unticked, uninstalled, and the plain-wizard fallback was forced and shown. Not
+  tried: the **Browse...** folder dialog, the **failed** page (a file in use, say), the **Launch** checkbox ticked, a
+  computer with no GPU or a remote session, and a high-DPI display.
 - **The `.deb` was not installed.** Its structure was inspected (control file, modes, link and `.desktop` file); no
   Debian system was available to run `dpkg -i`.
 - **The Linux images and the macOS x64 image were not launched.** If one fails, the first thing to read is the launcher
@@ -305,6 +345,10 @@ packager with `.\mvnw.cmd -pl rengl-packager install -DskipTests` so it picks up
 rengl-packager\native\windows\build-launcher.cmd "C:\path\to\jdk-25"
 rengl-packager\native\windows\build-setup.cmd
 ```
+
+The RenGL setup window is plain Java: change `InstallerWindow` in `rengl-packager`, run `.\mvnw.cmd -pl rengl-packager install -DskipTests`,
+and build the app again. Only the `--installer-ui` code path in `setup.c` (unpacking `ui/`, the `/PROGRESS` lines, the
+fallback) needs the C build.
 
 ## With jpackage
 
