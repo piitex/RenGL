@@ -50,4 +50,45 @@ final class LightBudget {
         if (chosen.size() < directional.size() + local.size()) truncated[0] = true;
         return chosen;
     }
+
+    /**
+     * The lights every pixel tests ({@code direct}) and the ones sorted into the cluster grid ({@code local}).
+     *
+     * @param directCut true when lights that mattered were left out of {@code direct}
+     * @param localCut  true when lights that mattered were left out of {@code local}
+     */
+    record Split(List<Light> direct, List<Light> local, boolean directCut, boolean localCut) {
+    }
+
+    /**
+     * Splits a frame's lights for the given mode. Without clustering this is {@link #choose} and nothing is local. With it
+     * the directional lights and the ones that cast shadows (which the shader looks up by place, with their shadow maps)
+     * go through {@link #choose} as before, and every other point or spot light that is on and reaches into the camera's
+     * view goes to the grid, the nearest {@link LightClusters#MAX_LIGHTS} of them.
+     */
+    static Split split(Scene3D.LightMode mode, List<Light> all, Vec3 eye, float[] cameraPlanes) {
+        boolean clustered = mode == Scene3D.LightMode.CLUSTERED || (mode == Scene3D.LightMode.AUTO && all.size() > Scene3D.MAX_LIGHTS);
+        boolean[] cut = {false};
+        if (!clustered) {
+            List<Light> direct = choose(all, eye, cameraPlanes, cut);
+            return new Split(direct, List.of(), cut[0], false);
+        }
+        List<Light> everyPixel = new ArrayList<>();
+        List<Light> local = new ArrayList<>();
+        for (Light light : all) {
+            if (light.getType() == Light.Type.DIRECTIONAL || light.isCastShadow()) {
+                everyPixel.add(light);
+            } else if (light.getIntensity() > 0f) {
+                Vec3 p = light.getVector();
+                if (ShadowPlanner.intersects(cameraPlanes, p.x(), p.y(), p.z(), light.getRange())) local.add(light);
+            }
+        }
+        List<Light> direct = choose(everyPixel, eye, cameraPlanes, cut);
+        boolean localCut = local.size() > LightClusters.MAX_LIGHTS;
+        if (localCut) {
+            local.sort(Comparator.comparingDouble(l -> l.getVector().sub(eye).length() - l.getRange()));
+            local = new ArrayList<>(local.subList(0, LightClusters.MAX_LIGHTS));
+        }
+        return new Split(direct, local, cut[0], localCut);
+    }
 }

@@ -79,4 +79,63 @@ class LightBudgetTest {
         assertEquals(Scene3D.MAX_LIGHTS, choose(lights, truncated).size());
         assertFalse(truncated[0]);
     }
+
+    private static LightBudget.Split split(Scene3D.LightMode mode, List<Light> lights) {
+        float[] planes = SceneRenderer.frustumPlanes(CAMERA.projection(1f).mul(CAMERA.view()));
+        return LightBudget.split(mode, lights, CAMERA.getPosition(), planes);
+    }
+
+    @Test
+    void autoShadesDirectlyUpToTheLimitAndSortsIntoTheGridPastIt() {
+        List<Light> lights = new ArrayList<>();
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) lights.add(lamp(i * 0.1f, 0));
+        LightBudget.Split few = split(Scene3D.LightMode.AUTO, lights);
+        assertEquals(Scene3D.MAX_LIGHTS, few.direct().size());
+        assertTrue(few.local().isEmpty());
+        lights.add(lamp(0, 0));
+        LightBudget.Split many = split(Scene3D.LightMode.AUTO, lights);
+        assertTrue(many.direct().isEmpty());
+        assertEquals(Scene3D.MAX_LIGHTS + 1, many.local().size());
+        assertFalse(many.directCut() || many.localCut());
+    }
+
+    @Test
+    void theGridKeepsDirectionalLightsAndShadowCastersForEveryPixel() {
+        List<Light> lights = new ArrayList<>();
+        lights.add(Light.directional(new Vec3(0, -1, 0), Color.WHITE, 1f));
+        lights.add(lamp(0, 0).setCastShadow(true));
+        for (int i = 0; i < 10; i++) lights.add(lamp(i * 0.2f, 0));
+        LightBudget.Split split = split(Scene3D.LightMode.CLUSTERED, lights);
+        assertEquals(2, split.direct().size());
+        assertEquals(10, split.local().size());
+    }
+
+    @Test
+    void theGridLeavesOutLightsThatAreOffAndLightsOutOfView() {
+        List<Light> lights = new ArrayList<>();
+        lights.add(lamp(0, 0));
+        lights.add(Light.point(new Vec3(0, 1, 0), Color.WHITE, 0f, 3f));
+        lights.add(lamp(400, 0));
+        LightBudget.Split split = split(Scene3D.LightMode.CLUSTERED, lights);
+        assertEquals(1, split.local().size());
+    }
+
+    @Test
+    void directModeNeverUsesTheGrid() {
+        List<Light> lights = new ArrayList<>();
+        for (int i = 0; i < 100; i++) lights.add(lamp(i * 0.1f, 0));
+        LightBudget.Split split = split(Scene3D.LightMode.DIRECT, lights);
+        assertTrue(split.local().isEmpty());
+        assertEquals(Scene3D.MAX_LIGHTS, split.direct().size());
+        assertTrue(split.directCut());
+    }
+
+    @Test
+    void theGridKeepsTheNearestWhenThereAreTooMany() {
+        List<Light> lights = new ArrayList<>();
+        for (int i = 0; i < LightClusters.MAX_LIGHTS + 50; i++) lights.add(Light.point(new Vec3((i % 100) * 0.05f, 0.5f, -(i / 100) * 0.6f), Color.WHITE, 1f, 2f));
+        LightBudget.Split split = split(Scene3D.LightMode.CLUSTERED, lights);
+        assertEquals(LightClusters.MAX_LIGHTS, split.local().size());
+        assertTrue(split.localCut());
+    }
 }

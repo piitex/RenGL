@@ -262,8 +262,67 @@ public class Scene3D implements Viewport3D.Content {
      * @param shadowViews shadow maps drawn this frame: a cascade, a spot light or one side of a point light each count one
      * @param shadowAtlasWidth width in pixels of the shadow atlas they were drawn into, 0 when nothing cast a shadow
      * @param shadowAtlasHeight height in pixels of the shadow atlas
+     * @param clusteredLights point and spot lights sorted into the grid this frame, 0 when the scene shades its lights directly
+     * @param occluded  nodes (or instances) left out because an occluder hid them; counted in {@code culled} too, not in {@code nodes}
+     * @param glowLights lights made this frame from glowing surfaces ({@link Material#setGlow})
      */
-    public record Stats(int nodes, int culled, int instances, int drawCalls, int shadowViews, int shadowAtlasWidth, int shadowAtlasHeight) {
+    public record Stats(int nodes, int culled, int instances, int drawCalls, int shadowViews, int shadowAtlasWidth, int shadowAtlasHeight,
+                        int clusteredLights, int occluded, int glowLights) {
+        public Stats(int nodes, int culled, int instances, int drawCalls, int shadowViews, int shadowAtlasWidth, int shadowAtlasHeight) {
+            this(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight, 0, 0, 0);
+        }
+    }
+
+    /**
+     * How a scene's point and spot lights are shaded.
+     */
+    public enum LightMode {
+        /** Clustered once the scene has more than {@link #MAX_LIGHTS} lights, direct below that. */
+        AUTO,
+        /** Every pixel tests every light that was chosen, up to {@link #MAX_LIGHTS}: the cheapest way to shade a handful. */
+        DIRECT,
+        /**
+         * Directional lights and lights that cast shadows are tested by every pixel, as in {@link #DIRECT}; every other point
+         * and spot light goes into a grid in front of the camera, and a pixel tests only the lights listed for its cell, up
+         * to {@link #MAX_CLUSTERED_LIGHTS} of them.
+         */
+        CLUSTERED
+    }
+
+    /**
+     * The most point and spot lights without shadows one frame shades when they are {@link LightMode#CLUSTERED clustered}.
+     * They come on top of the {@link #MAX_LIGHTS} that every pixel tests.
+     */
+    public static final int MAX_CLUSTERED_LIGHTS = LightClusters.MAX_LIGHTS;
+
+    private LightMode lightMode = LightMode.AUTO;
+    private boolean occlusionCulling;
+
+    public LightMode getLightMode() {
+        return lightMode;
+    }
+
+    /**
+     * Chooses between testing every light at every pixel and sorting the lights into a grid first ({@link LightMode}).
+     * {@link LightMode#AUTO} by default. The picture is the same either way; only the cost, and how many lights fit, differ.
+     */
+    public Scene3D setLightMode(LightMode mode) {
+        this.lightMode = mode == null ? LightMode.AUTO : mode;
+        return this;
+    }
+
+    public boolean isOcclusionCulling() {
+        return occlusionCulling;
+    }
+
+    /**
+     * Leaves out what is hidden behind the nodes marked with {@link Node3D#setOccluder}, before it is sent to the GPU (off by
+     * default). Worth turning on for a built-up scene seen from inside, such as a city street or the rooms of a building, where
+     * most of what is in front of the camera's frustum is behind a wall. A hidden node still casts its shadow.
+     */
+    public Scene3D setOcclusionCulling(boolean enabled) {
+        this.occlusionCulling = enabled;
+        return this;
     }
 
     public Stats getStats() {
