@@ -6,7 +6,12 @@
  * named relative to the install folder. Run as it is, it shows a wizard (folder, desktop shortcut, Start menu shortcut,
  * launch). Run with switches it installs without any window:
  *
- *     setup.exe /S [/DIR=C:\Some\Folder] [/DESKTOP=0|1] [/STARTMENU=0|1] [/LAUNCH]
+ *     setup.exe /S [/DIR=C:\Some\Folder] [/DESKTOP=0|1] [/STARTMENU=0|1] [/LAUNCH] [/PROGRESS]
+ *
+ * /PROGRESS prints "progress=<percent>" lines, and "error=<text>" if it fails, on stdout.
+ *
+ * When setup.ini names a ui=<launcher> and the zip holds a ui/ folder, the wizard is replaced by that RenGL app (see
+ * "the RenGL setup program" below). /NOUI forces the wizard anyway. The ui/ files are never installed.
  *
  * It installs for the current user (no administrator rights): by default into %LOCALAPPDATA%\Programs\<name>. It writes
  * uninstall.exe (a copy of this program without the payload) and uninstall.dat (every file it wrote) beside the app, and
@@ -40,6 +45,8 @@ static wchar_t appVendor[256];
 static wchar_t appDesc[512];
 static wchar_t appId[256] = L"app";
 static wchar_t appExe[MAX_PATH] = L"App.exe";
+static wchar_t appUi[MAX_PATH];  /* the launcher of the RenGL setup program under ui/, when the payload carries one */
+static int reportProgress;       /* /PROGRESS: say how the install is going on stdout, for the setup program that started us */
 
 static wchar_t selfPath[PATHLEN];
 static const uint8_t *image;   /* this exe, mapped */
@@ -401,7 +408,28 @@ static int loadSettings(void) {
     iniValue((const char *) d, ini->usize, "description", appDesc, 512);
     iniValue((const char *) d, ini->usize, "id", appId, 256);
     iniValue((const char *) d, ini->usize, "exe", appExe, MAX_PATH);
+    iniValue((const char *) d, ini->usize, "ui", appUi, MAX_PATH);
     return 1;
+}
+
+/* Files under ui/ belong to the setup program, not to the app, so they are never installed. */
+static int isUiEntry(const wchar_t *name) {
+    return wcsncmp(name, L"ui/", 3) == 0;
+}
+
+/* One line on stdout, when the caller asked for them with /PROGRESS and gave us a pipe to write to. */
+static void report(const char *prefix, const wchar_t *value) {
+    if (!reportProgress) return;
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (!out || out == INVALID_HANDLE_VALUE) return;
+    Sb line = {0};
+    sbAdd(&line, prefix);
+    sbAddW(&line, value);
+    for (size_t i = 0; i < line.n; i++) if (line.p[i] == '\r' || line.p[i] == '\n') line.p[i] = ' ';
+    sbAdd(&line, "\n");
+    DWORD wrote;
+    WriteFile(out, line.p, (DWORD) line.n, &wrote, NULL);
+    free(line.p);
 }
 
 /* ---- registry and shortcuts ---------------------------------------------------------------------------------------- */
@@ -479,7 +507,7 @@ static int install(Job *j) {
 
     if (!makeDirs(j->dir)) return failJob(j, L"Could not create the folder:", j->dir);
     for (int i = 0; i < entryCount; i++) {
-        if (wcscmp(entries[i].name, L"setup.ini") == 0) continue;
+        if (wcscmp(entries[i].name, L"setup.ini") == 0 || isUiEntry(entries[i].name)) continue;
         if (!safeName(entries[i].name)) return failJob(j, L"The installer is damaged (bad file name).", entries[i].name);
         total += entries[i].usize;
         if (entries[i].usize > biggest) biggest = entries[i].usize;
@@ -492,7 +520,7 @@ static int install(Job *j) {
 
     for (int i = 0; i < entryCount; i++) {
         Entry *e = &entries[i];
-        if (wcscmp(e->name, L"setup.ini") == 0) continue;
+        if (wcscmp(e->name, L"setup.ini") == 0 || isUiEntry(e->name)) continue;
         joinPath(path, j->dir, e->name);
         size_t nl = wcslen(e->name);
         if (e->name[nl - 1] == L'/') {
@@ -531,7 +559,13 @@ static int install(Job *j) {
 
         done += e->usize;
         int percent = total ? (int) (done * 100 / total) : 100;
-        if (j->window && percent != lastPercent) { lastPercent = percent; PostMessageW(j->window, WM_PROGRESS, percent, 0); }
+        if (percent != lastPercent) {
+            lastPercent = percent;
+            if (j->window) PostMessageW(j->window, WM_PROGRESS, percent, 0);
+            wchar_t number[16];
+            swprintf(number, 16, L"%d", percent);
+            report("progress=", number);
+        }
     }
 
     /* The uninstaller is this program without its payload. */
@@ -932,12 +966,170 @@ static int runWizard(int nShow) {
     return 0;
 }
 
+/* ---- the RenGL setup program --------------------------------------------------------------------------------------- */
+
+/*
+ * When the payload carries a ui/ folder (setup.ini says ui=<launcher>), that folder is a small RenGL app-image whose window
+ * is the installer you see. This program only unpacks it into the temp folder, runs it with
+ *
+ *     <launcher> --setup <this exe> --dir <default install folder> --ready <file>
+ *
+ * and waits. The program shows the options, then runs this exe again with /S /PROGRESS to do the installing, and reads the
+ * progress lines from its stdout. It creates the --ready file once its window is up, and exits with UI_NO_WINDOW if it
+ * could not open one (no usable graphics driver, say), in which case the wizard above is shown instead.
+ */
+
+#define UI_FALLBACK (-1)
+#define UI_NO_WINDOW 3
+
+static void removeTree(const wchar_t *dir) {
+    wchar_t pattern[PATHLEN], path[PATHLEN];
+    WIN32_FIND_DATAW f;
+    swprintf(pattern, PATHLEN, L"%ls\\*", dir);
+    HANDLE h = FindFirstFileW(pattern, &f);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (wcscmp(f.cFileName, L".") == 0 || wcscmp(f.cFileName, L"..") == 0) continue;
+            swprintf(path, PATHLEN, L"%ls\\%ls", dir, f.cFileName);
+            int folder = (f.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            if (folder && !(f.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+                removeTree(path);
+            } else {
+                SetFileAttributesW(path, FILE_ATTRIBUTE_NORMAL);   /* a link is removed, never followed out of the folder */
+                if (folder) RemoveDirectoryW(path); else DeleteFileW(path);
+            }
+        } while (FindNextFileW(h, &f));
+        FindClose(h);
+    }
+    RemoveDirectoryW(dir);
+}
+
+/* Unpacks the ui/ entries into dir. */
+static int extractUi(const wchar_t *dir) {
+    size_t biggest = 0;
+    int found = 0;
+    for (int i = 0; i < entryCount; i++) {
+        if (!isUiEntry(entries[i].name) || !entries[i].name[3]) continue;
+        found = 1;
+        if (entries[i].usize > biggest) biggest = entries[i].usize;
+    }
+    if (!found) return 0;
+    uint8_t *buf = biggest ? VirtualAlloc(NULL, biggest, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) : NULL;
+    if (biggest && !buf) return 0;
+
+    int ok = 1;
+    for (int i = 0; i < entryCount && ok; i++) {
+        Entry *e = &entries[i];
+        if (!isUiEntry(e->name) || !e->name[3]) continue;
+        const wchar_t *rel = e->name + 3;
+        wchar_t path[PATHLEN];
+        if (!safeName(rel)) { ok = 0; break; }
+        joinPath(path, dir, rel);
+        if (rel[wcslen(rel) - 1] == L'/') {
+            ok = makeDirs(path);
+            continue;
+        }
+        const uint8_t *data = entryData(e);
+        if (!data) { ok = 0; break; }
+        if (e->method == 8) {
+            if (inflateRaw(data, e->csize, buf, e->usize)) { ok = 0; break; }
+            data = buf;
+        } else if (e->method != 0 || e->csize != e->usize) {
+            ok = 0;
+            break;
+        }
+        if (crc32(data, e->usize) != e->crc) { ok = 0; break; }
+
+        wchar_t parent[PATHLEN];
+        wcscpy_s(parent, PATHLEN, path);
+        wchar_t *slash = wcsrchr(parent, L'\\');
+        if (slash) { *slash = 0; if (!makeDirs(parent)) { ok = 0; break; } }
+        HANDLE f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        DWORD wrote = 0;
+        if (f == INVALID_HANDLE_VALUE) { ok = 0; break; }
+        if (e->usize && (!WriteFile(f, data, e->usize, &wrote, NULL) || wrote != e->usize)) ok = 0;
+        CloseHandle(f);
+    }
+    if (buf) VirtualFree(buf, 0, MEM_RELEASE);
+    return ok;
+}
+
+/* A small "please wait" window for the seconds between double-clicking the setup and the RenGL window appearing. */
+static HWND showPreparing(void) {
+    HDC screen = GetDC(NULL);
+    int scale = GetDeviceCaps(screen, LOGPIXELSX);
+    ReleaseDC(NULL, screen);
+    int w = MulDiv(320, scale, 96), h = MulDiv(64, scale, 96);
+    wchar_t text[300];
+    swprintf(text, 300, L"Preparing %ls Setup...", appName);
+    HWND box = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, L"STATIC", text,
+                               WS_POPUP | WS_BORDER | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE,
+                               (GetSystemMetrics(SM_CXSCREEN) - w) / 2, (GetSystemMetrics(SM_CYSCREEN) - h) / 2, w, h,
+                               NULL, NULL, instance, NULL);
+    if (box) {
+        NONCLIENTMETRICSW ncm = { sizeof ncm };
+        SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof ncm, &ncm, 0);
+        SendMessageW(box, WM_SETFONT, (WPARAM) CreateFontIndirectW(&ncm.lfMessageFont), TRUE);
+        UpdateWindow(box);
+    }
+    return box;
+}
+
+static void pumpMessages(void) {
+    MSG m;
+    while (PeekMessageW(&m, NULL, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+}
+
+/* Runs the RenGL setup program. Returns its exit code, or UI_FALLBACK when it could not be run or had no window to show. */
+static int runUi(void) {
+    wchar_t temp[PATHLEN], dir[PATHLEN], exe[PATHLEN], ready[PATHLEN], start[PATHLEN], cmd[PATHLEN * 3];
+    DWORD n = GetTempPathW(PATHLEN, temp);
+    if (!n || n >= PATHLEN) return UI_FALLBACK;
+    while (n > 3 && temp[n - 1] == L'\\') temp[--n] = 0;
+    swprintf(dir, PATHLEN, L"%ls\\rengl-setup-%lu", temp, GetCurrentProcessId());
+    removeTree(dir);
+
+    HWND preparing = showPreparing();
+    pumpMessages();
+    int code = UI_FALLBACK;
+    if (makeDirs(dir) && extractUi(dir)) {
+        joinPath(exe, dir, appUi);
+        joinPath(ready, dir, L"ready");
+        defaultDir(start);
+        swprintf(cmd, PATHLEN * 3, L"\"%ls\" --setup \"%ls\" --dir \"%ls\" --ready \"%ls\"", exe, selfPath, start, ready);
+        STARTUPINFOW si = { sizeof si };
+        PROCESS_INFORMATION pi;
+        if (fileExists(exe) && CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, dir, &si, &pi)) {
+            for (;;) {
+                DWORD r = MsgWaitForMultipleObjects(1, &pi.hProcess, FALSE, 100, QS_ALLINPUT);
+                pumpMessages();
+                if (preparing && fileExists(ready)) { DestroyWindow(preparing); preparing = NULL; }
+                if (r == WAIT_OBJECT_0) break;
+            }
+            DWORD exitCode = 1;
+            GetExitCodeProcess(pi.hProcess, &exitCode);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            code = exitCode == UI_NO_WINDOW ? UI_FALLBACK : (int) exitCode;
+        }
+    }
+    if (preparing) DestroyWindow(preparing);
+    for (int tries = 0; tries < 20 && fileExists(dir); tries++) {   /* the runtime may still be unmapping for a moment */
+        removeTree(dir);
+        if (fileExists(dir)) Sleep(250);
+    }
+    return code;
+}
+
 /* ---- entry --------------------------------------------------------------------------------------------------------- */
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdLine, int nShow) {
     int argc = 0;
     wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    int silent = 0, launch = 0, desktop = -1, menu = -1;
+    int silent = 0, launch = 0, desktop = -1, menu = -1, noUi = 0;
     wchar_t dirArg[PATHLEN] = L"", removeDir[PATHLEN] = L"";
     (void) prev;
     (void) cmdLine;
@@ -948,6 +1140,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdLine, int nShow) {
         wchar_t *a = argv[i];
         if (_wcsicmp(a, L"/S") == 0) silent = 1;
         else if (_wcsicmp(a, L"/LAUNCH") == 0) launch = 1;
+        else if (_wcsicmp(a, L"/PROGRESS") == 0) reportProgress = 1;
+        else if (_wcsicmp(a, L"/NOUI") == 0) noUi = 1;
         else if (_wcsnicmp(a, L"/DIR=", 5) == 0) wcsncpy_s(dirArg, PATHLEN, a + 5, _TRUNCATE);
         else if (_wcsnicmp(a, L"/D=", 3) == 0) wcsncpy_s(dirArg, PATHLEN, a + 3, _TRUNCATE);
         else if (_wcsnicmp(a, L"/DESKTOP=", 9) == 0) desktop = _wtoi(a + 9) != 0;
@@ -971,12 +1165,19 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdLine, int nShow) {
         job.desktop = desktop < 0 ? 1 : desktop;
         job.startMenu = menu < 0 ? 1 : menu;
         job.window = NULL;
-        if (!install(&job)) return 1;
+        if (!install(&job)) {
+            report("error=", job.error);
+            return 1;
+        }
         if (launch) {
             joinPath(installedExe, job.dir, appExe);
             ShellExecuteW(NULL, L"open", installedExe, NULL, job.dir, SW_SHOWNORMAL);
         }
         return 0;
+    }
+    if (appUi[0] && !noUi) {
+        int result = runUi();
+        if (result != UI_FALLBACK) return result;
     }
     return runWizard(nShow);
 }

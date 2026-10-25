@@ -1,6 +1,7 @@
 package me.piitex.engine.packager;
 
 import java.io.IOException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -48,6 +49,10 @@ public final class Packager {
               --installer              Write an installer instead of the .zip / .tar.gz where there is one: a setup.exe
                                        for Windows (folder, desktop and Start menu shortcuts, uninstaller; run it with
                                        /S for a silent install) and a .deb for Linux. macOS keeps its .tar.gz
+              --installer-ui <dir>     Like --installer, and the Windows setup shows a RenGL window instead of the plain
+                                       Windows one. <dir> is the folder of jars the rengl-packager module builds
+                                       (rengl-packager/target/ui-input). The setup falls back to the plain window on a
+                                       computer that cannot open it
               --no-archive             Leave the folders; do not write the .zip / .tar.gz files (or installers)
               --help
             """.formatted(Platform.all());
@@ -62,6 +67,12 @@ public final class Packager {
             System.err.println("Error: " + e.getMessage());
             System.err.println("Run with --help for the options.");
             System.exit(2);
+        } catch (FileSystemException e) {
+            // The message of these is only the path; say what went wrong, and the usual reason on Windows.
+            System.err.println("Error: " + e.getClass().getSimpleName() + ": " + e.getMessage()
+                    + (e.getReason() == null ? "" : " (" + e.getReason() + ")"));
+            System.err.println("A file in the output folder is probably open in another program: a running copy of the app, its setup, or a virus scan. Close it and build again.");
+            System.exit(1);
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
             System.exit(1);
@@ -96,7 +107,8 @@ public final class Packager {
         List<Platform> platforms = platforms(single(options, "platform", ""));
         Path output = Path.of(single(options, "output", "app-images")).toAbsolutePath();
         boolean archive = !options.containsKey("no-archive");
-        boolean installer = options.containsKey("installer");
+        Path installerUi = installerUi(options);
+        boolean installer = options.containsKey("installer") || installerUi != null;
 
         Map<Platform, Path> jdks = new EnumMap<>(Platform.class);
         for (String entry : options.getOrDefault("jdk", List.of())) {
@@ -126,7 +138,17 @@ public final class Packager {
             Path image = builder.build(platformDir);
             System.out.println("  Image:   " + image);
             if (archive && installer && platform.os() == Platform.Os.WINDOWS) {
-                System.out.println("  Setup:   " + WindowsSetup.build(app, platform, image, output));
+                Path uiDir = null;
+                try {
+                    Path uiImage = null;
+                    if (installerUi != null) {
+                        uiDir = output.resolve(platform.id() + ".ui");
+                        uiImage = installerUiImage(app, installerUi, platform, jdkFinder, uiDir);
+                    }
+                    System.out.println("  Setup:   " + WindowsSetup.build(app, platform, image, uiImage, output));
+                } finally {
+                    if (uiDir != null) deleteTree(uiDir);
+                }
             } else if (archive && installer && platform.os() == Platform.Os.LINUX) {
                 System.out.println("  Package: " + DebPackage.build(app, platform, image, output));
             } else if (archive) {
@@ -134,6 +156,47 @@ public final class Packager {
             }
         }
         System.out.println("\nDone.");
+    }
+
+    // ---- the installer window -------------------------------------------------------------------------------------
+
+    private static final String INSTALLER_MAIN_CLASS = "me.piitex.engine.installer.InstallerMain";
+    private static final String INSTALLER_JAR_SUFFIX = "-ui.jar";   // rengl-packager-<version>-ui.jar
+
+    private static Path installerUi(Map<String, List<String>> options) {
+        if (!options.containsKey("installer-ui")) return null;
+        Path dir = Path.of(required(options, "installer-ui")).toAbsolutePath();
+        if (!Files.isDirectory(dir)) throw new IllegalArgumentException("--installer-ui " + dir + " is not a folder. Build the rengl-packager module first (mvnw install in the RenGL folder)");
+        installerJar(dir);
+        return dir;
+    }
+
+    private static String installerJar(Path dir) {
+        try (Stream<Path> files = Files.list(dir)) {
+            return files.map(file -> file.getFileName().toString())
+                    .filter(name -> name.endsWith(INSTALLER_JAR_SUFFIX))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("--installer-ui " + dir + " holds no <version>" + INSTALLER_JAR_SUFFIX + ". It should be the rengl-packager module's target/ui-input folder"));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("--installer-ui " + dir + " cannot be read: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Builds the installer window's own app-image, a small RenGL app with its own jlink runtime, into {@code dir}. The setup
+     * program carries it beside the app and runs it from the temp folder.
+     */
+    private static Path installerUiImage(AppSpec app, Path input, Platform platform, Jdks jdkFinder, Path dir) throws Exception {
+        String mainJar = installerJar(input);
+        AppSpec ui = new AppSpec(WindowsSetup.UI_NAME, app.version(), "", "", app.identifier() + ".installer",
+                input, mainJar, INSTALLER_MAIN_CLASS, List.of(), Map.of(), List.of(), List.of());
+        List<Path> allJars = jars(input, mainJar);
+        List<String> modules = modules(Map.of(), allJars);
+        System.out.println("  Building the installer window's Java runtime (jlink): " + String.join(", ", modules));
+        Path runtime = dir.resolveSibling(dir.getFileName() + "-runtime-tmp");
+        deleteTree(runtime);
+        Tools.jlink(jdkFinder.jmods(platform), modules, runtime);
+        return new ImageBuilder(ui, platform, jarsFor(allJars, platform), runtime).build(freshDir(dir));
     }
 
     // ---- arguments ------------------------------------------------------------------------------------------------
