@@ -35,13 +35,14 @@ final class WindowsSetup {
             Files.copy(stub, setup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
 
-        // The icon goes in before the payload: rewriting the exe's resources would drop what is appended to it.
+        // The icon and version go in before the payload: rewriting the exe's resources would drop what is appended to it.
         Path ico = app.icons().get("ico");
-        if (ico != null && WindowsIcon.available()) {
+        if (WindowsIcon.available()) {
             try {
-                WindowsIcon.apply(setup, ico);
+                if (ico != null) WindowsIcon.apply(setup, ico);
+                WindowsVersion.apply(setup, new WindowsVersion.Info(app.name(), app.version(), app.vendor(), app.name() + " Setup", setup.getFileName().toString()));
             } catch (Throwable t) {
-                throw new IOException("Could not set the setup program's icon: " + t.getMessage(), t);
+                throw new IOException("Could not set the setup program's icon and version: " + t.getMessage(), t);
             }
         }
 
