@@ -50,7 +50,9 @@ Call `scene.lights().clear()` for different lighting.
 | `setShadowAtlasSize(int)` | The largest width and height of the picture all shadows share (`4096`), see [Which lights get shadows](lighting.md#which-lights-get-shadows) |
 | `setToneMapping(ToneMapping)` / `setExposure(float)` | Bends light brighter than white into the screen's range (`NONE`, `REINHARD`, `ACES`), after scaling it by the exposure; see [Tone mapping](lighting.md#tone-mapping-and-exposure). `NONE` and `1` by default, which change nothing |
 | `setEnvironmentLighting(float)` / `getEnvironmentLighting()` | Light and reflections from the skybox, `0` (off, the default) or more, see [Light from the sky](lighting.md#light-from-the-sky) |
-| `getStats()` | A `Scene3D.Stats(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight)` for the last time the scene was drawn, see [Frustum culling](#frustum-culling) and [Which lights get shadows](lighting.md#which-lights-get-shadows) |
+| `getStats()` | A `Scene3D.Stats(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight, clusteredLights, occluded, glowLights)` for the last time the scene was drawn, see [Frustum culling](#frustum-culling), [Occlusion culling](#occlusion-culling), [Many lights](lighting.md#many-lights) and [Which lights get shadows](lighting.md#which-lights-get-shadows) |
+| `setLightMode(LightMode)` / `getLightMode()` | `AUTO` (the default), `DIRECT` or `CLUSTERED`: whether point and spot lights are sorted into a grid, see [Many lights](lighting.md#many-lights) |
+| `setOcclusionCulling(boolean)` / `isOcclusionCulling()` | Leaves out what is hidden behind nodes marked with `setOccluder`, see [Occlusion culling](#occlusion-culling). Off by default |
 | `animate(AnimationPlayer)` / `stopAnimating(AnimationPlayer)` | Registers a player that advances once per frame, see [Animation](animation.md) |
 | `animate(LightAnimation)` / `stopAnimating(LightAnimation)` | Registers a blinking-light animation that advances once per frame, see [Blinking lights](lighting.md#blinking-lights) |
 | `setUpdateHandler(UpdateHandler)` | Runs once per frame before the scene is drawn, see below |
@@ -130,6 +132,7 @@ arm.rotate(Vec3.UP, 0.5f);                      // the hand swings with it
 | `setSkin(Skin)` / `getSkin()` | Makes the mesh follow the joints of a [skin](animation.md) |
 | `setMorphWeights(float...)` / `setMorphWeight(i, w)` / `getMorphWeights()` | Mixes the mesh's [blend shapes](animation.md#morph-targets) |
 | `setFrustumCulled(boolean)` | Whether the node is skipped when outside the view (on by default), see [Frustum culling](#frustum-culling) |
+| `setOccluder(boolean)` | Lets the node hide what is behind it when the scene has [occlusion culling](#occlusion-culling) on. Off by default |
 | `setSortTriangles(boolean)` | Draws the triangles of a see-through mesh far to near each frame, for shapes that fold over themselves. Off by default; see [Material](#material) |
 | `setPosition(Vec3)` / `setPosition(x, y, z)` | Position in the parent's space |
 | `setRotation(Quat)` | Rotation in the parent's space |
@@ -645,6 +648,33 @@ view volume, so a node just outside may still be drawn, and one inside is never 
   is (a mesh bent by a shader of your own, say).
 - `scene.getStats()` says what the last frame did: nodes drawn, nodes culled, instance records and draw calls. It is the
   quickest way to see that culling and batching are working.
+
+## Occlusion culling
+
+[Frustum culling](#frustum-culling) leaves out what is beside or behind the camera. In a built-up scene most of what is in
+front of it is behind a wall, a floor or a building, and is drawn only to be covered up. Occlusion culling leaves that out too.
+
+```java
+scene.setOcclusionCulling(true);
+wall.setOccluder(true);       // big solid things
+floor.setOccluder(true);
+```
+
+- **You say what hides things.** Each frame the triangles of the nodes marked `setOccluder(true)` are drawn into a small depth
+  picture (256 by 144) on the CPU, and every other node is asked whether its box is wholly behind it. So mark walls, floors,
+  buildings and hills: shapes that are solid and have few triangles. Drawing 50,000 triangles a frame is the limit.
+- **It only says hidden when it is sure.** A triangle marks a pixel of the small picture only if it covers the whole pixel, with
+  the farthest depth it has there, so a gap between two walls, the edge of a wall and anything that sticks out past it all
+  count as visible. The picture is the same with it on and off, which a test checks by pixel on Vulkan and OpenGL.
+- **A hidden node still casts its shadow.** It is left out of the main picture the way a node outside the view is, and still
+  drawn into the shadow maps.
+- **Instances are tested one by one**, so a field of crates behind a wall is dropped crate by crate.
+- **What does not count as an occluder:** a node with a see-through or cut-out material (`blend`, `alphaCutoff`), lines, a skin or
+  blend shapes. What is not tested for being hidden: skinned or blend-shape nodes and nodes with `setFrustumCulled(false)`.
+- **Not hidden by their own near plane.** A floor under the camera is cut at the near plane first, so it still hides what is
+  below it. A box with a corner behind the camera is never reported hidden.
+- `scene.getStats().occluded()` counts the nodes and copies it left out; they are also counted in `culled`.
+- It is off by default and costs a CPU pass over the occluders every frame, so turn it on for scenes that gain from it.
 
 ## Gotchas
 

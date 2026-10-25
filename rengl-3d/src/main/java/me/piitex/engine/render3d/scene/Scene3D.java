@@ -43,8 +43,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class Scene3D implements Viewport3D.Content {
     /**
-     * The most lights shaded in one frame. A scene with more keeps drawing: each frame the lights that matter most are
-     * chosen, directional ones first and then the point and spot lights whose reach is in the camera's view, nearest first.
+     * The most lights every pixel tests in one frame. A scene with more keeps drawing: with {@link LightMode#AUTO} the point and
+     * spot lights without shadows go into a grid in front of the camera (up to {@link #MAX_CLUSTERED_LIGHTS} of them);
+     * with {@link LightMode#DIRECT} each frame the lights that matter most are chosen, directional ones first and then the
+     * point and spot lights whose reach is in the camera's view, nearest first.
      * Lights switched off (intensity 0) take no room when the choice has to be made.
      */
     public static final int MAX_LIGHTS = 64;

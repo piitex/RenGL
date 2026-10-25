@@ -5,7 +5,7 @@ import me.piitex.engine.ui.color.Color;
 
 /**
  * A light in a {@link Scene3D}: a directional light like the sun, a point light that fades out with distance, or a
- * spot light, a point light that only shines inside a cone. A scene shades up to {@link Scene3D#MAX_LIGHTS} lights at once, choosing the ones that matter when it has more.
+ * spot light, a point light that only shines inside a cone. A scene tests up to {@link Scene3D#MAX_LIGHTS} lights at every pixel and sorts more of them (without shadows) into a grid, see {@link Scene3D.LightMode}.
  */
 public final class Light {
     public enum Type {DIRECTIONAL, POINT, SPOT}
