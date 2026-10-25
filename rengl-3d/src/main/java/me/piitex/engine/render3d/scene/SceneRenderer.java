@@ -293,6 +293,9 @@ final class SceneRenderer {
     private final Map<Mesh, float[]> centroids = new IdentityHashMap<>();
     private final Map<Resources, Integer> sortedCounter = new IdentityHashMap<>();
     private Vec3 eye = Vec3.ZERO;
+    private final OcclusionBuffer occlusionBuffer = new OcclusionBuffer();
+    /** The depth picture of this frame's occluders, or null when the scene has none or does not use occlusion culling. */
+    private OcclusionBuffer occlusion;
     private ByteBuffer morphScratch = MemoryUtil.memAlloc(1024).order(ByteOrder.nativeOrder());
     private final List<Resources> resourcePool = new ArrayList<>();
     private final GpuTexture whiteTexture, flatNormalTexture;
@@ -387,8 +390,14 @@ final class SceneRenderer {
         List<Draw> opaque = new ArrayList<>();
         List<Draw> blended = new ArrayList<>();
         float[] planes = frustumPlanes(viewProj);
-        int[] counts = {0, 0};
+        int[] counts = {0, 0, 0};
         eye = camera.getPosition();
+        occlusion = null;
+        if (scene.isOcclusionCulling()) {
+            occlusionBuffer.begin(viewProj.toArray());
+            drawOccluders(scene.root(), Mat4.identity());
+            if (!occlusionBuffer.isEmpty()) occlusion = occlusionBuffer;
+        }
         collect(scene.root(), Mat4.identity(), camera.getPosition(), planes, counts, opaque, blended);
         opaque.sort(Comparator.<Draw>comparingInt(d -> d.key).thenComparingInt(d -> System.identityHashCode(d.material))
                 .thenComparingInt(d -> System.identityHashCode(d.mesh)));
@@ -477,7 +486,7 @@ final class SceneRenderer {
         }
         if (postProcessed) res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth);
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
-                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight(), clusters == null ? 0 : split.local().size(), 0, glowCount));
+                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight(), clusters == null ? 0 : split.local().size(), counts[2], glowCount));
         if (frame % SWEEP_EVERY == 0) sweep();
     }
 
@@ -548,6 +557,53 @@ final class SceneRenderer {
 
     // ---- collecting and building the instance stream -----------------------------------------------------------
 
+    /** The most triangles drawn into the occlusion picture in a frame; occluders past it hide nothing. */
+    private static final int MAX_OCCLUDER_TRIANGLES = 50_000;
+
+    /**
+     * Draws the triangles of the nodes marked {@link Node3D#setOccluder} into the occlusion buffer.
+     */
+    private void drawOccluders(Node3D node, Mat4 parentWorld) {
+        if (!node.isVisible() || occlusionBuffer.triangles >= MAX_OCCLUDER_TRIANGLES) return;
+        Mat4 world = parentWorld.mul(node.localMatrix());
+        Mesh mesh = node.getMesh();
+        if (node.isOccluder() && mesh != null && !mesh.isLines() && node.getSkin() == null && node.activeMorph() == null) {
+            Material material = node.getMaterial() != null ? node.getMaterial() : DEFAULT_MATERIAL;
+            if (!material.isBlend() && material.getAlphaCutoff() <= 0f) {
+                Instances instances = node.getInstances();
+                if (instances == null) {
+                    drawOccluder(mesh, world.toArray());
+                } else {
+                    float[] data = instances.matrixData();
+                    float[] w = world.toArray();
+                    float[] model = new float[16];
+                    for (int i = 0; i < instances.size() && occlusionBuffer.triangles < MAX_OCCLUDER_TRIANGLES; i++) {
+                        multiply(w, data, i * 16, model);
+                        drawOccluder(mesh, model);
+                    }
+                }
+            }
+        }
+        for (Node3D child : node.getChildren()) drawOccluders(child, world);
+    }
+
+    private void drawOccluder(Mesh mesh, float[] w) {
+        float[] v = mesh.vertices();
+        int[] idx = mesh.indices();
+        int count = mesh.vertexCount();
+        double[] p = new double[count * 3];
+        for (int i = 0; i < count; i++) {
+            double x = v[i * Mesh.FLOATS_PER_VERTEX], y = v[i * Mesh.FLOATS_PER_VERTEX + 1], z = v[i * Mesh.FLOATS_PER_VERTEX + 2];
+            p[i * 3] = w[0] * x + w[4] * y + w[8] * z + w[12];
+            p[i * 3 + 1] = w[1] * x + w[5] * y + w[9] * z + w[13];
+            p[i * 3 + 2] = w[2] * x + w[6] * y + w[10] * z + w[14];
+        }
+        for (int t = 0; t + 2 < idx.length && occlusionBuffer.triangles < MAX_OCCLUDER_TRIANGLES; t += 3) {
+            int a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+            occlusionBuffer.addTriangle(p[a], p[a + 1], p[a + 2], p[b], p[b + 1], p[b + 2], p[c], p[c + 1], p[c + 2]);
+        }
+    }
+
     private void collect(Node3D node, Mat4 parentWorld, Vec3 eye, float[] planes, int[] counts, List<Draw> opaque, List<Draw> blended) {
         if (!node.isVisible()) return;
         Mat4 world = parentWorld.mul(node.localMatrix());
@@ -588,6 +644,13 @@ final class SceneRenderer {
             boolean outOfView = culls && (skinned
                     ? skinSphere != null && !ShadowPlanner.intersects(planes, skinSphere[0], skinSphere[1], skinSphere[2], skinSphere[3])
                     : !inFrustum(planes, world, mesh, instances));
+            // Behind an occluder counts the same, apart from the tally: the node is not drawn but may still cast its shadow.
+            boolean occluded = !outOfView && culls && occlusion != null && !skinned && instances == null && draw.morph == null
+                    && occlusion.hides(OcclusionBuffer.corners(mesh.bounds(), world.toArray()));
+            if (occluded) {
+                outOfView = true;
+                counts[2]++;
+            }
             if (instances != null && instances.size() == 0) {
                 // nothing to draw
             } else if (outOfView) {
@@ -653,6 +716,10 @@ final class SceneRenderer {
             float y = model[1] * c.x() + model[5] * c.y() + model[9] * c.z() + model[13];
             float z = model[2] * c.x() + model[6] * c.y() + model[10] * c.z() + model[14];
             if (ShadowPlanner.intersects(planes, x, y, z, radius * maxColumn(model, 0))) {
+                if (occlusion != null && occlusion.hides(OcclusionBuffer.corners(mesh.bounds(), model))) {
+                    counts[2]++;
+                    continue;
+                }
                 seen[visible++] = i;
                 if (distance != null) {
                     float dx = x - eye.x(), dy = y - eye.y(), dz = z - eye.z();

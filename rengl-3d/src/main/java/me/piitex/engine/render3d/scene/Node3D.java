@@ -36,6 +36,7 @@ public final class Node3D {
     private boolean castShadow = true;
     private boolean receiveShadow = true;
     private boolean frustumCulled = true;
+    private boolean occluder;
     private boolean sortTriangles;
     private Instances instances;
     private Skin skin;
@@ -207,6 +208,21 @@ public final class Node3D {
             if (w[i] != 0f) return w;
         }
         return null;
+    }
+
+    public boolean isOccluder() {
+        return occluder;
+    }
+
+    /**
+     * Lets this node hide other nodes behind it when the scene has {@link Scene3D#setOcclusionCulling occlusion culling} on. The
+     * mesh's own triangles are drawn into a small depth picture on the CPU, so mark big solid shapes with few triangles: a wall,
+     * a floor, a building, a hill. Pick nodes that really are solid, because whatever lies behind one is not drawn: a node
+     * with see-through or cut-out pixels, lines, a skin or blend shapes does not count as an occluder. Off by default.
+     */
+    public Node3D setOccluder(boolean occluder) {
+        this.occluder = occluder;
+        return this;
     }
 
     public boolean isFrustumCulled() {
