@@ -236,6 +236,8 @@ public final class SceneKinds {
                 .omitWhen(true);
         prop(NODE, "receiveShadow", "Receive Shadow", Boolean.class, rendering, Node3D::isReceiveShadow, (n, x, b) -> n.setReceiveShadow((Boolean) x))
                 .omitWhen(true);
+        prop(NODE, "occluder", "Occluder", Boolean.class, rendering, Node3D::isOccluder, (n, x, b) -> n.setOccluder((Boolean) x))
+                .omitWhen(false).tip("Hides what is behind it when the scene has occlusion culling on. Mark solid things with few triangles, such as walls, floors and buildings");
     }
 
     // --- Materials -------------------------------------------------------------------------------------------------
@@ -315,6 +317,12 @@ public final class SceneKinds {
                 .tip("Light it gives off whatever the lights do. It doesn't light its surroundings");
         prop(MATERIAL, "emissiveStrength", "Glow Strength", Float.class, glow, SceneMeta::emissiveStrength,
                 (m, x, b) -> SceneMeta.setEmissive(m, SceneMeta.emissiveColor(m), f(x))).omitWhen(0f).range(0, 20).step(0.1);
+        prop(MATERIAL, "glowRange", "Light Range", Float.class, glow, Material::getGlowRange,
+                (m, x, b) -> m.setGlow(f(x), m.getGlowStrength())).omitWhen(0f).range(0, 200).step(0.5)
+                .tip("How far the glow lights its surroundings, like a lamp. 0 means it lights nothing but itself");
+        prop(MATERIAL, "glowStrength", "Light Strength", Float.class, glow, Material::getGlowStrength,
+                (m, x, b) -> m.setGlow(m.getGlowRange(), f(x))).omitWhen(1f).range(0, 20).step(0.1).when(m -> m.getGlowRange() > 0f)
+                .tip("How strong that light is, as a multiple of how bright the surface looks");
     }
 
     // --- Lights ----------------------------------------------------------------------------------------------------
@@ -495,6 +503,11 @@ public final class SceneKinds {
                 .omitWhen(0.8f).range(0, 2).step(0.05).when(s -> s.getBloom() > 0f).tip("How bright something has to be to glow. 1 is white");
         prop(WORLD, "bloomRadius", "Bloom Radius", Float.class, gLight, Scene3D::getBloomRadius, (s, x, b) -> s.setBloomRadius(f(x)))
                 .omitWhen(1f).range(0.1, 8).step(0.1).when(s -> s.getBloom() > 0f).tip("How far the glow spreads");
+        prop(WORLD, "lightMode", "Light Mode", Scene3D.LightMode.class, gLight, Scene3D::getLightMode, (s, x, b) -> s.setLightMode((Scene3D.LightMode) x))
+                .omitWhen(Scene3D.LightMode.AUTO).tip("How point and spot lights are shaded. Auto sorts them into a grid in front of the camera once there are "
+                        + "more than 64, which lets a scene hold about two thousand; the picture is the same either way");
+        prop(WORLD, "occlusionCulling", "Occlusion Culling", Boolean.class, gLight, Scene3D::isOcclusionCulling, (s, x, b) -> s.setOcclusionCulling((Boolean) x))
+                .omitWhen(false).tip("Leaves out what is hidden behind the nodes marked as occluders. A hidden node still casts its shadow");
         prop(WORLD, "ambientOcclusion", "Ambient Occlusion", Float.class, gLight, Scene3D::getAmbientOcclusion, (s, x, b) -> s.setAmbientOcclusion(f(x)))
                 .omitWhen(0f).range(0, 4).step(0.05).tip("Darkens creases, corners and the gaps under things. 0 turns it off. "
                         + "It draws the solid objects a second time, so it costs more than bloom");

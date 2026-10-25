@@ -8,7 +8,8 @@ surface answers the light, not in what the light is.
 
 ## How lights add up
 
-A scene shades up to 64 lights at once (`Scene3D.MAX_LIGHTS`). Each is **directional** (the sun: parallel rays from one direction, no position), a
+A scene shades up to 64 lights at once (`Scene3D.MAX_LIGHTS`), and about two thousand more when it sorts them into a grid (see
+[Many lights](#many-lights)). Each is **directional** (the sun: parallel rays from one direction, no position), a
 **point** light (a bulb: a position, fading to nothing at its range) or a **spot** light (a point light that only shines
 inside a cone, like a torch or a hearth opening onto a room). The surface receives the **ambient**
 light from every side, plus each light's share by the angle between the surface and the light, and a highlight.
@@ -91,8 +92,62 @@ Things to know:
 - **Scene files hold the simple patterns.** A light in a [scene file](scene-files.md) can have a `pattern` of blink, pulse,
   flicker or faulty, with a glow node, and `Scene3DFile.load` makes the animation. A custom sequence or lambda is code
   only: build it after loading, and do not also change those lights by hand.
-- **Emissive glow is not light.** The bulb shines on screen but does not light the wall; that is the lamp's job, which is
-  why the animation drives both. Glow does feed [bloom](#bloom), so a bright blinking bulb blooms.
+- **Emissive glow is not light** unless you ask for it. The bulb shines on screen but does not light the wall; that is the
+  lamp's job, which is why the animation drives both, or you can give the material a [glow](#glowing-surfaces) and have it
+  make the light itself. Glow does feed [bloom](#bloom), so a bright blinking bulb blooms.
+
+## Many lights
+
+Every pixel tests every light by default, which is the cheapest way to shade a handful. A built-up scene, such as the rooms of
+an office or a street at night, has hundreds of lamps, each lighting a small patch. For that the scene can sort its point and
+spot lights into a **grid** in front of the camera (16 by 9 tiles of the picture and 24 slices of depth), so a pixel tests only
+the lights whose reach includes its cell.
+
+```java
+scene.setLightMode(Scene3D.LightMode.AUTO);       // the default
+scene.setLightMode(Scene3D.LightMode.CLUSTERED);  // always use the grid
+scene.setLightMode(Scene3D.LightMode.DIRECT);     // never: up to 64 lights, every pixel tests all of them
+```
+
+- **`AUTO` switches by itself** when a scene has more than 64 lights (counting [glowing surfaces](#glowing-surfaces)); below
+  that it behaves exactly as before. The picture is the same either way: a test draws a scene both ways on Vulkan and OpenGL
+  and compares the pixels.
+- **With the grid, up to 2000 lights without shadows** (`Scene3D.MAX_CLUSTERED_LIGHTS`) are shaded, on top of the 64 that every
+  pixel tests. Directional lights and lights that [cast shadows](#shadows) are never put in the grid, because their shadow maps
+  are looked up by place; they stay in the 64.
+- **A light only counts when it reaches into the view.** A light switched off (intensity `0`) or wholly outside the camera's
+  view takes no room. If there are more than 2000 in view, the ones nearest the camera are kept and a warning is logged once.
+- **A cell holds up to 255 lights.** In a cell crowded with more than that, the extra ones add no light there (a warning is
+  logged once). Make ranges small instead of making everything overlap.
+- **It costs a little per frame**: the grid is rebuilt on the CPU and three small textures are written, about the cost of
+  sorting the lights once. `scene.getStats().clusteredLights()` says how many lights went through it in the last frame, `0`
+  when the scene shaded them directly.
+- A scene with only a few lights is faster without it, which is why `AUTO` leaves it off.
+- If the grid's shader does not compile on a GPU (reported once), the scene falls back to shading directly, and the usual
+  limit of 64 applies again.
+
+## Glowing surfaces
+
+A material that gives off light with `setEmissive` shines on screen but, on its own, does not light the wall beside it (the
+[blinking lights](#blinking-lights) section pairs a lamp with a bulb for that). `setGlow` makes the surface light its
+surroundings itself:
+
+```java
+Material panel = new Material(Color.WHITE).setEmissive(Color.WHITE, 2f).setGlow(8f);   // lights up to 8 units away
+Material neon = new Material(Color.BLACK).setEmissive(Color.RED, 4f).setGlow(5f, 0.5f); // half as strong
+```
+
+- Each node with the material adds **one point light** for the frame, at the middle of its mesh, in the emissive colour. A node
+  with [instances](instancing.md) adds one for **each copy**, so a ceiling of panels is one node. It follows the node, and the
+  emissive colour: a [`LightAnimation`](#blinking-lights) that blinks the material blinks the light with it.
+- The light is as bright as the surface looks (`strength` is a multiple of that, 1 by default), so a bright panel with a big
+  range is a strong light. It fades like any other (`WINDOWED_INVERSE_SQUARE`) and reaches 0 at `range`.
+- It lights like a point light at the middle of the mesh: it does not know the shape of the panel, and lights both sides of a
+  flat one. It **casts no shadow**.
+- A scene makes at most 1024 such lights a frame (`Scene3D.MAX_GLOW_LIGHTS`); surfaces past that still glow on screen but light
+  nothing. They go through the [grid](#many-lights) once the scene has more than 64 lights. `scene.getStats().glowLights()` says
+  how many were made.
+- In a [scene file](scene-files.md) they are the material's `glowRange` and `glowStrength`.
 
 ## Shadows
 
@@ -407,9 +462,10 @@ scene.setExposure(0.8f);
 
 - **The sky doesn't light the scene** unless you call [`setEnvironmentLighting`](#light-from-the-sky). Otherwise set the
   ambient light and the lights to match it.
-- **At most 64 lights are shaded in a frame.** A scene with more still draws: each frame the directional lights are
-  kept and then the point and spot lights whose reach is in the camera's view, nearest first, and the rest are left out
-  (a warning is logged once). A light switched off (intensity `0`) takes no room when that choice has to be made, so
+- **At most 64 lights are tested at every pixel, and about two thousand more through the [grid](#many-lights).** Past 64
+  the grid takes the point and spot lights without shadows. With `setLightMode(DIRECT)` a scene with more still draws: each
+  frame the directional lights are kept and then the point and spot lights whose reach is in the camera's view, nearest
+  first, and the rest are left out (a warning is logged once). A light switched off (intensity `0`) takes no room when that choice has to be made, so
   blinking lights can be switched off instead of removed. Every pixel is tested against every light, with a cheap
   distance check that skips the full shading of lights that do not reach it, so lights with small ranges cost far less
   than lights with large ones: give each lamp the smallest `range` that looks right.
