@@ -33,6 +33,21 @@ class SetupProcessTest {
     }
 
     @Test
+    void aPretendInstallFailsHalfwayWithTheGivenReason() throws InterruptedException {
+        java.util.List<Integer> seen = new java.util.ArrayList<>();
+        assertEquals("disk full", SetupProcess.simulate(seen::add, "disk full"));
+        assertEquals(50, seen.size());
+        assertEquals(49, seen.getLast());
+    }
+
+    @Test
+    void aPretendInstallWithoutAReasonFinishes() throws InterruptedException {
+        java.util.List<Integer> seen = new java.util.ArrayList<>();
+        assertNull(SetupProcess.simulate(seen::add, null));
+        assertEquals(100, seen.getLast());
+    }
+
+    @Test
     void commandCarriesTheChoices() {
         var command = SetupProcess.command(Path.of("C:\\Temp\\setup.exe"), new SetupProcess.Choices("C:\\Apps\\My App", true, false));
         assertEquals(java.util.List.of("C:\\Temp\\setup.exe", "/S", "/DIR=C:\\Apps\\My App", "/DESKTOP=1", "/STARTMENU=0", "/PROGRESS"), command);

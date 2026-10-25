@@ -12,6 +12,7 @@ import me.piitex.engine.ui.overlays.CheckBoxOverlay;
 import me.piitex.engine.ui.overlays.ProgressBarOverlay;
 import me.piitex.engine.ui.overlays.TextFieldOverlay;
 import me.piitex.engine.ui.overlays.TextOverlay;
+import me.piitex.engine.ui.theme.ThemeManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,14 +27,15 @@ import java.nio.file.Path;
 final class InstallerWindow {
     private static final int WIDTH = 560;
     private static final int HEIGHT = 380;
-    private static final Color MUTED = new Color(0.40f, 0.42f, 0.47f, 1f);
-    private static final Color ERROR = new Color(0.75f, 0.15f, 0.15f, 1f);
+    private static final Color ERROR = new Color(0.90f, 0.30f, 0.30f, 1f);
 
     private enum State {OPTIONS, WORKING, DONE, FAILED}
 
     private final SetupInfo info;
     private final Path setupProgram;   // null: the window is only being looked at, and installs nothing
     private final Path readyFile;      // created once the window is up, so the setup program can drop its "please wait" box
+    private String previewFailure;     // preview only: the reason the first pretend install fails with, or null to succeed
+    private boolean hidden;            // tests drive the window with posted messages and don't need it on screen
 
     private SetupProcess.Choices choices;
     private Window window;
@@ -45,11 +47,21 @@ final class InstallerWindow {
     private volatile boolean shown;
     private int exitCode;
 
-    InstallerWindow(SetupInfo info, Path setupProgram, String folder, Path readyFile) {
+    InstallerWindow(SetupInfo info, Path setupProgram, String folder, Path readyFile, String previewFailure) {
         this.info = info;
         this.setupProgram = setupProgram;
         this.readyFile = readyFile;
+        this.previewFailure = previewFailure;
         this.choices = new SetupProcess.Choices(folder, true, true);
+    }
+
+    void keepHidden() {
+        hidden = true;
+    }
+
+    /** For tests: closes the window whatever page it is on. */
+    void forceClose() {
+        if (window != null) window.close();
     }
 
     /** True once the window has been on screen. A failure before that is the setup program's cue to show its own wizard. */
@@ -63,6 +75,7 @@ final class InstallerWindow {
         window.onCloseRequest(() -> {
             if (state != State.WORKING) window.close();   // the files are half-written until the setup program ends
         });
+        if (hidden) window.hide();
         show(optionsPage(null));
         Scheduler.after(0.3f, this::signalReady);
         new Engine().start(window);
@@ -89,12 +102,12 @@ final class InstallerWindow {
 
     private Container optionsPage(String problemText) {
         Container c = new Container(WIDTH, HEIGHT);
-        text(c, "Install " + info.name(), 30f, Color.BLACK, 32, 26).setBold(true);
+        text(c, "Install " + info.name(), 30f, ink(), 32, 26).setBold(true);
         String who = info.vendor().isBlank() ? "" : "  -  " + info.vendor();
-        text(c, "Version " + info.version() + who, 14f, MUTED, 32, 72);
-        if (!info.description().isBlank()) text(c, info.description(), 14f, Color.BLACK, 32, 100).setMaxWidth(WIDTH - 64);
+        text(c, "Version " + info.version() + who, 14f, muted(), 32, 72);
+        if (!info.description().isBlank()) text(c, info.description(), 14f, ink(), 32, 100).setMaxWidth(WIDTH - 64);
 
-        text(c, "Install location", 14f, Color.BLACK, 32, 156);
+        text(c, "Install location", 14f, ink(), 32, 156);
         TextFieldOverlay folder = new TextFieldOverlay(32, 180, 400, 32);
         folder.setText(choices.folder());
         c.addElement(folder);
@@ -114,18 +127,18 @@ final class InstallerWindow {
 
     private Container workingPage() {
         Container c = new Container(WIDTH, HEIGHT);
-        text(c, "Installing " + info.name(), 30f, Color.BLACK, 32, 26).setBold(true);
+        text(c, "Installing " + info.name(), 30f, ink(), 32, 26).setBold(true);
         bar = new ProgressBarOverlay(WIDTH - 64, 18);
         bar.setPosition(32, 160);
         c.addElement(bar);
-        status = text(c, "Starting...", 14f, MUTED, 32, 190);
+        status = text(c, "Starting...", 14f, muted(), 32, 190);
         return c;
     }
 
     private Container donePage() {
         Container c = new Container(WIDTH, HEIGHT);
-        text(c, info.name() + " is installed", 30f, Color.BLACK, 32, 26).setBold(true);
-        text(c, choices.folder(), 14f, MUTED, 32, 72).setMaxWidth(WIDTH - 64);
+        text(c, info.name() + " is installed", 30f, ink(), 32, 26).setBold(true);
+        text(c, choices.folder(), 14f, muted(), 32, 72).setMaxWidth(WIDTH - 64);
         launchBox = checkBox(c, "Launch " + info.name(), true, 32, 160);
         button(c, "Finish", 440, 322, this::finish);
         return c;
@@ -134,7 +147,7 @@ final class InstallerWindow {
     private Container failedPage(String message) {
         Container c = new Container(WIDTH, HEIGHT);
         text(c, "The installation failed", 30f, ERROR, 32, 26).setBold(true);
-        text(c, message, 14f, Color.BLACK, 32, 84).setMaxWidth(WIDTH - 64);
+        text(c, message, 14f, ink(), 32, 84).setMaxWidth(WIDTH - 64);
         button(c, "Back", 332, 322, () -> {
             state = State.OPTIONS;
             show(optionsPage(null));
@@ -183,8 +196,10 @@ final class InstallerWindow {
     /** On the worker thread: runs the setup program, then hands the result to the render thread. */
     private void work() {
         String error;
+        String failure = previewFailure;
+        previewFailure = null;   // fails once, so Back and a second try can be seen too
         try {
-            error = setupProgram == null ? SetupProcess.simulate(this::progress) : SetupProcess.run(setupProgram, choices, this::progress);
+            error = setupProgram == null ? SetupProcess.simulate(this::progress, failure) : SetupProcess.run(setupProgram, choices, this::progress);
         } catch (IOException e) {
             error = "Could not start the setup program: " + e.getMessage();
         } catch (InterruptedException e) {
@@ -195,6 +210,7 @@ final class InstallerWindow {
         Scheduler.runLater(() -> {
             if (result == null) {
                 state = State.DONE;
+                exitCode = 0;   // an earlier attempt may have failed; the install that counts is this one
                 show(donePage());
             } else {
                 state = State.FAILED;
@@ -232,6 +248,16 @@ final class InstallerWindow {
 
     // ---- small builders -------------------------------------------------------------------------------------------
 
+    /** Body text, in whatever the current theme uses for it (the page is built after the theme is set). */
+    private static Color ink() {
+        return ThemeManager.getCurrent().getText();
+    }
+
+    /** Secondary text: the version line, the folder, the progress message. */
+    private static Color muted() {
+        return ThemeManager.getCurrent().getPlaceholderText();
+    }
+
     private static TextOverlay text(Container c, String text, float size, Color color, double x, double y) {
         TextOverlay overlay = new TextOverlay(text, size, color);
         overlay.setPosition(x, y);
@@ -243,7 +269,7 @@ final class InstallerWindow {
         CheckBoxOverlay box = new CheckBoxOverlay(20, checked);
         box.setPosition(x, y);
         c.addElement(box);
-        text(c, label, 14f, Color.BLACK, x + 30, y + 1);
+        text(c, label, 14f, ink(), x + 30, y + 1);
         return box;
     }
 

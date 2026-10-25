@@ -16,7 +16,8 @@ import java.util.Map;
  * </pre>
  * and takes the exit code: 0 when the window closed (installed or cancelled), 1 when the install failed, and
  * {@value #EXIT_NO_WINDOW} when no window could be shown, which makes the setup program fall back to its own wizard.
- * Started without {@code --setup} it shows a preview of the window that installs nothing.
+ * Started without {@code --setup} it shows a preview of the window that installs nothing; {@code --fail <reason>} makes
+ * the first pretend install fail with that reason, to see the failed page.
  */
 public final class InstallerMain {
     /** The code the setup program (setup.c) reads as "use the built-in wizard instead". */
@@ -35,7 +36,8 @@ public final class InstallerMain {
             String folder = options.getOrDefault("dir", defaultFolder(info));
             Path ready = options.containsKey("ready") ? Path.of(options.get("ready")) : null;
             ThemeManager.setCurrent(new DarkTheme());
-            window = new InstallerWindow(info, setup, folder, ready);
+            String failure = setup == null ? options.get("fail") : null;
+            window = new InstallerWindow(info, setup, folder, ready, failure);
             exit = window.run();
             if (!window.wasShown()) exit = EXIT_NO_WINDOW;
         } catch (Throwable t) {
