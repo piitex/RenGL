@@ -402,14 +402,22 @@ final class SceneRenderer {
 
         Skybox sky = scene.getSkybox();
         int env = environmentKind(scene, sky);
-        LightBudget.Split split = LightBudget.split(clusterBroken ? Scene3D.LightMode.DIRECT : scene.getLightMode(), scene.lights(), camera.getPosition(), planes);
+        // Glowing surfaces make lights of their own for this frame, after the scene's.
+        List<Light> sceneLights = scene.lights();
+        int glowCount = 0;
+        List<Light> allLights = sceneLights;
+        if (scene.hasGlow()) {
+            allLights = new ArrayList<>(sceneLights);
+            glowCount = GlowLights.collect(scene.root(), Mat4.identity(), allLights, sceneLights.size() + Scene3D.MAX_GLOW_LIGHTS);
+        }
+        LightBudget.Split split = LightBudget.split(clusterBroken ? Scene3D.LightMode.DIRECT : scene.getLightMode(), allLights, camera.getPosition(), planes);
         LightClusters clusters = null;
         if (!split.local().isEmpty()) {
             Vec3 forward = camera.getTarget().sub(camera.getPosition()).normalized();
             clusters = LightClusters.build(split.local(), viewProj.toArray(), camera.getPosition(), forward, camera.getNear(), camera.getFar());
             if (!clusterShaderWorks(env)) {
                 clusters = null;
-                split = LightBudget.split(Scene3D.LightMode.DIRECT, scene.lights(), camera.getPosition(), planes);
+                split = LightBudget.split(Scene3D.LightMode.DIRECT, allLights, camera.getPosition(), planes);
             } else if (clusters.dropped > 0 && !warnedCellFull) {
                 warnedCellFull = true;
                 log.warn("A cell of the light grid holds at most {} lights, and this scene crowds more than that into one; the others add no light there.", LightClusters.MAX_PER_CELL);
@@ -469,7 +477,7 @@ final class SceneRenderer {
         }
         if (postProcessed) res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth);
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
-                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight(), clusters == null ? 0 : split.local().size(), 0, 0));
+                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight(), clusters == null ? 0 : split.local().size(), 0, glowCount));
         if (frame % SWEEP_EVERY == 0) sweep();
     }
 

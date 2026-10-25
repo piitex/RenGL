@@ -34,6 +34,13 @@ public final class Material {
     private TextureData occlusionTexture;
     private TextureData emissiveTexture;
     private float emissiveR, emissiveG, emissiveB;
+    private float glowRange, glowStrength = 1f;
+    /** How many materials have a glow on, so a scene with none skips looking for them. */
+    private static final java.util.concurrent.atomic.AtomicInteger GLOWING = new java.util.concurrent.atomic.AtomicInteger();
+
+    static boolean anyGlow() {
+        return GLOWING.get() > 0;
+    }
     private float normalScale = 1f;
     private float uvOffsetU, uvOffsetV, uvScaleU = 1f, uvScaleV = 1f, uvRotation;
     private int uvSets;
@@ -300,7 +307,7 @@ public final class Material {
 
     /**
      * Light the surface gives off whatever the lights do, such as a lamp or a screen. A screen colour, scaled by
-     * {@code strength}; black (the default) is none. It does not light other surfaces.
+     * {@code strength}; black (the default) is none. It does not light other surfaces unless you also {@link #setGlow set a glow}.
      */
     public Material setEmissive(Color color, float strength) {
         return setEmissive((float) Math.pow(color.getR(), 2.2) * strength, (float) Math.pow(color.getG(), 2.2) * strength,
@@ -315,6 +322,43 @@ public final class Material {
         this.emissiveG = Math.max(0f, g);
         this.emissiveB = Math.max(0f, b);
         this.pbr = true;
+        return this;
+    }
+
+    public float getGlowRange() {
+        return glowRange;
+    }
+
+    public float getGlowStrength() {
+        return glowStrength;
+    }
+
+    /**
+     * Makes a surface that {@link #setEmissive gives off light} also light its surroundings: each node (or each copy of an
+     * instanced node) with this material adds a point light for the frame, at the middle of its mesh, in the emissive colour.
+     * It lights like any lamp, so what it reaches is shaded by it, but it casts no shadow. The light follows the emissive
+     * colour, so a {@link LightAnimation blink} of the material blinks the light with it.
+     * <p>
+     * A scene lights at most {@link Scene3D#MAX_GLOW_LIGHTS} such surfaces at once, and a scene with many of them (past
+     * {@link Scene3D#MAX_LIGHTS} lights in all) shades them through the light grid. Nothing happens for a material with no
+     * emissive colour.
+     *
+     * @param range the distance in world units where the light has faded to nothing; 0 (the default) switches the glow off
+     */
+    public Material setGlow(float range) {
+        return setGlow(range, 1f);
+    }
+
+    /**
+     * @param range    as above
+     * @param strength a multiple of the emissive colour's brightness for the light; 1 gives a light as bright as the surface
+     *                 looks, which is a strong one for a large range
+     */
+    public Material setGlow(float range, float strength) {
+        if (glowRange <= 0f && range > 0f) GLOWING.incrementAndGet();
+        else if (glowRange > 0f && range <= 0f) GLOWING.decrementAndGet();
+        this.glowRange = Math.max(0f, range);
+        this.glowStrength = Math.max(0f, strength);
         return this;
     }
 
