@@ -1,5 +1,8 @@
 package me.piitex.engine.installer;
 
+import me.piitex.engine.ui.theme.DarkTheme;
+import me.piitex.engine.ui.theme.ThemeManager;
+
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,7 +25,7 @@ public final class InstallerMain {
     private InstallerMain() {
     }
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         InstallerWindow window = null;
         int exit;
         try {
@@ -31,6 +34,7 @@ public final class InstallerMain {
             SetupInfo info = setup == null ? SetupInfo.preview() : SetupInfo.read(setup);
             String folder = options.getOrDefault("dir", defaultFolder(info));
             Path ready = options.containsKey("ready") ? Path.of(options.get("ready")) : null;
+            ThemeManager.setCurrent(new DarkTheme());
             window = new InstallerWindow(info, setup, folder, ready);
             exit = window.run();
             if (!window.wasShown()) exit = EXIT_NO_WINDOW;
