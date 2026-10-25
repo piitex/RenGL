@@ -37,6 +37,7 @@ final class InstallerWindow {
     private String previewFailure;     // preview only: the reason the first pretend install fails with, or null to succeed
     private boolean hidden;            // tests drive the window with posted messages and don't need it on screen
 
+    private final String perUserFolder;   // what the install folder starts as; for everyone it starts as the Program Files one
     private SetupProcess.Choices choices;
     private Window window;
     private Container page;
@@ -52,7 +53,8 @@ final class InstallerWindow {
         this.setupProgram = setupProgram;
         this.readyFile = readyFile;
         this.previewFailure = previewFailure;
-        this.choices = new SetupProcess.Choices(folder, true, true);
+        this.perUserFolder = folder;
+        this.choices = new SetupProcess.Choices(folder, true, true, false);
     }
 
     void keepHidden() {
@@ -117,10 +119,16 @@ final class InstallerWindow {
         c.addElement(browse);
         text(c, problemText == null ? "" : problemText, 13f, ERROR, 32, 216);
 
-        CheckBoxOverlay desktop = checkBox(c, "Create a desktop shortcut", choices.desktopShortcut(), 32, 244);
-        CheckBoxOverlay menu = checkBox(c, "Add to the Start menu", choices.startMenuShortcut(), 32, 274);
+        CheckBoxOverlay desktop = checkBox(c, "Create a desktop shortcut", choices.desktopShortcut(), 32, 238);
+        CheckBoxOverlay menu = checkBox(c, "Add to the Start menu", choices.startMenuShortcut(), 32, 264);
+        CheckBoxOverlay everyone = checkBox(c, "Install for all users (asks for administrator permission)", choices.allUsers(), 32, 290);
+        everyone.onToggle(all -> {
+            // The folder follows the choice, unless the person has typed their own.
+            String before = all ? perUserFolder : allUsersFolder();
+            if (folder.getText().strip().equalsIgnoreCase(before)) folder.setText(all ? allUsersFolder() : perUserFolder);
+        });
 
-        button(c, "Install", 332, 322, () -> install(folder.getText(), desktop.isChecked(), menu.isChecked()));
+        button(c, "Install", 332, 322, () -> install(folder.getText(), desktop.isChecked(), menu.isChecked(), everyone.isChecked()));
         button(c, "Cancel", 440, 322, () -> window.close());
         return c;
     }
@@ -168,11 +176,16 @@ final class InstallerWindow {
         dialog.show();
     }
 
-    private void install(String folderText, boolean desktopShortcut, boolean startMenuShortcut) {
+    private String allUsersFolder() {
+        String programs = System.getenv("ProgramFiles");
+        return (programs != null ? programs : "C:\\Program Files") + "\\" + info.name();
+    }
+
+    private void install(String folderText, boolean desktopShortcut, boolean startMenuShortcut, boolean allUsers) {
         String folder = folderText.strip();
         // A drive's own root, "C:\", keeps its slash; any other trailing slash goes.
         while (folder.length() > 3 && (folder.endsWith("\\") || folder.endsWith("/"))) folder = folder.substring(0, folder.length() - 1);
-        choices = new SetupProcess.Choices(folder, desktopShortcut, startMenuShortcut);
+        choices = new SetupProcess.Choices(folder, desktopShortcut, startMenuShortcut, allUsers);
         if (!isFullPath(folder)) {
             show(optionsPage("Enter a full folder path, such as C:\\Programs\\" + info.name() + "."));
             return;

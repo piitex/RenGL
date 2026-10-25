@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntConsumer;
 
@@ -18,8 +19,8 @@ final class SetupProcess {
     private SetupProcess() {
     }
 
-    /** What the person chose. */
-    record Choices(String folder, boolean desktopShortcut, boolean startMenuShortcut) {
+    /** What the person chose. {@code allUsers} installs for everyone, which the setup program asks Windows for administrator rights to do. */
+    record Choices(String folder, boolean desktopShortcut, boolean startMenuShortcut, boolean allUsers) {
     }
 
     sealed interface Line {
@@ -45,8 +46,10 @@ final class SetupProcess {
     }
 
     static List<String> command(Path setupProgram, Choices choices) {
-        return List.of(setupProgram.toString(), "/S", "/DIR=" + choices.folder(),
-                "/DESKTOP=" + (choices.desktopShortcut() ? 1 : 0), "/STARTMENU=" + (choices.startMenuShortcut() ? 1 : 0), "/PROGRESS");
+        List<String> command = new ArrayList<>(List.of(setupProgram.toString(), "/S", "/DIR=" + choices.folder(),
+                "/DESKTOP=" + (choices.desktopShortcut() ? 1 : 0), "/STARTMENU=" + (choices.startMenuShortcut() ? 1 : 0), "/PROGRESS"));
+        if (choices.allUsers()) command.add("/ALLUSERS=1");
+        return command;
     }
 
     /**

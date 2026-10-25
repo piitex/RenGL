@@ -8,8 +8,8 @@ or install:
 | You get | How |
 |---|---|
 | **An app-image**: a folder (or `.app`) with a native launcher, a private Java runtime and your jars. Zip it, and it runs anywhere with no install. | The RenGL packager |
-| **An installer**: a `setup.exe` (Windows) or `.deb` (Linux) that adds shortcuts and an uninstaller. | The RenGL packager with `--installer` |
-| **A `.msi`, `.dmg`, `.pkg` or `.rpm`**, or file-type registration on Windows and Linux. | `jpackage`, [below](#with-jpackage) |
+| **An installer**: a `setup.exe` (Windows), or a `.deb` and an `.rpm` (Linux), that adds shortcuts and an uninstaller. | The RenGL packager with `--installer` |
+| **A `.msi`, `.dmg` or `.pkg`**, or file-type registration on Windows and Linux. | `jpackage`, [below](#with-jpackage) |
 
 The RenGL packager builds **all five platforms from one computer**, Windows included. `jpackage` can only build for the
 platform it runs on. [`AppEnvironment`](app-environment.md) behaves the same under both.
@@ -72,9 +72,9 @@ installer=false
 | `mainClass` | none, required | The class with `main`, package included |
 | `version` | `1.0.0` | The app's version |
 | `platform` | `all` | What to build, comma separated: `windows-x64`, `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`. `-Init` writes `windows-x64`, which is the quick one |
-| `installer` | `false` | `true` makes a `setup.exe` for Windows, with a RenGL window, and a `.deb` for Linux instead of the `.zip` and `.tar.gz`. `plain` makes the same with the small plain Windows window in the setup, about 50 MB smaller. See [Installers](#installers) and [A RenGL window for the setup](#a-rengl-window-for-the-setup) |
+| `installer` | `false` | `true` makes a `setup.exe` for Windows, with a RenGL window, and a `.deb` and an `.rpm` for Linux instead of the `.zip` and `.tar.gz`. `plain` makes the same with the small plain Windows window in the setup, which is about 50 MB smaller when the app cannot share its Java runtime with the window. See [Installers](#installers) and [A RenGL window for the setup](#a-rengl-window-for-the-setup) |
 | `icon` | none | The Windows, Linux and macOS icons: `MyApp.ico,MyApp.png,icns=MyApp-1024.png`. The last is made from a square 1024 px PNG |
-| `vendor`, `description` | none | Shown in the setup and the `.deb` |
+| `vendor`, `description` | none | Shown in the setup, in the properties of the Windows `.exe` files, and in the `.deb` and `.rpm` |
 | `identifier` | `me.rengl.<name>` | The macOS bundle id, which also names the Windows uninstall entry |
 | `addModules` | none | Java modules the app loads by reflection, e.g. `java.logging,java.prefs` |
 | `content` | none | A folder of files to ship beside the jars, e.g. `assets` |
@@ -114,7 +114,7 @@ dist\app-images\
 ```
 
 With `installer=true` or `-Installer true`, the Windows `.zip` becomes `MyApp-1.0.0-windows-x64-setup.exe` and each Linux
-`.tar.gz` becomes a `.deb`. macOS keeps its `.tar.gz`. The first build of another platform downloads that platform's Java
+`.tar.gz` becomes a `.deb` and an `.rpm`. macOS keeps its `.tar.gz`. The first build of another platform downloads that platform's Java
 modules once into `~/.rengl/jdks` (about 340 MB for the four platforms besides your own). Keep the project's path short:
 Windows fails on paths over about 260 characters.
 
@@ -207,7 +207,7 @@ no `--platform` it builds this computer's. Keep `--output` short: Windows paths 
 | `--content <dir>` | A folder of files to ship beside the jars (assets, default data). Its contents are copied into every platform's app folder |
 | `--file-association ext,mime,description` | Registers the type in the macOS `Info.plist`. Windows and Linux images cannot register types without `jpackage`, but a file passed on the command line arrives like any launch |
 | `--identifier` | The macOS bundle id; defaults to `me.rengl.<name>`. On Windows it also names the Apps & features entry |
-| `--installer` | A `setup.exe` for Windows and a `.deb` for Linux instead of the `.zip` and `.tar.gz`. See [Installers](#installers) |
+| `--installer` | A `setup.exe` for Windows and a `.deb` and an `.rpm` for Linux instead of the `.zip` and `.tar.gz`. See [Installers](#installers) |
 | `--installer-ui <dir>` | Like `--installer`, and the Windows setup shows a RenGL window instead of the plain Windows one. `<dir>` is `rengl-packager/target/ui-input`. See [A RenGL window for the setup](#a-rengl-window-for-the-setup) |
 | `--no-archive` | Leave the folders only; write no archives or installers |
 | `--jdk platform=path` | Use this JDK for a platform instead of downloading Corretto's modules |
@@ -226,6 +226,18 @@ The uninstaller removes exactly the files the installer wrote, plus the shortcut
 chosen by mistake only loses what the installer put there. Files the app made itself in its install folder stay, and so
 does the data it keeps in its data folder.
 
+**Install for all users** is a third choice, unticked. It installs into `%ProgramFiles%\MyApp` instead, puts the
+shortcuts in the shared Desktop and Start menu folders, and writes the Apps & features entry for the whole computer.
+That needs administrator rights, so the setup starts a second copy of itself and Windows asks the person to confirm; if
+they decline, nothing is installed. The uninstaller of such an install asks the same way. An app that writes into its
+own folder will not be allowed to there for a standard user, so keep its data in the
+[data folder](app-environment.md) instead.
+
+`setup.exe` and `MyApp.exe` both carry a version resource built from `--app-version`, `--vendor` and `--description`: it
+is the Details tab of their properties and what Task Manager shows for the app. Only the first four numbers of a version
+such as `1.2.3-beta` count (`1.2.3.0`); the text keeps the whole string. Setting it uses a Windows function, so it
+happens only when building on Windows.
+
 For scripts and package managers it also runs without a window:
 
 ```powershell
@@ -239,6 +251,7 @@ C:\Tools\MyApp\uninstall.exe /S
 | `/DIR=path` | Install folder |
 | `/DESKTOP=0` or `1` | Desktop shortcut (default 1) |
 | `/STARTMENU=0` or `1` | Start menu shortcut (default 1) |
+| `/ALLUSERS=0` or `1` | Install for all users (default 0). Asks Windows for administrator rights unless it already has them, and `/DIR` then defaults to `%ProgramFiles%\MyApp` |
 | `/LAUNCH` | Start the app when done |
 | `/PROGRESS` | Print `progress=<percent>` lines on stdout, and `error=<text>` if it fails. The [RenGL window](#a-rengl-window-for-the-setup) reads these |
 | `/NOUI` | Show the plain Windows wizard even when the setup carries a RenGL window |
@@ -264,9 +277,9 @@ For the small plain window instead, use `installer=plain` (or `-Installer plain`
 
 How it fits together:
 
-- The setup is still one file. Besides the app's files it carries a second app-image, the installer window with its own
-  `jlink` runtime, under `ui/` in the same zip. `setup.ini` names its launcher (`ui=installer.exe`), and the `ui/` files
-  are never installed.
+- The setup is still one file. Besides the app's files it carries the installer window under `ui/` in the same zip.
+  `setup.ini` names its launcher (`ui=installer.exe`), and the `ui/` files are never installed. The window either runs on
+  the app's own Java runtime or brings one of its own, see the cost below.
 - Run it, and the native setup unpacks `ui/` into `%TEMP%\rengl-setup-<pid>`, shows a small "Preparing ... Setup" box for
   the second or two the window takes to start, runs the window and waits. The window asks for the folder and the
   shortcuts, then runs the same setup program again with `/S /PROGRESS` and draws what it prints. All the installing,
@@ -276,14 +289,30 @@ How it fits together:
   setup shows the plain wizard instead, so a computer that cannot show RenGL can still install. The temp folder is
   removed either way.
 
-The cost is size. The window is a second Java runtime plus the engine: in a small test app it added about 51 MB (a
-51 MB setup became 102 MB), and the setup takes a second or two longer to show its window. For an app that is itself
-large it is a small share; for a small one, the plain wizard is the better trade.
+**The window shares the app's runtime when it can.** An app built with RenGL already carries the engine, Skia and the
+LWJGL natives the window needs, and a Java runtime with the modules they use. When every jar of the window (the files in
+`rengl-packager/target/ui-input`) is in the app's input folder, byte for byte, and the app's runtime has the modules the
+window needs, the setup carries only the window's launcher and its small jar. At run time it unpacks the app's `runtime/`
+and `app/*.jar` from the same zip, which are there anyway, beside them. A sample setup made this way was 54 MB where
+the same one with a runtime of its own was 107 MB. The packager says which it chose and why:
 
-**Linux: `MyApp-1.0.0-linux-x64.deb`.** The image goes in `/opt/MyApp`, the launcher is linked as `/usr/bin/myapp`, and
-a `.desktop` file and the PNG icon give it an entry in the desktop's application menu. Install it with
-`sudo apt install ./MyApp-1.0.0-linux-x64.deb`. A `.deb` has no install-time choices, so the menu entry is always made.
-It is built without `dpkg`, from any OS. There is no `.rpm`.
+```
+Installer window: runs on the app's own Java runtime
+Installer window: carries a Java runtime of its own (rengl-core.jar in the app is a different build)
+```
+
+An app built with another version of the engine, an app that is not a RenGL app, or one built with `--modules` that
+leaves out something the window needs gets the second form: the window as an app-image of its own, with its own `jlink`
+runtime, about 51 MB more. The temp folder is larger with the shared form (the app's whole runtime, 68 MB in a small
+test), but it is removed when the window closes. For an app that cannot share, the plain wizard (`installer=plain`) is
+the smaller trade.
+
+**Linux: `MyApp-1.0.0-linux-x64.deb` and `MyApp-1.0.0-linux-x64.rpm`.** Both put the image in `/opt/MyApp`, link the
+launcher as `/usr/bin/myapp`, and add a `.desktop` file and the PNG icon, which give the app an entry in the desktop's
+application menu. Install them with `sudo apt install ./MyApp-1.0.0-linux-x64.deb` or
+`sudo dnf install ./MyApp-1.0.0-linux-x64.rpm`. They have no install-time choices, so the menu entry is always made.
+Both are built without `dpkg` or `rpmbuild`, from any OS. The `.rpm` is unsigned (it carries its size and digests) and
+lists no dependencies beyond rpm itself, like the `.deb`.
 
 **macOS** has no installer here. Players drag `MyApp.app` out of the archive into Applications.
 
@@ -319,20 +348,32 @@ other projects' scripts were run and built their images and installers, but thos
 arm64 image was run on a Mac and works. Not checked:
 
 - **The RenGL setup window** was tested on one Windows 11 computer: run through the real `setup.exe` (options, progress,
-  done), installed, shortcuts left unticked, uninstalled, and the plain-wizard fallback was forced and shown. Not
-  tried: the **Browse...** folder dialog, the **failed** page (a file in use, say), the **Launch** checkbox ticked, a
-  computer with no GPU or a remote session, and a high-DPI display.
+  done), installed, shortcuts left unticked, uninstalled, and the plain-wizard fallback was forced and shown. That
+  was done with the window sharing the app's runtime and with one of its own, and its pages (Cancel, the failed page,
+  Back and a second try) are driven by tests in `rengl-packager`, by posting the clicks to its window. Not tried: the
+  **Browse...** folder dialog, the **Launch** checkbox ticked, a computer with no GPU or a remote session, and a
+  high-DPI display.
+- **Install for all users** was run only as far as the prompt: the second copy of the setup was started as the current
+  user (a switch for tests, `/NOELEVATE`), which fails on `%ProgramFiles%` and passes that error back, and installs
+  into a folder of your own with its progress passed back, with `scope=allusers` recorded in the uninstall list. Not run:
+  the real administrator prompt, an install into `%ProgramFiles%`, the shared shortcuts, the entry under
+  `HKEY_LOCAL_MACHINE`, and the uninstaller asking for rights. Try it once with a click on the prompt before relying on it.
 - **The `.deb` was not installed.** Its structure was inspected (control file, modes, link and `.desktop` file); no
   Debian system was available to run `dpkg -i`.
+- **The `.rpm` was not installed either.** It was read back by a reader written from the file format (the lead, both
+  headers with their region trailers, the digests, and the payload against the file list) and listed by `tar`
+  (libarchive), which saw the right files, modes and link. No computer with `rpm` was available, so the tags rpm itself
+  checks on install, which no other reader looks at, have not been run through it. If `rpm -i` or `dnf` rejects it, the
+  message names the tag.
 - **The Linux images and the macOS x64 image were not launched.** If one fails, the first thing to read is the launcher
   script: `bin/MyApp` (Linux) or `Contents/MacOS/MyApp` (macOS).
-- **Nothing is signed.** The Windows setup and `MyApp.exe` trigger SmartScreen when downloaded, and `MyApp.exe` has no
-  version resource (Task Manager shows the file name). Sign with `signtool`. macOS signing is [below](#signing-and-notarizing-on-macos),
+- **Nothing is signed.** The Windows setup and `MyApp.exe` trigger SmartScreen when downloaded, even with their
+  version resource. Sign with `signtool`. macOS signing is [below](#signing-and-notarizing-on-macos),
   done to `MyApp.app` with `codesign --deep` rather than `--mac-sign` of `jpackage`.
 - **Windows on ARM** has no launcher yet, and Corretto no build to download. `windows-x64` apps run there under
   emulation.
-- **The Windows setup installs per user only.** There is no "all users" choice and no file associations. Use `jpackage`
-  for those, or give the Windows folder to Inno Setup or NSIS.
+- **The Windows setup has no file associations and makes no `.msi`.** Use `jpackage` for those, or give the Windows
+  folder to Inno Setup or NSIS.
 - A path to the install folder with characters outside the Windows ANSI code page works, but then `user.dir` is the
   install folder rather than where the app was started.
 
@@ -347,8 +388,8 @@ rengl-packager\native\windows\build-setup.cmd
 ```
 
 The RenGL setup window is plain Java: change `InstallerWindow` in `rengl-packager`, run `.\mvnw.cmd -pl rengl-packager install -DskipTests`,
-and build the app again. Only the `--installer-ui` code path in `setup.c` (unpacking `ui/`, the `/PROGRESS` lines, the
-fallback) needs the C build.
+and build the app again. Only the `--installer-ui` code path in `setup.c` (unpacking `ui/` and the shared runtime, the
+`/PROGRESS` lines, the fallback) needs the C build, and so does everything about all users.
 
 ## With jpackage
 

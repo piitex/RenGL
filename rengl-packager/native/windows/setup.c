@@ -6,14 +6,18 @@
  * named relative to the install folder. Run as it is, it shows a wizard (folder, desktop shortcut, Start menu shortcut,
  * launch). Run with switches it installs without any window:
  *
- *     setup.exe /S [/DIR=C:\Some\Folder] [/DESKTOP=0|1] [/STARTMENU=0|1] [/LAUNCH] [/PROGRESS]
+ *     setup.exe /S [/DIR=C:\Some\Folder] [/DESKTOP=0|1] [/STARTMENU=0|1] [/ALLUSERS=0|1] [/LAUNCH] [/PROGRESS]
  *
  * /PROGRESS prints "progress=<percent>" lines, and "error=<text>" if it fails, on stdout.
  *
  * When setup.ini names a ui=<launcher> and the zip holds a ui/ folder, the wizard is replaced by that RenGL app (see
  * "the RenGL setup program" below). /NOUI forces the wizard anyway. The ui/ files are never installed.
  *
- * It installs for the current user (no administrator rights): by default into %LOCALAPPDATA%\Programs\<name>. It writes
+ * It installs for the current user (no administrator rights): by default into %LOCALAPPDATA%\Programs\<name>. With /ALLUSERS=1
+ * it installs for everyone instead: into %ProgramFiles%\<name>, with the shortcuts in the shared folders and the Apps &
+ * features entry in HKEY_LOCAL_MACHINE. That needs administrator rights, so it starts a second copy of itself with the
+ * "runas" verb (Windows asks the person to confirm), which does the work and passes the progress back through a file. The
+ * uninstaller does the same. It writes
  * uninstall.exe (a copy of this program without the payload) and uninstall.dat (every file it wrote) beside the app, and
  * an Apps & features entry. uninstall.exe removes exactly the files that list holds, so a folder chosen by mistake
  * (Documents, say) only ever loses what the installer put there.
@@ -48,6 +52,8 @@ static wchar_t appExe[MAX_PATH] = L"App.exe";
 static wchar_t appUi[MAX_PATH];  /* the launcher of the RenGL setup program under ui/, when the payload carries one */
 static int uiShare;              /* ui-share=1: that program runs on the app's own runtime/ and app/*.jar, which are unpacked beside it */
 static int reportProgress;       /* /PROGRESS: say how the install is going on stdout, for the setup program that started us */
+static wchar_t progressFile[PATHLEN]; /* /PROGRESSFILE=: say it in this file instead, for the elevated copy of this program */
+static int noElevate;            /* /NOELEVATE: start the elevated copy as the current user. Only for testing the hand-over without a prompt */
 
 static wchar_t selfPath[PATHLEN];
 static const uint8_t *image;   /* this exe, mapped */
@@ -423,8 +429,10 @@ static int isUiEntry(const wchar_t *name) {
 
 /* One line on stdout, when the caller asked for them with /PROGRESS and gave us a pipe to write to. */
 static void report(const char *prefix, const wchar_t *value) {
-    if (!reportProgress) return;
-    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (!reportProgress && !progressFile[0]) return;
+    HANDLE out;
+    if (progressFile[0]) out = CreateFileW(progressFile, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    else out = GetStdHandle(STD_OUTPUT_HANDLE);
     if (!out || out == INVALID_HANDLE_VALUE) return;
     Sb line = {0};
     sbAdd(&line, prefix);
@@ -434,6 +442,24 @@ static void report(const char *prefix, const wchar_t *value) {
     DWORD wrote;
     WriteFile(out, line.p, (DWORD) line.n, &wrote, NULL);
     free(line.p);
+    if (progressFile[0]) CloseHandle(out);
+}
+
+/* True when this process has administrator rights (it was started with "Run as administrator" or confirmed a prompt). */
+static int isElevated(void) {
+    HANDLE token;
+    TOKEN_ELEVATION elevation;
+    DWORD size;
+    int elevated = 0;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
+        if (GetTokenInformation(token, TokenElevation, &elevation, sizeof elevation, &size)) elevated = elevation.TokenIsElevated != 0;
+        CloseHandle(token);
+    }
+    return elevated;
+}
+
+static HKEY hive(int allUsers) {
+    return allUsers ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
 }
 
 /* ---- registry and shortcuts ---------------------------------------------------------------------------------------- */
@@ -463,26 +489,33 @@ static int makeShortcut(const wchar_t *lnk, const wchar_t *target, const wchar_t
     return ok;
 }
 
-static void shortcutPath(int desktop, wchar_t *out) {
+static void shortcutPath(int desktop, int allUsers, wchar_t *out) {
     wchar_t folder[PATHLEN];
-    knownFolder(desktop ? &FOLDERID_Desktop : &FOLDERID_Programs, folder);
+    if (allUsers) knownFolder(desktop ? &FOLDERID_PublicDesktop : &FOLDERID_CommonPrograms, folder);
+    else knownFolder(desktop ? &FOLDERID_Desktop : &FOLDERID_Programs, folder);
     out[0] = 0;
     if (folder[0]) swprintf(out, PATHLEN, L"%ls\\%ls.lnk", folder, appName);
 }
 
-static void defaultDir(wchar_t *out) {
+/* Where to offer to install: where it is installed already, else the usual place for the current user or for everyone. */
+static void defaultDir(wchar_t *out, int allUsers) {
     wchar_t key[PATHLEN], old[PATHLEN];
     DWORD size = sizeof old;
     HKEY k;
     swprintf(key, PATHLEN, UNINSTALL_KEY L"%ls", appId);
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &k) == ERROR_SUCCESS) {
+    if (RegOpenKeyExW(hive(allUsers), key, 0, KEY_READ, &k) == ERROR_SUCCESS) {
         LONG r = RegQueryValueExW(k, L"InstallLocation", NULL, NULL, (BYTE *) old, &size);
         RegCloseKey(k);
         if (r == ERROR_SUCCESS && old[0]) { wcsncpy_s(out, PATHLEN, old, _TRUNCATE); return; }
     }
-    wchar_t local[PATHLEN];
-    knownFolder(&FOLDERID_LocalAppData, local);
-    swprintf(out, PATHLEN, L"%ls\\Programs\\%ls", local, appName);
+    wchar_t base[PATHLEN];
+    if (allUsers) {
+        knownFolder(&FOLDERID_ProgramFiles, base);
+        swprintf(out, PATHLEN, L"%ls\\%ls", base, appName);
+    } else {
+        knownFolder(&FOLDERID_LocalAppData, base);
+        swprintf(out, PATHLEN, L"%ls\\Programs\\%ls", base, appName);
+    }
 }
 
 /* ---- installing ---------------------------------------------------------------------------------------------------- */
@@ -493,6 +526,8 @@ static void defaultDir(wchar_t *out) {
 typedef struct {
     wchar_t dir[PATHLEN];
     int desktop, startMenu;
+    int allUsers;                /* for everyone: Program Files, shared shortcuts, HKEY_LOCAL_MACHINE; needs administrator rights */
+    int elevatedCopy;            /* this is the copy that was started to do the work, so it must not start another */
     HWND window;                 /* gets progress messages; NULL when silent */
     wchar_t error[PATHLEN + 256];
 } Job;
@@ -502,6 +537,98 @@ static int failJob(Job *j, const wchar_t *what, const wchar_t *path) {
     return 0;
 }
 
+/* Reads the whole of a file the elevated copy is still writing. The caller frees it; NULL if it cannot be read. */
+static char *readLog(const wchar_t *path, size_t *size) {
+    HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return NULL;
+    LARGE_INTEGER sz;
+    GetFileSizeEx(f, &sz);
+    char *data = malloc((size_t) sz.QuadPart + 1);
+    DWORD got = 0;
+    if (!ReadFile(f, data, (DWORD) sz.QuadPart, &got, NULL)) got = 0;
+    CloseHandle(f);
+    data[got] = 0;
+    *size = got;
+    return data;
+}
+
+/* Passes on the progress the elevated copy has logged (each percent once) and keeps the error it ended with, if any. */
+static void relayLog(Job *j, const char *text, size_t size, int *lastPercent, wchar_t *error) {
+    for (size_t i = 0; i < size;) {
+        size_t e = i;
+        while (e < size && text[e] != '\n') e++;
+        if (e == size) break;   /* a line still being written */
+        size_t le = e;
+        if (le > i && text[le - 1] == '\r') le--;
+        if (le - i > 9 && memcmp(text + i, "progress=", 9) == 0) {
+            int percent = atoi(text + i + 9);
+            if (percent != *lastPercent) {
+                wchar_t number[16];
+                *lastPercent = percent;
+                if (j->window) PostMessageW(j->window, WM_PROGRESS, percent, 0);
+                swprintf(number, 16, L"%d", percent);
+                report("progress=", number);
+            }
+        } else if (le - i > 6 && memcmp(text + i, "error=", 6) == 0) {
+            wchar_t *w = widen(text + i + 6, (int) (le - i - 6));
+            wcsncpy_s(error, PATHLEN, w, _TRUNCATE);
+            free(w);
+        }
+        i = e + 1;
+    }
+}
+
+/*
+ * Starts this program again with administrator rights (Windows asks the person to confirm) to do the install, and passes
+ * its progress on. The two share a log file, because a process started that way cannot be given a pipe.
+ */
+static int installElevated(Job *j) {
+    wchar_t temp[PATHLEN], log[PATHLEN], dir[PATHLEN], args[PATHLEN * 2], error[PATHLEN] = L"";
+    GetTempPathW(PATHLEN, temp);
+    swprintf(log, PATHLEN, L"%lsrengl-install-%lu.log", temp, GetCurrentProcessId());
+    HANDLE f = CreateFileW(log, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) return failJob(j, L"Could not prepare the installation for administrator rights:", log);
+    CloseHandle(f);
+
+    /* A folder ending in a backslash (a drive's root) would escape the closing quote. */
+    wcscpy_s(dir, PATHLEN, j->dir);
+    size_t n = wcslen(dir);
+    if (n && dir[n - 1] == L'\\' && n + 1 < PATHLEN) { dir[n] = L'\\'; dir[n + 1] = 0; }
+    swprintf(args, PATHLEN * 2, L"/S /ALLUSERS=1 /_ELEVATED /DIR=\"%ls\" /DESKTOP=%d /STARTMENU=%d /PROGRESSFILE=\"%ls\"",
+             dir, j->desktop, j->startMenu, log);
+
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);   /* ShellExecuteEx may hand the work to shell extensions */
+    SHELLEXECUTEINFOW sei = { sizeof sei };
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+    sei.lpVerb = noElevate ? L"open" : L"runas";
+    sei.lpFile = selfPath;
+    sei.lpParameters = args;
+    sei.nShow = SW_HIDE;
+    BOOL started = ShellExecuteExW(&sei) && sei.hProcess;
+    DWORD why = GetLastError();
+    CoUninitialize();
+    if (!started) {
+        DeleteFileW(log);
+        return failJob(j, why == ERROR_CANCELLED ? L"Administrator permission was not given, so nothing was installed."
+                                                  : L"Could not start the installation with administrator rights.", NULL);
+    }
+
+    int lastPercent = -1;
+    for (;;) {
+        DWORD r = WaitForSingleObject(sei.hProcess, 100);
+        size_t size = 0;
+        char *text = readLog(log, &size);
+        if (text) { relayLog(j, text, size, &lastPercent, error); free(text); }
+        if (r != WAIT_TIMEOUT) break;
+    }
+    DWORD code = 1;
+    GetExitCodeProcess(sei.hProcess, &code);
+    CloseHandle(sei.hProcess);
+    DeleteFileW(log);
+    if (code == 0) return 1;
+    return failJob(j, error[0] ? error : L"The installation with administrator rights did not finish.", NULL);
+}
+
 static int install(Job *j) {
     wchar_t path[PATHLEN], exe[PATHLEN];
     Sb dat = {0};
@@ -509,6 +636,7 @@ static int install(Job *j) {
     size_t biggest = 0;
     int lastPercent = -1;
 
+    if (j->allUsers && !j->elevatedCopy && !isElevated()) return installElevated(j);
     if (!makeDirs(j->dir)) return failJob(j, L"Could not create the folder:", j->dir);
     for (int i = 0; i < entryCount; i++) {
         if (wcscmp(entries[i].name, L"setup.ini") == 0 || isUiEntry(entries[i].name)) continue;
@@ -521,6 +649,7 @@ static int install(Job *j) {
 
     sbAdd(&dat, "name="); sbAddW(&dat, appName); sbAdd(&dat, "\n");
     sbAdd(&dat, "id="); sbAddW(&dat, appId); sbAdd(&dat, "\n");
+    if (j->allUsers) sbAdd(&dat, "scope=allusers\n");
 
     for (int i = 0; i < entryCount; i++) {
         Entry *e = &entries[i];
@@ -586,11 +715,11 @@ static int install(Job *j) {
     wchar_t desktopLink[PATHLEN] = L"", menuLink[PATHLEN] = L"";
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (j->desktop) {
-        shortcutPath(1, desktopLink);
+        shortcutPath(1, j->allUsers, desktopLink);
         if (!desktopLink[0] || !makeShortcut(desktopLink, exe, j->dir, appDesc[0] ? appDesc : appName)) desktopLink[0] = 0;
     }
     if (j->startMenu) {
-        shortcutPath(0, menuLink);
+        shortcutPath(0, j->allUsers, menuLink);
         if (!menuLink[0] || !makeShortcut(menuLink, exe, j->dir, appDesc[0] ? appDesc : appName)) menuLink[0] = 0;
     }
     CoUninitialize();
@@ -610,7 +739,7 @@ static int install(Job *j) {
     wchar_t key[PATHLEN], text[PATHLEN];
     HKEY k;
     swprintf(key, PATHLEN, UNINSTALL_KEY L"%ls", appId);
-    if (RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, NULL, 0, KEY_WRITE, NULL, &k, NULL) == ERROR_SUCCESS) {
+    if (RegCreateKeyExW(hive(j->allUsers), key, 0, NULL, 0, KEY_WRITE, NULL, &k, NULL) == ERROR_SUCCESS) {
         regString(k, L"DisplayName", appName);
         regString(k, L"DisplayVersion", appVersion);
         regString(k, L"Publisher", appVendor);
@@ -638,7 +767,7 @@ static int install(Job *j) {
 
 /* Removes what uninstall.dat lists in dir. Returns 1 if everything went. */
 static int removeInstall(const wchar_t *dir, int silent, wchar_t *nameOut) {
-    wchar_t path[PATHLEN], id[256] = L"", desktop[PATHLEN] = L"", menu[PATHLEN] = L"";
+    wchar_t path[PATHLEN], id[256] = L"", desktop[PATHLEN] = L"", menu[PATHLEN] = L"", scope[16] = L"";
     size_t size = 0;
     joinPath(path, dir, L"uninstall.dat");
     char *text = (char *) readFile(path, &size);
@@ -647,6 +776,7 @@ static int removeInstall(const wchar_t *dir, int silent, wchar_t *nameOut) {
     iniValue(text, size, "id", id, 256);
     iniValue(text, size, "desktop", desktop, PATHLEN);
     iniValue(text, size, "startmenu", menu, PATHLEN);
+    iniValue(text, size, "scope", scope, 16);
 
     int failures = 0;
     for (size_t i = 0; i < size;) {
@@ -702,8 +832,24 @@ static int removeInstall(const wchar_t *dir, int silent, wchar_t *nameOut) {
     RemoveDirectoryW(dir);
     wchar_t key[PATHLEN];
     swprintf(key, PATHLEN, UNINSTALL_KEY L"%ls", id);
-    if (id[0]) RegDeleteKeyW(HKEY_CURRENT_USER, key);
+    if (id[0]) RegDeleteKeyW(hive(wcscmp(scope, L"allusers") == 0), key);
     return 1;
+}
+
+/* Starts this uninstaller again with administrator rights. Returns its exit code: 0 once started, 1 if the person said no. */
+static int uninstallElevated(int silent) {
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    SHELLEXECUTEINFOW sei = { sizeof sei };
+    sei.fMask = SEE_MASK_NOASYNC;
+    sei.lpVerb = L"runas";
+    sei.lpFile = selfPath;
+    sei.lpParameters = silent ? L"/S" : L"";
+    sei.nShow = SW_SHOWNORMAL;
+    BOOL started = ShellExecuteExW(&sei);
+    DWORD why = GetLastError();
+    CoUninitialize();
+    if (!started && why != ERROR_CANCELLED && !silent) message(NULL, L"Could not start the uninstaller with administrator rights.", MB_ICONERROR);
+    return started ? 0 : 1;
 }
 
 /* A running exe cannot delete itself, so uninstall.exe copies itself to the temp folder and that copy does the work. */
@@ -735,8 +881,11 @@ static int runUninstaller(int silent, const wchar_t *removeDir) {
     char *text = (char *) readFile(dat, &size);
     if (!text) { message(NULL, L"Nothing to uninstall here: uninstall.dat is missing.", MB_ICONERROR); return 1; }
     iniValue(text, size, "name", name, 256);
+    wchar_t scope[16] = L"";
+    iniValue(text, size, "scope", scope, 16);
     free(text);
     wcscpy_s(appName, 256, name[0] ? name : L"Uninstall");
+    if (wcscmp(scope, L"allusers") == 0 && !noElevate && !isElevated()) return uninstallElevated(silent);
 
     if (!silent) {
         wchar_t q[PATHLEN + 256];
@@ -764,7 +913,7 @@ static int runUninstaller(int silent, const wchar_t *removeDir) {
 /* ---- the wizard ---------------------------------------------------------------------------------------------------- */
 
 enum {
-    ID_TITLE = 100, ID_SUB, ID_DESC, ID_DIRLABEL, ID_DIR, ID_BROWSE, ID_DESKTOP, ID_MENU, ID_LAUNCH, ID_PROGRESS, ID_STATUS, ID_LINE
+    ID_TITLE = 100, ID_SUB, ID_DESC, ID_DIRLABEL, ID_DIR, ID_BROWSE, ID_DESKTOP, ID_MENU, ID_ALLUSERS, ID_LAUNCH, ID_PROGRESS, ID_STATUS, ID_LINE
 };
 enum { STATE_OPTIONS, STATE_WORKING, STATE_DONE };
 
@@ -788,8 +937,8 @@ static HWND control(const wchar_t *cls, const wchar_t *text, DWORD style, int id
 static HWND item(int id) { return GetDlgItem(window, id); }
 
 static void showOptions(int on) {
-    int ids[] = { ID_DIRLABEL, ID_DIR, ID_BROWSE, ID_DESKTOP, ID_MENU };
-    for (int i = 0; i < 5; i++) ShowWindow(item(ids[i]), on ? SW_SHOW : SW_HIDE);
+    int ids[] = { ID_DIRLABEL, ID_DIR, ID_BROWSE, ID_DESKTOP, ID_MENU, ID_ALLUSERS };
+    for (int i = 0; i < 6; i++) ShowWindow(item(ids[i]), on ? SW_SHOW : SW_HIDE);
 }
 
 static DWORD WINAPI installThread(LPVOID arg) {
@@ -811,6 +960,7 @@ static void startInstall(void) {
     }
     job.desktop = IsDlgButtonChecked(window, ID_DESKTOP) == BST_CHECKED;
     job.startMenu = IsDlgButtonChecked(window, ID_MENU) == BST_CHECKED;
+    job.allUsers = IsDlgButtonChecked(window, ID_ALLUSERS) == BST_CHECKED;
     job.window = window;
     state = STATE_WORKING;
     showOptions(0);
@@ -843,6 +993,17 @@ static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_COMMAND:
         switch (LOWORD(wp)) {
         case ID_BROWSE: browse(); return 0;
+        case ID_ALLUSERS:
+            if (HIWORD(wp) == BN_CLICKED) {
+                /* The folder follows the choice, unless the person has typed their own. */
+                wchar_t now[PATHLEN], before[PATHLEN], after[PATHLEN];
+                int all = IsDlgButtonChecked(hwnd, ID_ALLUSERS) == BST_CHECKED;
+                GetWindowTextW(item(ID_DIR), now, PATHLEN);
+                defaultDir(before, !all);
+                defaultDir(after, all);
+                if (_wcsicmp(now, before) == 0) SetWindowTextW(item(ID_DIR), after);
+            }
+            return 0;
         case IDOK:
             if (state == STATE_OPTIONS) {
                 startInstall();
@@ -937,11 +1098,12 @@ static int runWizard(int nShow) {
 
     control(L"STATIC", L"Install location:", 0, ID_DIRLABEL, 24, 128, 452, 18);
     wchar_t dir[PATHLEN];
-    defaultDir(dir);
+    defaultDir(dir, 0);
     control(L"EDIT", dir, WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, ID_DIR, 24, 150, 364, 24);
     control(L"BUTTON", L"Browse...", WS_TABSTOP | BS_PUSHBUTTON, ID_BROWSE, 396, 149, 80, 26);
     control(L"BUTTON", L"Create a desktop shortcut", WS_TABSTOP | BS_AUTOCHECKBOX, ID_DESKTOP, 24, 192, 452, 22);
     control(L"BUTTON", L"Add to the Start menu", WS_TABSTOP | BS_AUTOCHECKBOX, ID_MENU, 24, 218, 452, 22);
+    control(L"BUTTON", L"Install for all users (asks for administrator permission)", WS_TABSTOP | BS_AUTOCHECKBOX, ID_ALLUSERS, 24, 244, 452, 22);
     CheckDlgButton(window, ID_DESKTOP, BST_CHECKED);
     CheckDlgButton(window, ID_MENU, BST_CHECKED);
 
@@ -1117,7 +1279,7 @@ static int runUi(void) {
     if (makeDirs(dir) && extractUi(dir)) {
         joinPath(exe, dir, appUi);
         joinPath(ready, dir, L"ready");
-        defaultDir(start);
+        defaultDir(start, 0);
         swprintf(cmd, PATHLEN * 3, L"\"%ls\" --setup \"%ls\" --dir \"%ls\" --ready \"%ls\"", exe, selfPath, start, ready);
         STARTUPINFOW si = { sizeof si };
         PROCESS_INFORMATION pi;
@@ -1148,7 +1310,7 @@ static int runUi(void) {
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdLine, int nShow) {
     int argc = 0;
     wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    int silent = 0, launch = 0, desktop = -1, menu = -1, noUi = 0;
+    int silent = 0, launch = 0, desktop = -1, menu = -1, noUi = 0, allUsers = 0, elevatedCopy = 0;
     wchar_t dirArg[PATHLEN] = L"", removeDir[PATHLEN] = L"";
     (void) prev;
     (void) cmdLine;
@@ -1165,6 +1327,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdLine, int nShow) {
         else if (_wcsnicmp(a, L"/D=", 3) == 0) wcsncpy_s(dirArg, PATHLEN, a + 3, _TRUNCATE);
         else if (_wcsnicmp(a, L"/DESKTOP=", 9) == 0) desktop = _wtoi(a + 9) != 0;
         else if (_wcsnicmp(a, L"/STARTMENU=", 11) == 0) menu = _wtoi(a + 11) != 0;
+        else if (_wcsnicmp(a, L"/ALLUSERS=", 10) == 0) allUsers = _wtoi(a + 10) != 0;
+        else if (_wcsnicmp(a, L"/PROGRESSFILE=", 14) == 0) wcsncpy_s(progressFile, PATHLEN, a + 14, _TRUNCATE);
+        else if (_wcsicmp(a, L"/NOELEVATE") == 0) noElevate = 1;
+        else if (_wcsicmp(a, L"/_ELEVATED") == 0) elevatedCopy = 1;
         else if (_wcsicmp(a, L"/_remove") == 0 && i + 1 < argc) wcsncpy_s(removeDir, PATHLEN, argv[++i], _TRUNCATE);
     }
 
@@ -1180,7 +1346,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdLine, int nShow) {
 
     if (silent) {
         wcscpy_s(job.dir, PATHLEN, dirArg[0] ? dirArg : L"");
-        if (!job.dir[0]) defaultDir(job.dir);
+        job.allUsers = allUsers;
+        job.elevatedCopy = elevatedCopy;
+        if (!job.dir[0]) defaultDir(job.dir, job.allUsers);
         job.desktop = desktop < 0 ? 1 : desktop;
         job.startMenu = menu < 0 ? 1 : menu;
         job.window = NULL;
