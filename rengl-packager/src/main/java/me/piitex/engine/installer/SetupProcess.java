@@ -72,9 +72,14 @@ final class SetupProcess {
         return error != null ? error : "The setup program stopped with exit code " + exit + ".";
     }
 
-    /** Stands in for {@link #run} when the window is only being looked at. */
-    static String simulate(IntConsumer progress) throws InterruptedException {
+    /**
+     * Stands in for {@link #run} when the window is only being looked at.
+     *
+     * @param failure null to finish, or the reason to fail with halfway through
+     */
+    static String simulate(IntConsumer progress, String failure) throws InterruptedException {
         for (int percent = 0; percent <= 100; percent++) {
+            if (failure != null && percent == 50) return failure;
             progress.accept(percent);
             Thread.sleep(25);
         }
