@@ -203,6 +203,100 @@ final class SceneShaders {
                 """;
     }
 
+    /**
+     * Reads the light grid: the cell a point is in, the lights listed for it, and one light's parameters. Everything is read
+     * with {@code texelFetch} from RGBA8 textures; a float is its four bytes, put back together. See {@link LightClusters}.
+     */
+    private static final String CLUSTER_FUNCTIONS = """
+            layout(set = 0, binding = 11) uniform sampler2D clusterLights;
+            layout(set = 0, binding = 12) uniform sampler2D clusterHeaders;
+            layout(set = 0, binding = 13) uniform sampler2D clusterIndices;
+
+            float clusterFloat(int row, int texel) {
+                uvec4 u = uvec4(texelFetch(clusterLights, ivec2(texel, row), 0) * 255.0 + 0.5);
+                return uintBitsToFloat(u.x | (u.y << 8) | (u.z << 16) | (u.w << 24));
+            }
+
+            // The cell the point is in: where its offset into the index list starts and how many lights it lists.
+            bool clusterCell(vec3 worldPos, out int offset, out int count) {
+                vec4 clip = viewProj * vec4(worldPos, 1.0);
+                vec2 ndc = clip.xy / clip.w;
+                float viewZ = dot(worldPos - cameraPos.xyz, cameraFwd.xyz);
+                int tx = clamp(int(floor((ndc.x * 0.5 + 0.5) * %TILES_X%.0)), 0, %TILES_X% - 1);
+                int ty = clamp(int(floor((ndc.y * 0.5 + 0.5) * %TILES_Y%.0)), 0, %TILES_Y% - 1);
+                int sl = clamp(int(floor(log(max(viewZ, params.y) / params.y) * params.z)), 0, %SLICES% - 1);
+                int cell = (sl * %TILES_Y% + ty) * %TILES_X% + tx;
+                uvec4 h = uvec4(texelFetch(clusterHeaders, ivec2(cell % %HEADER_WIDTH%, cell / %HEADER_WIDTH%), 0) * 255.0 + 0.5);
+                offset = int(h.x | (h.y << 8) | (h.z << 16));
+                count = int(h.w);
+                return count > 0;
+            }
+
+            int clusterIndex(int entry) {
+                int texel = entry >> 1;
+                uvec4 u = uvec4(texelFetch(clusterIndices, ivec2(texel % %INDEX_WIDTH%, texel / %INDEX_WIDTH%), 0) * 255.0 + 0.5);
+                return (entry & 1) == 0 ? int(u.x | (u.y << 8)) : int(u.z | (u.w << 8));
+            }
+
+            // The same as lightAt, for a light in the grid: the direction to it, its colour, and how much of it arrives.
+            float clusterLight(int row, vec3 worldPos, out vec3 l, out vec3 rgb) {
+                vec3 pos = vec3(clusterFloat(row, 0), clusterFloat(row, 1), clusterFloat(row, 2));
+                float range = clusterFloat(row, 3);
+                uvec4 c = uvec4(texelFetch(clusterLights, ivec2(4, row), 0) * 255.0 + 0.5);
+                rgb = vec3(c.xyz) / 255.0 * clusterFloat(row, 5);
+                vec3 d = pos - worldPos;
+                float dist = length(d);
+                l = d / max(dist, 0.0001);
+                float atten = falloff(int(c.w >> 1), dist, range);
+                if (atten > 0.0 && (c.w & 1u) != 0u) {
+                    vec3 dir = vec3(clusterFloat(row, 6), clusterFloat(row, 7), clusterFloat(row, 8));
+                    float outerCos = clusterFloat(row, 9);
+                    float innerCos = clusterFloat(row, 10);
+                    atten *= clamp((dot(-l, dir) - outerCos) / max(innerCos - outerCos, 1e-4), 0.0, 1.0);
+                }
+                return atten;
+            }
+            """.replace("%TILES_X%", "" + LightClusters.TILES_X).replace("%TILES_Y%", "" + LightClusters.TILES_Y)
+            .replace("%SLICES%", "" + LightClusters.SLICES).replace("%HEADER_WIDTH%", "" + LightClusters.HEADER_WIDTH)
+            .replace("%INDEX_WIDTH%", "" + LightClusters.INDEX_WIDTH);
+
+    private static final String CLUSTER_PBR = """
+                        int clusterOffset, clusterCount;
+                        if (clusterCell(vWorldPos, clusterOffset, clusterCount)) {
+                            for (int j = 0; j < clusterCount; j++) {
+                                vec3 l, lightRgb;
+                                float atten = clusterLight(clusterIndex(clusterOffset + j), vWorldPos, l, lightRgb);
+                                if (atten <= 0.0) continue;
+                                float nl = max(dot(n, l), 0.0);
+                                if (nl <= 0.0) continue;
+                                vec3 h = normalize(l + v);
+                                float nh = max(dot(n, h), 0.0);
+                                float vh = max(dot(v, h), 0.0);
+                                vec3 f = f0 + (1.0 - f0) * pow(1.0 - vh, 5.0);
+                                float g = (nv / (nv * (1.0 - k) + k)) * (nl / (nl * (1.0 - k) + k));
+                                vec3 spec = distributionGGX(nh, a2) * g * f / max(4.0 * nv * nl, 1e-4);
+                                lit += ((vec3(1.0) - f) * diffuseColor + PI * spec) * lightRgb * atten * nl;
+                            }
+                        }
+            """;
+
+    private static final String CLUSTER_CLASSIC = """
+                        int clusterOffset, clusterCount;
+                        if (clusterCell(vWorldPos, clusterOffset, clusterCount)) {
+                            for (int j = 0; j < clusterCount; j++) {
+                                vec3 l, lightRgb;
+                                float atten = clusterLight(clusterIndex(clusterOffset + j), vWorldPos, l, lightRgb);
+                                if (atten <= 0.0) continue;
+                                float ndl = max(dot(n, l), 0.0);
+                                if (ndl <= 0.0) continue;
+                                vec3 radiance = lightRgb * atten;
+                                lit += albedo * radiance * ndl;
+                                vec3 h = normalize(l + v);
+                                lit += radiance * vParams.x * pow(max(dot(n, h), 0.0), vParams.y);
+                            }
+                        }
+            """;
+
     static final int ENV_NONE = 0, ENV_GRADIENT = 1, ENV_CUBE = 2, ENV_EQUIRECT = 3, ENV_EQUIRECT_HDR = 4;
 
     /**
@@ -218,6 +312,14 @@ final class SceneShaders {
      * the order given (0 to 2 are the built-in ones). A body that doesn't compile fails the program, so the caller checks.
      */
     static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs) {
+        return fragment(env, filters, falloffs, false);
+    }
+
+    /**
+     * The same, and with {@code clustered} the lights listed for the pixel's cell of the light grid ({@link LightClusters})
+     * are shaded after the ones every pixel tests. The grid is three textures at bindings 11 to 13.
+     */
+    static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered) {
         StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
         for (int i = 0; i < filters.size(); i++) {
             filterFunctions.append("float customFilter").append(i).append("(vec2 uv, float depth, vec2 texel, float softness) {\n")
@@ -231,6 +333,9 @@ final class SceneShaders {
             falloffCases.append("if (id == ").append(3 + i).append(") return customFalloff").append(i).append("(dist, range);\n");
         }
         return "#version 450\n#define ENV_KIND " + env + "\n" + FRAGMENT_BODY
+                .replace("//@CLUSTER_FUNCTIONS", clustered ? CLUSTER_FUNCTIONS : "")
+                .replace("//@CLUSTER_PBR", clustered ? CLUSTER_PBR : "")
+                .replace("//@CLUSTER_CLASSIC", clustered ? CLUSTER_CLASSIC : "")
                 .replace("//@FILTER_FUNCTIONS", filterFunctions)
                 .replace("//@FILTER_CASES", filterCases)
                 .replace("//@FALLOFF_FUNCTIONS", falloffFunctions)
@@ -440,6 +545,8 @@ final class SceneShaders {
                 return atten;
             }
 
+            //@CLUSTER_FUNCTIONS
+
             float distributionGGX(float nh, float a2) {
                 float d = nh * nh * (a2 - 1.0) + 1.0;
                 return a2 / (PI * d * d);
@@ -523,6 +630,7 @@ final class SceneShaders {
                             // The light's intensity is irradiance over pi, so a white light of 1 lights a white surface to 1.
                             lit += ((vec3(1.0) - f) * diffuseColor + PI * spec) * lightColor[i].rgb * atten * nl;
                         }
+                        //@CLUSTER_PBR
                         lit += vExtra.xyz * pow(texture(emissiveTexture, uvEmissive).rgb, vec3(2.2));
                     } else {
             #if ENV_KIND != 0
@@ -544,6 +652,7 @@ final class SceneShaders {
                             vec3 h = normalize(l + v);
                             lit += radiance * vParams.x * pow(max(dot(n, h), 0.0), vParams.y);
                         }
+                        //@CLUSTER_CLASSIC
                     }
                 }
                 if (fog.a > 0.0) {

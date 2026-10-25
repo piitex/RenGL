@@ -59,7 +59,9 @@ final class SceneRenderer {
     /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
     private static final int KEY_ENV_MASK = 7;
     /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
-    private static final int KEY_VARIANT_SHIFT = 12;
+    private static final int KEY_VARIANT_SHIFT = 13;
+    /** The program also shades the lights listed in the cluster grid for the pixel's cell. */
+    private static final int KEY_CLUSTER = 1 << 12;
 
     /**
      * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
@@ -186,6 +188,7 @@ final class SceneRenderer {
         final List<GpuBuffer> sortedIndices = new ArrayList<>();
         PostPass post;
         GpuBuffer depthView;
+        ClusterTextures cluster;
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
@@ -202,6 +205,21 @@ final class SceneRenderer {
             for (GpuBuffer b : sortedIndices) if (b != null) b.close();
             if (post != null) post.close();
             if (depthView != null) depthView.close();
+            if (cluster != null) cluster.close();
+        }
+    }
+
+    /**
+     * The three textures of one render call's light grid ({@link LightClusters}), grown when a frame needs more room.
+     */
+    private static final class ClusterTextures {
+        GpuTexture lights, headers, indices;
+        int lightRows, indexRows;
+
+        void close() {
+            if (lights != null) lights.close();
+            if (headers != null) headers.close();
+            if (indices != null) indices.close();
         }
     }
 
@@ -286,7 +304,9 @@ final class SceneRenderer {
     private long frame;
     private long lastDeviceFrame = -1;
     private int resourcesUsed;
-    private boolean warnedLights, warnedShadowLights, warnedShadowShrink;
+    private boolean warnedLights, warnedShadowLights, warnedShadowShrink, warnedLocalLights, warnedCellFull;
+    /** The light grid's shader did not compile, so every scene shades its lights directly. */
+    private boolean clusterBroken;
 
     SceneRenderer(GpuDevice device) {
         this.device = device;
@@ -327,7 +347,7 @@ final class SceneRenderer {
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
             desc = new PipelineDesc(vertex(skinned, uv2, morph), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
-                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs()), meshLayout, true, (key & KEY_CULL) != 0, blend,
+                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
                     .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
         }
@@ -380,20 +400,37 @@ final class SceneRenderer {
         List<Group> blendedGroups = build(blended, res, cursor);
         uploadInstances(res, cursor[0]);
 
-        boolean[] lightsCut = {false};
-        List<Light> lights = LightBudget.choose(scene.lights(), camera.getPosition(), planes, lightsCut);
-        if (lightsCut[0] && !warnedLights) {
+        Skybox sky = scene.getSkybox();
+        int env = environmentKind(scene, sky);
+        LightBudget.Split split = LightBudget.split(clusterBroken ? Scene3D.LightMode.DIRECT : scene.getLightMode(), scene.lights(), camera.getPosition(), planes);
+        LightClusters clusters = null;
+        if (!split.local().isEmpty()) {
+            Vec3 forward = camera.getTarget().sub(camera.getPosition()).normalized();
+            clusters = LightClusters.build(split.local(), viewProj.toArray(), camera.getPosition(), forward, camera.getNear(), camera.getFar());
+            if (!clusterShaderWorks(env)) {
+                clusters = null;
+                split = LightBudget.split(Scene3D.LightMode.DIRECT, scene.lights(), camera.getPosition(), planes);
+            } else if (clusters.dropped > 0 && !warnedCellFull) {
+                warnedCellFull = true;
+                log.warn("A cell of the light grid holds at most {} lights, and this scene crowds more than that into one; the others add no light there.", LightClusters.MAX_PER_CELL);
+            }
+        }
+        List<Light> lights = split.direct();
+        if (split.directCut() && !warnedLights) {
             warnedLights = true;
             log.warn("A Scene3D shades at most {} lights at once; the ones farthest from the camera are left out of the frame.", Scene3D.MAX_LIGHTS);
         }
+        if (split.localCut() && !warnedLocalLights) {
+            warnedLocalLights = true;
+            log.warn("A Scene3D sorts at most {} lights without shadows into the light grid; the ones farthest from the camera are left out of the frame.", LightClusters.MAX_LIGHTS);
+        }
         ShadowFrame shadowFrame = planShadows(scene, lights, camera, aspect, planes, opaque);
         if (!shadowFrame.plans().isEmpty()) shadowPass(res, opaqueGroups, shadowFrame);
-        Skybox sky = scene.getSkybox();
-        int env = environmentKind(scene, sky);
-        int variant = variantFor(lights, shadowFrame, env);
+        int variant = variantFor(lights, split.local(), shadowFrame, env, clusters != null);
         boolean postProcessed = scene.usesPostProcessing();
-        writeFrameBlock(res.frame, scene, lights, camera, viewProj, shadowFrame, env, variants.get(variant), postProcessed);
-        int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT);
+        writeFrameBlock(res.frame, scene, lights, camera, viewProj, shadowFrame, env, variants.get(variant), postProcessed, clusters);
+        if (clusters != null) uploadClusters(res, clusters, split.local(), variants.get(variant));
+        int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (clusters != null ? KEY_CLUSTER : 0);
         if (sky != null) writeSky(res.sky, scene, camera, aspect, sky, postProcessed);
 
         Color bg = scene.getBackground();
@@ -414,6 +451,11 @@ final class SceneRenderer {
             if (sky != null) drawSky(pass, res, sky);
             pass.bindTexture(7, shadowFrame.plans().isEmpty() ? whiteTexture : atlas.texture());
             if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
+            if (clusters != null) {
+                pass.bindTexture(11, res.cluster.lights);
+                pass.bindTexture(12, res.cluster.headers);
+                pass.bindTexture(13, res.cluster.indices);
+            }
             int[] state = {-1, 0};
             Material[] lastMaterial = {null};
             for (List<Group> list : List.of(opaqueGroups, blendedGroups)) {
@@ -427,7 +469,7 @@ final class SceneRenderer {
         }
         if (postProcessed) res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth);
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
-                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight()));
+                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight(), clusters == null ? 0 : split.local().size(), 0, 0));
         if (frame % SWEEP_EVERY == 0) sweep();
     }
 
@@ -1076,13 +1118,87 @@ final class SceneRenderer {
         }
     }
 
+    // ---- the light grid ------------------------------------------------------------------------------------------
+
+    /**
+     * Whether the scene shader with the light grid compiles here. If it does not (reported once), scenes shade their lights
+     * directly from then on.
+     */
+    private boolean clusterShaderWorks(int env) {
+        if (clusterBroken) return false;
+        try {
+            pipeline((env << KEY_ENV_SHIFT) | KEY_CLUSTER);
+            return true;
+        } catch (RuntimeException e) {
+            clusterBroken = true;
+            log.error("The light grid's shader does not compile on this GPU; lights are shaded directly instead, and a scene with more than {} lights leaves some out.",
+                    Scene3D.MAX_LIGHTS, e);
+            return false;
+        }
+    }
+
+    /**
+     * Writes the grid into this render call's three textures, making them bigger first if the frame needs more room.
+     */
+    private static int nextPowerOfTwo(int n) {
+        return n <= 1 ? 1 : Integer.highestOneBit(n - 1) << 1;
+    }
+
+    private void uploadClusters(Resources res, LightClusters grid, List<Light> locals, Variant variant) {
+        if (res.cluster == null) res.cluster = new ClusterTextures();
+        ClusterTextures t = res.cluster;
+
+        int lightRows = Math.max(16, nextPowerOfTwo(locals.size()));
+        boolean fresh = t.lights == null || t.lightRows < lightRows;
+        lightRows = fresh ? lightRows : t.lightRows;
+        ByteBuffer data = MemoryUtil.memAlloc(lightRows * LightClusters.LIGHT_TEXELS * 4);
+        try {
+            LightClusters.writeLights(data, locals, lightRows, light -> falloffId(light.getFalloff(), variant));
+            if (fresh) {
+                if (t.lights != null) t.lights.close();
+                t.lights = device.createTexture(LightClusters.LIGHT_TEXELS, lightRows, data);
+                t.lightRows = lightRows;
+            } else {
+                t.lights.update(data);
+            }
+        } finally {
+            MemoryUtil.memFree(data);
+        }
+
+        data = MemoryUtil.memAlloc(LightClusters.HEADER_WIDTH * LightClusters.HEADER_ROWS * 4);
+        try {
+            grid.writeHeaders(data);
+            if (t.headers == null) t.headers = device.createTexture(LightClusters.HEADER_WIDTH, LightClusters.HEADER_ROWS, data);
+            else t.headers.update(data);
+        } finally {
+            MemoryUtil.memFree(data);
+        }
+
+        int indexRows = nextPowerOfTwo(grid.indexRows());
+        fresh = t.indices == null || t.indexRows < indexRows;
+        indexRows = fresh ? indexRows : t.indexRows;
+        data = MemoryUtil.memAlloc(indexRows * LightClusters.INDEX_WIDTH * 4);
+        try {
+            grid.writeIndices(data, indexRows);
+            if (fresh) {
+                if (t.indices != null) t.indices.close();
+                t.indices = device.createTexture(LightClusters.INDEX_WIDTH, indexRows, data);
+                t.indexRows = indexRows;
+            } else {
+                t.indices.update(data);
+            }
+        } finally {
+            MemoryUtil.memFree(data);
+        }
+    }
+
     // ---- uniform blocks ----------------------------------------------------------------------------------------
 
     /**
      * The custom pieces this frame's lights use, as the index of the shader variant that holds them. A set that doesn't
      * compile is reported once and its lights fall back to the built-in filter and falloff.
      */
-    private int variantFor(List<Light> lights, ShadowFrame shadows, int env) {
+    private int variantFor(List<Light> lights, List<Light> local, ShadowFrame shadows, int env, boolean clustered) {
         java.util.TreeSet<CustomShadowFilter> filters = new java.util.TreeSet<>(Comparator.comparing(CustomShadowFilter::name).thenComparing(CustomShadowFilter::glsl));
         java.util.TreeSet<CustomLightFalloff> falloffs = new java.util.TreeSet<>(Comparator.comparing(CustomLightFalloff::name).thenComparing(CustomLightFalloff::glsl));
         for (ShadowPlanner.LightPlan plan : shadows.plans()) {
@@ -1090,6 +1206,9 @@ final class SceneRenderer {
         }
         for (int i = 0; i < Math.min(lights.size(), Scene3D.MAX_LIGHTS); i++) {
             if (lights.get(i).getType() != Light.Type.DIRECTIONAL && lights.get(i).getFalloff() instanceof CustomLightFalloff f) falloffs.add(f);
+        }
+        for (Light light : local) {
+            if (light.getFalloff() instanceof CustomLightFalloff f) falloffs.add(f);
         }
         if (filters.isEmpty() && falloffs.isEmpty()) return 0;
         Variant wanted = new Variant(List.copyOf(filters), List.copyOf(falloffs));
@@ -1100,7 +1219,7 @@ final class SceneRenderer {
         }
         if (brokenVariants.contains(index)) return 0;
         try {
-            pipeline((env << KEY_ENV_SHIFT) | (index << KEY_VARIANT_SHIFT)); // compiles now, so a mistake shows up here
+            pipeline((env << KEY_ENV_SHIFT) | (index << KEY_VARIANT_SHIFT) | (clustered ? KEY_CLUSTER : 0)); // compiles now, so a mistake shows up here
         } catch (RuntimeException e) {
             brokenVariants.add(index);
             log.error("A custom shadow filter or light falloff does not compile ({}); lights using one fall back to the built-in filter and falloff.",
@@ -1133,7 +1252,7 @@ final class SceneRenderer {
         return (float) Math.pow(Math.max(0f, srgb), 2.2);
     }
 
-    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, List<Light> lights, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput) {
+    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, List<Light> lights, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput, LightClusters clusters) {
         scratch.clear();
         viewProj.put(scratch);
         Vec3 eye = camera.getPosition();
@@ -1145,7 +1264,8 @@ final class SceneRenderer {
         scratch.putFloat(linear(ambient.getR()) * ai).putFloat(linear(ambient.getG()) * ai).putFloat(linear(ambient.getB()) * ai).putFloat(1f);
 
         int count = Math.min(lights.size(), Scene3D.MAX_LIGHTS);
-        scratch.putFloat(count).putFloat(0f).putFloat(0f).putFloat(0f);
+        // The light grid's near plane and its depth scale, for the shader to find a pixel's slice.
+        scratch.putFloat(count).putFloat(clusters == null ? 1f : clusters.near).putFloat(clusters == null ? 0f : clusters.scale).putFloat(0f);
         // The atlas's texel size, and whether its rows run from the bottom (OpenGL).
         scratch.putFloat(shadows.atlasWidth() == 0 ? 0f : 1f / shadows.atlasWidth()).putFloat(shadows.atlasHeight() == 0 ? 0f : 1f / shadows.atlasHeight())
                 .putFloat(shadows.bottomLeft() ? 1f : 0f).putFloat(0f);
