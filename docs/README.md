@@ -70,7 +70,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Camera](graphics/camera.md) | `Camera`: position, zoom, rotation, viewports, following, shake, and mouse to world coordinates |
 | [Sprites](graphics/sprites.md) | `Texture`, `TextureRegion`, `Sprite`, and `SpriteBatch` for drawing many in order and in few calls |
 | [Texture atlases](graphics/atlases.md) | `TextureAtlas`: packed sprite sheets from TexturePacker, Aseprite and similar tools |
-| [Tile maps](graphics/tile-maps.md) | `TileMap`: levels from the Tiled map editor: drawing, collision shapes, objects and properties |
+| [Tile maps](graphics/tile-maps.md) | `TileMap`: levels from the Tiled map editor, orthogonal, isometric, staggered or hexagonal: drawing, picking a cell, collision shapes, objects and properties |
 | [Sprite animation](graphics/sprite-animation.md) | `Animation` and `AnimationPlayer`: frame animation, loop modes, frame events |
 | [Particles](graphics/particles.md) | `ParticleSystem`, `ParticleEffect` and `ParticleEmitter`: sparks, smoke and debris, in bursts or a steady stream |
 | [Shaders and post effects](graphics/shaders.md) | `ShaderEffect`: SkSL shaders to fill shapes or post-process a scene or element |

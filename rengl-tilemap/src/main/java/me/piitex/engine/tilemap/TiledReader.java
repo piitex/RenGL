@@ -40,7 +40,7 @@ final class TiledReader {
     private static final int FLIPPED_HORIZONTALLY = 0x80000000;
     private static final int FLIPPED_VERTICALLY = 0x40000000;
     private static final int FLIPPED_DIAGONALLY = 0x20000000;
-    private static final int GID_MASK = 0x0FFFFFFF; // bit 28 turns hexagonal tiles, which aren't read
+    private static final int GID_MASK = 0x0FFFFFFF; // bit 28 turns hexagonal tiles by 120 degrees, which is not read
 
     private final Map<Path, TileSet> tileSets = new HashMap<>();
     private final Map<Path, Template> templates = new HashMap<>();
@@ -119,10 +119,19 @@ final class TiledReader {
         String kind = str(root, "type", "map");
         if (!kind.equals("map")) throw new IllegalArgumentException("this is a " + kind + " file, not a map");
         String orientation = str(root, "orientation", "orthogonal");
-        if (!orientation.equals("orthogonal")) {
-            throw new IllegalArgumentException("only orthogonal maps are supported, and this one is " + orientation);
+        int mapWidth = intOr(root, "width", 0), mapHeight = intOr(root, "height", 0), tileWidth = integer(root, "tilewidth"), tileHeight = integer(root, "tileheight");
+        TileMap.StaggerAxis axis = str(root, "staggeraxis", "y").equals("x") ? TileMap.StaggerAxis.X : TileMap.StaggerAxis.Y;
+        boolean odd = !str(root, "staggerindex", "odd").equals("even");
+        if (!orientation.equals("orthogonal") && bool(root, "infinite", false)) {
+            throw new IllegalArgumentException("an infinite map must be orthogonal, and this one is " + orientation);
         }
-        map = new TileMap(intOr(root, "width", 0), intOr(root, "height", 0), integer(root, "tilewidth"), integer(root, "tileheight"));
+        map = switch (orientation) {
+            case "orthogonal" -> new TileMap(mapWidth, mapHeight, tileWidth, tileHeight);
+            case "isometric" -> TileMap.isometric(mapWidth, mapHeight, tileWidth, tileHeight);
+            case "staggered" -> TileMap.staggered(mapWidth, mapHeight, tileWidth, tileHeight, axis, odd);
+            case "hexagonal" -> TileMap.hexagonal(mapWidth, mapHeight, tileWidth, tileHeight, intOr(root, "hexsidelength", 0), axis, odd);
+            default -> throw new IllegalArgumentException("unknown map orientation '" + orientation + "'");
+        };
         map.setSource(file);
         map.setInfinite(bool(root, "infinite", false));
         map.setType(str(root, "class", ""));
@@ -323,11 +332,59 @@ final class TiledReader {
         }
         String type = str(merged, "class", "");
         if (type.isEmpty()) type = str(merged, "type", "");
+        float x = (float) num(merged, "x", 0), y = (float) num(merged, "y", 0);
+        float width = (float) num(merged, "width", 0), height = (float) num(merged, "height", 0), rotation = (float) num(merged, "rotation", 0);
+        if (map.getOrientation() == TileMap.Orientation.ISOMETRIC) {
+            // Tiled saves the objects of an isometric map on a square grid of tileHeight pixels, which it then draws as diamonds.
+            // They are read where they are drawn, so a rectangle becomes the parallelogram it is, and an ellipse its outline.
+            float[] at = map.isometricToScreen(x, y);
+            float[] shape = null;
+            if (kind == MapObject.Kind.POLYGON || kind == MapObject.Kind.POLYLINE) {
+                shape = new float[points.length];
+                for (int i = 0; i < points.length; i += 2) {
+                    float[] p = map.isometricToScreen(x + points[i], y + points[i + 1]);
+                    shape[i] = p[0] - at[0];
+                    shape[i + 1] = p[1] - at[1];
+                }
+            } else if ((kind == MapObject.Kind.RECTANGLE || kind == MapObject.Kind.CAPSULE) && width > 0f && height > 0f) {
+                shape = isometricOutline(map, at, x, y, new float[]{0, 0, width, 0, width, height, 0, height});
+                kind = MapObject.Kind.POLYGON;
+            } else if (kind == MapObject.Kind.ELLIPSE && width > 0f && height > 0f) {
+                float[] ring = new float[32];
+                for (int i = 0; i < 16; i++) {
+                    double angle = Math.PI * 2 * i / 16;
+                    ring[i * 2] = width / 2f + width / 2f * (float) Math.cos(angle);
+                    ring[i * 2 + 1] = height / 2f + height / 2f * (float) Math.sin(angle);
+                }
+                shape = isometricOutline(map, at, x, y, ring);
+                kind = MapObject.Kind.POLYGON;
+            }
+            if (shape != null) {
+                points = shape;
+                width = 0f;
+                height = 0f;
+                rotation = 0f;
+            }
+            x = at[0];
+            y = at[1];
+        }
         return new MapObject(intOr(merged, "id", 0), str(merged, "name", ""), type, kind,
-                (float) num(merged, "x", 0), (float) num(merged, "y", 0),
-                (float) num(merged, "width", 0), (float) num(merged, "height", 0), (float) num(merged, "rotation", 0),
+                x, y, width, height, rotation,
                 points, tile, (gid & FLIPPED_HORIZONTALLY) != 0, (gid & FLIPPED_VERTICALLY) != 0, text,
                 bool(merged, "visible", true), (float) num(merged, "opacity", 1), new Properties(props, map));
+    }
+
+    /**
+     * A shape given as points measured from an isometric object's corner, as points measured from where that corner is drawn.
+     */
+    private static float[] isometricOutline(TileMap map, float[] at, float x, float y, float[] local) {
+        float[] out = new float[local.length];
+        for (int i = 0; i < local.length; i += 2) {
+            float[] p = map.isometricToScreen(x + local[i], y + local[i + 1]);
+            out[i] = p[0] - at[0];
+            out[i + 1] = p[1] - at[1];
+        }
+        return out;
     }
 
     private static ObjectText objectText(Map<String, Object> t) {
@@ -430,7 +487,7 @@ final class TiledReader {
         }
         set.setType(str(entry, "class", ""));
         set.setProperties(new Properties(properties(entry, file), map));
-        float[] pivot = pivot(str(entry, "objectalignment", "unspecified"), where);
+        float[] pivot = pivot(str(entry, "objectalignment", "unspecified"), where, map != null && map.getOrientation() == TileMap.Orientation.ISOMETRIC);
         set.setObjectPivot(pivot[0], pivot[1]);
         set.setRenderSize(str(entry, "tilerendersize", "tile").equals("grid"), str(entry, "fillmode", "stretch").equals("preserve-aspect-fit"));
 
@@ -475,9 +532,10 @@ final class TiledReader {
         return set;
     }
 
-    private static float[] pivot(String alignment, String where) {
+    private static float[] pivot(String alignment, String where, boolean isometric) {
         return switch (alignment) {
-            case "unspecified", "bottomleft" -> new float[]{0f, 1f};
+            case "unspecified" -> isometric ? new float[]{0.5f, 1f} : new float[]{0f, 1f}; // bottom centre by default on an isometric map
+            case "bottomleft" -> new float[]{0f, 1f};
             case "topleft" -> new float[]{0f, 0f};
             case "top" -> new float[]{0.5f, 0f};
             case "topright" -> new float[]{1f, 0f};

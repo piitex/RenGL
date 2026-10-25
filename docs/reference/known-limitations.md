@@ -8,9 +8,9 @@ something not listed, please add it.
 
 ## Graphics
 
-- **Tile maps are orthogonal only.** [`TileMap`](../graphics/tile-maps.md#loading) reads Tiled's square and
-  rectangular grids, not isometric, staggered or hexagonal maps. Text objects are drawn in the engine's default font,
-  whatever family Tiled shows.
+- **Tile maps: no infinite isometric or hexagonal maps, no rotated hexagonal tiles.** [`TileMap`](../graphics/tile-maps.md#isometric-staggered-and-hexagonal-maps)
+  reads all four of Tiled's orientations, but an infinite map must be orthogonal and a hexagonal tile's 60 and 120 degree
+  rotations are drawn unrotated. Text objects are drawn in the engine's default font, whatever family Tiled shows.
 - **Post effects on a turned camera are resampled.** Inside a turned `Camera`, `pushEffect`'s layer is drawn upright
   and turned afterwards, so its content is slightly softer than without the effect. Push effects outside the camera,
   in window coordinates, to avoid it.

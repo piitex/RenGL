@@ -20,13 +20,15 @@ import java.util.function.Predicate;
  * ground.setTile(tx, ty, null);                             // dig a hole
  * List<Rect> walls = ground.getSolidRects(tile -> tile.getProperties().getBoolean("solid", false));
  * }</pre>
- * <b>Cells</b> are numbered in tiles from the map's top-left corner: cell (x, y) covers
- * {@code x * tileWidth} to {@code (x + 1) * tileWidth} across, plus the layer's offset. In an infinite map a layer
- * can start left of or above that corner, at negative cells; {@link #getStartX()} and {@link #getStartY()} say
- * where it starts. Cells outside the layer read as empty.
+ * <b>Cells</b> are numbered in tiles from the map's top-left corner: on an orthogonal map cell (x, y) covers
+ * {@code x * tileWidth} to {@code (x + 1) * tileWidth} across, plus the layer's offset. On an isometric, staggered or
+ * hexagonal map the cells are laid out as the map's {@link TileMap#getOrientation() orientation} says; the layer's cells are
+ * numbered the same way, and {@link #getTileAt} and the map's {@link TileMap#toCell} find the cell under a point. In an infinite
+ * (orthogonal) map a layer can start left of or above that corner, at negative cells; {@link #getStartX()} and
+ * {@link #getStartY()} say where it starts. Cells outside the layer read as empty.
  * <p>
  * <b>Tiles bigger than the grid</b>, such as a tree two cells tall, sit on the bottom-left corner of their cell and
- * reach up and to the right, as in Tiled.
+ * reach up and to the right, as in Tiled. On an isometric map they are centred across the cell instead, as Tiled draws them.
  * <p>
  * <b>Flags</b> mirror or turn a cell's tile: {@link #FLIP_X}, {@link #FLIP_Y} and {@link #FLIP_DIAGONAL}, or for
  * turning, {@link #ROTATE_90}, {@link #ROTATE_180} and {@link #ROTATE_270}. They come from Tiled's flip and rotate
@@ -161,10 +163,8 @@ public final class TileLayer extends MapLayer {
      * The tile under the world point ({@code worldX}, {@code worldY}), allowing for the layer's offset, or null.
      */
     public Tile getTileAt(float worldX, float worldY) {
-        TileMap map = requireMap();
-        int x = (int) Math.floor((worldX - totalOffsetX()) / map.getTileWidth());
-        int y = (int) Math.floor((worldY - totalOffsetY()) / map.getTileHeight());
-        return getTile(x, y);
+        TileMap.Cell cell = requireMap().toCell(worldX - totalOffsetX(), worldY - totalOffsetY());
+        return getTile(cell.x(), cell.y());
     }
 
     /**
@@ -183,10 +183,12 @@ public final class TileLayer extends MapLayer {
      * turned with their cells. Cells whose tile's shape is one rectangle covering the whole cell are joined into
      * as few large rectangles as easily fit, so a wall of a hundred tiles is a handful of shapes. Ready for
      * {@link me.piitex.engine.math.Slide#move} or a {@link me.piitex.engine.math.SpatialGrid}. Includes the layer's
-     * offset; hidden layers count too.
+     * offset; hidden layers count too. Cells are not joined on an isometric, staggered or hexagonal map, whose cells are not
+     * rectangles to join: each tile's own shapes are placed on its picture.
      */
     public List<Shape> getCollisionShapes() {
         TileMap map = requireMap();
+        boolean orthogonal = map.getOrientation() == TileMap.Orientation.ORTHOGONAL;
         float ox = totalOffsetX(), oy = totalOffsetY();
         float gw = map.getTileWidth(), gh = map.getTileHeight();
         List<Shape> shapes = new ArrayList<>();
@@ -201,7 +203,7 @@ public final class TileLayer extends MapLayer {
                 int cellFlags = flags[index];
                 placeTile(map, tile, cellFlags, startX + column, startY + row, ox, oy, rect);
                 float x = rect[0], y = rect[1], w = rect[2], h = rect[3];
-                if (local.size() == 1 && local.getFirst() instanceof Rect r && r.x() == 0f && r.y() == 0f
+                if (orthogonal && local.size() == 1 && local.getFirst() instanceof Rect r && r.x() == 0f && r.y() == 0f
                         && r.width() == tile.getWidth() && r.height() == tile.getHeight()
                         && x == ox + (startX + column) * gw && y == oy + (startY + row) * gh && w == gw && h == gh) {
                     full[index] = true;
@@ -220,15 +222,47 @@ public final class TileLayer extends MapLayer {
      * Rectangles covering every cell whose tile passes {@code isSolid}, joined into as few large rectangles as
      * easily fit: {@code t -> true} for a layer that is solid wherever it has a tile, or a test of the tile's class
      * or properties. Each covers whole cells of the grid, whatever the tile's picture or collision shapes. Includes
-     * the layer's offset.
+     * the layer's offset. For an orthogonal map only: the cells of the others are diamonds and hexagons, so use
+     * {@link #getSolidShapes}.
+     *
+     * @throws UnsupportedOperationException on a map that is not orthogonal
      */
     public List<Rect> getSolidRects(Predicate<? super Tile> isSolid) {
         TileMap map = requireMap();
+        if (map.getOrientation() != TileMap.Orientation.ORTHOGONAL) {
+            throw new UnsupportedOperationException("getSolidRects is for orthogonal maps; this one is " + map.getOrientation() + ", so use getSolidShapes");
+        }
         boolean[] full = new boolean[tiles.length];
         for (int i = 0; i < tiles.length; i++) full[i] = tiles[i] != null && isSolid.test(tiles[i]);
         List<Rect> rects = new ArrayList<>();
         joinCells(full, totalOffsetX(), totalOffsetY(), map.getTileWidth(), map.getTileHeight(), rects);
         return rects;
+    }
+
+    /**
+     * The cells whose tile passes {@code isSolid}, as shapes in world coordinates, including the layer's offset: joined
+     * rectangles on an orthogonal map (as {@link #getSolidRects}), one diamond or hexagon for each cell on the others. For
+     * {@link me.piitex.engine.math.Slide#move} or a {@link me.piitex.engine.math.SpatialGrid} on a map of any orientation.
+     */
+    public List<Shape> getSolidShapes(Predicate<? super Tile> isSolid) {
+        TileMap map = requireMap();
+        if (map.getOrientation() == TileMap.Orientation.ORTHOGONAL) return new ArrayList<>(getSolidRects(isSolid));
+        float ox = totalOffsetX(), oy = totalOffsetY();
+        List<Shape> shapes = new ArrayList<>();
+        for (int row = 0; row < height; row++) {
+            for (int column = 0; column < width; column++) {
+                Tile tile = tiles[row * width + column];
+                if (tile == null || !isSolid.test(tile)) continue;
+                Polygon cell = (Polygon) map.getCellShape(startX + column, startY + row);
+                float[] points = cell.getPoints();
+                for (int i = 0; i < points.length; i += 2) {
+                    points[i] += ox;
+                    points[i + 1] += oy;
+                }
+                shapes.add(new Polygon(points));
+            }
+        }
+        return shapes;
     }
 
     /**
@@ -305,7 +339,8 @@ public final class TileLayer extends MapLayer {
 
     /**
      * Where the tile in cell ({@code cellX}, {@code cellY}) is drawn, as x, y, width, height: on the bottom-left
-     * corner of the cell, moved by the tile set's drawing offset, and sized as the tile set says.
+     * corner of the cell's box (centred across it on an isometric map), moved by the tile set's drawing offset, and sized as the
+     * tile set says.
      */
     static void placeTile(TileMap map, Tile tile, int cellFlags, int cellX, int cellY, float ox, float oy, float[] out) {
         TileSet set = tile.getTileSet();
@@ -329,8 +364,12 @@ public final class TileLayer extends MapLayer {
             w = h;
             h = swap;
         }
-        out[0] = ox + cellX * gw + set.getTileOffsetX() + shiftX;
-        out[1] = oy + (cellY + 1) * gh + set.getTileOffsetY() - h + shiftY;
+        map.cellOrigin(cellX, cellY, out);
+        float left = ox + out[0], top = oy + out[1];
+        // Tiled centres a tile across its cell on an isometric map and puts it on the left of the cell on the others.
+        float across = map.getOrientation() == TileMap.Orientation.ISOMETRIC ? (gw - w) / 2f : 0f;
+        out[0] = left + across + set.getTileOffsetX() + shiftX;
+        out[1] = top + gh + set.getTileOffsetY() - h + shiftY;
         out[2] = w;
         out[3] = h;
     }
@@ -346,7 +385,15 @@ public final class TileLayer extends MapLayer {
         float ox = state.offsetX + state.shiftX(map, view), oy = state.offsetY + state.shiftY(map, view);
 
         int x0 = startX, x1 = startX + width - 1, y0 = startY, y1 = startY + height - 1;
-        if (view != null) {
+        boolean orthogonal = map.getOrientation() == TileMap.Orientation.ORTHOGONAL;
+        if (view != null && !orthogonal) {
+            int[] range = visibleCells(map, view, ox, oy);
+            x0 = Math.max(x0, range[0]);
+            x1 = Math.min(x1, range[1]);
+            y0 = Math.max(y0, range[2]);
+            y1 = Math.min(y1, range[3]);
+            if (x0 > x1 || y0 > y1) return;
+        } else if (view != null) {
             // How far a tile can reach out of its cell: big tiles reach up and right, drawing offsets any way.
             float reachLeft = 0f, reachRight = 0f, reachUp = 0f, reachDown = 0f;
             for (TileSet set : usedSets) {
@@ -367,6 +414,24 @@ public final class TileLayer extends MapLayer {
         int color = state.packed();
         double time = map.getTime();
         boolean rightwards = map.isRenderRight(), downwards = map.isRenderDown();
+        boolean byColumns = (map.getOrientation() == TileMap.Orientation.STAGGERED || map.getOrientation() == TileMap.Orientation.HEXAGONAL)
+                && map.getStaggerAxis() == TileMap.StaggerAxis.X;
+        if (byColumns) {
+            // columns that are shifted down overlap the next column, so a column is drawn whole before the one beside it
+            for (int i = 0, columns = x1 - x0 + 1; i < columns; i++) {
+                int cellX = rightwards ? x0 + i : x1 - i;
+                for (int j = 0, rows = y1 - y0 + 1; j < rows; j++) {
+                    int cellY = downwards ? y0 + j : y1 - j;
+                    Tile tile = tiles[(cellY - startY) * width + cellX - startX];
+                    if (tile == null) continue;
+                    int cellFlags = flags[(cellY - startY) * width + cellX - startX];
+                    placeTile(map, tile, cellFlags, cellX, cellY, ox, oy, rect);
+                    addQuad(renderer, quads, tile.getRegionAt(time), cellFlags, rect[0], rect[1], rect[2], rect[3], color);
+                }
+            }
+            quads.flush(renderer);
+            return;
+        }
         for (int j = 0, rows = y1 - y0 + 1; j < rows; j++) {
             int cellY = downwards ? y0 + j : y1 - j;
             int rowStart = (cellY - startY) * width - startX;
@@ -380,6 +445,43 @@ public final class TileLayer extends MapLayer {
             }
         }
         quads.flush(renderer);
+    }
+
+    /**
+     * The cells, as x0, x1, y0, y1, that a view of an isometric, staggered or hexagonal map can show, with room for tiles that reach out
+     * of their cells. A little more than the exact set, never less.
+     */
+    private int[] visibleCells(TileMap map, Rect view, float ox, float oy) {
+        float gw = map.getTileWidth(), gh = map.getTileHeight();
+        float reach = Math.max(gw, gh);
+        for (TileSet set : usedSets) {
+            reach = Math.max(reach, Math.max(set.getMaxTileWidth(), set.getMaxTileHeight()) + Math.max(Math.abs(set.getTileOffsetX()), Math.abs(set.getTileOffsetY())));
+        }
+        float left = view.x() - ox - reach, right = view.right() - ox + reach, top = view.y() - oy - reach, bottom = view.bottom() - oy + reach;
+        if (map.getOrientation() == TileMap.Orientation.ISOMETRIC) {
+            // the picture to cells is a straight map, so the corners of the view hold every cell the view holds
+            int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
+            float[] xs = {left, right, left, right}, ys = {top, top, bottom, bottom};
+            for (int i = 0; i < 4; i++) {
+                TileMap.Cell cell = map.toCell(xs[i], ys[i]);
+                minX = Math.min(minX, cell.x());
+                maxX = Math.max(maxX, cell.x());
+                minY = Math.min(minY, cell.y());
+                maxY = Math.max(maxY, cell.y());
+            }
+            return new int[]{minX - 1, maxX + 1, minY - 1, maxY + 1};
+        }
+        boolean axisX = map.getStaggerAxis() == TileMap.StaggerAxis.X;
+        float side = map.getHexSideLength(), colStep, rowStep;
+        if (map.getOrientation() == TileMap.Orientation.STAGGERED) {
+            colStep = axisX ? gw / 2f : gw;
+            rowStep = axisX ? gh : gh / 2f;
+        } else {
+            colStep = axisX ? (gw - side) / 2f + side : gw;
+            rowStep = axisX ? gh : (gh - side) / 2f + side;
+        }
+        return new int[]{(int) Math.floor(left / colStep) - 1, (int) Math.floor(right / colStep) + 1,
+                (int) Math.floor(top / rowStep) - 1, (int) Math.floor(bottom / rowStep) + 1};
     }
 
     /**
