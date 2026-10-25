@@ -25,7 +25,9 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   untested.
 - **On Windows,** the 3D and 2D demos, the GPU tests and several apps were run on both APIs with no errors in the logs
   (see the [3D status document](../3d-status.md#verification-so-far)). Only a few of them were looked at by eye, and
-  nobody has driven the demos with a real mouse and keyboard there.
+  nobody has driven the demos with a real mouse and keyboard there. What is checked is a click, a check box and typing
+  posted to a real window as Windows messages (`PostedInputTest` in `rengl-core`), which is how the system hands input
+  to GLFW.
 - **Light from the sky is an approximation.** [Environment lighting](../3d/lighting.md#light-from-the-sky) lights surfaces
   from nine spherical-harmonic terms and blurs reflections with the sky's mipmaps instead of filtering a real
   environment map, and the sky pictures are 8-bit, so there is no bright sun in them and a sharp reflection of a small
