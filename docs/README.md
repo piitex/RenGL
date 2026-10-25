@@ -51,9 +51,10 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | Controls | [ButtonOverlay](overlays/button-overlay.md) · [LinkOverlay](overlays/link-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
 | Feedback | [ProgressBarOverlay](overlays/progress-bar-overlay.md) · [LoadingSpinnerOverlay](overlays/loading-spinner-overlay.md) · [SeparatorOverlay](overlays/separator-overlay.md) |
 | Images | [ImageOverlay](overlays/image-overlay.md) · [IconOverlay](overlays/icon-overlay.md) |
-| **[Charts](charts/README.md)** | Line, bar, pie and donut charts drawn by the engine, with live data |
-| [Line chart](charts/line-chart.md) | `LineChartOverlay`: lines, smooth curves, filled areas, gaps |
-| [Bar chart](charts/bar-chart.md) | `BarChartOverlay`: grouped, stacked and horizontal bars |
+| **[Charts](charts/README.md)** | Line, bar, scatter, pie and donut charts drawn by the engine, with live data |
+| [Line chart](charts/line-chart.md) | `LineChartOverlay`: lines, smooth curves, filled areas, gaps, a log axis, a time axis |
+| [Bar chart](charts/bar-chart.md) | `BarChartOverlay`: grouped, stacked and horizontal bars, on a log axis if you like |
+| [Scatter chart](charts/scatter-chart.md) | `ScatterChartOverlay`: points and bubbles on two numeric axes |
 | [Pie chart](charts/pie-chart.md) | `PieChartOverlay`: pies and donuts |
 | **[Game](game/README.md)** | Scenes and the game loop |
 | [Scenes](game/scenes.md) | `Scene` and `SceneManager`: menus, gameplay, pause menus, and moving between them |

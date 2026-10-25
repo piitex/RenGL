@@ -15,7 +15,7 @@ import me.piitex.engine.ui.text.TextAlign;
  * chart.addSeries("2026", 51, 36, 49, 40);
  * }</pre>
  * Bars grow from the zero line (negative values hang below it) and the axis always includes zero, since a bar's length
- * is the number. {@link #setStacked} piles a category's series on top of each other, and {@link #setHorizontal} turns
+ * is the number. On a {@linkplain #setLogScale log axis}, which has no zero, they grow from the bottom instead. {@link #setStacked} piles a category's series on top of each other, and {@link #setHorizontal} turns
  * the chart on its side, which suits long category names.
  */
 public class BarChartOverlay extends AxisChartOverlay {
@@ -97,6 +97,11 @@ public class BarChartOverlay extends AxisChartOverlay {
     }
 
     @Override
+    protected boolean supportsLogScale() {
+        return !stacked;
+    }
+
+    @Override
     protected double[] dataExtent() {
         double low = Double.POSITIVE_INFINITY, high = Double.NEGATIVE_INFINITY;
         int n = categoryCount();
@@ -104,7 +109,7 @@ public class BarChartOverlay extends AxisChartOverlay {
             double positive = 0, negative = 0;
             for (ChartSeries s : series) {
                 double v = s.get(c);
-                if (!s.isVisible() || Double.isNaN(v)) continue;
+                if (!s.isVisible() || !usable(v)) continue;
                 if (stacked) {
                     if (v >= 0) positive += v;
                     else negative += v;
@@ -136,7 +141,7 @@ public class BarChartOverlay extends AxisChartOverlay {
     private boolean barRect(int index, int category) {
         ChartSeries s = series.get(index);
         double v = s.shown(category);
-        if (!s.isVisible() || Double.isNaN(v)) return false;
+        if (!s.isVisible() || !usable(v)) return false;
 
         int visible = visibleCount();
         float step = categoryStep();
@@ -163,8 +168,9 @@ public class BarChartOverlay extends AxisChartOverlay {
             slot = (group - gap * (visible - 1)) / visible;
             offset = -group / 2f + slotIndex * (slot + gap);
         }
-        rectPositive = v >= 0;
-        float a = valuePos(from), b = valuePos(to);
+        rectPositive = v >= 0 || logAxis();
+        // a log axis has no zero: a bar grows from the bottom of the axis
+        float a = logAxis() ? zeroPos() : valuePos(from), b = valuePos(to);
         float low = Math.min(a, b), extent = Math.abs(b - a);
         if (horizontal) {
             rect[0] = low;

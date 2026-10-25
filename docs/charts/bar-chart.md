@@ -35,6 +35,21 @@ chart.setValueMax(100);
 chart.setBeginAtZero(false);  // lets the axis fit the data instead. Bars then start at the axis' foot
 ```
 
+## A logarithmic value axis
+
+```java
+chart.setLogScale(true);   // or chart.setValueScale(AxisScale.LOG)
+```
+
+For amounts that span orders of magnitude (the population of a town, a city and a region), where on a straight axis the small
+bars would be a hair. Each power of ten gets the same height, so a bar is as tall as the **logarithm** of its value: a bar twice as
+tall is not twice the amount. A log axis has no zero, so bars grow from the **bottom** of the axis, and the axis starts at a
+power of ten below the smallest value.
+
+- A value of zero or less has no bar.
+- A **stacked** chart stays linear, since the parts of a stack add; the setting is kept for when it is unstacked.
+- Read [the line chart's](line-chart.md#a-logarithmic-value-axis) notes on ticks and ranges; they are the same.
+
 ## Look
 
 ```java
@@ -67,6 +82,7 @@ chart.onPointClick(hit -> open(hit.categoryLabel(), hit.seriesName()));
 | `setGroupGap(float)` | Space between groups, as a share of a category's room |
 | `addSeries(...)`, `getSeries(...)`, `removeSeries`, `clearSeries` | [Series](README.md#data) |
 | `setBeginAtZero(boolean)` / `setValueMin(double)` / `setValueMax(double)` / `setValueRange(double, double)` | The value axis' range |
+| `setLogScale(boolean)` / `setValueScale(AxisScale)` | A [logarithmic](#a-logarithmic-value-axis) value axis |
 | `getAxisRange()` | The range drawn this frame, as `{min, max}` |
 | `setShowGrid(boolean)` | Grid lines at each tick |
 | `setValueAxisTitle(String)` / `setCategoryAxisTitle(String)` | Axis titles |
