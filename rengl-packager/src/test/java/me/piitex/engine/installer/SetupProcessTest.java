@@ -49,7 +49,13 @@ class SetupProcessTest {
 
     @Test
     void commandCarriesTheChoices() {
-        var command = SetupProcess.command(Path.of("C:\\Temp\\setup.exe"), new SetupProcess.Choices("C:\\Apps\\My App", true, false));
+        var command = SetupProcess.command(Path.of("C:\\Temp\\setup.exe"), new SetupProcess.Choices("C:\\Apps\\My App", true, false, false));
         assertEquals(java.util.List.of("C:\\Temp\\setup.exe", "/S", "/DIR=C:\\Apps\\My App", "/DESKTOP=1", "/STARTMENU=0", "/PROGRESS"), command);
+    }
+
+    @Test
+    void commandAsksForAllUsersOnlyWhenChosen() {
+        var command = SetupProcess.command(Path.of("C:\\Temp\\setup.exe"), new SetupProcess.Choices("C:\\Program Files\\My App", true, true, true));
+        assertEquals(java.util.List.of("C:\\Temp\\setup.exe", "/S", "/DIR=C:\\Program Files\\My App", "/DESKTOP=1", "/STARTMENU=1", "/PROGRESS", "/ALLUSERS=1"), command);
     }
 }
