@@ -199,6 +199,10 @@ polyline has its points converted, a **rectangle** (or capsule) comes out as a `
 and an **ellipse** as a 16-sided `POLYGON`. Their rotation is dropped. A tile object's *Object Alignment* is *Bottom* by default there, as
 in Tiled, so it stands on its point. Objects on the other three orientations are in plain pixels and are read as they are.
 
+`me.piitex.examples.demo.TileMapDemo` builds all five layouts in code, with tile pictures drawn at startup, and lets you point at a
+cell (`toCell` and `getCellShape`), click to change its tile, and show the grid and the solid cells (`getSolidShapes`). Keys 1 to
+5 switch the layout, or start it with `-Drengl.demo.layout=3`.
+
 Not read: the 60 and 120 degree rotation flags of hexagonal tiles (a rotated hexagonal tile is drawn unrotated; mirrored ones are
 mirrored), and **infinite** maps that are not orthogonal, which fail to load saying so. Collision shapes drawn on a tile in an isometric
 *tile set* (whose grid Tiled shows as diamonds) are taken as measured on the tile's picture, as for any tile.

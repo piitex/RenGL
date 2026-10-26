@@ -12,7 +12,9 @@ ordinary [`Overlay`](../core/overlay.md), so it goes in a layout or a container,
 ![Four charts on a dashboard](../images/charts.jpg)
 
 `me.piitex.examples.demo.ChartDemo` is a runnable dashboard with all of them: a live line chart that scrolls, bars that
-stack and turn on their side, a donut, and a ranking.
+stack and turn on their side, a donut, and a ranking. `me.piitex.examples.demo.ChartAxesDemo` is the one for the axes: a log
+axis that turns compound growth into a straight line (and back, with a check box), a time axis over a year and a half of days
+that buttons narrow to 30 or 90 days, and a scatter chart with log axes and a bubble chart on a time axis.
 
 | Chart | What it is for |
 |---|---|

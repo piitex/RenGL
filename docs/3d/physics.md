@@ -86,6 +86,10 @@ that counts the bodies that are awake. `me.piitex.examples.demo.DominoDemo` is a
 curve, a button or a click to push one over, and slow motion. `me.piitex.examples.demo.TerrainDemo` drops rocks (convex
 hulls) and crates on a hilly terrain (a triangle mesh). `me.piitex.examples.demo.PlaygroundDemo` walks a character
 around stairs, ramps, a lift, a rope bridge of hinged planks, a door, a seesaw and a wrecking ball on a rope.
+`me.piitex.examples.demo.FastBodiesDemo` fires thin sheets, planks, balls and cubes at a 2 cm wall, at a speed you choose
+up to 1000 m/s, with [continuous collision](#fast-bodies) on or off, and drops L-shaped bodies cut by
+[`ConvexDecomposition`](#concave-moving-bodies) on a staircase. With the check box off, about one thin sheet in six at 300 m/s
+ends up on the far side of the wall (measured over 240 sheets); with it on, none does.
 
 ## Units and conventions
 
