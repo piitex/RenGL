@@ -47,6 +47,7 @@ public final class Input {
     private final PressState[] keys = new PressState[GLFW.GLFW_KEY_LAST + 1];
     private final PressState[] buttons = new PressState[GLFW.GLFW_MOUSE_BUTTON_LAST + 1];
     private final PressState any = new PressState();
+    private final boolean[] modifiersHeld = new boolean[GLFW.GLFW_KEY_LAST + 1]; // modifier keys down, as seen by every key event
 
     long frame; // counts the frames, from the start of each frame's input
 
@@ -115,9 +116,17 @@ public final class Input {
     public int getModifiers() {
         int mods = 0;
         for (int key : MODIFIER_KEYS) {
-            if (keys[key].down) mods |= modifierBit(key);
+            if (keys[key].down || modifiersHeld[key]) mods |= modifierBit(key);
         }
         return mods;
+    }
+
+    /**
+     * Notes that a modifier key went down or up, whoever the press was for. An Element with the keyboard takes a press
+     * away from the game's own input, and a tree's Ctrl-click has to know Ctrl is held even then. Other keys are ignored.
+     */
+    void trackModifier(int key, boolean down) {
+        if (modifierBit(key) != 0) modifiersHeld[key] = down;
     }
 
     // ---------------------------------------------------------------- mouse

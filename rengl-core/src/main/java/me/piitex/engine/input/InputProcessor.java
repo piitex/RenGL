@@ -447,6 +447,7 @@ public class InputProcessor {
      */
     private void handleKey(Window window, InputEvent event) {
         Input input = window.getInput();
+        if (event.action != GLFW.GLFW_REPEAT) input.trackModifier(event.buttonOrKey, event.action == GLFW.GLFW_PRESS);
         if (input.captureKey(event.buttonOrKey, event.action, event.mods)) return; // a controls menu waiting for a binding
 
         // A release always reaches the game as well, so a key held down in the game and let go while a text field
