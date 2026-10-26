@@ -206,7 +206,7 @@ public final class PhysicsWorld {
     /**
      * Whether a joint between {@code a} and {@code b} keeps them from colliding.
      */
-    private static boolean jointedApart(RigidBody a, RigidBody b) {
+    static boolean jointedApart(RigidBody a, RigidBody b) {
         List<Joint> list = a.joints.size() <= b.joints.size() ? a.joints : b.joints;
         for (Joint joint : list) {
             if (!joint.isCollideConnected() && (joint.getBodyA() == a && joint.getBodyB() == b || joint.getBodyA() == b && joint.getBodyB() == a)) return true;
@@ -599,7 +599,10 @@ public final class PhysicsWorld {
             jointTree.build(holding);
         }
         for (RigidBody body : active) {
-            if (body.getWorld() == this) body.integratePosition(dt);
+            if (body.getWorld() == this) {
+                body.limitSpin(dt);
+                body.integratePosition(body.sweeps(dt) ? dt * ContinuousCollision.timeOfImpact(this, body, dt) : dt);
+            }
             if (last) body.clearForces();
         }
         // The velocities kept the joints from coming apart, as far as a straight-line step can; turning moved the

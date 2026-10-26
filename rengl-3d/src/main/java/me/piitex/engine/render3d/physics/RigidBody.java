@@ -76,6 +76,8 @@ public final class RigidBody {
     float speculative;
     private Object userData;
     private boolean trigger;
+    private boolean continuous = true;
+    private float reach, thickness;
     private ContactListener contactListener;
     private int collisionLayer = 1;
     private int collisionMask = -1;
@@ -626,6 +628,20 @@ public final class RigidBody {
         return trigger;
     }
 
+    public boolean isContinuous() {
+        return continuous;
+    }
+
+    /**
+     * Whether a step this body makes that is long for how thin it is (a bullet, a thin blade, a fast sheet) is checked for
+     * hitting something static on the way, so it stops at the surface instead of passing through (on by default). Turn it
+     * off for a body that is meant to go through, or to save the little it costs.
+     */
+    public RigidBody setContinuous(boolean continuous) {
+        this.continuous = continuous;
+        return this;
+    }
+
     /**
      * Makes the body a trigger: other bodies pass through it, and it reports who enters and leaves to the contact
      * listeners. Use a static trigger for a zone (a finish line, a pickup, water), or a kinematic one that moves.
@@ -745,7 +761,48 @@ public final class RigidBody {
     /**
      * The farthest any point of the body's shapes is from its centre of mass, a little over (taken from their boxes).
      */
-    private float reach() {
+    float reach() {
+        return reach;
+    }
+
+    /**
+     * Whether this step's travel, of the centre and of the farthest point as it turns, is more than the body is thick, so it could
+     * cross a wall without its contacts having seen it.
+     */
+    boolean sweeps(float dt) {
+        if (!continuous || type != BodyType.DYNAMIC || sleeping || character != null || scaledShapes.isEmpty()) return false;
+        float travel = (float) Math.sqrt((vx + pvx) * (vx + pvx) + (vy + pvy) * (vy + pvy) + (vz + pvz) * (vz + pvz)) * dt;
+        float spin = (float) Math.sqrt((wx + pwx) * (wx + pwx) + (wy + pwy) * (wy + pwy) + (wz + pwz) * (wz + pwz));
+        travel += Math.min(spin * dt, MAX_TURN_PER_STEP) * reach;
+        return travel > thickness;
+    }
+
+    /**
+     * Half of the narrowest the body is, of its thinnest shape: how far it can move in one step without passing a wall.
+     */
+    private float thickness() {
+        float thin = Float.POSITIVE_INFINITY;
+        for (BodyShape shape : scaledShapes) {
+            thin = Math.min(thin, switch (shape.shape()) {
+                case SphereShape s -> s.radius();
+                case CapsuleShape c -> c.radius();
+                case BoxShape b -> Math.min(b.halfExtents().x(), Math.min(b.halfExtents().y(), b.halfExtents().z()));
+                case ConvexHullShape h -> {
+                    float narrowest = Float.POSITIVE_INFINITY;
+                    for (Vec3 normal : h.polytope().normals) narrowest = Math.min(narrowest, (h.polytope().max(normal) - h.polytope().min(normal)) * 0.5f);
+                    yield narrowest;
+                }
+                case PlaneShape _, MeshShape _ -> Float.POSITIVE_INFINITY;
+            });
+        }
+        return thin;
+    }
+
+    List<BodyShape> placedShapes() {
+        return scaledShapes;
+    }
+
+    private float computeReach() {
         float far = 0f;
         Vec3 centre = getLocalCenterOfMass();
         for (BodyShape shape : scaledShapes) {
@@ -888,24 +945,39 @@ public final class RigidBody {
      */
     void integratePosition(float dt) {
         if (type == BodyType.STATIC || sleeping) return;
+        limitSpin(dt);
+        cx += (vx + pvx) * dt;
+        cy += (vy + pvy) * dt;
+        cz += (vz + pvz) * dt;
+        pvx = pvy = pvz = 0f;
+        setOrientation(orientationAfter(dt));
+        pwx = pwy = pwz = 0f;
+    }
+
+    /**
+     * Slows a spin that would turn the body past a quarter turn in {@code dt}, where the rotation update falls apart.
+     */
+    void limitSpin(float dt) {
         float speed = (float) Math.sqrt(wx * wx + wy * wy + wz * wz);
-        if (speed * dt > MAX_TURN_PER_STEP) { // past a quarter turn per step the rotation update falls apart
+        if (speed * dt > MAX_TURN_PER_STEP) {
             float s = MAX_TURN_PER_STEP / (speed * dt);
             wx *= s;
             wy *= s;
             wz *= s;
         }
-        cx += (vx + pvx) * dt;
-        cy += (vy + pvy) * dt;
-        cz += (vz + pvz) * dt;
+    }
+
+    /**
+     * The orientation {@code integratePosition(dt)} would leave, from the spin as it is now; changes nothing.
+     */
+    Quat orientationAfter(float dt) {
         // dq/dt = 0.5 * (w, 0) * q
         float h = 0.5f * dt, tx = wx + pwx, ty = wy + pwy, tz = wz + pwz;
         float nx = qx + h * (tx * qw + ty * qz - tz * qy);
         float ny = qy + h * (ty * qw + tz * qx - tx * qz);
         float nz = qz + h * (tz * qw + tx * qy - ty * qx);
         float nw = qw - h * (tx * qx + ty * qy + tz * qz);
-        pvx = pvy = pvz = pwx = pwy = pwz = 0f;
-        setOrientation(new Quat(nx, ny, nz, nw).normalized());
+        return new Quat(nx, ny, nz, nw).normalized();
     }
 
     void savePrevious() {
@@ -1118,6 +1190,8 @@ public final class RigidBody {
             }
         }
         localCenter = center;
+        reach = computeReach();
+        thickness = thickness();
         inertiaLocal = inertia;
         invInertiaLocal = inertia.inverse();
         invMass = type == BodyType.DYNAMIC ? 1f / mass : 0f;
