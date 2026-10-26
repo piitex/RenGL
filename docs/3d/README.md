@@ -126,8 +126,8 @@ The repo has runnable examples in `me.piitex.examples.demo`, which also show eve
 | `WorldScreenDemo` | A control panel on a [screen in the world](scenes.md#an-interface-on-a-screen): drag its slider, open its dropdown and colour picker, tick its check box, all with the mouse through `scene.pick`, while a drag anywhere else orbits the camera |
 | `FastBodiesDemo` | A 2 cm wall and a thin sheet, ball, plank or cube fired at it at up to 1000 m/s, with [continuous collision](physics.md#fast-bodies) switched on and off and a count of what got through; and six L-shaped bodies, cut into hulls by [`ConvexDecomposition`](physics.md#concave-moving-bodies), dropped on a staircase |
 
-All pick Vulkan on macOS and OpenGL elsewhere, and `-Drengl.demo.api=VULKAN` or `OPENGL` overrides that. The OpenGL
-path of the demos has been run on Windows (both APIs) but not on Linux yet.
+All pick Vulkan on macOS and OpenGL elsewhere, and `-Drengl.demo.api=VULKAN` or `OPENGL` overrides that. The demos
+have been run on Windows (both APIs) and started on Arch Linux.
 
 ## Limits at a glance
 
@@ -136,6 +136,6 @@ and emissive maps), shadows from several lights at once (directional with cascad
 skinned animation, morph targets (blend shapes), frustum culling, mipmapped and anisotropically filtered textures, 4x
 anti-aliasing by default, [bloom, ambient occlusion, a colour grade and lens effects](lighting.md#bloom), and ray
 [picking](scenes.md#picking). It has **no variable-width soft shadows, depth of field or motion blur**. It was written and tested on macOS on Apple silicon (Vulkan through MoltenVK and, in a harness,
-OpenGL 3.3) and on Windows 11 with an NVIDIA GPU (native Vulkan and OpenGL); Linux is untested. The full list, with the reasons, is in
+OpenGL 3.3) and on Windows 11 with an NVIDIA GPU (native Vulkan and OpenGL); Linux has been compiled and run on Arch Linux but not checked as closely. The full list, with the reasons, is in
 [Known limitations](../reference/known-limitations.md#rendering-and-3d). The code that checks it all is in `rengl-3d/src/test`: run
 `./mvnw test`, which skips the GPU tests when the machine has no usable GPU.

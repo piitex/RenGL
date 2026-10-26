@@ -20,9 +20,10 @@ something not listed, please add it.
 The 2D UI looks the same on every [rendering API](../core/rendering-apis.md). These limits are about Vulkan and the
 optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) has the reasons and the plans.
 
-- **Vulkan and OpenGL have been run on two machines:** macOS on Apple silicon (Vulkan through MoltenVK, OpenGL only in
-  a harness) and Windows 11 on an NVIDIA RTX 4090 (both natively). Linux, AMD and Intel GPUs, and arm64 Windows are
-  untested.
+- **Vulkan and OpenGL have been checked closely on two machines:** macOS on Apple silicon (Vulkan through MoltenVK,
+  OpenGL only in a harness) and Windows 11 on an NVIDIA RTX 4090 (both natively). The engine also compiles and runs on
+  Arch Linux; which GPU and API were used there was not recorded, so Linux is the least checked. AMD and Intel GPUs on
+  Windows, and arm64 Windows, are untested.
 - **On Windows,** the 3D and 2D demos, the GPU tests and several apps were run on both APIs with no errors in the logs
   (see the [3D status document](../3d-status.md#verification-so-far)). Only a few of them were looked at by eye, and
   nobody has driven the demos with a real mouse and keyboard there. What is checked is a click, a check box and typing
@@ -79,10 +80,11 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   **HEVC plays only where Windows has the HEVC Video Extensions** (a free Store add-on that some editions lack); without
   them the file fails to open with the usual conversion hint. A machine without Media Foundation (a Windows "N"
   edition without the Media Feature Pack) has no system decoder at all.
-- **The Linux decoder (GStreamer) has never been run.** It was written from GStreamer's headers on a Windows machine,
-  with no Linux to try it on: the logic around it is tested with a pipeline that is made up, and the real calls are
-  checked only by `SystemMediaSourceTest` and `VideoPlayerTest` when they run on Linux. Expect to find a mistake in the
-  first run. It needs GStreamer 1.10 or newer and a plug-in for each codec (`gst-libav` for H.264 and AAC). The time of
+- **The Linux decoder (GStreamer) is not confirmed.** It was written from GStreamer's headers on a Windows machine:
+  the logic around it is tested with a pipeline that is made up, and the real calls are checked only by
+  `SystemMediaSourceTest` and `VideoPlayerTest` when they run on Linux (they skip when GStreamer lacks the MP4 demuxer
+  or an H.264 decoder). The engine has since been run on Arch Linux, but playing real H.264 there was not recorded, so
+  expect a mistake until it is. It needs GStreamer 1.10 or newer and a plug-in for each codec (`gst-libav` for H.264 and AAC). The time of
   each picture is read from a fixed place in GStreamer's buffer structure (64-bit builds only), and times that do not
   make sense are replaced by counting frames. A stream that changes its picture size part way through is not followed.
   A machine without GStreamer plays only the formats the engine decodes itself.
