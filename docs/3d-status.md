@@ -146,6 +146,12 @@ implement it. Metal and the CPU snapshot renderer do not, so a `Viewport3D` ther
 
 `me.piitex.examples.demo.PlaygroundDemo`: a character walked with WASD (relative to the camera), Shift and Space, followed by an orbit camera, over stairs to a tower, across a rope bridge of 12 hinged planks, down a ramp, up a gentle ramp and against a steep one, on a lift and a shuttling platform, through a hinged door, onto a seesaw, past pushable crates and a 2000 kg one, a pad that lights up through a trigger, and a wrecking ball on a rope that scatters a crate stack and knocks the character back. C rebuilds the crates, R resets, V shows the colliders.
 
+`me.piitex.examples.demo.LightsDemo`: a night city of 81 buildings (marked as occluders), 700 instanced crates and 64 lamps that glow onto the street; a slider adds up to 1500 coloured point lights, a button cycles `AUTO`, `DIRECT` and `CLUSTERED`, check boxes switch the glow and occlusion culling, and the numbers beside it are `Scene3D.getStats()`. "Street view" puts the camera low, where most of the city is behind something.
+
+`me.piitex.examples.demo.WorldScreenDemo`: a control panel on a `UiScreen` in a room, used with the mouse through `scene.pick`: a slider dragged on the screen (held when the pointer leaves it), a dropdown and a colour picker whose popups open on the screen, and a check box; a press that misses the screen orbits the camera.
+
+`me.piitex.examples.demo.FastBodiesDemo`: a 2 cm wall that thin sheets, planks, balls and cubes are fired at up to 1000 m/s, with a check box for continuous collision and a count of what got through (checked headless: 41 of 240 sheets at about 300 m/s with it off, none with it on), and six L-shaped bodies cut into four hulls each by `ConvexDecomposition` dropped on a mesh staircase (all six came to rest on it and fell asleep).
+
 `me.piitex.examples.demo.Scene3DDemo`: a main viewport (floor, textured cube, specular sphere, glass sphere, loaded model, orbiting point light),
 a second small viewport with its own scene, sliders and check boxes for the lights, spin and glass, and a file dialog to load a model.
 Run it with `-XstartOnFirstThread` on macOS. `-Drengl.demo.api=VULKAN|OPENGL` overrides the API (default Vulkan on macOS, OpenGL elsewhere; OPENGL on macOS is now the fatal error).

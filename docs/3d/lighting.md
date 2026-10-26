@@ -101,7 +101,9 @@ Things to know:
 Every pixel tests every light by default, which is the cheapest way to shade a handful. A built-up scene, such as the rooms of
 an office or a street at night, has hundreds of lamps, each lighting a small patch. For that the scene can sort its point and
 spot lights into a **grid** in front of the camera (16 by 9 tiles of the picture and 24 slices of depth), so a pixel tests only
-the lights whose reach includes its cell.
+the lights whose reach includes its cell. `me.piitex.examples.demo.LightsDemo` has a slider for the number of lights, a button
+for the mode and the grid's count of lights beside the frame rate, in a night city with glowing lamps and
+[occlusion culling](scenes.md#occlusion-culling).
 
 ```java
 scene.setLightMode(Scene3D.LightMode.AUTO);       // the default

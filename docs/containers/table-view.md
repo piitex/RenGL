@@ -25,6 +25,9 @@ panel.addElement(table);
 
 `me.piitex.examples.demo.TableDemo` is a runnable file browser: it sorts, resizes, selects several rows, opens a row with
 the OS, shows it in Finder, and lists whatever folder is [dropped on the window](../core/window.md#files-dropped-on-the-window).
+`me.piitex.examples.demo.TableEditDemo` is an order sheet: a check box for each row (and one in the header for all of them),
+cells that are typed into in place with `setEditable`, a price edited as a number but shown as money with `setEditText`,
+and buttons that act on the ticked rows.
 
 ## Columns
 

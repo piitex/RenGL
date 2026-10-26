@@ -115,13 +115,16 @@ window.setBackground(new Background3D(window, scene));
 
 ## Running the demos
 
-The repo has two runnable examples in `me.piitex.examples.demo`, which also show every call used here:
+The repo has runnable examples in `me.piitex.examples.demo`, which also show every call used here:
 
 | Class | Shows |
 |---|---|
 | `Scene3DDemo` | A main viewport with a floor, textured cube, specular and glass spheres, a loaded model and an orbiting light; a second small viewport with its own scene; sliders and check boxes for the lights; a file dialog that loads a model |
 | `Background3DDemo` | A cube, a sphere and a floor behind a control panel, with the orbit controls working through the UI |
 | `HdrSkyDemo` | An HDR sky lighting chrome, gold, plastic and matte spheres, with a shadow-casting sun light aimed by `HdrTextureData.sunDirection()`; sliders for exposure, sky lighting, bloom and sun, a tone mapping switch, and "Load sky..." (or `-Drengl.demo.sky=file.hdr`) for any Radiance file. It makes its own sky when none is given |
+| `LightsDemo` | A night city: a slider adds up to 1500 coloured point lights along the streets, a button cycles the [light grid](lighting.md#many-lights) between `AUTO`, `DIRECT` and `CLUSTERED`, a check box makes the 64 lamps [glow](lighting.md#glowing-surfaces) onto the street, and another turns on [occlusion culling](scenes.md#occlusion-culling) against the buildings, with the drawn, hidden and grid counts beside it |
+| `WorldScreenDemo` | A control panel on a [screen in the world](scenes.md#an-interface-on-a-screen): drag its slider, open its dropdown and colour picker, tick its check box, all with the mouse through `scene.pick`, while a drag anywhere else orbits the camera |
+| `FastBodiesDemo` | A 2 cm wall and a thin sheet, ball, plank or cube fired at it at up to 1000 m/s, with [continuous collision](physics.md#fast-bodies) switched on and off and a count of what got through; and six L-shaped bodies, cut into hulls by [`ConvexDecomposition`](physics.md#concave-moving-bodies), dropped on a staircase |
 
 All pick Vulkan on macOS and OpenGL elsewhere, and `-Drengl.demo.api=VULKAN` or `OPENGL` overrides that. The OpenGL
 path of the demos has been run on Windows (both APIs) but not on Linux yet.

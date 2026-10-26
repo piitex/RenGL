@@ -322,6 +322,8 @@ view.setInputListener(new Viewport3D.InputListener() {
 buttons, text, lists, animated backgrounds. It draws the container into a `TextureData`, and the player hovers and clicks
 it by aiming at the surface. The drawing is done on the CPU by the renderer that takes a
 [snapshot](../core/snapshots.md), so it needs no window and works the same on every graphics API.
+`me.piitex.examples.demo.WorldScreenDemo` is a control panel on a screen standing in a room: a slider that is dragged (and held when the
+pointer leaves the screen), a dropdown and a colour picker that open their popups on the screen, and a check box.
 
 ```java nocompile
 Container ui = new Container(320, 200);                       // give it its size first
