@@ -12,7 +12,7 @@
 
     <artifactId>rengl-video</artifactId>
     <name>RenGL video</name>
-    <description>Video playback: the VideoOverlay element, AVI/MJPEG and MP4/H.264 decoding, and the system decoders on Windows and macOS.</description>
+    <description>Video playback: the VideoOverlay element, AVI/MJPEG and MP4/H.264 decoding, and the system decoders on Windows, macOS and Linux.</description>
 
     <dependencies>
         <dependency>

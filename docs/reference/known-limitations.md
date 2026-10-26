@@ -79,7 +79,13 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   **HEVC plays only where Windows has the HEVC Video Extensions** (a free Store add-on that some editions lack); without
   them the file fails to open with the usual conversion hint. A machine without Media Foundation (a Windows "N"
   edition without the Media Feature Pack) has no system decoder at all.
-- **There is no Linux decoder for H.264, HEVC and AAC.** They play only on macOS and Windows.
+- **The Linux decoder (GStreamer) has never been run.** It was written from GStreamer's headers on a Windows machine,
+  with no Linux to try it on: the logic around it is tested with a pipeline that is made up, and the real calls are
+  checked only by `SystemMediaSourceTest` and `VideoPlayerTest` when they run on Linux. Expect to find a mistake in the
+  first run. It needs GStreamer 1.10 or newer and a plug-in for each codec (`gst-libav` for H.264 and AAC). The time of
+  each picture is read from a fixed place in GStreamer's buffer structure (64-bit builds only), and times that do not
+  make sense are replaced by counting frames. A stream that changes its picture size part way through is not followed.
+  A machine without GStreamer plays only the formats the engine decodes itself.
 - **A seek restarts the sound,** which leaves a brief gap while the decoder fills the first part (about 25 ms at 1080p,
   85 ms at 4K). Looping has no gap.
 - **Tested with files the engine's own test writer produces,** covering all three AVI index layouts, not yet with
