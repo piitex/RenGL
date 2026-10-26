@@ -43,7 +43,20 @@ import java.util.regex.Pattern;
  * underneath, and a key held when a dialogue box opens doesn't keep the player walking.
  * <p>
  * Only presses no element took reach contexts: none while a text field has the keyboard, a popup or modal is open, or
- * a scene's {@link Scene#onKey} consumed the key, and no clicks on buttons or other elements that listen for them.
+ * a scene's {@link Scene#onKey} consumed the key, and no clicks on buttons or other elements that listen for them. The
+ * same goes for a controller: see {@link Gamepad}.
+ * <h2>Controllers</h2>
+ * {@link Binding#gamepad Controller buttons} and {@link Binding#gamepadAxis stick directions} are bindings like any other,
+ * so one action can have a key and a button: {@code bind("jump", Binding.key(GLFW_KEY_SPACE), Binding.gamepad(Gamepad.Button.A))}.
+ * A stick binding is analog. Its action counts as pressed once the stick passes {@link Gamepads#setPressPoint a press point},
+ * for menus and for {@link #isJustPressed}, but {@link #getValue} follows the stick all the way, so movement is smooth:
+ * <pre>{@code
+ * controls.bind("move_left", Binding.key(GLFW_KEY_A), Binding.gamepadAxis(Gamepad.Axis.LEFT_X, false))
+ *         .bind("move_right", Binding.key(GLFW_KEY_D), Binding.gamepadAxis(Gamepad.Axis.LEFT_X, true));
+ * velocityX = controls.getAxis("move_left", "move_right") * speed;    // -1 to 1 on a stick, -1, 0 or 1 on keys
+ * }</pre>
+ * Any connected controller can trigger an action. For one controller per player, give each player's context its own with
+ * {@link #setGamepad}.
  * <h2>Just pressed, in steps and frames</h2>
  * {@link #isJustPressed}, {@link #isJustReleased} and {@link #isRepeated} mean "since the last step" when called from
  * {@link Scene#fixedUpdate} and "since the last frame" everywhere else. So a press shows in exactly one fixed step, even
@@ -65,6 +78,11 @@ public final class InputContext {
     private final Map<Integer, List<Action>> claims = new HashMap<>();
     private boolean enabled = true;
     private boolean blocking;
+    private int gamepad = -1;
+    /**
+     * How far each controller's stick or trigger direction is pushed, 0 to 1, by pad and {@link Binding} code.
+     */
+    private final float[] axisValues = new float[Gamepads.MAX * Gamepad.DIRECTION_COUNT];
 
     Input input; // the Input this context was last active in, whose frame count its queries use; null before that
     boolean active;
@@ -291,15 +309,26 @@ public final class InputContext {
     }
 
     /**
-     * How strongly the action is pressed, from 0 to 1. Keys and buttons give 0 or 1.
+     * How strongly the action is pressed, from 0 to 1. Keys and buttons give 0 or 1. A stick or trigger binding gives how
+     * far it is pushed (with the dead zone out), also below the point where the action counts as {@link #isDown pressed}.
+     * With several bindings held, the strongest.
      */
     public float getValue(String action) {
-        return get(action).state.down ? 1f : 0f;
+        Action a = get(action);
+        if (a.digital > 0) return 1f;
+        float value = 0f;
+        for (Binding b : a.bindings) {
+            if (b.device() != Binding.Device.GAMEPAD_AXIS) continue;
+            for (int pad = 0; pad < Gamepads.MAX; pad++) {
+                if (acceptsGamepad(pad)) value = Math.max(value, axisValues[pad * Gamepad.DIRECTION_COUNT + b.code()]);
+            }
+        }
+        return value;
     }
 
     /**
-     * {@code getValue(positive) - getValue(negative)}: -1, 0 or 1 with keys. For movement on one axis:
-     * {@code getAxis("move_left", "move_right")}.
+     * {@code getValue(positive) - getValue(negative)}: -1, 0 or 1 with keys, anything between with a stick. For movement on
+     * one axis: {@code getAxis("move_left", "move_right")}.
      */
     public float getAxis(String negative, String positive) {
         return getValue(positive) - getValue(negative);
@@ -307,7 +336,8 @@ public final class InputContext {
 
     /**
      * A direction from four actions, in screen orientation: x grows to the right and y downwards, so "up" gives a
-     * negative y. It is never longer than 1, so moving diagonally isn't faster than moving straight.
+     * negative y. It is never longer than 1, so moving diagonally isn't faster than moving straight. With the four
+     * directions of a stick bound it gives the stick position.
      */
     public Vec2 getVector(String left, String right, String up, String down) {
         float x = getAxis(left, right);
@@ -346,6 +376,26 @@ public final class InputContext {
 
     public boolean isBlocking() {
         return blocking;
+    }
+
+    /**
+     * The controller slot this context listens to, or -1 for any.
+     */
+    public int getGamepad() {
+        return gamepad;
+    }
+
+    /**
+     * Makes this context hear only the controller in slot {@code index} (see {@link Gamepad#getIndex()}), for one context
+     * per player in a local multiplayer game; -1, the default, hears every controller. A context for one pad does not take
+     * presses from other pads, so they go on to the contexts below it. Keyboard and mouse input is not affected.
+     */
+    public InputContext setGamepad(int index) {
+        if (index < -1 || index >= Gamepads.MAX) {
+            throw new IllegalArgumentException("a controller slot is 0 to " + (Gamepads.MAX - 1) + ", or -1 for any: " + index);
+        }
+        this.gamepad = index;
+        return this;
     }
 
     /**
@@ -389,9 +439,31 @@ public final class InputContext {
         return matched == null ? List.of() : matched;
     }
 
+    boolean acceptsGamepad(int pad) {
+        return gamepad < 0 || gamepad == pad;
+    }
+
+    /**
+     * Whether any action here is bound to the controller input {@code device}/{@code code}.
+     */
+    boolean binds(Binding.Device device, int code) {
+        for (Action a : actions.values()) {
+            for (Binding b : a.bindings) {
+                if (b.device() == device && b.code() == code) return true;
+            }
+        }
+        return false;
+    }
+
+    void setAxisValue(int pad, int code, float value) {
+        axisValues[pad * Gamepad.DIRECTION_COUNT + code] = value;
+    }
+
     void press(int source, List<Action> matched, long frame) {
         claims.put(source, matched);
+        boolean digital = !Binding.isAxisSource(source);
         for (Action a : matched) {
+            if (digital) a.digital++;
             if (a.held++ == 0) a.state.press(frame);
         }
     }
@@ -406,7 +478,9 @@ public final class InputContext {
     void release(int source, long frame) {
         List<Action> held = claims.remove(source);
         if (held == null) return;
+        boolean digital = !Binding.isAxisSource(source);
         for (Action a : held) {
+            if (digital && a.digital > 0) a.digital--;
             if (a.held > 0 && --a.held == 0) a.state.release(frame);
         }
     }
@@ -422,7 +496,9 @@ public final class InputContext {
      */
     void deactivate(long frame) {
         claims.clear();
+        java.util.Arrays.fill(axisValues, 0f);
         for (Action a : actions.values()) {
+            a.digital = 0;
             if (a.held > 0) {
                 a.held = 0;
                 a.state.release(frame);
@@ -454,7 +530,8 @@ public final class InputContext {
         final List<Binding> defaults;
         List<Binding> bindings;
         final PressState state = new PressState();
-        int held; // how many held keys or buttons are pressing it
+        int held; // how many held keys, buttons or stick directions are pressing it
+        int digital; // how many of those are not stick directions, which are held at the strength the stick is pushed
 
         Action(String name, List<Binding> defaults) {
             this.name = name;

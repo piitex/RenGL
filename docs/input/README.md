@@ -6,6 +6,7 @@
 |---|---|
 | [Input and focus](input-and-focus.md) | Clicks, hover, cursors, dragging, scrolling, keyboard focus, Tab order, clipboard |
 | [Game input](game-input.md) | `Input`, `InputContext`, `Binding`: polled keys and mouse, named actions, contexts, rebinding and saving bindings |
+| [Gamepads](gamepad.md) | Controllers: buttons, sticks and triggers as bindings or polled, dead zones, one pad per player, rebinding, driving menus |
 | [Tooltips](tooltips.md) | Hover bubbles on any element |
 | [File dialogs](file-dialogs.md) | Native open, save and choose-folder dialogs for importing and exporting |
 | [Menus](menus.md) | Menu bar, popup menus and right-click context menus |

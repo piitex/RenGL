@@ -46,6 +46,18 @@ public class InputProcessor {
     private double pendingDragX, pendingDragY;
     private static final double DRAG_THRESHOLD = 4.0;
 
+    /**
+     * A held D-pad or stick direction repeats as an arrow key after this long, and then at the interval, like a held key.
+     */
+    private static final long PAD_REPEAT_DELAY_NANOS = 400_000_000L;
+    private static final long PAD_REPEAT_NANOS = 100_000_000L;
+    /**
+     * The arrow key a held controller direction is repeating as, or -1, and the controller input that holds it.
+     */
+    private int padRepeatKey = -1;
+    private int padRepeatSource = -1;
+    private long padRepeatNext;
+
     public void processEvents(Window window) {
         InputManager manager = window.getInputManager();
         window.getInput().beginFrame();
@@ -90,6 +102,86 @@ public class InputProcessor {
                     break;
             }
         }
+        handleGamepads(window, window.isFocused(), System.nanoTime());
+    }
+
+    /**
+     * Takes this frame's controller changes and sends each press where a key would go: to a prompt waiting for a binding,
+     * else to the interface if it has the keyboard (as the arrow keys, Enter, Escape and Tab), else to the game. Releases
+     * always reach the game, so nothing is left held.
+     */
+    void handleGamepads(Window window, boolean focused, long now) {
+        Input input = window.getInput();
+        for (Input.GamepadEdge edge : input.pollGamepads(focused, uiOwnsGamepad(window))) {
+            if (!edge.pressed()) {
+                input.gamepadReleased(edge);
+                if (Binding.padSource(edge.pad().getIndex(), edge.device(), edge.code()) == padRepeatSource) padRepeatKey = -1;
+                continue;
+            }
+            if (window.swallowInput(true)) continue;
+            if (input.captureGamepad(edge)) continue;
+            if (uiOwnsGamepad(window)) {
+                uiGamepadPress(window, edge, now);
+            } else {
+                input.gamepadPressed(edge);
+            }
+        }
+        if (padRepeatKey >= 0) {
+            if (!uiOwnsGamepad(window)) {
+                padRepeatKey = -1;
+            } else if (now >= padRepeatNext) {
+                padRepeatNext = now + PAD_REPEAT_NANOS;
+                handleKey(window, new InputEvent(InputEvent.Type.KEY, now, 0, 0, padRepeatKey, GLFW.GLFW_REPEAT, 0));
+            }
+        }
+    }
+
+    /**
+     * Whether the interface has the controller: a popup or modal is open, or an element has the keyboard. The same
+     * condition keeps keys from the game.
+     */
+    private boolean uiOwnsGamepad(Window window) {
+        return window.getPopup() != null || window.getModal() != null || usableFocus(window) != null;
+    }
+
+    /**
+     * A controller press for the interface, as the key it stands for: the D-pad and the left stick are the arrow keys, A is
+     * Enter, B is Escape, and the bumpers are Tab and Shift+Tab. A held direction repeats. Anything else does nothing.
+     */
+    private void uiGamepadPress(Window window, Input.GamepadEdge edge, long now) {
+        int key = uiKeyFor(edge);
+        if (key < 0) return;
+        boolean previous = edge.device() == Binding.Device.GAMEPAD_BUTTON && edge.code() == Gamepad.Button.LEFT_BUMPER.code();
+        handleKey(window, new InputEvent(InputEvent.Type.KEY, now, 0, 0, key, GLFW.GLFW_PRESS, previous ? GLFW.GLFW_MOD_SHIFT : 0));
+        if (key >= GLFW.GLFW_KEY_RIGHT && key <= GLFW.GLFW_KEY_UP) {
+            padRepeatKey = key;
+            padRepeatSource = Binding.padSource(edge.pad().getIndex(), edge.device(), edge.code());
+            padRepeatNext = now + PAD_REPEAT_DELAY_NANOS;
+        }
+    }
+
+    private static int uiKeyFor(Input.GamepadEdge edge) {
+        if (edge.device() == Binding.Device.GAMEPAD_BUTTON) {
+            Gamepad.Button button = Gamepad.Button.of(edge.code());
+            return button == null ? -1 : switch (button) {
+                case A -> GLFW.GLFW_KEY_ENTER;
+                case B -> GLFW.GLFW_KEY_ESCAPE;
+                case DPAD_UP -> GLFW.GLFW_KEY_UP;
+                case DPAD_DOWN -> GLFW.GLFW_KEY_DOWN;
+                case DPAD_LEFT -> GLFW.GLFW_KEY_LEFT;
+                case DPAD_RIGHT -> GLFW.GLFW_KEY_RIGHT;
+                case LEFT_BUMPER, RIGHT_BUMPER -> GLFW.GLFW_KEY_TAB;
+                default -> -1;
+            };
+        }
+        // Stick directions are twice the axis, plus one for the right or down side
+        return switch (edge.code()) {
+            case 0 -> GLFW.GLFW_KEY_LEFT;
+            case 1 -> GLFW.GLFW_KEY_RIGHT;
+            case 2 -> GLFW.GLFW_KEY_UP;
+            case 3 -> GLFW.GLFW_KEY_DOWN;
+            default -> -1;
+        };
     }
 
     private static boolean isInsideWindow(Window window, double x, double y) {
