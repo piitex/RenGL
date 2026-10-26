@@ -34,6 +34,20 @@ Every widget in RenGL is an [`Overlay`](../core/overlay.md) (an [`Element`](../c
 | [`DateTimePickerOverlay`](date-time-picker-overlay.md) | A date, time, or date-and-time chosen from a floating calendar and clock |
 | [`MenuBarOverlay`](../input/menus.md) | A strip of titles that each open a popup menu (see also `PopupMenu` and context menus) |
 
+## Game widgets
+
+| Widget | What it is |
+|---|---|
+| [`KnobOverlay`](knob-overlay.md) | A round dial turned by dragging up and down |
+| [`GaugeOverlay`](gauge-overlay.md) | A round read-out with an arc or needle, colored zones and eased movement |
+| [`JoystickOverlay`](joystick-overlay.md) | An on-screen thumb stick read as two axes, with a dead zone and 4 or 8 way snapping |
+| [`MinimapOverlay`](minimap-overlay.md) | A small map of a larger world with markers, a camera outline, zoom and click to navigate |
+| [`HotkeyOverlay`](hotkey-overlay.md) | A box that shows a key binding and learns a new one, with conflict warnings |
+| [`InventoryGridOverlay<T>`](inventory-grid-overlay.md) | A grid of item slots with stacks, drag between grids, locks and per-slot filters |
+| [`RadialMenu`](../input/radial-menu.md) | A pie menu of wedges around the pointer |
+
+`me.piitex.examples.demo.GameWidgetsDemo` shows all of them, with a `ConsoleLog`, in one window.
+
 ## Feedback and decoration
 
 | Widget | What it is |
@@ -45,7 +59,7 @@ Every widget in RenGL is an [`Overlay`](../core/overlay.md) (an [`Element`](../c
 
 Widgets that are containers, such as [`ListBox`](../containers/list-box.md), [`AccordionContainer`](../containers/accordion-container.md),
 [`ToolBar`](../containers/tool-bar.md), [`StatusBar`](../containers/status-bar.md), [`ToastManager`](../containers/toast-manager.md) and
-[`MessageBox`](../containers/message-box.md), are in the [containers](../containers/README.md) catalog.
+[`MessageBox`](../containers/message-box.md) and [`ConsoleLog`](../containers/console-log.md), are in the [containers](../containers/README.md) catalog.
 
 ## Charts
 

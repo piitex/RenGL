@@ -44,6 +44,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [ListBox](containers/list-box.md) · [AccordionContainer](containers/accordion-container.md) | A pick-one-or-many list; sections that fold |
 | [ToastManager](containers/toast-manager.md) · [MessageBox](containers/message-box.md) | Corner notifications; one-line alert, confirm, prompt and choose dialogs |
 | [ToolBar](containers/tool-bar.md) · [StatusBar](containers/status-bar.md) | The strips along the top and bottom of a window |
+| [ConsoleLog](containers/console-log.md) | A scrolling log with a command line, history and completion: a developer console or a chat window |
 | **[Layouts](layouts/README.md)** | Automatic positioning |
 | [Layouts overview](layouts/README.md) | How automatic positioning works |
 | [Layout files](containers/layout-files.md) | Load a screen designed in the editor from JSON |
@@ -53,6 +54,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | Text | [TextOverlay](overlays/text-overlay.md) · [TextFlowOverlay](overlays/text-flow-overlay.md) · [TextFieldOverlay](overlays/text-field-overlay.md) · [TextAreaOverlay](overlays/text-area-overlay.md) · [RichTextAreaOverlay](overlays/rich-text-area-overlay.md) · [FormattedTextOverlay](overlays/formatted-text-overlay.md) |
 | Controls | [ButtonOverlay](overlays/button-overlay.md) · [LinkOverlay](overlays/link-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [RangeSliderOverlay](overlays/range-slider-overlay.md) · [ComboBoxOverlay](overlays/combo-box-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
 | Feedback | [ProgressBarOverlay](overlays/progress-bar-overlay.md) · [LoadingSpinnerOverlay](overlays/loading-spinner-overlay.md) · [SeparatorOverlay](overlays/separator-overlay.md) · [SpacerOverlay](overlays/spacer-overlay.md) |
+| Game | [KnobOverlay](overlays/knob-overlay.md) · [GaugeOverlay](overlays/gauge-overlay.md) · [JoystickOverlay](overlays/joystick-overlay.md) · [MinimapOverlay](overlays/minimap-overlay.md) · [HotkeyOverlay](overlays/hotkey-overlay.md) · [InventoryGridOverlay](overlays/inventory-grid-overlay.md) |
 | Images | [ImageOverlay](overlays/image-overlay.md) · [IconOverlay](overlays/icon-overlay.md) |
 | **[Charts](charts/README.md)** | Line, bar, scatter, pie and donut charts drawn by the engine, with live data |
 | [Line chart](charts/line-chart.md) | `LineChartOverlay`: lines, smooth curves, filled areas, gaps, a log axis, a time axis |
@@ -110,6 +112,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Tooltips](input/tooltips.md) | Hover bubbles |
 | [File dialogs](input/file-dialogs.md) | Native open, save and choose-folder dialogs |
 | [Menus](input/menus.md) | Menu bar, popup menus and right-click context menus |
+| [RadialMenu](input/radial-menu.md) | A pie menu around the pointer, picked by direction |
 | **[Text editing](text/README.md)** | Shared text options and spell checking |
 | [TextEditingOptions](text/text-editing-options.md) | Shared knobs for text fields and areas |
 | [Spell checking](text/spell-checking.md) | Offline spell checking in [`RichTextAreaOverlay`](overlays/rich-text-area-overlay.md) |

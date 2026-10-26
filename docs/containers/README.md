@@ -20,6 +20,7 @@ split containers, modals and tree views are all containers.
 | [MessageBox](message-box.md) | One-line `alert`, `confirm`, `prompt` and `choose` dialogs over a modal |
 | [ToolBar](tool-bar.md) | A row of flat icon and text buttons, dividers and any other widget |
 | [StatusBar](status-bar.md) | The strip along the bottom: a message at the left and readouts at the sides |
+| [ConsoleLog](console-log.md) | A scrolling log with a command line under it: history, Tab completion, levels and chat lines |
 
 Containers that position their children automatically are covered under [Layouts](../layouts/README.md), including
 [SplitContainer](split-container.md) and [TabContainer](tab-container.md).

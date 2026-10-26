@@ -9,5 +9,6 @@
 | [Tooltips](tooltips.md) | Hover bubbles on any element |
 | [File dialogs](file-dialogs.md) | Native open, save and choose-folder dialogs for importing and exporting |
 | [Menus](menus.md) | Menu bar, popup menus and right-click context menus |
+| [RadialMenu](radial-menu.md) | A pie menu around the pointer, picked by the direction of a flick |
 
 Animation is a separate topic: see [Animation and transitions](../animation/transitions.md).
