@@ -2,6 +2,8 @@ package me.piitex.engine.ui.overlays;
 
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.Binding;
+import me.piitex.engine.input.Gamepad;
+import me.piitex.engine.input.Input;
 import me.piitex.engine.input.InputContext;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Focusable;
@@ -24,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * A box that shows a key binding and learns a new one: the "Jump: Space" row of a controls screen. Clicking it says "Press a
@@ -46,6 +49,12 @@ import java.util.function.Function;
  * and the wheel; a left click while listening always cancels, since that is how the player leaves. {@link #setAllowModifiers}
  * off learns the key alone, for games where Shift and Ctrl are used on their own.
  * <p>
+ * {@link #setAllowGamepad} also learns controller buttons, and sticks and triggers pushed one way, as {@link Binding#gamepad
+ * gamepad bindings}: it takes the press before the interface does, so B and the D-pad can be bound. A box that is only for the
+ * controller, {@link #setGamepadOnly}, ignores keys other than Escape (cancel) and Backspace (unbind), and
+ * {@link #bindToGamepad} makes one for an action of an {@link InputContext}, next to the {@link #bindTo keyboard} box for the
+ * same action. Controller bindings are named for the layout of the pad that is plugged in ("Cross" or "A").
+ * <p>
  * A binding that {@link #setConflictCheck is refused} is not taken: the box says why for a moment and goes on listening.
  * <p>
  * Colors come from the theme like a text field's; the accent marks the box while it listens.
@@ -64,8 +73,12 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
     private boolean allowClear = true;
     private boolean allowMouse;
     private boolean allowModifiers = true;
+    private boolean allowGamepad;
+    private boolean gamepadOnly;
+    private boolean gamepadListening; // this box has a prompt waiting in the window's Input
+    private Gamepad.Layout layout;
     private String emptyText = "Unbound";
-    private String listenText = "Press a key...";
+    private String listenText; // null: "Press a key..." or what the settings above make of it
 
     private Function<Binding, String> conflictCheck;
     private Consumer<Binding> onBindingChange;
@@ -122,8 +135,25 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
      * {@link #setConflictCheck check} and {@link #onBindingChange listener} set before.
      */
     public void bindTo(InputContext context, String action) {
-        List<Binding> current = context.getBindings(action);
-        this.binding = current.isEmpty() ? null : current.getFirst();
+        bindTo(context, action, b -> !b.isGamepad());
+    }
+
+    /**
+     * As {@link #bindTo(InputContext, String)}, for a box that is only for the controller: it edits the first controller
+     * binding of {@code action} and learns only controller inputs ({@link #setGamepadOnly}). The keyboard box of the same
+     * action leaves the controller bindings alone, and the other way round.
+     */
+    public void bindToGamepad(InputContext context, String action) {
+        setGamepadOnly(true);
+        bindTo(context, action, Binding::isGamepad);
+    }
+
+    /**
+     * As {@link #bindTo(InputContext, String)}, editing the first binding of {@code action} that {@code slot} accepts.
+     * Writing a new binding replaces that one where it is, or adds it at the end if the action has none of that kind.
+     */
+    public void bindTo(InputContext context, String action, Predicate<Binding> slot) {
+        this.binding = context.getBindings(action).stream().filter(slot).findFirst().orElse(null);
         this.conflictCheck = candidate -> {
             for (String other : context.getActionsBoundTo(candidate)) {
                 if (!other.equals(action)) return "In use by " + other;
@@ -132,8 +162,17 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
         };
         this.onBindingChange = changed -> {
             List<Binding> next = new ArrayList<>(context.getBindings(action));
-            if (!next.isEmpty()) next.removeFirst();
-            if (changed != null) next.addFirst(changed);
+            int at = -1;
+            for (int i = 0; i < next.size() && at < 0; i++) {
+                if (slot.test(next.get(i))) at = i;
+            }
+            if (at >= 0 && changed != null) {
+                next.set(at, changed);
+            } else if (at >= 0) {
+                next.remove(at);
+            } else if (changed != null) {
+                next.add(changed);
+            }
             context.setBindings(action, next);
         };
     }
@@ -158,6 +197,7 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
         previewMods = 0;
         message = "";
         if (onListenStart != null) onListenStart.run();
+        waitForGamepad();
     }
 
     /**
@@ -166,6 +206,31 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
     public void stopListening() {
         listening = false;
         previewMods = 0;
+        if (gamepadListening) {
+            gamepadListening = false;
+            Input input = currentInput();
+            if (input != null) input.cancelGamepadListening();
+        }
+    }
+
+    /**
+     * Asks the window's input for the next controller press, ahead of the interface, so every button can be learned.
+     */
+    private void waitForGamepad() {
+        if (!isAllowGamepad()) return;
+        Input input = currentInput();
+        if (input == null) return;
+        input.listenForGamepad(this::learnGamepad);
+        gamepadListening = true;
+    }
+
+    /**
+     * A controller input the player pressed while the box listened.
+     */
+    void learnGamepad(Binding learned) {
+        if (!listening) return;
+        accept(learned);
+        if (listening) waitForGamepad(); // refused: the prompt that delivered this is used up, so ask for another
     }
 
     /**
@@ -200,6 +265,38 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
         this.allowMouse = allowMouse;
     }
 
+    public boolean isAllowGamepad() {
+        return allowGamepad || gamepadOnly;
+    }
+
+    /**
+     * Whether controller buttons, and sticks and triggers pushed one way, can be learned too. Off by default.
+     */
+    public void setAllowGamepad(boolean allowGamepad) {
+        this.allowGamepad = allowGamepad;
+    }
+
+    public boolean isGamepadOnly() {
+        return gamepadOnly;
+    }
+
+    /**
+     * Makes this a box for the controller alone: it learns only controller inputs, and ignores the keyboard and mouse
+     * except Escape, which cancels, and Backspace and Delete, which unbind ({@link #setAllowClear}). Implies {@link
+     * #setAllowGamepad}.
+     */
+    public void setGamepadOnly(boolean gamepadOnly) {
+        this.gamepadOnly = gamepadOnly;
+    }
+
+    /**
+     * The layout controller bindings are named for, or null (the default) for the layout of the controller that is plugged
+     * in, else an Xbox one.
+     */
+    public void setLayout(Gamepad.Layout layout) {
+        this.layout = layout;
+    }
+
     public boolean isAllowModifiers() {
         return allowModifiers;
     }
@@ -219,10 +316,11 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
     }
 
     /**
-     * What is shown while listening; "Press a key..." by default.
+     * What is shown while listening; "Press a key..." by default ("Press a key or button..." when it also learns the
+     * controller, "Press a button..." when it is only for it). Null puts the default back.
      */
     public void setListenText(String listenText) {
-        this.listenText = listenText == null ? "" : listenText;
+        this.listenText = listenText;
     }
 
     /**
@@ -236,9 +334,16 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
                 String combo = Binding.key(GLFW.GLFW_KEY_SPACE, previewMods).getDisplayName();
                 return combo.substring(0, combo.length() - "Space".length()) + "...";
             }
-            return listenText;
+            if (listenText != null) return listenText;
+            return gamepadOnly ? "Press a button..." : allowGamepad ? "Press a key or button..." : "Press a key...";
         }
-        return binding == null ? emptyText : binding.getDisplayName();
+        return binding == null ? emptyText : binding.getDisplayName(displayLayout());
+    }
+
+    private Gamepad.Layout displayLayout() {
+        if (layout != null) return layout;
+        Input input = currentInput();
+        return input != null && input.isGamepadConnected() ? input.getGamepad().getLayout() : Gamepad.Layout.XBOX;
     }
 
     public float getFontSize() {
@@ -289,21 +394,21 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
         }
         if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             stopListening(); // the way out of listening
-        } else if (allowMouse) {
+        } else if (allowMouse && !gamepadOnly) {
             accept(Binding.mouse(event.getButton(), modifiersFor(currentMods())));
         }
     }
 
     @Override
     public void onScroll(double deltaX, double deltaY) {
-        if (!listening || !allowMouse) return;
+        if (!listening || !allowMouse || gamepadOnly) return;
         int direction = deltaY > 0 ? Binding.WHEEL_UP : deltaY < 0 ? Binding.WHEEL_DOWN : deltaX > 0 ? Binding.WHEEL_RIGHT : deltaX < 0 ? Binding.WHEEL_LEFT : -1;
         if (direction >= 0) accept(Binding.wheel(direction, modifiersFor(currentMods())));
     }
 
     @Override
     public boolean canScroll(double deltaX, double deltaY) {
-        return listening && allowMouse; // otherwise the wheel scrolls the page behind it
+        return listening && allowMouse && !gamepadOnly; // otherwise the wheel scrolls the page behind it
     }
 
     @Override
@@ -334,7 +439,7 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
         }
         if (Binding.isModifierKey(key)) {
             // Show the combination so far; the key it waits for decides it.
-            previewMods = modifiersFor(mods);
+            if (!gamepadOnly) previewMods = modifiersFor(mods);
             return;
         }
         if (action == GLFW.GLFW_RELEASE) return;
@@ -349,6 +454,7 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
             if (onBindingChange != null) onBindingChange.accept(null);
             return;
         }
+        if (gamepadOnly) return; // a box for the controller does not learn keys
         Binding learned;
         try {
             learned = Binding.key(key, pressedMods);
@@ -366,8 +472,16 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
      * The modifier bits held now, from the window's input. Separate so a test can say so without a window.
      */
     protected int currentMods() {
+        Input input = currentInput();
+        return input == null ? 0 : input.getModifiers();
+    }
+
+    /**
+     * The window's input, or null before the box is in a window. Separate so a test can give it one.
+     */
+    protected Input currentInput() {
         me.piitex.engine.Window window = getWindow();
-        return window == null ? 0 : window.getInput().getModifiers();
+        return window == null ? null : window.getInput();
     }
 
     private void accept(Binding learned) {

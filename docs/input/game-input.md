@@ -7,9 +7,9 @@ step, where is the mouse. Three types in `me.piitex.engine.input` answer that:
 
 | Type | What it is |
 |---|---|
-| `Input` | The keyboard and mouse as the game sees them. One per window: `window.getInput()` |
+| `Input` | The keyboard, mouse and [controllers](gamepad.md) as the game sees them. One per window: `window.getInput()` |
 | `InputContext` | A set of named actions, such as "jump" or "move_left", each triggered by one or more bindings. Game code asks about actions, so players can rebind them |
-| `Binding` | One key, mouse button or wheel direction, optionally with modifier keys held: Space, Ctrl+S, Left Mouse, Wheel Up |
+| `Binding` | One key, mouse button, wheel direction or [controller](gamepad.md) button or stick direction, optionally with modifier keys held: Space, Ctrl+S, Left Mouse, Wheel Up, PAD_A |
 
 ```java nocompile
 public class Level extends Scene {
@@ -68,7 +68,7 @@ isn't held.
 | `isJustReleased(action)` | True if it was let go, including by the context [stopping being active](#which-context-gets-a-press) |
 | `isRepeated(action)` | True if the OS repeated a held key of the action, as it does after a key is held for a moment. For menus, move on `isJustPressed(a) \|\| isRepeated(a)` |
 | `getHeldTime(action)` | Seconds held, as above |
-| `getValue(action)` | How strongly it is pressed, 0 to 1. Keys and buttons give 0 or 1 |
+| `getValue(action)` | How strongly it is pressed, 0 to 1. Keys and buttons give 0 or 1; a [stick or trigger](gamepad.md#bindings) gives how far it is pushed |
 | `getAxis(negative, positive)` | `getValue(positive) - getValue(negative)`, from -1 to 1: `getAxis("move_left", "move_right")` |
 | `getVector(left, right, up, down)` | A `Vec2` from four actions, with y growing downwards like the screen, and never longer than 1, so diagonals aren't faster |
 
@@ -85,6 +85,7 @@ Action names use letters, digits, `_` and `-`, because they become keys when [sa
 | `Binding.key(GLFW_KEY_S, GLFW_MOD_CONTROL)` | The key pressed while the modifiers are held: Ctrl+S |
 | `Binding.mouse(GLFW_MOUSE_BUTTON_LEFT)`, `Binding.mouse(button, mods)` | A mouse button, 0 to 7 |
 | `Binding.wheel(Binding.WHEEL_UP)`, `wheel(direction, mods)` | A wheel direction: `WHEEL_UP`, `WHEEL_DOWN`, `WHEEL_LEFT`, `WHEEL_RIGHT` |
+| `Binding.gamepad(Gamepad.Button.A)`, `gamepadAxis(axis, positive)`, `gamepadTrigger(axis)` | A controller button, a stick pushed one way, a trigger pulled. See [Gamepads](gamepad.md) |
 
 When a press matches several bindings in a context, the ones requiring the most modifiers win. With both S and
 Ctrl+S bound, Ctrl+S triggers only the second. S pressed with Ctrl held, and no Ctrl+S binding, still triggers

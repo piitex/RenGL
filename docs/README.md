@@ -109,6 +109,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | **[Input](input/README.md)** | Clicks, drags, scrolling, focus, cursors, tooltips, menus, game controls |
 | [Input and focus](input/input-and-focus.md) | Clicks, drags, scrolling, keyboard focus, cursors, clipboard |
 | [Game input](input/game-input.md) | Polled keys and mouse, named actions and contexts, rebinding, saved key bindings |
+| [Gamepads](input/gamepad.md) | Controllers as bindings or polled, dead zones, one pad per player, rebinding |
 | [Tooltips](input/tooltips.md) | Hover bubbles |
 | [File dialogs](input/file-dialogs.md) | Native open, save and choose-folder dialogs |
 | [Menus](input/menus.md) | Menu bar, popup menus and right-click context menus |

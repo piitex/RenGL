@@ -11,6 +11,7 @@ import me.piitex.engine.gl.renderer.SkikoRenderer;
 import me.piitex.engine.input.Clipboard;
 import me.piitex.engine.input.CursorManager;
 import me.piitex.engine.input.FileDialog;
+import me.piitex.engine.input.Gamepads;
 import me.piitex.engine.input.InputProcessor;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.input.OpenFiles;
@@ -257,6 +258,7 @@ public class Engine {
             glfwWaitEventsTimeout(MAIN_LOOP_WAIT_SECONDS);
 
             glfwPollEvents();
+            Gamepads.pump(); // GLFW only talks to controllers from this thread; each window's Input takes the reading
             for (Host host : hosts) {
                 host.glfWindow.runMainThreadTasks();
                 if (host.swapping && glfwWindowShouldClose(host.handle)) host.swapping = false; // closed meanwhile: a plain close
@@ -300,6 +302,7 @@ public class Engine {
             if (host.metalContext != null) host.metalContext.close();
             hosts.remove(host);
         }
+        Gamepads.shutdown();
         for (Runnable hook : shutdownHooks) {
             try {
                 hook.run();

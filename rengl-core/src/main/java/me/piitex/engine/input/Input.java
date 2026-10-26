@@ -14,9 +14,9 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * The game's keyboard and mouse, polled from game code: which keys and buttons are held, which were just pressed or
- * released, where the mouse is. One per window, from {@link Window#getInput()}. Named, rebindable actions are in
- * {@link InputContext}s, which are added here or to a {@link Scene}.
+ * The game's keyboard, mouse and controllers, polled from game code: which keys and buttons are held, which were just
+ * pressed or released, where the mouse is, what a {@link Gamepad} is doing. One per window, from {@link Window#getInput()}.
+ * Named, rebindable actions are in {@link InputContext}s, which are added here or to a {@link Scene}.
  * <pre>{@code
  * Input input = getWindow().getInput();
  * if (input.isKeyJustPressed(GLFW_KEY_SPACE)) jump();
@@ -28,7 +28,8 @@ import java.util.function.Consumer;
  * element (a button, anything with a click listener, a text field, a scroll area, a draggable panel). A click on an
  * element that doesn't listen for clicks, such as a label or a plain panel, counts as game input; give the element a
  * click listener that does nothing to keep clicks on it from the game. Releases always come through, so nothing is left
- * held down. Presses a scene's {@link Scene#onKey} consumes are seen here but not by any {@link InputContext}.
+ * held down. Presses a scene's {@link Scene#onKey} consumes are seen here but not by any {@link InputContext}. A
+ * controller follows the same rule, and while the interface has it, it drives the interface (see {@link Gamepad}).
  * <h2>Just pressed, in steps and frames</h2>
  * The "just" queries mean "since the last step" when called from {@link Scene#fixedUpdate} and "since the last frame"
  * everywhere else, so a press shows in exactly one fixed step, however many steps a frame runs, and in exactly one
@@ -269,6 +270,273 @@ public final class Input {
         return bindingListener != null;
     }
 
+    // ---------------------------------------------------------------- controllers
+
+    private final Gamepad[] pads = new Gamepad[Gamepads.MAX];
+    private final List<Gamepad.Listener> padListeners = new ArrayList<>();
+    private final List<GamepadEdge> padEdges = new ArrayList<>();
+    private Consumer<Binding> padBindingListener;
+
+    /**
+     * The controller in slot {@code index}, 0 to 15, in the order the OS found them. A slot with nothing in it gives a
+     * {@link Gamepad} that is not {@link Gamepad#isConnected() connected} and reads as untouched, never null.
+     */
+    public Gamepad getGamepad(int index) {
+        if (index < 0 || index >= pads.length) {
+            throw new IllegalArgumentException("a controller slot is 0 to " + (pads.length - 1) + ": " + index);
+        }
+        Gamepad pad = pads[index];
+        if (pad == null) pad = pads[index] = new Gamepad(this, index);
+        return pad;
+    }
+
+    /**
+     * The first controller that is plugged in, or the one in slot 0, not connected, if there is none. For a game with one
+     * player.
+     */
+    public Gamepad getGamepad() {
+        for (Gamepad pad : pads) {
+            if (pad != null && pad.isConnected()) return pad;
+        }
+        return getGamepad(0);
+    }
+
+    /**
+     * Every controller plugged in, by slot.
+     */
+    public List<Gamepad> getGamepads() {
+        List<Gamepad> connected = new ArrayList<>(2);
+        for (Gamepad pad : pads) {
+            if (pad != null && pad.isConnected()) connected.add(pad);
+        }
+        return connected;
+    }
+
+    public boolean isGamepadConnected() {
+        for (Gamepad pad : pads) {
+            if (pad != null && pad.isConnected()) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Tells {@code listener} about controllers plugged in and removed. Those already plugged in when the window opened are
+     * announced in its first frame; one added later should look at {@link #getGamepads()} too.
+     */
+    public void addGamepadListener(Gamepad.Listener listener) {
+        if (listener == null) throw new IllegalArgumentException("listener must not be null");
+        if (!padListeners.contains(listener)) padListeners.add(listener);
+    }
+
+    public void removeGamepadListener(Gamepad.Listener listener) {
+        padListeners.remove(listener);
+    }
+
+    /**
+     * Hands the next controller button or stick direction pressed to {@code onBound} as a {@link Binding}, for a "press a
+     * button" prompt in a controls menu. It comes before everything else, the interface included, so every button can be
+     * bound, B and the D-pad too. That press goes nowhere else. Unlike {@link #listenForBinding}, the keyboard and mouse are
+     * left alone, so a prompt can wait for a button while keys still work. Calling this again replaces the waiting callback.
+     */
+    public void listenForGamepad(Consumer<Binding> onBound) {
+        if (onBound == null) throw new IllegalArgumentException("callback must not be null");
+        padBindingListener = onBound;
+    }
+
+    /**
+     * Stops waiting for a controller binding, without calling the callback.
+     */
+    public void cancelGamepadListening() {
+        padBindingListener = null;
+    }
+
+    public boolean isListeningForGamepad() {
+        return padBindingListener != null;
+    }
+
+    /**
+     * A controller button or stick direction that went down or up.
+     */
+    record GamepadEdge(Gamepad pad, Binding.Device device, int code, boolean pressed) {
+        Binding binding() {
+            return new Binding(device, code, 0);
+        }
+    }
+
+    /**
+     * Takes the latest reading of every controller and returns what changed since the last: each button, and each stick or
+     * trigger direction crossing the press point, going down or up, in slot order. The list is only good until the next call.
+     * Plugging controllers in and out is announced to the listeners here.
+     * <p>
+     * A window without the OS focus sees every controller untouched: what was held is let go, and what is held when it comes
+     * back is not a press. {@code uiOwns} says the interface has the controller: the game's view of the sticks is then 0,
+     * and the caller decides what to do with the presses.
+     */
+    List<GamepadEdge> pollGamepads(boolean focused, boolean uiOwns) {
+        padEdges.clear();
+        refreshContexts();
+        Gamepads.Pad[] snapshot = Gamepads.snapshot();
+        for (int i = 0; i < Gamepads.MAX; i++) {
+            Gamepads.Pad hw = snapshot[i];
+            Gamepad pad = pads[i];
+            if (pad == null) {
+                if (hw == null) continue;
+                pad = getGamepad(i);
+            }
+            if (hw == null) {
+                if (pad.isConnected()) {
+                    letGo(pad);
+                    pad.disconnect();
+                    for (Gamepad.Listener listener : List.copyOf(padListeners)) {
+                        try {
+                            listener.disconnected(pad);
+                        } catch (Throwable t) {
+                            log.error("Gamepad listener threw", t);
+                        }
+                    }
+                }
+                continue;
+            }
+            if (!pad.isConnected()) {
+                pad.connect(hw.name, hw.guid);
+                pad.baseline = true;
+                for (Gamepad.Listener listener : List.copyOf(padListeners)) {
+                    try {
+                        listener.connected(pad);
+                    } catch (Throwable t) {
+                        log.error("Gamepad listener threw", t);
+                    }
+                }
+            }
+            if (!focused) {
+                letGo(pad);
+                pad.baseline = true;
+                continue;
+            }
+            pad.readAxes(hw.axes);
+            pad.showAxes(!uiOwns);
+            if (pad.baseline) {
+                // Plugged in, or the window came back, with things held: they are held, not pressed
+                pad.baseline = false;
+                for (int b = 0; b < Gamepad.BUTTON_COUNT; b++) pad.physical[b] = hw.buttons[b];
+                for (int c = 0; c < Gamepad.DIRECTION_COUNT; c++) {
+                    pad.physicalDirection[c] = Gamepad.isDirection(c) && pad.directionValue(c) >= Gamepads.getPressPoint();
+                }
+            } else {
+                for (int b = 0; b < Gamepad.BUTTON_COUNT; b++) {
+                    if (hw.buttons[b] == pad.physical[b]) continue;
+                    pad.physical[b] = hw.buttons[b];
+                    padEdges.add(new GamepadEdge(pad, Binding.Device.GAMEPAD_BUTTON, b, hw.buttons[b]));
+                }
+                for (int c = 0; c < Gamepad.DIRECTION_COUNT; c++) {
+                    if (!Gamepad.isDirection(c)) continue;
+                    float value = pad.directionValue(c);
+                    boolean was = pad.physicalDirection[c];
+                    boolean now = value >= (was ? Gamepads.releasePoint() : Gamepads.getPressPoint());
+                    if (now == was) continue;
+                    pad.physicalDirection[c] = now;
+                    padEdges.add(new GamepadEdge(pad, Binding.Device.GAMEPAD_AXIS, c, now));
+                }
+            }
+            for (int c = 0; c < Gamepad.DIRECTION_COUNT; c++) {
+                if (!Gamepad.isDirection(c)) continue;
+                float value = uiOwns ? 0f : pad.directionValue(c);
+                if (value != pad.pushed[c]) {
+                    pad.pushed[c] = value;
+                    pushAxis(i, c, value);
+                }
+            }
+        }
+        return padEdges;
+    }
+
+    /**
+     * Lets go of everything the controller holds: a release for each button and stick direction down, and its analog values
+     * back to 0.
+     */
+    private void letGo(Gamepad pad) {
+        for (int b = 0; b < Gamepad.BUTTON_COUNT; b++) {
+            if (!pad.physical[b]) continue;
+            pad.physical[b] = false;
+            padEdges.add(new GamepadEdge(pad, Binding.Device.GAMEPAD_BUTTON, b, false));
+        }
+        for (int c = 0; c < Gamepad.DIRECTION_COUNT; c++) {
+            if (pad.physicalDirection[c]) {
+                pad.physicalDirection[c] = false;
+                padEdges.add(new GamepadEdge(pad, Binding.Device.GAMEPAD_AXIS, c, false));
+            }
+            if (pad.pushed[c] != 0f) {
+                pad.pushed[c] = 0f;
+                pushAxis(pad.getIndex(), c, 0f);
+            }
+        }
+        pad.showAxes(false);
+    }
+
+    /**
+     * Gives how far a stick or trigger direction is pushed to the context that binds it: the first active one that does, as
+     * with a press. The others, and a context for another pad, read 0.
+     */
+    private void pushAxis(int pad, int code, float value) {
+        boolean taken = false;
+        for (InputContext context : active) {
+            if (!context.acceptsGamepad(pad)) continue;
+            float given = 0f;
+            if (!taken) {
+                if (context.binds(Binding.Device.GAMEPAD_AXIS, code)) {
+                    taken = true;
+                    if (!containsSame(muted, context)) given = value;
+                } else if (context.isBlocking()) {
+                    taken = true;
+                }
+            }
+            context.setAxisValue(pad, code, given);
+        }
+    }
+
+    /**
+     * Offers a controller press to a {@link #listenForGamepad} or {@link #listenForBinding} prompt. Returns true if one took
+     * it, so it goes nowhere else.
+     */
+    boolean captureGamepad(GamepadEdge edge) {
+        if (!edge.pressed()) return false;
+        if (padBindingListener != null) {
+            Consumer<Binding> listener = padBindingListener;
+            padBindingListener = null;
+            try {
+                listener.accept(edge.binding());
+            } catch (Throwable t) {
+                log.error("Binding listener threw", t);
+            }
+            return true;
+        }
+        if (bindingListener != null) {
+            finishListening(edge.binding());
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * A controller press the game gets: the interface did not take it.
+     */
+    void gamepadPressed(GamepadEdge edge) {
+        if (edge.device() == Binding.Device.GAMEPAD_BUTTON) edge.pad().buttons[edge.code()].press(frame);
+        any.press(frame);
+        pressContexts(edge.device(), edge.code(), 0, edge.pad().getIndex());
+    }
+
+    /**
+     * A controller release, which always reaches the game, so nothing is left held.
+     */
+    void gamepadReleased(GamepadEdge edge) {
+        PressState state = edge.device() == Binding.Device.GAMEPAD_BUTTON ? edge.pad().buttons[edge.code()] : null;
+        if (state != null && state.down) state.release(frame);
+        refreshContexts();
+        int source = Binding.padSource(edge.pad().getIndex(), edge.device(), edge.code());
+        for (InputContext context : active) context.release(source, frame);
+    }
+
     // ---------------------------------------------------------------- fed by InputProcessor
 
     /**
@@ -289,7 +557,7 @@ public final class Input {
         keys[key].press(frame);
         any.press(frame);
         if (consumed) return false;
-        return pressContexts(Binding.Device.KEY, key, mods & Binding.MODIFIER_MASK);
+        return pressContexts(Binding.Device.KEY, key, mods & Binding.MODIFIER_MASK, -1);
     }
 
     /**
@@ -315,7 +583,7 @@ public final class Input {
         if (button < 0 || button >= buttons.length || buttons[button].down) return;
         buttons[button].press(frame);
         any.press(frame);
-        pressContexts(Binding.Device.MOUSE, button, mods & Binding.MODIFIER_MASK);
+        pressContexts(Binding.Device.MOUSE, button, mods & Binding.MODIFIER_MASK, -1);
     }
 
     void mouseReleased(int button) {
@@ -413,10 +681,14 @@ public final class Input {
         }
     }
 
-    private boolean pressContexts(Binding.Device device, int code, int mods) {
+    /**
+     * @param pad the controller slot the press came from, or -1 for the keyboard and mouse
+     */
+    private boolean pressContexts(Binding.Device device, int code, int mods, int pad) {
         refreshContexts();
-        int source = Binding.source(device, code);
+        int source = pad < 0 ? Binding.source(device, code) : Binding.padSource(pad, device, code);
         for (InputContext context : active) {
+            if (pad >= 0 && !context.acceptsGamepad(pad)) continue; // another player's context
             List<InputContext.Action> matched = context.match(device, code, mods);
             if (!matched.isEmpty()) {
                 if (!containsSame(muted, context)) context.press(source, matched, frame);
