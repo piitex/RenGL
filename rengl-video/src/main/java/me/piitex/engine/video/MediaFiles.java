@@ -38,23 +38,25 @@ final class MediaFiles {
             Demuxer os = openWithSystem(file, 0);
             if (os != null) return os;
             throw new UnsupportedOperationException("Unsupported video format: " + file.getName() + " is " + container(head)
-                    + ". RenGL plays AVI and MP4 files with Motion JPEG or uncompressed video and PCM audio, and on macOS and Windows any file the system can play. "
+                    + ". RenGL plays AVI and MP4 files with Motion JPEG or uncompressed video and PCM audio, and on macOS, Windows and Linux any file the system can play (on Linux through GStreamer). "
                     + convertHint(file.getName()));
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read video file: " + file, e);
         }
     }
 
-    /** Whether this machine has a system decoder: AVFoundation on macOS, Media Foundation on Windows. */
+    /** Whether this machine has a system decoder: AVFoundation on macOS, Media Foundation on Windows, GStreamer on Linux. */
     static boolean systemAvailable() {
-        return MacMediaSource.available() || WinMediaSource.available();
+        return MacMediaSource.available() || WinMediaSource.available() || LinuxMediaSource.available();
     }
 
     /** The operating system's decoder, when there is one and it accepts the file. Null otherwise. */
     private static Demuxer openWithSystem(File file, double editShift) throws IOException {
         if (!systemAvailable()) return null;
         try {
-            return MacMediaSource.available() ? new MacMediaSource(file) : new WinMediaSource(file, editShift);
+            if (MacMediaSource.available()) return new MacMediaSource(file);
+            if (WinMediaSource.available()) return new WinMediaSource(file, editShift);
+            return new LinuxMediaSource(file);
         } catch (UnsupportedOperationException e) {
             log.debug("The system cannot play {}: {}", file.getName(), e.getMessage());
             return null;

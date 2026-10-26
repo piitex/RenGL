@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * The files here were written by real encoders (Apple's for H.264, HEVC and AAC, Chromium's for the quadrants clip),
- * so they exercise the system decoder (AVFoundation on macOS, Media Foundation on Windows) for real. Frame {@code i} is solid {@code AviBuilder.COLORS[i % 8]}. Skipped where there is no system decoder.
+ * so they exercise the system decoder (AVFoundation on macOS, Media Foundation on Windows, GStreamer on Linux) for real. Frame {@code i} is solid {@code AviBuilder.COLORS[i % 8]}. Skipped where there is no system decoder.
  */
 class SystemMediaSourceTest {
     @TempDir
