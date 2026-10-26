@@ -26,6 +26,8 @@ Every widget in RenGL is an [`Overlay`](../core/overlay.md) (an [`Element`](../c
 | [`RadioButtonOverlay`](radio-button-overlay.md) + [`RadioGroup`](radio-button-overlay.md#radiogroup) | Mutually exclusive circular selectors |
 | [`DropdownOverlay<T>`](dropdown-overlay.md) | A closed box that opens a floating list of choices |
 | [`SliderOverlay`](slider-overlay.md) / [`PercentSliderOverlay`](slider-overlay.md#percentslideroverlay) | A draggable numeric slider with ticks, labels and snapping |
+| [`RangeSliderOverlay`](range-slider-overlay.md) | A slider with two thumbs that picks a from-to range |
+| [`ComboBoxOverlay<T>`](combo-box-overlay.md) | A text field with filtered suggestions under it; takes free text too |
 | [`SpinnerOverlay`](spinner-overlay.md) | A numeric field with up/down buttons (a composite layout) |
 | [`ToggleSwitchOverlay`](toggle-switch-overlay.md) | An on/off switch with a sliding knob |
 | [`ColorPickerOverlay`](color-picker-overlay.md) | A swatch that opens a picker: color square, hue and opacity bars, hex field, presets |
@@ -39,6 +41,11 @@ Every widget in RenGL is an [`Overlay`](../core/overlay.md) (an [`Element`](../c
 | [`ProgressBarOverlay`](progress-bar-overlay.md) | A bar that fills as work completes, or sweeps when the amount is unknown |
 | [`LoadingSpinnerOverlay`](loading-spinner-overlay.md) | A ring of dots that chases around a circle |
 | [`SeparatorOverlay`](separator-overlay.md) | A thin dividing line, horizontal or vertical |
+| [`SpacerOverlay`](spacer-overlay.md) | Empty space in a row or column: flexible, or a fixed gap |
+
+Widgets that are containers, such as [`ListBox`](../containers/list-box.md), [`AccordionContainer`](../containers/accordion-container.md),
+[`ToolBar`](../containers/tool-bar.md), [`StatusBar`](../containers/status-bar.md), [`ToastManager`](../containers/toast-manager.md) and
+[`MessageBox`](../containers/message-box.md), are in the [containers](../containers/README.md) catalog.
 
 ## Charts
 
@@ -65,7 +72,7 @@ theme system. A plain [`Container`](../containers/container.md) does too, once y
 [Theming](../styling/theming.md).
 
 **Which widgets can take keyboard focus?** [`TextFieldOverlay`](text-field-overlay.md), [`TextAreaOverlay`](text-area-overlay.md) (and its rich subclass),
-[`DropdownOverlay`](dropdown-overlay.md), [`ToggleSwitchOverlay`](toggle-switch-overlay.md), [`ColorPickerOverlay`](color-picker-overlay.md) and
+[`DropdownOverlay`](dropdown-overlay.md), [`ComboBoxOverlay`](combo-box-overlay.md) (as a text field), [`RangeSliderOverlay`](range-slider-overlay.md), [`ToggleSwitchOverlay`](toggle-switch-overlay.md), [`ColorPickerOverlay`](color-picker-overlay.md) and
 [`DateTimePickerOverlay`](date-time-picker-overlay.md). [`SpinnerOverlay`](spinner-overlay.md) gets focus through its inner text field. See
 [Input and focus](../input/input-and-focus.md).
 
@@ -73,7 +80,7 @@ theme system. A plain [`Container`](../containers/container.md) does too, once y
 `DropdownOverlay`, `ToggleSwitchOverlay`, `ColorPickerOverlay`, `DateTimePickerOverlay` and [`RichTextAreaOverlay`](rich-text-area-overlay.md). They keep that handler apart from `onMouseClick`, so setting your own does not replace it; the widget's own callback is the usual way to react.
 
 **Which widgets need `dispose()`?** Those that own a native `Font`: [`TextOverlay`](text-overlay.md), `ButtonOverlay`,
-`TextFieldOverlay`, `TextAreaOverlay`, `RichTextAreaOverlay` and [`SliderOverlay`](slider-overlay.md). Call it when permanently
+`TextFieldOverlay` (and `ComboBoxOverlay`), `TextAreaOverlay`, `RichTextAreaOverlay`, [`SliderOverlay`](slider-overlay.md) and `RangeSliderOverlay`. Call it when permanently
 discarding one.
 
 ## One of each

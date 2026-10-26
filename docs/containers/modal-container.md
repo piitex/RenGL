@@ -26,6 +26,8 @@ open.onAction(() -> modal.show(window));
 root.addElement(open);
 ```
 
+For the usual questions (an alert, a yes/no, a line of text, a choice of buttons), [`MessageBox`](message-box.md) builds the modal in one call.
+
 ## Constructors
 
 | Constructor | Content panel |
