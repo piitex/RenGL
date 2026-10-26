@@ -288,6 +288,18 @@ public class Engine {
         main.window.notifyClosing();
 
         FileDialog.shutdown();
+        // The windows still open (the first one always is) never reach destroyHost. Destroy them now, or each engine run
+        // leaves its GLFW window and its Vulkan instance and device behind: harmless when the process exits next, but a
+        // JVM that starts the engine many times (the test suites) runs the GPU driver out of resources after ~50 runs.
+        // A window whose renderer the render thread didn't get to release (it was stuck past the join) is left alone.
+        for (Host host : hosts) {
+            if (!host.released) continue;
+            CursorManager.detach(host.handle);
+            if (host.backendContext != null) host.backendContext.close(); // its surface belongs to the GLFW window
+            host.glfWindow.destroy();
+            if (host.metalContext != null) host.metalContext.close();
+            hosts.remove(host);
+        }
         for (Runnable hook : shutdownHooks) {
             try {
                 hook.run();
@@ -535,6 +547,19 @@ public class Engine {
     }
 
     private void renderLoop() {
+        // If the render thread dies (a renderer that can't start, an exception in a frame), the main thread would
+        // keep polling a window that never draws and the program would hang with nothing on screen. Stop instead.
+        try {
+            runFrames();
+        } catch (Throwable t) {
+            log.error("The render thread stopped", t);
+            running = false;
+            glfwPostEmptyEvent(); // wake the main thread out of glfwWaitEventsTimeout
+            throw t;
+        }
+    }
+
+    private void runFrames() {
         lastFrameTimeNanos = System.nanoTime();
         GameTime.reset();
         List<Host> live = new ArrayList<>();
