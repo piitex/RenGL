@@ -88,7 +88,7 @@ separate artifacts. `me.piitex.engine:RenGL` pulls in all of them, as the single
 - **Maven** (a wrapper is included: `./mvnw`)
 - A GPU that supports **Metal** (macOS) or **OpenGL 3.3** (Windows, Linux). Vulkan 1.1 is an optional alternative.
 
-Native libraries (LWJGL and Skiko) are selected automatically for Windows, Linux and macOS on x86-64 and arm64, and each module brings only its own.
+Native libraries (LWJGL and Skiko) are selected automatically for Windows, Linux and macOS on x86-64 and arm64, and each module brings only its own. A project of your own picks them with one Maven profile per platform: see [Setting up a Maven project](docs/getting-started.md#setting-up-a-maven-project).
 
 ## Building and running
 
