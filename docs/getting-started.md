@@ -21,7 +21,207 @@ RenGL is a set of Maven modules. Start with `rengl-core` and add the others when
 </dependency>
 ```
 
-## Building
+That is the Java side. The native libraries (LWJGL's and Skiko's) are separate jars per platform, so a project also
+needs the natives of the platform it runs on. [Setting up a Maven project](#setting-up-a-maven-project) shows how.
+
+## Setting up a Maven project
+
+RenGL is not on Maven Central yet, so there are two steps: put the engine in your local Maven repository, then write a
+`pom.xml` that picks the natives for each platform.
+
+### 1. Install the engine
+
+Once, in the folder you cloned RenGL into (`mvnw.cmd` on Windows):
+
+```bash
+./mvnw install -DskipTests
+```
+
+This installs every module into `~/.m2`, but not the natives jars. Those are built separately, one platform per
+command. Each command repackages the published LWJGL and Skiko natives of one platform, so it needs the internet but no
+other operating system. Run it for the platform you are on, and for any other platform you build or package for:
+
+```bash
+./mvnw -q -pl rengl-all -DskipTests -Dmaven.javadoc.skip=true -DskipAutoNatives -Dnatives.platform=linux-amd64 install
+```
+
+The platforms are `windows-amd64`, `windows-aarch64`, `linux-amd64`, `linux-aarch64`, `macos-x86_64` and
+`macos-aarch64`. On Windows, `rengl-packager\install-natives.ps1` runs five of them for you (everything except
+`windows-aarch64`). Repeat all of it when you update the engine.
+
+`-pl rengl-all` makes the natives jar of the `RenGL` artifact, which holds the natives of every module. If you depend
+on individual modules instead (see [Taking only some modules](#taking-only-some-modules)), leave `-pl rengl-all` out so
+that each module that has natives gets its own jar.
+
+### 2. Write the pom
+
+A project depends on the engine twice: the engine jars, and the same artifact again with a `natives-<platform>`
+classifier, which holds only the native libraries. The classifier comes from a property that one profile per platform
+sets, so the same `pom.xml` builds on Windows, Linux and macOS:
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>myapp</artifactId>
+    <version>1.0</version>
+
+    <properties>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <rengl.version>1.0-SNAPSHOT</rengl.version>
+        <!-- JVM flags for running the app. The macOS profiles below add -XstartOnFirstThread. -->
+        <rengl.jvmargs>--enable-native-access=ALL-UNNAMED</rengl.jvmargs>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>RenGL</artifactId>
+            <version>${rengl.version}</version>
+        </dependency>
+        <!-- The native libraries (LWJGL and Skiko) of the platform the profiles below pick. -->
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>RenGL</artifactId>
+            <version>${rengl.version}</version>
+            <classifier>${rengl.natives}</classifier>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <profile>
+            <id>rengl-windows-x64</id>
+            <activation><os><family>windows</family><arch>amd64</arch></os></activation>
+            <properties><rengl.natives>natives-windows</rengl.natives></properties>
+        </profile>
+        <profile>
+            <id>rengl-windows-arm64</id>
+            <activation><os><family>windows</family><arch>aarch64</arch></os></activation>
+            <properties><rengl.natives>natives-windows-arm64</rengl.natives></properties>
+        </profile>
+        <profile>
+            <id>rengl-linux-x64</id>
+            <activation><os><family>unix</family><name>linux</name><arch>amd64</arch></os></activation>
+            <properties><rengl.natives>natives-linux</rengl.natives></properties>
+        </profile>
+        <profile>
+            <id>rengl-linux-arm64</id>
+            <activation><os><family>unix</family><name>linux</name><arch>aarch64</arch></os></activation>
+            <properties><rengl.natives>natives-linux-arm64</rengl.natives></properties>
+        </profile>
+        <profile>
+            <id>rengl-macos-x64</id>
+            <activation><os><family>mac</family><arch>x86_64</arch></os></activation>
+            <properties>
+                <rengl.natives>natives-macos</rengl.natives>
+                <rengl.jvmargs>-XstartOnFirstThread --enable-native-access=ALL-UNNAMED</rengl.jvmargs>
+            </properties>
+        </profile>
+        <profile>
+            <id>rengl-macos-arm64</id>
+            <activation><os><family>mac</family><arch>aarch64</arch></os></activation>
+            <properties>
+                <rengl.natives>natives-macos-arm64</rengl.natives>
+                <rengl.jvmargs>-XstartOnFirstThread --enable-native-access=ALL-UNNAMED</rengl.jvmargs>
+            </properties>
+        </profile>
+    </profiles>
+
+    <build>
+        <plugins>
+            <!-- mvn compile exec:exec runs the app with the right flags for the platform. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>${rengl.jvmargs}</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>com.example.Main</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+Maven picks the profile that matches the computer it runs on:
+
+| Computer | Profile | Natives classifier |
+|---|---|---|
+| Windows, x86-64 | `rengl-windows-x64` | `natives-windows` |
+| Windows, arm64 | `rengl-windows-arm64` | `natives-windows-arm64` |
+| Linux, x86-64 | `rengl-linux-x64` | `natives-linux` |
+| Linux, arm64 | `rengl-linux-arm64` | `natives-linux-arm64` |
+| macOS, Intel | `rengl-macos-x64` | `natives-macos` |
+| macOS, Apple silicon | `rengl-macos-arm64` | `natives-macos-arm64` |
+
+The names are LWJGL's, so `natives-macos` is the Intel Mac, and `natives-linux` and `natives-windows` are x86-64. The
+Skiko runtime is inside the natives jar, so a program cannot start without it, even on its own platform.
+
+To build for a platform other than the one you are on, name the classifier yourself instead of letting a profile pick
+it: `mvn -Drengl.natives=natives-linux package`. That platform's jar has to be in your local repository (step 1).
+
+Run `mvn help:active-profiles` to see which profile Maven picked. If the build says it cannot find
+`RenGL:jar:natives-...`, that platform's natives jar was not installed.
+
+### Taking only some modules
+
+A project that depends on individual modules adds the classifier to each module that owns natives. Import the
+[BOM](modules.md#using-them) so the versions agree:
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-bom</artifactId>
+            <version>${rengl.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>me.piitex.engine</groupId>
+        <artifactId>rengl-core</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>me.piitex.engine</groupId>
+        <artifactId>rengl-core</artifactId>
+        <classifier>${rengl.natives}</classifier>
+    </dependency>
+    <dependency>
+        <groupId>me.piitex.engine</groupId>
+        <artifactId>rengl-audio</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>me.piitex.engine</groupId>
+        <artifactId>rengl-audio</artifactId>
+        <classifier>${rengl.natives}</classifier>
+    </dependency>
+</dependencies>
+```
+
+`rengl-core`, `rengl-audio`, `rengl-3d` and `rengl-tilemap` have a natives jar on every platform. `rengl-vulkan` has one
+for macOS only (MoltenVK), so on Windows and Linux there is no `natives-windows` jar to ask for. The other modules have
+no natives. [Modules](modules.md#native-libraries) has the list. The natives jar of `RenGL` holds the natives of all
+of them, which is why the pom above needs only one.
+
+## Building the engine from source
+
+To work on RenGL itself rather than use it:
 
 ```bash
 mvn compile
@@ -39,7 +239,8 @@ mvn -DskipAutoNatives -Dnatives.platform=macos-aarch64 package
 
 ## Running
 
-Run the class that calls `Engine.start`. The bundled demo lists these JVM flags:
+Run the class that calls `Engine.start`. With the pom above, `mvn compile exec:exec` runs `com.example.Main` with the
+right flags for your platform. To run it any other way, pass these JVM flags yourself (the demos use them):
 
 ```text
 -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
