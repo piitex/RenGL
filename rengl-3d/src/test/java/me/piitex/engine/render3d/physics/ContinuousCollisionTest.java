@@ -2,7 +2,6 @@ package me.piitex.engine.render3d.physics;
 
 import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Vec3;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
@@ -129,17 +128,69 @@ class ContinuousCollisionTest {
     }
 
     /**
-     * OPEN BUG (see "Open bugs" in docs/3d-status.md). The sweep stops the sheet at the wall, but the next step starts with it
-     * touching, which the sweep skips by design, and the solver turns the corner hit into so much spin that the sheet swings
-     * through the 2 cm wall. Remove @Disabled when the impact is resolved inside the step.
+     * The sweep stops the sheet at the wall, and the next step starts with it touching. The solver turns the corner hit into
+     * so much spin that the sheet would swing through the 2 cm wall in that step; {@code ContinuousCollision.settle} cuts the
+     * step where the face comes flat.
      */
-    @Disabled("known bug: a fast thin sheet hitting a thin wall on a corner spins through it the step after the sweep stops it")
     @Test
     void aThinFastSheetStopsAtAWallAtEveryAngleAndSpeed() {
         for (float speed : new float[]{60f, 100f, 200f, 300f, 600f}) {
             for (float turn = 0f; turn <= 1.5f; turn += 0.1f) {
                 assertTrue(sheetAt(speed, turn) < 0.1f, "a sheet turned " + turn + " at " + speed + " m/s got to x = " + sheetAt(speed, turn));
             }
+        }
+    }
+
+    @Test
+    void aSheetThatHitACornerIsLaidFlatAgainstTheWall() {
+        // Stopped dead by the sweep, then turned about the corner by the hit: it should end lying on the wall, not stuck
+        // short of it at an angle and not through it. (Nothing holds it back along the wall, so it slides away.)
+        PhysicsWorld world = space();
+        world.add(wall());
+        RigidBody sheet = new RigidBody(BodyType.DYNAMIC).addShape(new BoxShape(0.01f, 0.4f, 0.4f)).setMass(1f)
+                .setPosition(-20f, 0f, 0f).setVelocity(600f, 0f, 0f);
+        sheet.setRotation(Quat.fromAxisAngle(new Vec3(0f, 1f, 0f), 1.1f));
+        world.add(sheet);
+        for (int i = 0; i < 6; i++) world.step(DT);
+        float x = sheet.getPosition().x();
+        assertTrue(x < -0.01f && x > -0.06f, "the sheet's middle is at x = " + x + ", and the wall's face is at -0.01");
+        assertTrue(sheet.getRotation().rotate(new Vec3(1f, 0f, 0f)).x() > 0.99f, "the sheet is not flat: " + sheet.getRotation());
+        assertTrue(Math.abs(sheet.getVelocity().x()) < 1f, "still moving into the wall at " + sheet.getVelocity());
+    }
+
+    @Test
+    void bodiesOfAnyShapeAtAnyAngleStayOnTheirSideOfAWall() {
+        // Seeded, so the same bodies every time: sheets, planks and cubes, turned and spinning, fired at a 2 cm wall
+        // at 40 to 1000 m/s from three step lengths. One that gets past the wall's face (and not round its edge: it slides along it)
+        // is a failure.
+        Random random = new Random(11);
+        for (int trial = 0; trial < 240; trial++) {
+            float dt = trial % 3 == 0 ? 1f / 30f : trial % 3 == 1 ? 1f / 60f : 1f / 120f;
+            float speed = 40f + random.nextFloat() * 960f;
+            Vec3 axis = new Vec3(random.nextFloat() - 0.5f, random.nextFloat() - 0.5f, random.nextFloat() - 0.5f).normalized();
+            Quat turn = Quat.fromAxisAngle(axis, random.nextFloat() * 6.28f);
+            Vec3 velocity = new Vec3(speed, (random.nextFloat() - 0.5f) * speed * 0.3f, (random.nextFloat() - 0.5f) * speed * 0.3f);
+            Vec3 spin = new Vec3((random.nextFloat() - 0.5f) * 20f, (random.nextFloat() - 0.5f) * 20f, (random.nextFloat() - 0.5f) * 20f);
+            Vec3 half = switch (trial % 4) {
+                case 0 -> new Vec3(0.01f, 0.4f, 0.4f);   // a sheet
+                case 1 -> new Vec3(0.02f, 0.03f, 0.9f);  // a plank
+                case 2 -> new Vec3(0.02f, 0.3f, 0.3f);   // a slab
+                default -> new Vec3(0.05f, 0.05f, 0.05f); // a cube
+            };
+            PhysicsWorld world = space();
+            world.add(wall());
+            RigidBody body = new RigidBody(BodyType.DYNAMIC).addShape(new BoxShape(half.x(), half.y(), half.z())).setMass(1f)
+                    .setAngularDamping(0f).setPosition(-30f, 0f, 0f).setVelocity(velocity.x(), velocity.y(), velocity.z());
+            body.setRotation(turn);
+            body.setAngularVelocity(spin);
+            world.add(body);
+            float far = Float.NEGATIVE_INFINITY;
+            for (int i = 0, steps = (int) (1.5f / dt); i < steps; i++) {
+                world.step(dt);
+                Vec3 p = body.getPosition();
+                if (Math.abs(p.y()) < 9f && Math.abs(p.z()) < 9f) far = Math.max(far, p.x()); // the wall is 20 m across
+            }
+            assertTrue(far < 0.1f, "trial " + trial + " (" + half + " at " + speed + " m/s, step " + dt + " s) got to x = " + far);
         }
     }
 

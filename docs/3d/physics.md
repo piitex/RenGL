@@ -138,8 +138,10 @@ A body that moves more in one step than it is thick (a bullet, a thrown dart, a 
 fast) could be on one side of a thin wall at the start of a step and on the other at the end. Contacts reach a little past
 a body's box, which holds anything that covers a few metres a step, but a bullet covers dozens. So for such a body the
 world also **sweeps** the step's motion: it walks the body along its path, as far as it can without touching anything
-static, and moves it only that far, to within half a centimetre of the surface. The next step has a contact there, and the
-solver bounces, stops or slides it as it would any other. The check is on by default and only runs for a body whose step is longer than half
+static, and moves it only that far, to within half a centimetre of the surface. There the body is solved against what
+stands still again, as it now lies, and sent on for the rest of the step, up to sixteen times. So a bullet is bounced, stopped or
+slid along the wall in the step it arrives, and a thin sheet that hits a wall on a corner and turns about it is laid flat against
+the wall instead of swinging through it. The check is on by default and only runs for a body whose step is longer than half
 its narrowest width (a ball moving a third of its radius a step costs nothing).
 
 ```java nocompile
@@ -151,8 +153,11 @@ bullet.setContinuous(false);               // or let it through, to save the lit
 It sweeps against static bodies, and kinematic ones that are standing still: spheres, capsules, boxes and hulls, planes and the
 triangles of meshes. It leaves out triggers, bodies whose layers and masks don't meet, bodies a joint says not to collide with,
 other dynamic bodies and kinematic platforms that are moving (those still rely on the contacts' reach). A body that
-starts a step touching a surface isn't held back by it, and neither is one the solver has already brought to the surface, so
-resting, sliding and landing are as before.
+starts a step touching a surface isn't stopped by that contact, so resting and sliding are as before; but its motion is
+followed through the step, and cut where it would reach into the surface more than half a centimetre (or more than it
+already does), which is what keeps the far edge of a hit sheet from swinging through. One the solver has already brought to
+the surface isn't held back, so landing is as before. A fast body with a joint is cut where the sweep stops it and waits for
+the next step, since joints are solved with the whole world and not alone.
 
 ## Bodies
 
@@ -590,7 +595,8 @@ walk into, in pieces no longer than half their radius, so they can't pass throug
 Shapes a little apart already get a contact, sized by how far the bodies could move in the step. That stops falling
 bodies at the surface and keeps a ball from passing through a thin wall. For a body that moves more in a step than it is
 thick, the end of the step is also checked by a sweep (see [fast bodies](#fast-bodies)): conservative advancement, which
-asks GJK for the gap and divides it by the fastest the body's points can close it.
+asks GJK for the gap and divides it by the fastest the body's points can close it. A body that already touches
+something has its real motion placed at eight points along the step instead, with the narrow phase, and cut where it digs in.
 
 ## Limits
 
@@ -603,11 +609,10 @@ asks GJK for the gap and divides it by the fastest the body's points can close i
   at a time with the contacts, so the masses behind them should stay within about 10 to 1 at one step ([substeps](#substeps)
   take that further). Trees of ball joints, hinges, sliders and fixed joints, stops and motors included, are solved exactly, up to about 600 to 1 in one step.
 - A character isn't turned by a turning platform (it is carried round, facing the same way).
-- A fast body is [swept](#fast-bodies) against what stands still, and stopped at the surface. What happens next is the
-  solver's, and a thin sheet that hits a thin wall on a corner picks up so much spin from the hit that it can
-  swing through the wall in the following step. This is a known bug, not a design limit. A sheet 80 cm across and 2 cm thick
-  got through from 60 m/s up, at turns of about 0.6 to 1.3 rad; flat on and edge on it was stopped at 600 m/s. Substeps shrink the step and help; so does a thicker wall. Bodies
-  moving at each other are not swept, only the moving one against the still.
+- A fast body is [swept](#fast-bodies) against what stands still, stopped at the surface and solved there again for the
+  rest of the step. Bodies moving at each other are not swept, only the moving one against the still, and the solve that
+  follows a stop counts the static bodies only. A sheet 80 cm across and 2 cm thick was thrown at a 2 cm wall at 60 to 600 m/s
+  at every turn, and 600 bodies of four shapes at random angles, spins and step lengths from 1/30 to 1/120 s: none got through.
 - A mesh can't be on a dynamic body, so mesh against mesh and mesh against plane are never tested: neither moves.
   A moving body that is concave is [cut into hulls](#concave-moving-bodies), which do meet meshes and planes.
 - Gyroscopic effects are left out: a spinning body keeps its angular velocity rather than its angular momentum, which

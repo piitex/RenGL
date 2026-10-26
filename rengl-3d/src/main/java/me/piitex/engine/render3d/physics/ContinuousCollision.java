@@ -13,12 +13,13 @@ import java.util.List;
  * tilt; they only see what is within their margin. This walks the shape along the motion the step is about to make,
  * as far as the nearest it could get without touching (conservative advancement: the gap by GJK, divided by the
  * fastest the shape's points can close it), and reports the fraction of the step at which it first comes within
- * {@link #SKIN} of anything. The body is then moved only that far, so the next step finds the contact in range and the
- * solver does what it always does.
+ * {@link #SKIN} of anything. The body is then moved only that far, and {@link PhysicsWorld} solves it against what it
+ * has reached and sends it on for the rest of the step.
  * <p>
  * Only the bodies that don't move are swept against (static ones, and kinematic ones at rest), and only a body whose
- * step is long for how thin it is. A body already touching a surface isn't held back by it, and one the solver has
- * already stopped at the surface isn't either, so resting and landing are as they were.
+ * step is long for how thin it is. A body already touching a surface isn't stopped by it, and one the solver has
+ * already stopped at the surface isn't either, so resting and landing are as they were; a touching body's motion is
+ * followed for real instead ({@link #settle}), so it can't turn into the surface where its contacts don't reach.
  */
 final class ContinuousCollision {
     /**
@@ -27,6 +28,8 @@ final class ContinuousCollision {
      */
     static final float SKIN = 0.005f;
     private static final int MAX_ITERATIONS = 32;
+    /** How many places along the step {@link #settle} looks, and how many times it halves the gap to the first it dislikes. */
+    private static final int SAMPLES = 8, HALVINGS = 10;
 
     private ContinuousCollision() {
     }
@@ -40,12 +43,13 @@ final class ContinuousCollision {
     }
 
     /**
-     * The motion a body is about to make: its centre of mass moves in a straight line while it turns by the shortest way,
-     * both at a steady rate.
+     * The motion a body is about to make: its centre of mass moves in a straight line while it turns about its spin
+     * axis, placed as the body's own update would place it for any fraction of the step.
      */
     private static final class Sweep {
+        final RigidBody body;
+        final float dt;
         final Vec3 start, move, localCenter;
-        final Quat from, to;
         final float angle, reach;
         final Vec3 axis;
         final List<BodyShape> shapes;
@@ -53,16 +57,17 @@ final class ContinuousCollision {
         final float[] radius;
 
         Sweep(RigidBody body, float dt) {
+            this.body = body;
+            this.dt = dt;
             start = new Vec3(body.cx, body.cy, body.cz);
             move = new Vec3((body.vx + body.pvx) * dt, (body.vy + body.pvy) * dt, (body.vz + body.pvz) * dt);
             localCenter = body.getLocalCenterOfMass();
-            from = body.getRotation();
-            to = body.orientationAfter(dt);
-            Quat turn = to.mul(from.conjugate());
-            if (turn.w() < 0f) turn = new Quat(-turn.x(), -turn.y(), -turn.z(), -turn.w());
-            float s = (float) Math.sqrt(turn.x() * turn.x() + turn.y() * turn.y() + turn.z() * turn.z());
-            angle = 2f * (float) Math.atan2(s, turn.w());
-            axis = s > 1e-6f ? new Vec3(turn.x() / s, turn.y() / s, turn.z() / s) : Vec3.ZERO;
+            // How fast the body turns, the most it ever does in the step: the integrator turns it by less than the spin
+            // times the time, and by less the longer it goes (it is a straight-line update of the quaternion).
+            Vec3 spin = new Vec3(body.wx + body.pwx, body.wy + body.pwy, body.wz + body.pwz);
+            float rate = spin.length();
+            angle = rate * dt;
+            axis = rate > 1e-6f ? spin.mul(1f / rate) : Vec3.ZERO;
             reach = body.reach();
             shapes = body.placedShapes();
             corners = new Vec3[shapes.size()][];
@@ -88,13 +93,22 @@ final class ContinuousCollision {
          * The corners of shape {@code i} when the step is {@code t} of the way through.
          */
         Vec3[] cornersAt(int i, float t) {
-            Quat rotation = angle == 0f ? from : from.slerp(to, t);
-            Vec3 origin = start.add(move.mul(t)).sub(rotation.rotate(localCenter));
-            BodyShape shape = shapes.get(i);
-            Pose pose = new Pose(origin.add(rotation.rotate(shape.offset())), rotation.mul(shape.rotation()));
+            Pose pose = poseAt(i, t);
             Vec3[] local = corners[i], world = new Vec3[local.length];
             for (int k = 0; k < world.length; k++) world[k] = pose.toWorld(local[k]);
             return world;
+        }
+
+        /**
+         * Where shape {@code i} is when the step is {@code t} of the way through.
+         */
+        Pose poseAt(int i, float t) {
+            // The orientation the body is left with if it is moved for the fraction t of the step: the same update the
+            // body makes, so a body cut at t really is where this said.
+            Quat rotation = angle == 0f ? body.getRotation() : body.orientationAfter(dt * t);
+            Vec3 origin = start.add(move.mul(t)).sub(rotation.rotate(localCenter));
+            BodyShape shape = shapes.get(i);
+            return new Pose(origin.add(rotation.rotate(shape.offset())), rotation.mul(shape.rotation()));
         }
 
         /**
@@ -125,7 +139,9 @@ final class ContinuousCollision {
         world.tree.query(area, other -> {
             if (!blocks(body, other)) return;
             for (int j = 0; j < other.shapeCount(); j++) {
-                if (Broadphase.overlap(area, other.shapeBounds(j))) against(sweep, other.collisionShape(j), other.shapePose(j), best);
+                if (!Broadphase.overlap(area, other.shapeBounds(j))) continue;
+                against(sweep, other.collisionShape(j), other.shapePose(j), best);
+                settle(sweep, other.collisionShape(j), other.shapePose(j), best);
             }
         });
         return best[0];
@@ -134,7 +150,7 @@ final class ContinuousCollision {
     /**
      * Whether {@code body} can be stopped by {@code other}: something that stays where it is, that it collides with.
      */
-    private static boolean blocks(RigidBody body, RigidBody other) {
+    static boolean blocks(RigidBody body, RigidBody other) {
         if (other == body || other.isDynamic() || other.isTrigger() || body.isTrigger()) return false;
         if (other.getType() == BodyType.KINEMATIC && other.isMoving()) return false;
         if (!Broadphase.layersAgree(body, other)) return false;
@@ -200,6 +216,59 @@ final class ContinuousCollision {
             Vec3[] triangle = {pose.toWorld(mesh.corner(t, 0)), pose.toWorld(mesh.corner(t, 1)), pose.toWorld(mesh.corner(t, 2))};
             convex(sweep, triangle, 0f, best);
         });
+    }
+
+    /**
+     * A body that starts the step touching something is not held back by the advancement above: the solver has its
+     * contacts, and a body resting on a floor or sliding along it must go on. But the contacts see only the place that
+     * touches. A thin sheet that arrives on a corner is turned by the hit about that corner, fast enough to swing the rest of
+     * it through a wall in one step, and nothing of it was near the wall when the contacts were made.
+     * <p>
+     * So the motion the solver left is followed here for real, not bounded: the shape is placed at a few points along
+     * the step and, where it first sinks into the thing more than the {@link #SKIN} (or more than it already is), the
+     * step is cut at the last place it didn't, found by halving. The body is left there with its face against the wall,
+     * and {@link PhysicsWorld} solves it again from there, with contacts all along the face.
+     */
+    private static void settle(Sweep sweep, Shape shape, Pose pose, float[] best) {
+        Manifold scratch = new Manifold();
+        for (int i = 0; i < sweep.shapes.size(); i++) {
+            float now = depth(sweep, i, 0f, shape, pose, SKIN * 1.5f, scratch);
+            if (now == Float.NEGATIVE_INFINITY) continue; // not touching: the advancement is for that
+            // No deeper than the skin, or than it already is (the position pass is getting it out). Not "than it is plus the skin":
+            // that would let a body that is cut every step sink in a skin at a time.
+            float allowed = Math.max(now + 0.5f * ContactSolver.SLOP, SKIN), limit = best[0], ok = 0f, bad = -1f;
+            for (int k = 1; k <= SAMPLES && bad < 0f; k++) {
+                float t = limit * k / SAMPLES;
+                if (depth(sweep, i, t, shape, pose, 0f, scratch) > allowed) bad = t;
+                else ok = t;
+            }
+            if (bad < 0f) continue;
+            for (int n = 0; n < HALVINGS; n++) {
+                float mid = 0.5f * (ok + bad);
+                if (depth(sweep, i, mid, shape, pose, 0f, scratch) > allowed) bad = mid;
+                else ok = mid;
+            }
+            best[0] = Math.min(best[0], ok);
+        }
+    }
+
+    /**
+     * How far shape {@code i} of the sweep reaches into {@code shape} when the step is {@code t} through: the deepest
+     * contact point, negative when they are apart by less than {@code margin}, and negative infinity when by more.
+     */
+    private static float depth(Sweep sweep, int i, float t, Shape shape, Pose pose, float margin, Manifold scratch) {
+        Shape moving = sweep.shapes.get(i).shape();
+        Pose at = sweep.poseAt(i, t);
+        float[] deepest = {Float.NEGATIVE_INFINITY};
+        if (shape instanceof MeshShape mesh) {
+            MeshCollision.collide(mesh, pose, moving, at, margin, true, (triangle, m) -> {
+                for (int k = 0; k < m.count; k++) deepest[0] = Math.max(deepest[0], m.depths[k]);
+                return true;
+            });
+        } else if (Narrowphase.collide(moving, at, shape, pose, margin, scratch)) {
+            for (int k = 0; k < scratch.count; k++) deepest[0] = Math.max(deepest[0], scratch.depths[k]);
+        }
+        return deepest[0];
     }
 
     /**
