@@ -7,6 +7,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,6 +22,15 @@ class SystemMediaSourceTest {
     @BeforeEach
     void needSystemDecoder() {
         Assumptions.assumeTrue(MediaFiles.systemAvailable(), "no system media framework on this OS");
+        needGStreamerH264();
+    }
+
+    /** On Linux, skips unless GStreamer can read H.264 in MP4: distributions ship the demuxer and decoder separately. */
+    static void needGStreamerH264() {
+        if (!GStreamer.available()) return;
+        Assumptions.assumeTrue(GStreamer.has("qtdemux"), "GStreamer has no MP4 demuxer: install gst-plugins-good");
+        Assumptions.assumeTrue(Stream.of("avdec_h264", "openh264dec", "vah264dec", "nvh264dec", "vaapih264dec", "v4l2h264dec")
+                .anyMatch(GStreamer::has), "GStreamer has no H.264 decoder: install gst-libav");
     }
 
     static File fixture(String name) {

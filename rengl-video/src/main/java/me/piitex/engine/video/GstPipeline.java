@@ -25,6 +25,8 @@ final class GstPipeline implements GstPlayback {
     private static final Logger log = LogManager.getLogger("Video");
     private static final long SETTLE_NANOS = 20_000_000_000L;
     private static final long POLL_NANOS = 100 * NANOS_PER_MILLI;
+    private static final String PLUGIN_HINT = "A plug-in may be missing: MP4 and MOV files need gst-plugins-good"
+            + " (gstreamer1.0-plugins-good), and H.264 needs gst-libav (gstreamer1.0-libav) or a decoder from gst-plugins-bad";
     private static final String VIDEO_CAPS = "video/x-raw,format=BGRA";
     private static final String AUDIO_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,channels=[1,2]";
 
@@ -92,7 +94,7 @@ final class GstPipeline implements GstPlayback {
         MemorySegment picture = pullPreroll(video, 0);
         if (isNull(picture)) {
             throw new UnsupportedOperationException("Unsupported video format: " + name + " has no picture GStreamer can decode."
-                    + " The plug-in for its codec may be missing (H.264 needs gst-libav, gstreamer1.0-libav, or an H.264 decoder from gst-plugins-bad)");
+                    + " " + PLUGIN_HINT);
         }
         double frameRate;
         try {
@@ -142,7 +144,7 @@ final class GstPipeline implements GstPlayback {
     private UnsupportedOperationException cannotPlay(String why) {
         return new UnsupportedOperationException("Unsupported video format: " + name + " cannot be played by GStreamer"
                 + (why == null ? "" : " (" + why + ")")
-                + ". A plug-in for its codec may be missing (H.264 needs gst-libav, gstreamer1.0-libav, or a decoder from gst-plugins-bad)");
+                + ". " + PLUGIN_HINT);
     }
 
     @Override
