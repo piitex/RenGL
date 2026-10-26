@@ -197,11 +197,28 @@ Useful switches: `-Drengl.vulkan.validation=true` (with `-Dorg.lwjgl.vulkan.libn
 
 Sky lighting is an approximation (SH9 diffuse, mip-blurred reflections), off by default. Shadow edges are the same width everywhere, no more than 8 shadow-casting lights at a time, no more than 64 lights tested at every pixel and about 2000 point and spot lights without shadows through the light grid (lights with shadows are never in the grid; a cell holds 255; lots of lights with large ranges are slow however they are sorted; the grid is built on the CPU every frame), a glowing surface lights like one point light at the middle of its mesh and casts no shadow, no screen-space reflections, reflection probes or volumetric light, occlusion culling only by the nodes you mark as occluders, on a 256 by 144 depth picture drawn on the CPU (no culling against the previous frame's depth on the GPU, no portals), an interface on a surface (`UiScreen`) has hover, clicks, the wheel, dragging, popups (a dropdown's list, context menus, pickers) and typing in text fields, though a drag that leaves the surface holds at its last place on it instead of following the ray past the edge, and the post effects are bloom, screen-space ambient occlusion, a colour fringe, a vignette and a colour grade (saturation, contrast, shadow and highlight tints), with no depth of field, motion blur or lens flare. They work in 16-bit linear light on a multisampled scene, tone mapped at the end; the occlusion darkens direct light as well as ambient light, and sees only what is on screen. Skinned meshes are limited to 512 joints. Morph targets are blended on the GPU up to 16 shapes at a time, past that on the CPU.
 
+### Open bugs
+
+Things that are wrong, as opposed to not built. Each has a reason it was left and a plan; fix them after the roadmap rounds.
+
+1. **A fast thin sheet hitting a thin wall on a corner spins through it.** `ContinuousCollision` stops the sheet within 5 mm of the
+   wall, but the next step starts with it touching, which the sweep skips on purpose (a body that has landed must be left to the
+   solver). The solver then turns the corner hit into 50 to 100 rad/s of spin, and the sheet swings through the 2 cm wall in
+   that one step. Measured with a 2 cm by 80 cm by 80 cm sheet turned about the vertical axis, fired at a 2 cm wall at 1/60 s steps:
+   no turn got through at 30 m/s; at 60 m/s a turn of 0.9 rad did; at 100 m/s, 0.9 and 1.0; at 200 m/s, 0.7 to 1.1; at 300 m/s,
+   0.6 to 1.2; at 600 m/s, 0.6 to 1.3. Flat on (0) and edge on (1.57) it was stopped at every speed.
+   *Test:* `ContinuousCollisionTest.aThinFastSheetStopsAtAWallAtEveryAngleAndSpeed` (disabled, fails today).
+   *Fix:* resolve the impact at the moment it happens, inside the step: after the sweep finds a time of impact, advance to it, run the
+   contact solve for that pair there (a mini sub-step), then spend the rest of the step. Cheaper stopgaps: cap the angular
+   velocity a contact may give a body whose thinnest side is under its step (`RigidBody.thickness`), or sweep a body that
+   starts touching using only the part of its motion that is not already blocked.
+   *Workarounds today:* `PhysicsWorld.setSubsteps`, a thicker wall, or a thicker sheet.
+
 ### Physics limits
 
 1. Tall stacks: 10 velocity iterations hold ten boxes, 20 hold fifteen; twenty need more, or substeps. A block solver or substepping (as in Box2D v3) would do better.
 2. The view's lines are a texture, so they blur when seen very close and thin out on long thin triangles; there is no line primitive in the renderer. Contact and joint marks are drawn with depth testing, so a contact inside a body's mesh is hidden.
-3. Continuous collision is a sweep of a fast body against static ones only (see [Physics](3d/physics.md#fast-bodies)); a thin sheet that hits a thin wall on a corner at high speed can still spin through it after being stopped, and there is one thread.
+3. Continuous collision is a sweep of a fast body against static ones only (see [Physics](3d/physics.md#fast-bodies)); a thin sheet that hits a thin wall on a corner at high speed can still spin through it after being stopped ([open bug 1](#open-bugs)), and there is one thread.
 4. Restitution: a speculative bounce is moved to the surface by the position pass, which is exact for one point and an approximation for a face landing at an angle.
 5. Hull against hull tests every pair of edge directions with exact projections: fine for hulls of a few dozen corners, slow for hundreds. Gauss-map pruning and a support-mapping (GJK/EPA) path would scale better.
 6. Mesh corners are joined only at exactly equal positions; nearly touching pieces keep real edges along the gap. Seams are judged from the triangles' front sides, so a box sliding on the back of a convex fold can still catch.

@@ -2,6 +2,7 @@ package me.piitex.engine.render3d.physics;
 
 import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Vec3;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
@@ -124,6 +125,21 @@ class ContinuousCollisionTest {
         // Flat on, or edge on, it is stopped at any speed.
         for (float turn : new float[]{0f, 1.5707964f}) {
             assertTrue(sheetAt(600f, turn) < 0.1f, "a sheet turned " + turn + " at 600 m/s got to x = " + sheetAt(600f, turn));
+        }
+    }
+
+    /**
+     * OPEN BUG (see "Open bugs" in docs/3d-status.md). The sweep stops the sheet at the wall, but the next step starts with it
+     * touching, which the sweep skips by design, and the solver turns the corner hit into so much spin that the sheet swings
+     * through the 2 cm wall. Remove @Disabled when the impact is resolved inside the step.
+     */
+    @Disabled("known bug: a fast thin sheet hitting a thin wall on a corner spins through it the step after the sweep stops it")
+    @Test
+    void aThinFastSheetStopsAtAWallAtEveryAngleAndSpeed() {
+        for (float speed : new float[]{60f, 100f, 200f, 300f, 600f}) {
+            for (float turn = 0f; turn <= 1.5f; turn += 0.1f) {
+                assertTrue(sheetAt(speed, turn) < 0.1f, "a sheet turned " + turn + " at " + speed + " m/s got to x = " + sheetAt(speed, turn));
+            }
         }
     }
 
