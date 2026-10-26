@@ -64,13 +64,28 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private static final float PADDING = 4f;
     private static final float ICON_GAP = 6f; // between an item's icon and its name
     private static final float BOX_SIZE = 14f; // a check box
+    private static final float CARRIED_ALPHA = 0.4f; // rows being dragged, where they still are
+    private static final float PREVIEW_ALPHA = 0.92f;
+    private static final float PREVIEW_OFFSET_X = 14f; // the dragged row's preview, right of the pointer
+    private static final float PREVIEW_MAX_WIDTH = 220f;
 
     /**
      * Where a dragged item was dropped: under {@code parent} (null for the top level), at {@code index} among its
      * children. The index is the gap the user dropped into, counting the children as they are now, the item itself
      * included if it is already there. That is how {@code Entity.addChild} and {@code EntityScene.add} count too, so the index can be passed straight to them.
+     * <p>
+     * {@code item} is the row that was pressed. {@code items} is everything that goes: with
+     * {@link #setMultiSelect multi-select}, pressing one of several selected rows drags them all, top to bottom as the
+     * rows are shown, leaving out any that is inside another selected row since it goes along with that one. It is
+     * just {@code item} otherwise.
      */
-    public record Drop<T>(T item, T parent, int index) {
+    public record Drop<T>(T item, T parent, int index, List<T> items) {
+        /**
+         * A drop of one item.
+         */
+        public Drop(T item, T parent, int index) {
+            this(item, parent, index, List.of(item));
+        }
     }
 
     /**
@@ -135,6 +150,8 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private double pressX, pressY, lastX, lastY;
     private T lastPressItem;
     private long lastPressNanos;
+    private List<T> dragged = List.of();                // what the drag carries; just the pressed row unless several are selected
+    private Set<T> draggedSet = Set.of();
     private Drop<T> drop;
     private DropMode dropMode;
     private int dropRow = -1;
@@ -778,7 +795,25 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private void endRowDrag() {
         pressed = null;
         draggingRow = false;
+        dragged = List.of();
+        draggedSet = Set.of();
         clearDrop();
+    }
+
+    /**
+     * What dragging the pressed row carries: the whole selection if it is one of several, without the rows inside
+     * another selected row, else just itself.
+     */
+    private List<T> carried() {
+        if (!multiSelect || selection.size() < 2 || !selection.contains(pressed.item)) return List.of(pressed.item);
+        List<T> items = new ArrayList<>();
+        for (Row<T> row : rows) {
+            if (!selection.contains(row.item)) continue;
+            boolean inside = false;
+            for (Row<T> up = row.parent; up != null && !inside; up = up.parent) inside = selection.contains(up.item);
+            if (!inside) items.add(row.item);
+        }
+        return items;
     }
 
     private void clearDrop() {
@@ -825,16 +860,18 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private void offer(Row<T> parentRow, int index, DropMode mode, int indicatorRow) {
         T item = pressed.item;
         for (Row<T> r = parentRow; r != null; r = r.parent) {
-            if (r == pressed) return; // into itself or its own children
+            if (draggedSet.contains(r.item)) return; // into itself or its own children
         }
         T parent = parentRow == null ? null : parentRow.item;
-        if (!canDrop.test(item, parent)) return;
+        for (T each : dragged) {
+            if (!canDrop.test(each, parent)) return;
+        }
         T oldParent = pressed.parent == null ? null : pressed.parent.item;
-        if (Objects.equals(parent, oldParent)) {
+        if (dragged.size() == 1 && Objects.equals(parent, oldParent)) {
             int oldIndex = siblingIndex(pressed);
             if (index == oldIndex || index == oldIndex + 1) return; // the gaps either side of it: no move
         }
-        drop = new Drop<>(item, parent, index);
+        drop = new Drop<>(item, parent, index, dragged);
         dropMode = mode;
         dropRow = indicatorRow;
     }
@@ -1040,6 +1077,8 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         if (!draggingRow) {
             if (Math.hypot(x - pressX, y - pressY) < DRAG_THRESHOLD) return;
             draggingRow = true;
+            dragged = carried();
+            draggedSet = new HashSet<>(dragged);
             lastPressItem = null; // a drag is not the first half of a double-click
         }
         updateDrop();
@@ -1320,6 +1359,44 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         renderChildren(renderer);
         renderer.popClip();
         if (isScrollbarVisible()) renderScrollbars(renderer);
+        if (draggingRow && pressed != null) renderDragPreview(renderer);
+    }
+
+    /**
+     * The dragged row's icon and name beside the pointer, so the user sees what they hold and where it is, with how
+     * many rows go along when it is more than one. It is not clipped to the tree, so it can leave the tree's edge.
+     */
+    private void renderDragPreview(Renderer renderer) {
+        org.jetbrains.skia.Font f = getFont();
+        float textH = FontMetricsCompat.of(f).getHeight();
+        Paint text = textColor.get();
+        Paint selectionPaint = selectionColor.get();
+        Paint chip = AnimatedPaint.resolve(selectionPaint) instanceof Color c ? c.withAlpha(1f) : selectionPaint;
+        T item = pressed.item;
+        IconAsset icon = iconProvider == null ? null : iconProvider.apply(item);
+        String label = labelProvider.apply(item);
+        label = label == null ? "" : TextFit.ellipsize(label, f, PREVIEW_MAX_WIDTH);
+        String more = dragged.size() > 1 ? "+" + (dragged.size() - 1) : null;
+        float width = PADDING * 2 + f.measureTextWidth(label);
+        if (icon != null) width += iconSize + ICON_GAP;
+        if (more != null) width += ICON_GAP + f.measureTextWidth(more);
+        float x = (float) toLocalX(lastX) + PREVIEW_OFFSET_X, y = (float) toLocalY(lastY) + rowHeight / 2f;
+        renderer.pushAlpha(PREVIEW_ALPHA);
+        renderer.drawQuad(x, y, width, rowHeight, chip, rowCornerRadius);
+        renderer.popAlpha();
+        float at = x + PADDING;
+        if (icon != null) {
+            int size = Math.round(iconSize);
+            Color tint = iconColorProvider == null ? null : iconColorProvider.apply(item);
+            renderer.drawImage(IconCache.loadResource(icon.resourcePath(), size, size), at, y + (rowHeight - size) / 2f,
+                    size, size, 0f, 1f, tint == null ? solid(text) : tint);
+            at += iconSize + ICON_GAP;
+        }
+        renderer.drawText(label, at, y + (rowHeight - textH) / 2f, f, text);
+        if (more != null) {
+            at += f.measureTextWidth(label) + ICON_GAP;
+            renderer.drawText(more, at, y + (rowHeight - textH) / 2f, f, dimTextColor.get());
+        }
     }
 
     private void renderRows(Renderer renderer) {
@@ -1344,6 +1421,8 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
             float rowY = y + i * rowHeight - scroll;
             if (rowY >= y + h) break;
             Row<T> row = rows.get(i);
+            boolean carried = draggingRow && draggedSet.contains(row.item);
+            if (carried) renderer.pushAlpha(CARRIED_ALPHA); // what is being dragged stays in its place, faded
             if (selection.contains(row.item)) {
                 if (!focused) renderer.pushAlpha(0.6f);
                 renderer.drawQuad(x, rowY, w, rowHeight, selectionPaint, rowCornerRadius);
@@ -1374,6 +1453,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
                 if (ellipsize && label != null) label = TextFit.ellipsize(label, f, w - labelX(row) - PADDING);
                 renderer.drawText(label, x + labelX(row), rowY + (rowHeight - textH) / 2f, f, color);
             }
+            if (carried) renderer.popAlpha();
         }
 
         if (dropMode == DropMode.BEFORE || dropMode == DropMode.AFTER) {
