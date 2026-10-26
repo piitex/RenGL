@@ -41,6 +41,9 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [ReorderableGrid](containers/reorderable-grid.md) | Drag-to-rearrange grid of items |
 | [TreeView](containers/tree-view.md) | A tree of items, like an editor's hierarchy or a file browser |
 | [TableView](containers/table-view.md) | Rows and columns with a fixed header, click-to-sort and resizable columns, check boxes and cells that edit in place |
+| [ListBox](containers/list-box.md) · [AccordionContainer](containers/accordion-container.md) | A pick-one-or-many list; sections that fold |
+| [ToastManager](containers/toast-manager.md) · [MessageBox](containers/message-box.md) | Corner notifications; one-line alert, confirm, prompt and choose dialogs |
+| [ToolBar](containers/tool-bar.md) · [StatusBar](containers/status-bar.md) | The strips along the top and bottom of a window |
 | **[Layouts](layouts/README.md)** | Automatic positioning |
 | [Layouts overview](layouts/README.md) | How automatic positioning works |
 | [Layout files](containers/layout-files.md) | Load a screen designed in the editor from JSON |
@@ -48,8 +51,8 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | **[Overlays](overlays/README.md)** (widgets) | Every widget, one page each |
 | [Overlay catalog](overlays/README.md) | Every widget at a glance |
 | Text | [TextOverlay](overlays/text-overlay.md) · [TextFlowOverlay](overlays/text-flow-overlay.md) · [TextFieldOverlay](overlays/text-field-overlay.md) · [TextAreaOverlay](overlays/text-area-overlay.md) · [RichTextAreaOverlay](overlays/rich-text-area-overlay.md) · [FormattedTextOverlay](overlays/formatted-text-overlay.md) |
-| Controls | [ButtonOverlay](overlays/button-overlay.md) · [LinkOverlay](overlays/link-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
-| Feedback | [ProgressBarOverlay](overlays/progress-bar-overlay.md) · [LoadingSpinnerOverlay](overlays/loading-spinner-overlay.md) · [SeparatorOverlay](overlays/separator-overlay.md) |
+| Controls | [ButtonOverlay](overlays/button-overlay.md) · [LinkOverlay](overlays/link-overlay.md) · [CheckBoxOverlay](overlays/checkbox-overlay.md) · [RadioButtonOverlay](overlays/radio-button-overlay.md) · [DropdownOverlay](overlays/dropdown-overlay.md) · [SliderOverlay](overlays/slider-overlay.md) · [RangeSliderOverlay](overlays/range-slider-overlay.md) · [ComboBoxOverlay](overlays/combo-box-overlay.md) · [SpinnerOverlay](overlays/spinner-overlay.md) · [ToggleSwitchOverlay](overlays/toggle-switch-overlay.md) · [ColorPickerOverlay](overlays/color-picker-overlay.md) · [DateTimePickerOverlay](overlays/date-time-picker-overlay.md) |
+| Feedback | [ProgressBarOverlay](overlays/progress-bar-overlay.md) · [LoadingSpinnerOverlay](overlays/loading-spinner-overlay.md) · [SeparatorOverlay](overlays/separator-overlay.md) · [SpacerOverlay](overlays/spacer-overlay.md) |
 | Images | [ImageOverlay](overlays/image-overlay.md) · [IconOverlay](overlays/icon-overlay.md) |
 | **[Charts](charts/README.md)** | Line, bar, scatter, pie and donut charts drawn by the engine, with live data |
 | [Line chart](charts/line-chart.md) | `LineChartOverlay`: lines, smooth curves, filled areas, gaps, a log axis, a time axis |

@@ -15,6 +15,8 @@ country.onSelect(c -> System.out.println("Selected: " + c));
 layout.addElement(country);
 ```
 
+For a box the user can also type into, with suggestions that narrow as they type, see [`ComboBoxOverlay`](combo-box-overlay.md).
+
 The list is shown through `Window.showPopup`, so it paints over sibling elements and containers, is **not clipped**
 by a parent [`ScrollContainer`](../containers/scroll-container.md), and closes on an outside click or Escape. It follows the
 dropdown if the dropdown moves while open, and closes if the dropdown is removed, disabled or scrolled out of view.
