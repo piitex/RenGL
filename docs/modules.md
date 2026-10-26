@@ -132,16 +132,17 @@ never used.)
 
 ## Running the examples
 
-`rengl-examples` holds the demos. They load their sample files by relative path, so run them with the working directory
-set to `rengl-examples`:
+`rengl-examples` holds the demos. They load their sample files by relative path from the repository root, so run them
+with the working directory set to the repository root (`EntityDemo`, and `TreeDemo` through it, are the exception and expect
+`rengl-examples`):
 
 ```bash
 ./mvnw -pl rengl-examples -am package -DskipTests
-cd rengl-examples
 ```
 
 then run a demo class from your IDE with that as the working directory (`Demo`, `AudioDemo`, `Scene3DDemo`, ...). On
-macOS add `-XstartOnFirstThread`.
+macOS add `-XstartOnFirstThread`. The 3D demos choose their API with `-Drengl.demo.api=VULKAN` or `OPENGL`, not
+`-Drengl.backend`.
 
 ## Keeping the core small
 

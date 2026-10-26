@@ -103,7 +103,7 @@ the first thread:
 -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
 ```
 
-The [demos](rengl-examples/src/main/java/me/piitex/examples/demo) (in the `rengl-examples` module; run them with it as the working directory) are the quickest way to see what it can do. Start with `Demo`, then try
+The [demos](rengl-examples/src/main/java/me/piitex/examples/demo) (in the `rengl-examples` module; run them with the repository root as the working directory, except `EntityDemo`, which expects `rengl-examples`) are the quickest way to see what it can do. Start with `Demo`, then try
 `FireworksDemo`, `Studio3DDemo`, `GameLoopDemo`, `SpriteDemo`, `ResizableContainerDemo`, `Scene3DDemo`, `HdrSkyDemo`, `PhysicsDemo` or `VideoDemo`.
 
 ## Documentation
