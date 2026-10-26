@@ -604,9 +604,9 @@ asks GJK for the gap and divides it by the fastest the body's points can close i
   take that further). Trees of ball joints, hinges, sliders and fixed joints, stops and motors included, are solved exactly, up to about 600 to 1 in one step.
 - A character isn't turned by a turning platform (it is carried round, facing the same way).
 - A fast body is [swept](#fast-bodies) against what stands still, and stopped at the surface. What happens next is the
-  solver's, and a thin sheet that hits a thin wall on a corner at 100 m/s or more picks up so much spin from the hit that it can
-  swing through the wall in the following step (a sheet 80 cm across and 2 cm thick did, between about 30 and 100 m/s,
-  at some angles; flat on and edge on it was stopped at 600 m/s). Substeps shrink the step and help; so does a thicker wall. Bodies
+  solver's, and a thin sheet that hits a thin wall on a corner picks up so much spin from the hit that it can
+  swing through the wall in the following step. This is a known bug, not a design limit. A sheet 80 cm across and 2 cm thick
+  got through from 60 m/s up, at turns of about 0.6 to 1.3 rad; flat on and edge on it was stopped at 600 m/s. Substeps shrink the step and help; so does a thicker wall. Bodies
   moving at each other are not swept, only the moving one against the still.
 - A mesh can't be on a dynamic body, so mesh against mesh and mesh against plane are never tested: neither moves.
   A moving body that is concave is [cut into hulls](#concave-moving-bodies), which do meet meshes and planes.
