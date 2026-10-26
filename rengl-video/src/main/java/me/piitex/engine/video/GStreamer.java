@@ -233,6 +233,14 @@ final class GStreamer {
         }
     }
 
+    /** Whether the plug-in that provides this element is installed. */
+    static boolean has(String factory) {
+        if (!available()) return false;
+        MemorySegment element = make(factory, "rengl-probe");
+        unref(element);
+        return !isNull(element);
+    }
+
     static void unref(MemorySegment object) {
         if (isNull(object)) return;
         try {

@@ -284,6 +284,7 @@ class VideoPlayerTest {
     @Test
     void playsAndSeeksH264ThroughTheSystemDecoder() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(MediaFiles.systemAvailable(), "no system media framework on this OS");
+        SystemMediaSourceTest.needGStreamerH264();
         VideoPlayer p = VideoPlayer.open(SystemMediaSourceTest.fixture("h264-640x360.mp4")); // no soundtrack: stays silent
         players.add(p);
         assertEquals("H.264", p.getInfo().videoCodec());
