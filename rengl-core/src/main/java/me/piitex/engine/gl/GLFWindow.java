@@ -114,6 +114,15 @@ public class GLFWindow {
             vulkan.beforeGlfwInit();
         }
 
+        // Native Wayland breaks both backends: GLFW makes an EGL context there, and Skia's makeGL finds its functions
+        // through GLX, so OpenGL fails with "Can't create OpenGL DirectContext"; and a Vulkan window presents its first
+        // frame while still hidden, before the compositor has configured the surface, which is a protocol error
+        // ("attached a buffer before configure event") that ends the connection. Use X11 (XWayland on a Wayland
+        // session). The hint only counts on the first glfwInit of the process, so it applies to every backend.
+        if (System.getProperty("os.name", "").toLowerCase().contains("linux") && glfwPlatformSupported(GLFW_PLATFORM_X11)) {
+            glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+        }
+
         if (!glfwInit()) {
             throw new IllegalStateException("Unable to initialize GLFW");
         }
