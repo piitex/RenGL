@@ -272,7 +272,7 @@ public final class RigidBody {
             throw new IllegalStateException("A plane has no volume to move; put it on a static or kinematic body");
         }
         if (shape.shape() instanceof MeshShape && type == BodyType.DYNAMIC) {
-            throw new IllegalStateException("A mesh has no inside to move; put it on a static or kinematic body, or use a ConvexHullShape");
+            throw new IllegalStateException("A mesh has no inside to move; put it on a static or kinematic body, or use a ConvexHullShape (ConvexDecomposition cuts a mesh into hulls)");
         }
         shapes.add(shape);
         updateMassProperties();

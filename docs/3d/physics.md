@@ -236,7 +236,33 @@ Like a mesh, a hull stays where its points are rather than being centred on the 
 its volume; `centerOfMass()` says where its middle is. Every corner costs a little in each contact test, so a hull of a
 few dozen corners is quicker than one of a few hundred (two hulls of 200 corners take about 3 ms to test and two of 400
 about 5 ms; a hull of 30 takes 0.01 ms): build it from a low-detail version of the model when there is one.
-For an object with dents that matter (a chair, an L-shaped beam), give the body several hulls or boxes.
+For an object with dents that matter (a chair, an L-shaped beam), give the body several hulls or boxes, or let
+[`ConvexDecomposition`](#concave-moving-bodies) cut the model into hulls for you.
+
+### Concave moving bodies
+
+A mesh can't move and a hull fills in every dent, so a moving chair, a bowl, or an L-shaped corridor segment is made of
+several hulls. `ConvexDecomposition` cuts a model into them:
+
+```java nocompile
+RigidBody chair = new RigidBody(chairNode).setMass(8f);
+for (ConvexHullShape piece : ConvexDecomposition.of(chairNode, 12)) chair.addShape(piece);
+world.add(chair);
+```
+
+`of(mesh, maxHulls)`, `of(node, maxHulls)` and `of(positions, indices, maxHulls, tolerance)` return the hulls in the model's
+own space, so a body on the model's node lines up with what is drawn. The cutting is by planes along the X, Y and Z axes,
+through the deepest dent in the part with the worst one, until no part's surface is more than `tolerance` inside its hull
+(a fiftieth of the model's size when you leave it out) or `maxHulls` is reached. A solid model gives solid pieces, a thin
+sheet gives thin slabs, and a convex model stays one hull. The body then collides with static meshes, planes, boxes and other
+bodies' hulls through the same tests as any hull, so a decomposed chair can fall onto a mesh floor, slide down a mesh ramp and
+hook into another chair's notch. That is how a moving body gets to touch a mesh: through the pieces it is made of.
+
+Pieces overlap a little along the cuts, so the body is a little heavier than its model: the mass you set is shared by the pieces by
+volume. Every piece costs a contact test, so keep `maxHulls` low (a chair is 6 to 12) and cut a low-detail copy of the model when
+there is one. A model that is a thin shell around a hollow (a bowl, a mug) comes out right only if the pieces are small enough
+to follow the hollow; use a higher count for those. Cutting is a tool for building the shapes, not something to do each
+frame: do it once when the model loads.
 
 ### Mass and inertia
 
@@ -568,7 +594,8 @@ asks GJK for the gap and divides it by the fastest the body's points can close i
 
 ## Limits
 
-- Meshes can't move freely: a dynamic body needs hulls (or boxes, spheres and capsules) instead.
+- Meshes can't move freely: a dynamic body needs hulls (or boxes, spheres and capsules) instead, which
+  [`ConvexDecomposition`](#concave-moving-bodies) makes from a mesh.
 - A mesh joins its corners only where they are at exactly the same place unless you give it a weld distance
   (`new MeshShape(positions, indices, 0.002f)`, `MeshShape.of(node, 0.002f)`, or the collider's Weld in a scene file);
   a level whose pieces merely nearly meet keeps real edges along the gaps, which a sliding box can catch on, until welded.
@@ -582,6 +609,7 @@ asks GJK for the gap and divides it by the fastest the body's points can close i
   at some angles; flat on and edge on it was stopped at 600 m/s). Substeps shrink the step and help; so does a thicker wall. Bodies
   moving at each other are not swept, only the moving one against the still.
 - A mesh can't be on a dynamic body, so mesh against mesh and mesh against plane are never tested: neither moves.
+  A moving body that is concave is [cut into hulls](#concave-moving-bodies), which do meet meshes and planes.
 - Gyroscopic effects are left out: a spinning body keeps its angular velocity rather than its angular momentum, which
   only differs for an unevenly shaped body spinning freely.
 - One thread.
