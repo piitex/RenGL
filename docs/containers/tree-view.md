@@ -104,8 +104,8 @@ fires for the setters below or for `refresh()`.
 | `clearSelection()` | Nothing selected |
 
 Pressing a row that is one of several keeps them all selected until the button is released, so they can be
-dragged together: if a dragged row is in the selection, `onDrop` gets the pressed row, and the whole selection is
-`getSelectedItems()`. Releasing without dragging selects only that row. Closing an item that has selected rows inside
+dragged together: if a dragged row is in the selection, `onDrop` gets the pressed row as `drop.item()` and every row
+going along as `drop.items()`. Releasing without dragging selects only that row. Closing an item that has selected rows inside
 it removes them from the selection and selects the closed item. `refresh()` forgets selected items that are gone.
 
 ## Check boxes
@@ -174,13 +174,20 @@ Where a row lands depends on where the pointer is over the row under it:
 A line shows a place between rows, and a box shows the row it would go into. Holding a dragged row near the top or
 bottom edge scrolls the tree.
 
-A `Drop` is `(item, parent, index)`, with a null parent for the top level. `index` is the gap the row was dropped
-into, counted among the parent's children as they are now, the dragged item included if it is already there. That
-is how `Entity.addChild(child, index)` and `EntityScene.add(entity, index)` count, so the index can be passed straight
-to them.
+The dragged row's icon and name follow the pointer, so you can see what you hold, with a count such as `+2` when
+several go along. The rows being dragged fade where they are until the button is let go.
 
-The tree never drops an item into itself or its own children, and a drop that would leave the item where it is
-reports nothing. It never changes the model either: the listener makes the move and calls `refresh()`.
+A `Drop` is `(item, parent, index, items)`, with a null parent for the top level. `index` is the gap the row was
+dropped into, counted among the parent's children as they are now, the dragged item included if it is already there.
+That is how `Entity.addChild(child, index)` and `EntityScene.add(entity, index)` count, so the index can be passed
+straight to them for one item. `items` is every row that goes, top to bottom: with multi-select, pressing one of
+several selected rows takes them all, leaving out a row that is inside another selected one, since it goes with that
+one. It is just `item` otherwise. For several, remove them all from the model first, drop the `index` by one for each
+that was in the parent before the gap, and put them in at that place in order.
+
+The tree never drops an item into itself or its own children, nor into any row that is being carried. `setCanDrop`
+is asked about each carried row, and one refusal refuses the drop. A single row dropped where it is already reports
+nothing. The tree never changes the model either: the listener makes the move and calls `refresh()`.
 
 ## Keyboard
 
