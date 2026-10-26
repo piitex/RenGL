@@ -1,14 +1,10 @@
 package me.piitex.engine.render3d.scene;
 
 import me.piitex.engine.render3d.math.Vec3;
-import org.lwjgl.stb.STBImage;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -101,27 +97,104 @@ public final class HdrTextureData {
     }
 
     /**
-     * Decodes a Radiance (.hdr) file held in memory.
+     * Decodes a Radiance (.hdr) file held in memory: flat or run-length encoded scanlines, top row first ({@code -Y h +X w}).
+     * <p>
+     * This is done in Java rather than with stb_image, whose {@code stbi_loadf} in LWJGL 3.4.3 writes each row of a flat
+     * file to the wrong place.
      *
      * @param name what to call it in an error
      */
     public static HdrTextureData decode(byte[] encoded, String name) throws IOException {
-        ByteBuffer data = MemoryUtil.memAlloc(encoded.length);
-        data.put(encoded).flip();
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer w = stack.mallocInt(1), h = stack.mallocInt(1), channels = stack.mallocInt(1);
-            FloatBuffer pixels = STBImage.stbi_loadf_from_memory(data, w, h, channels, 4);
-            if (pixels == null) throw new IOException("Could not decode the image " + name + ": " + STBImage.stbi_failure_reason());
-            try {
-                float[] rgba = new float[w.get(0) * h.get(0) * 4];
-                pixels.get(0, rgba);
-                return new HdrTextureData(w.get(0), h.get(0), rgba);
-            } finally {
-                STBImage.stbi_image_free(pixels);
-            }
-        } finally {
-            MemoryUtil.memFree(data);
+        int[] pos = {0};
+        String magic = line(encoded, pos);
+        if (!magic.startsWith("#?RADIANCE") && !magic.startsWith("#?RGBE")) {
+            throw new IOException("Could not decode the image " + name + ": not a Radiance file");
         }
+        for (String header = line(encoded, pos); !header.isEmpty(); header = line(encoded, pos)) {
+            if (header.startsWith("FORMAT=") && !header.equals("FORMAT=32-bit_rle_rgbe")) {
+                throw new IOException("Could not decode the image " + name + ": unsupported " + header);
+            }
+        }
+        String[] size = line(encoded, pos).trim().split("\\s+");
+        if (size.length != 4 || !size[0].equals("-Y") || !size[2].equals("+X")) {
+            throw new IOException("Could not decode the image " + name + ": unsupported orientation " + String.join(" ", size));
+        }
+        int width, height;
+        try {
+            height = Integer.parseInt(size[1]);
+            width = Integer.parseInt(size[3]);
+        } catch (NumberFormatException e) {
+            throw new IOException("Could not decode the image " + name + ": bad size " + String.join(" ", size));
+        }
+        if (width < 1 || height < 1 || (long) width * height > Integer.MAX_VALUE / 4) {
+            throw new IOException("Could not decode the image " + name + ": bad size " + width + "x" + height);
+        }
+
+        float[] rgba = new float[width * height * 4];
+        byte[] row = new byte[width * 4];
+        for (int y = 0; y < height; y++) {
+            readScanline(encoded, pos, row, width, name);
+            for (int x = 0; x < width; x++) {
+                int e = row[x * 4 + 3] & 0xff, i = (y * width + x) * 4;
+                if (e != 0) {
+                    // mantissa / 256 * 2^(exponent - 128)
+                    float scale = Math.scalb(1f, e - 136);
+                    rgba[i] = (row[x * 4] & 0xff) * scale;
+                    rgba[i + 1] = (row[x * 4 + 1] & 0xff) * scale;
+                    rgba[i + 2] = (row[x * 4 + 2] & 0xff) * scale;
+                }
+                rgba[i + 3] = 1f;
+            }
+        }
+        return new HdrTextureData(width, height, rgba);
+    }
+
+    /**
+     * One header line, without its newline.
+     */
+    private static String line(byte[] data, int[] pos) throws IOException {
+        int start = pos[0];
+        while (pos[0] < data.length && data[pos[0]] != '\n') pos[0]++;
+        if (pos[0] >= data.length) throw new IOException("Radiance header ends early");
+        return new String(data, start, pos[0]++ - start, java.nio.charset.StandardCharsets.US_ASCII);
+    }
+
+    /**
+     * Reads one row of RGBE pixels into {@code row}. A row of 8 to 32767 pixels may be run-length encoded, one channel at a
+     * time, and starts with {@code 2 2} and its width; anything else is flat.
+     */
+    private static void readScanline(byte[] data, int[] pos, byte[] row, int width, String name) throws IOException {
+        int p = pos[0];
+        if (p + 4 > data.length) throw new IOException("Could not decode the image " + name + ": the file ends early");
+        boolean rle = width >= 8 && width < 32768 && data[p] == 2 && data[p + 1] == 2 && (data[p + 2] & 0x80) == 0;
+        if (!rle) {
+            if (p + width * 4 > data.length) throw new IOException("Could not decode the image " + name + ": the file ends early");
+            System.arraycopy(data, p, row, 0, width * 4);
+            pos[0] = p + width * 4;
+            return;
+        }
+        if (((data[p + 2] & 0xff) << 8 | (data[p + 3] & 0xff)) != width) {
+            throw new IOException("Could not decode the image " + name + ": a run-length row has the wrong width");
+        }
+        p += 4;
+        for (int c = 0; c < 4; c++) {
+            for (int x = 0; x < width; ) {
+                if (p >= data.length) throw new IOException("Could not decode the image " + name + ": the file ends early");
+                int count = data[p++] & 0xff;
+                boolean run = count > 128;
+                if (run) count -= 128;
+                if (count == 0 || x + count > width) throw new IOException("Could not decode the image " + name + ": bad run-length data");
+                if (run) {
+                    if (p >= data.length) throw new IOException("Could not decode the image " + name + ": the file ends early");
+                    byte value = data[p++];
+                    for (int k = 0; k < count; k++) row[(x++) * 4 + c] = value;
+                } else {
+                    if (p + count > data.length) throw new IOException("Could not decode the image " + name + ": the file ends early");
+                    for (int k = 0; k < count; k++) row[(x++) * 4 + c] = data[p++];
+                }
+            }
+        }
+        pos[0] = p;
     }
 
     /**

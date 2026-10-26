@@ -44,6 +44,31 @@ class HdrSkyTest {
     }
 
     @Test
+    void aRunLengthEncodedRadianceFileLoads() throws Exception {
+        ByteArrayOutputStream file = new ByteArrayOutputStream();
+        file.write("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 2 +X 8\n".getBytes(StandardCharsets.US_ASCII));
+        for (int row = 0; row < 2; row++) {
+            file.write(new byte[]{2, 2, 0, 8});
+            // Red: a run of 8 at 128. Green: 4 literals then a run of 4. Blue: a run of 8 at 64. Exponent: 130 on the first row, 129 on the second.
+            file.write(new byte[]{(byte) (128 + 8), (byte) 128});
+            file.write(new byte[]{4, 0, 64, (byte) 128, (byte) 192, (byte) (128 + 4), 32});
+            file.write(new byte[]{(byte) (128 + 8), 64});
+            file.write(new byte[]{(byte) (128 + 8), (byte) (130 - row)});
+        }
+        HdrTextureData hdr = HdrTextureData.decode(file.toByteArray(), "rle.hdr");
+        assertEquals(8, hdr.width());
+        assertEquals(2, hdr.height());
+        float[] px = hdr.pixels();
+        assertEquals(2f, px[0], 1e-3f);
+        assertEquals(0f, px[1], 0f);
+        assertEquals(1f, px[2], 1e-3f);
+        assertEquals(1f, px[4 + 1], 1e-3f, "second green literal");
+        assertEquals(0.5f, px[7 * 4 + 1], 1e-3f, "green run");
+        assertEquals(1f, px[8 * 4], 1e-3f, "the second row has half the exponent");
+        assertEquals(1f, px[15 * 4 + 3], 0f);
+    }
+
+    @Test
     void notAPictureIsAnError() {
         assertThrows(java.io.IOException.class, () -> HdrTextureData.decode(new byte[]{1, 2, 3}, "nothing"));
         assertThrows(IllegalArgumentException.class, () -> new HdrTextureData(2, 2, new float[3]));
