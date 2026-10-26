@@ -226,7 +226,9 @@ class RadialMenuTest {
         menu.setTextColor(me.piitex.engine.ui.color.Color.WHITE);
         RadialMenu drawn = menu;
         drawn.show(new Host(), 110, 110);
-        try (OffscreenRenderer r = new OffscreenRenderer(220, 220, 1f)) {
+        // No pointer anywhere, whatever an earlier test left in the static tracker: a pointer over a wedge would light it.
+        try (OffscreenRenderer r = new OffscreenRenderer(220, 220, 1f);
+             var loan = me.piitex.engine.input.MouseTracker.lend(-1, -1, false)) {
             r.begin();
             drawn.render(r);
             r.end();

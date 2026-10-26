@@ -50,7 +50,10 @@ public final class MouseTracker {
      * Engine use, render thread: drops a closed window's state.
      */
     public static void forget(Window window) {
-        states.remove(window);
+        State removed = states.remove(window);
+        // Without this the getters keep answering with the closed window's last pointer, and whatever draws next (another
+        // window, an offscreen capture) sees a mouse that is no longer anywhere.
+        if (removed != null && removed == current) current = new State();
     }
 
     /**
