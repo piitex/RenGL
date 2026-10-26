@@ -50,6 +50,8 @@ public final class PhysicsWorld {
      * the solver stop a falling body at the surface instead of after it sinks in.
      */
     static final float CONTACT_MARGIN = 0.02f;
+    /** How many times a fast body is cut and solved again in one step (see {@link #advanceFast}). */
+    private static final int MAX_PIECES = 16;
 
     /**
      * Which two shapes a contact is between, and the triangle when one is a mesh (-1 otherwise).
@@ -601,7 +603,8 @@ public final class PhysicsWorld {
         for (RigidBody body : active) {
             if (body.getWorld() == this) {
                 body.limitSpin(dt);
-                body.integratePosition(body.sweeps(dt) ? dt * ContinuousCollision.timeOfImpact(this, body, dt) : dt);
+                if (body.sweeps(dt)) advanceFast(body, dt);
+                else body.integratePosition(dt);
             }
             if (last) body.clearForces();
         }
@@ -616,6 +619,47 @@ public final class PhysicsWorld {
         }
         if (last) for (RigidBody body : bodies) if (!body.settled()) body.updateCollisionShapes(CONTACT_MARGIN); // fresh for queries
         return broken;
+    }
+
+    /**
+     * Moves a body whose step is long for how thin it is. It goes as far as {@link ContinuousCollision} says it can
+     * without reaching into what stands still; there, the contacts it has are the ones the step began with, which can't
+     * know what the body will meet next (a thin sheet hit on a corner turns about it, and its far edge arrives at the
+     * wall a moment later). So the body is solved again against what stands still, as it now lies, and sent on for the
+     * rest of the step, as many times as it takes. A body with joints stops where it was cut: joints are solved with
+     * the whole world, not alone.
+     */
+    private void advanceFast(RigidBody body, float dt) {
+        float left = dt;
+        for (int piece = 0; piece < MAX_PIECES; piece++) {
+            float reached = ContinuousCollision.timeOfImpact(this, body, left);
+            if (reached >= 1f) {
+                body.integratePosition(left);
+                return;
+            }
+            body.integratePosition(left * reached);
+            left *= 1f - reached;
+            if (!body.joints.isEmpty() || left <= 0f) return;
+            solveAgainstStatic(body, left);
+            if (!body.sweeps(left)) {
+                body.integratePosition(left);
+                return;
+            }
+        }
+    }
+
+    /**
+     * The contact solve of one body against the bodies that stand still, where it lies now, for {@code dt} more seconds.
+     */
+    private void solveAgainstStatic(RigidBody body, float dt) {
+        body.updateCollisionShapes(CONTACT_MARGIN, dt, gravity);
+        List<PairKey> keys = new ArrayList<>();
+        List<Contact> touching = new ArrayList<>();
+        tree.query(body.collisionBounds(), other -> {
+            if (ContinuousCollision.blocks(body, other)) narrow(body, other, manifold, Map.of(), keys, touching);
+        });
+        touching.removeIf(c -> !ContactSolver.active(c));
+        if (!touching.isEmpty()) ContactSolver.solveIslands(touching, dt, velocityIterations, positionIterations);
     }
 
     /**
