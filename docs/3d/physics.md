@@ -107,6 +107,7 @@ want crates you can push around easily, give them a smaller mass: what matters f
 | `setStepHandler(StepHandler)` | Runs before every step: the place for forces that act over time |
 | `setVelocityIterations(int)` / `setPositionIterations(int)` | How hard the solver works (10 and 4). 10 holds a stack of ten boxes; 20 holds fifteen. Joints get twice the position passes |
 | `setSubsteps(int)` | Cuts each step into smaller ones (1; up to 32), [below](#substeps) |
+| `RigidBody.setContinuous(boolean)` | Whether a body with a long step for how thin it is is [swept](#fast-bodies) against static bodies so it can't pass through them (on) |
 | `setSolverThreads(int)` | Extra threads for collision tests and for solving separate piles of bodies (up to 7, fewer on a smaller CPU; 0 keeps everything on the calling thread). The result is identical whatever the number. Many scattered bodies scale with the cores; one big heap still solves on one thread |
 | `setSleeping(boolean)` | Whether resting bodies may fall asleep (on) |
 | `addJoint(Joint)` / `removeJoint(Joint)` / `joints()` | The [joints](#joints). Add the bodies first |
@@ -130,6 +131,28 @@ Bodies then move a quarter as far between two looks at them, which is what a tal
 chain (past about 600 to 1; see [Joints](#joints)), and a thin stick spinning fast ask for. A stack of twenty boxes
 with a 200 kg one on top falls over with one step and stands with four. Try 2 to 4 before raising the solver's passes;
 it costs about as much more as there are substeps. Forces, the step handler and events still work on the whole step, so nothing else in a game changes.
+
+### Fast bodies
+
+A body that moves more in one step than it is thick (a bullet, a thrown dart, a thin blade or sheet, a long stick spinning
+fast) could be on one side of a thin wall at the start of a step and on the other at the end. Contacts reach a little past
+a body's box, which holds anything that covers a few metres a step, but a bullet covers dozens. So for such a body the
+world also **sweeps** the step's motion: it walks the body along its path, as far as it can without touching anything
+static, and moves it only that far, to within half a centimetre of the surface. The next step has a contact there, and the
+solver bounces, stops or slides it as it would any other. The check is on by default and only runs for a body whose step is longer than half
+its narrowest width (a ball moving a third of its radius a step costs nothing).
+
+```java nocompile
+RigidBody bullet = new RigidBody(BodyType.DYNAMIC).addShape(new SphereShape(0.02f)).setMass(0.01f);
+bullet.setVelocity(0, 0, -600);            // ten metres a step; it stops at the wall, not behind it
+bullet.setContinuous(false);               // or let it through, to save the little the check costs
+```
+
+It sweeps against static bodies, and kinematic ones that are standing still: spheres, capsules, boxes and hulls, planes and the
+triangles of meshes. It leaves out triggers, bodies whose layers and masks don't meet, bodies a joint says not to collide with,
+other dynamic bodies and kinematic platforms that are moving (those still rely on the contacts' reach). A body that
+starts a step touching a surface isn't held back by it, and neither is one the solver has already brought to the surface, so
+resting, sliding and landing are as before.
 
 ## Bodies
 
@@ -539,7 +562,9 @@ is what lets stacks settle and chains hang still. Characters move first, each st
 walk into, in pieces no longer than half their radius, so they can't pass through thin walls.
 
 Shapes a little apart already get a contact, sized by how far the bodies could move in the step. That stops falling
-bodies at the surface and keeps a fast ball from passing through a thin wall, without a separate sweep test.
+bodies at the surface and keeps a ball from passing through a thin wall. For a body that moves more in a step than it is
+thick, the end of the step is also checked by a sweep (see [fast bodies](#fast-bodies)): conservative advancement, which
+asks GJK for the gap and divides it by the fastest the body's points can close it.
 
 ## Limits
 
@@ -551,9 +576,11 @@ bodies at the surface and keeps a fast ball from passing through a thin wall, wi
   at a time with the contacts, so the masses behind them should stay within about 10 to 1 at one step ([substeps](#substeps)
   take that further). Trees of ball joints, hinges, sliders and fixed joints, stops and motors included, are solved exactly, up to about 600 to 1 in one step.
 - A character isn't turned by a turning platform (it is carried round, facing the same way).
-- Fast spinning bodies are covered by growing the contact margin by how far their far end travels in a step, which is
-  right for a stick hitting a wall or floor; a very long thin body spinning so fast that it turns a large angle in one
-  step and hits something sideways can still be missed. Substeps shrink the step.
+- A fast body is [swept](#fast-bodies) against what stands still, and stopped at the surface. What happens next is the
+  solver's, and a thin sheet that hits a thin wall on a corner at 100 m/s or more picks up so much spin from the hit that it can
+  swing through the wall in the following step (a sheet 80 cm across and 2 cm thick did, between about 30 and 100 m/s,
+  at some angles; flat on and edge on it was stopped at 600 m/s). Substeps shrink the step and help; so does a thicker wall. Bodies
+  moving at each other are not swept, only the moving one against the still.
 - A mesh can't be on a dynamic body, so mesh against mesh and mesh against plane are never tested: neither moves.
 - Gyroscopic effects are left out: a spinning body keeps its angular velocity rather than its angular momentum, which
   only differs for an unevenly shaped body spinning freely.

@@ -25,7 +25,14 @@ final class Gjk {
     }
 
     static Result closest(Vec3 p0, Vec3 p1, Vec3[] set) {
-        Vec3[] ends = {p0, p1};
+        return closest(new Vec3[]{p0, p1}, set);
+    }
+
+    /**
+     * The same between two sets of corners: {@code onSegment} is the nearest point of the first set, whatever its size.
+     */
+    static Result closest(Vec3[] ends, Vec3[] set) {
+        Vec3 p0 = ends[0];
         Vec3[] w = new Vec3[4];
         int[] ia = new int[4], ib = new int[4];
         double[] lambda = new double[4];
@@ -39,7 +46,15 @@ final class Gjk {
             float vv = v.lengthSquared();
             if (vv < 1e-14f) return new Result(0f, p0, p0, 0);
             // The corner of the difference farthest toward the origin.
-            int sa = p0.dot(v) <= p1.dot(v) ? 0 : 1;
+            int sa = 0;
+            float least = Float.POSITIVE_INFINITY;
+            for (int i = 0; i < ends.length; i++) {
+                float d = ends[i].dot(v);
+                if (d < least) {
+                    least = d;
+                    sa = i;
+                }
+            }
             int sb = 0;
             float most = Float.NEGATIVE_INFINITY;
             for (int i = 0; i < set.length; i++) {

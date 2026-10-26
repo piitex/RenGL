@@ -201,7 +201,7 @@ Sky lighting is an approximation (SH9 diffuse, mip-blurred reflections), off by 
 
 1. Tall stacks: 10 velocity iterations hold ten boxes, 20 hold fifteen; twenty need more, or substeps. A block solver or substepping (as in Box2D v3) would do better.
 2. The view's lines are a texture, so they blur when seen very close and thin out on long thin triangles; there is no line primitive in the renderer. Contact and joint marks are drawn with depth testing, so a contact inside a body's mesh is hidden.
-3. No continuous collision for spinning bodies, and one thread.
+3. Continuous collision is a sweep of a fast body against static ones only (see [Physics](3d/physics.md#fast-bodies)); a thin sheet that hits a thin wall on a corner at high speed can still spin through it after being stopped, and there is one thread.
 4. Restitution: a speculative bounce is moved to the surface by the position pass, which is exact for one point and an approximation for a face landing at an angle.
 5. Hull against hull tests every pair of edge directions with exact projections: fine for hulls of a few dozen corners, slow for hundreds. Gauss-map pruning and a support-mapping (GJK/EPA) path would scale better.
 6. Mesh corners are joined only at exactly equal positions; nearly touching pieces keep real edges along the gap. Seams are judged from the triangles' front sides, so a box sliding on the back of a convex fold can still catch.
@@ -228,6 +228,6 @@ In suggested order:
 
 1. **Platforms:** Windows is done (see Verification). Linux remains: run the demos and `./mvnw test` there, and try an AMD and an Intel GPU on Windows. This is the one piece that needs the other machines.
 2. **Use it:** run `Scene3DDemo`, `Background3DDemo`, `PhysicsDemo`, `DominoDemo`, `TerrainDemo` and `PlaygroundDemo` with a real mouse and keyboard; nothing has driven the click, hover, drag or walking paths of the demos by hand.
-3. **Physics in the editor:** RenGL-Editor's inspector shows the node and world physics properties as they are, from `SceneKinds`; joints need a list like the lights (`Scene3DFile.joints`, `SceneKinds.joint`, `newJoint`), a play mode (`buildPhysics`, then step the world), and a `ColliderView` toggle in the 3D view.
+3. **Physics in the editor:** done in RenGL-Editor (a separate project): its inspector shows the node and world physics properties, joints are listed with the lights, Play Physics (P) runs the scene's physics in the view and Stop puts everything back, and Show Colliders (C) toggles a `ColliderView`.
 4. **Later ideas:** stops and motors in the joint-tree solve (an active set), sliders and rods as rows.
 5. **Your own list of other engine issues and changes**, which has not been sent yet.

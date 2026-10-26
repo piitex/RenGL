@@ -53,6 +53,13 @@ final class Broadphase {
             if (!a.isDynamic() && !b.isDynamic()) return false;
             if (!a.isActive() && !b.isActive()) return false;
         }
+        return layersAgree(a, b);
+    }
+
+    /**
+     * Whether each body's layer is in the other's mask.
+     */
+    static boolean layersAgree(RigidBody a, RigidBody b) {
         return (a.getCollisionLayer() & b.getCollisionMask()) != 0 && (b.getCollisionLayer() & a.getCollisionMask()) != 0;
     }
 
