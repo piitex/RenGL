@@ -63,6 +63,15 @@ class PostEffectsGpuTest {
         }
     }
 
+    /**
+     * The colour at a place in a {@code VIEW} pixel square, wherever the target is bigger than that (a Retina screen
+     * makes the viewport's target twice the size).
+     */
+    private static int[] viewAt(RenderTarget target, int x, int y) {
+        float scale = (float) target.width() / VIEW;
+        return rgbAt(target, (int) ((x + 0.5f) * scale), (int) ((y + 0.5f) * scale));
+    }
+
     private static int[] rgbAt(RenderTarget target, int x, int y) {
         ByteBuffer data = target.readPixels();
         try {
@@ -127,7 +136,7 @@ class PostEffectsGpuTest {
         return new Scenario("the look", scene, (device, s, target, r) -> {
             int[] plain = {0, 0, 0};
             r.guard("look: the plain picture is the texture", () -> {
-                int[] c = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] c = viewAt(target, VIEW / 2, VIEW / 2);
                 System.arraycopy(c, 0, plain, 0, 3);
                 r.check("look: the plain picture is the texture", Math.abs(c[0] - 200) <= 3 && Math.abs(c[1] - 100) <= 3 && Math.abs(c[2] - 50) <= 3,
                         "centre is " + c[0] + ", " + c[1] + ", " + c[2] + ", wanted 200, 100, 50");
@@ -135,7 +144,7 @@ class PostEffectsGpuTest {
             r.guard("look: going through the effects pass changes no colour", () -> {
                 s.setBloom(0.0001f);
                 s.render(device, target, 1f / 60f);
-                int[] c = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] c = viewAt(target, VIEW / 2, VIEW / 2);
                 s.setBloom(0f);
                 r.check("look: going through the effects pass changes no colour",
                         Math.abs(c[0] - plain[0]) <= 3 && Math.abs(c[1] - plain[1]) <= 3 && Math.abs(c[2] - plain[2]) <= 3,
@@ -144,7 +153,7 @@ class PostEffectsGpuTest {
             r.guard("look: no saturation is grey", () -> {
                 s.setSaturation(0f);
                 s.render(device, target, 1f / 60f);
-                int[] c = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] c = viewAt(target, VIEW / 2, VIEW / 2);
                 s.setSaturation(1f);
                 int spread = Math.max(c[0], Math.max(c[1], c[2])) - Math.min(c[0], Math.min(c[1], c[2]));
                 r.check("look: no saturation is grey", spread <= 3 && c[0] > 60, "centre is " + c[0] + ", " + c[1] + ", " + c[2]);
@@ -153,10 +162,10 @@ class PostEffectsGpuTest {
                 s.setContrast(2f);
                 fill(texture, 180, 180, 180);
                 s.render(device, target, 1f / 60f);
-                int[] bright = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] bright = viewAt(target, VIEW / 2, VIEW / 2);
                 fill(texture, 80, 80, 80);
                 s.render(device, target, 1f / 60f);
-                int[] dark = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] dark = viewAt(target, VIEW / 2, VIEW / 2);
                 s.setContrast(1f);
                 r.check("look: contrast spreads the tones", bright[0] > 180 + 30 && dark[0] < 80 - 30,
                         "180 became " + bright[0] + ", 80 became " + dark[0]);
@@ -165,10 +174,10 @@ class PostEffectsGpuTest {
                 s.setShadowTint(rgb(1f, 0f, 0f));
                 fill(texture, 30, 30, 30);
                 s.render(device, target, 1f / 60f);
-                int[] dark = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] dark = viewAt(target, VIEW / 2, VIEW / 2);
                 fill(texture, 250, 250, 250);
                 s.render(device, target, 1f / 60f);
-                int[] bright = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] bright = viewAt(target, VIEW / 2, VIEW / 2);
                 s.setShadowTint(Color.WHITE);
                 r.check("look: the shadow tint colours the dark and leaves the bright", dark[0] > 15 && dark[1] < 6 && dark[2] < 6 && bright[1] > 235 && bright[2] > 235,
                         "dark " + dark[0] + ", " + dark[1] + ", " + dark[2] + "; bright " + bright[0] + ", " + bright[1] + ", " + bright[2]);
@@ -177,10 +186,10 @@ class PostEffectsGpuTest {
                 s.setHighlightTint(rgb(0f, 0f, 1f));
                 fill(texture, 250, 250, 250);
                 s.render(device, target, 1f / 60f);
-                int[] bright = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] bright = viewAt(target, VIEW / 2, VIEW / 2);
                 fill(texture, 30, 30, 30);
                 s.render(device, target, 1f / 60f);
-                int[] dark = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] dark = viewAt(target, VIEW / 2, VIEW / 2);
                 s.setHighlightTint(Color.WHITE);
                 r.check("look: the highlight tint colours the bright and leaves the dark", bright[2] > 235 && bright[0] < 6 && bright[1] < 6 && dark[0] > 20 && dark[1] > 20,
                         "bright " + bright[0] + ", " + bright[1] + ", " + bright[2] + "; dark " + dark[0] + ", " + dark[1] + ", " + dark[2]);
@@ -189,7 +198,7 @@ class PostEffectsGpuTest {
                 s.setVignette(1f);
                 fill(texture, 200, 200, 200);
                 s.render(device, target, 1f / 60f);
-                int middle = rgbAt(target, VIEW / 2, VIEW / 2)[0], corner = rgbAt(target, 4, 4)[0], opposite = rgbAt(target, VIEW - 5, VIEW - 5)[0];
+                int middle = viewAt(target, VIEW / 2, VIEW / 2)[0], corner = viewAt(target, 4, 4)[0], opposite = viewAt(target, VIEW - 5, VIEW - 5)[0];
                 s.setVignette(0f);
                 r.check("look: the vignette darkens the corners and not the middle", middle > 195 && corner < middle * 0.4 && opposite < middle * 0.4,
                         "middle " + middle + ", corners " + corner + " and " + opposite);
@@ -216,7 +225,7 @@ class PostEffectsGpuTest {
                 s.setChromaticAberration(0.05f);
                 s.render(device, target, 1f / 60f);
                 int split = widestSplit(target);
-                int[] middle = rgbAt(target, VIEW / 2 - 20, VIEW / 2);
+                int[] middle = viewAt(target, VIEW / 2 - 20, VIEW / 2);
                 r.check("fringe: with it the edge splits red from blue", split > 60, "red and blue differ by only " + split + " along the edge");
                 r.check("fringe: the middle of the picture is untouched", middle[0] > 250 && middle[1] > 250 && middle[2] > 250,
                         "left of centre is " + middle[0] + ", " + middle[1] + ", " + middle[2]);
