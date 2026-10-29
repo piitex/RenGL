@@ -75,6 +75,15 @@ class LiveScreenGpuTest {
     /**
      * The red, green and blue at a pixel of a target's picture, summed with the others as a brightness.
      */
+    private static int[] viewAt(RenderTarget target, int x, int y) {
+        float scale = (float) target.width() / VIEW;
+        return rgbAt(target, (int) ((x + 0.5f) * scale), (int) ((y + 0.5f) * scale));
+    }
+
+    /**
+     * The colour at a pixel of the target itself. The target is bigger than {@code VIEW} where the screen is Retina, so the
+     * places in this file's checks, given in {@code VIEW} pixels, go through {@link #viewAt}.
+     */
     private static int[] rgbAt(RenderTarget target, int x, int y) {
         ByteBuffer data = target.readPixels();
         try {
@@ -125,13 +134,13 @@ class LiveScreenGpuTest {
         scene.camera().lookAt(new Vec3(0, 0, 3), new Vec3(0, 0, 0)).setFovYDegrees(60);
         return new Scenario("an animated screen", scene, (device, s, target, r) -> {
             r.guard("screen: shows the first picture", () -> {
-                int[] c = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] c = viewAt(target, VIEW / 2, VIEW / 2);
                 r.check("screen: shows the first picture", c[0] > 200 && c[1] < 40 && c[2] < 40, "centre is " + c[0] + ", " + c[1] + ", " + c[2] + ", wanted red");
             });
             r.guard("screen: shows a changed picture on the next frame", () -> {
                 fill(texture, 0, 255, 0);
                 s.render(device, target, 1f / 60f);
-                int[] c = rgbAt(target, VIEW / 2, VIEW / 2);
+                int[] c = viewAt(target, VIEW / 2, VIEW / 2);
                 r.check("screen: shows a changed picture on the next frame", c[1] > 200 && c[0] < 40 && c[2] < 40, "centre is " + c[0] + ", " + c[1] + ", " + c[2] + ", wanted green");
             });
             r.guard("screen: keeps changing, many times", () -> {
@@ -141,7 +150,7 @@ class LiveScreenGpuTest {
                     boolean blue = i % 2 == 0;
                     fill(texture, 0, 0, blue ? 255 : 0);
                     s.render(device, target, 1f / 60f);
-                    int[] c = rgbAt(target, VIEW / 2, VIEW / 2);
+                    int[] c = viewAt(target, VIEW / 2, VIEW / 2);
                     ok = blue ? c[2] > 200 : c[2] < 40;
                     seen = i + ": " + c[0] + ", " + c[1] + ", " + c[2];
                 }
@@ -181,7 +190,7 @@ class LiveScreenGpuTest {
         int topRightX = 165, topRightY = 91, bottomRightY = 165, leftX = 91;
         return new Scenario("a clickable panel", scene, (device, s, target, r) -> {
             r.guard("panel: shows the container, top row first", () -> {
-                int[] button1 = rgbAt(target, topRightX, topRightY), below = rgbAt(target, topRightX, bottomRightY), left = rgbAt(target, leftX, 128);
+                int[] button1 = viewAt(target, topRightX, topRightY), below = viewAt(target, topRightX, bottomRightY), left = viewAt(target, leftX, 128);
                 r.check("panel: shows the container, top row first",
                         button1[2] > 200 && button1[0] < 40 && below[0] > 200 && below[2] < 40 && left[0] > 200 && left[2] < 40,
                         "button " + button1[0] + ", " + button1[1] + ", " + button1[2] + " (wanted blue), below it " + below[0] + ", " + below[1] + ", " + below[2]
@@ -204,8 +213,8 @@ class LiveScreenGpuTest {
             r.guard("panel: what the click changed shows on the screen", () -> {
                 screen.refresh();
                 s.render(device, target, 1f / 60f);
-                int[] c = rgbAt(target, topRightX, topRightY);
-                int[] other = rgbAt(target, leftX, 128);
+                int[] c = viewAt(target, topRightX, topRightY);
+                int[] other = viewAt(target, leftX, 128);
                 r.check("panel: what the click changed shows on the screen", c[1] > 200 && c[0] < 40 && c[2] < 40 && other[0] > 200,
                         "button is " + c[0] + ", " + c[1] + ", " + c[2] + " (wanted green), the rest " + other[0] + ", " + other[1] + ", " + other[2]);
             });
@@ -233,9 +242,11 @@ class LiveScreenGpuTest {
      */
     private static int changedIn(byte[] before, byte[] after, int x0, int y0, int x1, int y1) {
         int changed = 0;
-        for (int y = y0; y < y1; y++) {
-            for (int x = x0; x < x1; x++) {
-                int i = (y * VIEW + x) * 4;
+        int side = (int) Math.round(Math.sqrt(before.length / 4.0));
+        float scale = (float) side / VIEW;
+        for (int y = (int) (y0 * scale); y < (int) (y1 * scale); y++) {
+            for (int x = (int) (x0 * scale); x < (int) (x1 * scale); x++) {
+                int i = (y * side + x) * 4;
                 if (before[i] != after[i] || before[i + 1] != after[i + 1] || before[i + 2] != after[i + 2]) changed++;
             }
         }
