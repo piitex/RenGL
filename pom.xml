@@ -85,6 +85,15 @@
                     <value>all</value>
                 </property>
             </activation>
+            <!--
+              Placeholders so the poms resolve when the host's lwjgl-natives-* profile is not active (IntelliJ passes
+              -P !lwjgl-natives-<host> for every profile left unticked). Nothing in the all-platform bundle reads them: the
+              modules unpack each platform's natives by explicit coordinates. When the host profile is active, it wins.
+            -->
+            <properties>
+                <lwjgl.natives>natives-windows</lwjgl.natives>
+                <skiko.runtime.artifact>skiko-awt-runtime-windows-x64</skiko.runtime.artifact>
+            </properties>
             <build>
                 <plugins>
                     <plugin>
