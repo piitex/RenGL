@@ -116,7 +116,14 @@ it for each module you use that has natives. `RenGL` has one too, holding the na
 
 ### Building the natives jars
 
-One platform per command. `-DskipAutoNatives` stops the host's own platform from also being selected, and the
+All six platforms in one build (no other platform profile may be active with it; in IntelliJ tick only `natives-bundle-all`
+in the Maven tool window, then run `package` or `install`):
+
+```bash
+./mvnw -DskipTests -Dnatives.platform=all package
+```
+
+Or one platform per command. `-DskipAutoNatives` stops the host's own platform from also being selected, and the
 platform goes in `natives.platform`:
 
 ```bash

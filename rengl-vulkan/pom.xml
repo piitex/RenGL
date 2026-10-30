@@ -100,6 +100,51 @@
                 </dependency>
             </dependencies>
         </profile>
+        <!-- All six platforms in one build (-Pnatives-bundle-all): the MoltenVK natives, macOS only (LWJGL publishes no Vulkan natives for Windows or Linux). -->
+        <profile>
+            <id>natives-bundle-all</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>all</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>3.8.1</version>
+                        <executions>
+                            <execution>
+                                <id>unpack-natives</id>
+                                <phase>prepare-package</phase>
+                                <goals><goal>unpack</goal></goals>
+                                <configuration>
+                                    <excludes>META-INF/*.SF,META-INF/*.DSA,META-INF/*.RSA,META-INF/MANIFEST.MF,META-INF/INDEX.LIST,META-INF/versions/**,module-info.class</excludes>
+                                    <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.lwjgl</groupId>
+                                    <artifactId>lwjgl-vulkan</artifactId>
+                                    <version>${lwjgl.version}</version>
+                                    <classifier>natives-macos</classifier>
+                                    <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.lwjgl</groupId>
+                                    <artifactId>lwjgl-vulkan</artifactId>
+                                    <version>${lwjgl.version}</version>
+                                    <classifier>natives-macos-arm64</classifier>
+                                    <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
+                                </artifactItem>
+                                    </artifactItems>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 
     <build>
