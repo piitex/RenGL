@@ -231,7 +231,8 @@ The native libraries (LWJGL and Skiko) are picked automatically by OS and archit
 profiles (`lwjgl-natives-<os>-<arch>`). Supported: Linux, macOS and Windows, each on x86-64 and arm64.
 
 To publish jars that other apps can depend on, the `natives.platform` property builds one small "natives" jar per
-platform for every module that has natives. Run one platform per invocation:
+platform for every module that has natives. `-Dnatives.platform=all` (or the `natives-bundle-all` profile) builds all six in
+one run; a single platform takes one invocation:
 
 ```bash
 mvn -DskipAutoNatives -Dnatives.platform=macos-aarch64 package

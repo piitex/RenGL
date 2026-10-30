@@ -71,6 +71,112 @@
         </profile>
 
         <!--
+          All six platforms in ONE build: -Pnatives-bundle-all (tick it in IntelliJ's Maven tool window, and nothing
+          else from the lwjgl-natives-* / natives-bundle-<platform> lists), then package or install. Each module that
+          owns natives unpacks every platform's natives (its own natives-bundle-all profile) and the jar executions
+          below attach one natives-<platform> jar per platform; rengl-all merges the modules' jars. No other platform
+          profile may be active with it, since they all set the same lwjgl.natives property.
+        -->
+        <profile>
+            <id>natives-bundle-all</id>
+            <activation>
+                <property>
+                    <name>natives.platform</name>
+                    <value>all</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <version>3.4.2</version>
+                        <executions>
+                            <execution>
+                                <id>natives-jar-natives-linux</id>
+                                <phase>package</phase>
+                                <goals><goal>jar</goal></goals>
+                                <configuration>
+                                    <classifier>natives-linux</classifier>
+                                    <classesDirectory>${project.build.directory}/natives/natives-linux</classesDirectory>
+                                    <skipIfEmpty>true</skipIfEmpty>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                    </archive>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>natives-jar-natives-linux-arm64</id>
+                                <phase>package</phase>
+                                <goals><goal>jar</goal></goals>
+                                <configuration>
+                                    <classifier>natives-linux-arm64</classifier>
+                                    <classesDirectory>${project.build.directory}/natives/natives-linux-arm64</classesDirectory>
+                                    <skipIfEmpty>true</skipIfEmpty>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                    </archive>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>natives-jar-natives-macos</id>
+                                <phase>package</phase>
+                                <goals><goal>jar</goal></goals>
+                                <configuration>
+                                    <classifier>natives-macos</classifier>
+                                    <classesDirectory>${project.build.directory}/natives/natives-macos</classesDirectory>
+                                    <skipIfEmpty>true</skipIfEmpty>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                    </archive>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>natives-jar-natives-macos-arm64</id>
+                                <phase>package</phase>
+                                <goals><goal>jar</goal></goals>
+                                <configuration>
+                                    <classifier>natives-macos-arm64</classifier>
+                                    <classesDirectory>${project.build.directory}/natives/natives-macos-arm64</classesDirectory>
+                                    <skipIfEmpty>true</skipIfEmpty>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                    </archive>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>natives-jar-natives-windows</id>
+                                <phase>package</phase>
+                                <goals><goal>jar</goal></goals>
+                                <configuration>
+                                    <classifier>natives-windows</classifier>
+                                    <classesDirectory>${project.build.directory}/natives/natives-windows</classesDirectory>
+                                    <skipIfEmpty>true</skipIfEmpty>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                    </archive>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>natives-jar-natives-windows-arm64</id>
+                                <phase>package</phase>
+                                <goals><goal>jar</goal></goals>
+                                <configuration>
+                                    <classifier>natives-windows-arm64</classifier>
+                                    <classesDirectory>${project.build.directory}/natives/natives-windows-arm64</classesDirectory>
+                                    <skipIfEmpty>true</skipIfEmpty>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                    </archive>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
           The six dev profiles below resolve natives for whichever platform is BUILDING the
           project: fine for local dev and for running the demos, but useless to a downstream
           consumer. Maven does not evaluate a dependency's own <profiles> when another
