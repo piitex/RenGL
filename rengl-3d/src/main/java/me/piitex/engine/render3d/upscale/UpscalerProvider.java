@@ -29,6 +29,16 @@ public interface UpscalerProvider {
     }
 
     /**
+     * The render scale this upscaler works at, given the one the scene asked for (below 1): the same by default. A vendor's
+     * library may take only some sizes (DLSS gives back a black picture outside the ones it lists for its modes), so it moves the
+     * scale to the nearest it takes. Called every frame by a scene that uses the provider, and by a settings screen that wants
+     * to show the size that will be drawn.
+     */
+    default float supportedRenderScale(float requested, int displayWidth, int displayHeight) {
+        return requested;
+    }
+
+    /**
      * A new upscaler for the device. Called on the render thread, once for each place a scene is drawn.
      */
     Upscaler create(GpuDevice device);
