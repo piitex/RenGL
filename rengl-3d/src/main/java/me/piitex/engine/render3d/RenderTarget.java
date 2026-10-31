@@ -38,6 +38,26 @@ public interface RenderTarget extends AutoCloseable {
     }
 
     /**
+     * The depth buffer as a texture, to bind in a later pass: a temporal upscaler reads it. Only for a target made with
+     * {@link GpuDevice#createDepthSampledTarget}, and not while a pass is drawing into it. Its red channel holds the depth
+     * a pass wrote with the depth test on: 0 at the near plane and 1 at the far plane for {@link
+     * me.piitex.engine.render3d.math.Mat4#perspective}, on both APIs, the same value the fragment shader sees in
+     * {@code gl_FragCoord.z}. The texture belongs to the target and is freed with it.
+     *
+     * @throws UnsupportedOperationException for any other target
+     */
+    default GpuTexture depthTexture() {
+        throw new UnsupportedOperationException("Only a target made with createDepthSampledTarget has a depth texture");
+    }
+
+    /**
+     * True when {@link #depthTexture()} can be read.
+     */
+    default boolean hasReadableDepth() {
+        return false;
+    }
+
+    /**
      * True when row 0 of the image in GPU memory is the bottom of the picture (OpenGL), false when it is the top
      * (Vulkan). The UI layer needs this to draw the image the right way up.
      */

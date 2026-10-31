@@ -110,6 +110,11 @@ public final class GlDevice implements GpuDevice {
     }
 
     @Override
+    public RenderTarget createDepthSampledTarget(int width, int height, boolean linear, boolean hdr) {
+        return new GlRenderTarget(width, height, true, 1, true, linear, hdr, true);
+    }
+
+    @Override
     public int maxAnisotropy() {
         return (int) anisotropy;
     }
