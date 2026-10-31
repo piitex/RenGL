@@ -16,6 +16,7 @@ All artifacts have the group id `me.piitex.engine` and the same version.
 | `rengl-video` | [Video](video/README.md): `VideoOverlay` and the decoders | none (needs `rengl-audio`) | none |
 | `rengl-vulkan` | The Vulkan renderer for `RenderAPI.VULKAN` | LWJGL Vulkan | MoltenVK on macOS only |
 | `rengl-3d` | The optional [3D layer](3d/README.md) (needs `rengl-vulkan`) | LWJGL assimp, shaderc, spvc, VMA | those four |
+| `rengl-upscale` | Vendor [upscalers](3d/upscaling.md#fsr) for the 3D layer (AMD FSR). Carries no vendor binaries and is left out of `RenGL` | none (needs AMD's libraries at run time) | none |
 | `rengl-spellcheck` | `HunspellChecker` and the en_US dictionary for [spell checking](text/spell-checking.md) | Lucene analysis | none |
 | `rengl-tilemap` | [Tile maps](graphics/tile-maps.md) | LWJGL zstd | zstd |
 | `rengl-entity` | [Entities and components](game/entities.md) | none | none |
@@ -23,7 +24,7 @@ All artifacts have the group id `me.piitex.engine` and the same version.
 | `rengl-downloads` | `DownloadManager` and the download UI ([downloads](reference/downloads.md)) | none | none |
 | `rengl-ui-file` | UI files: a screen described in a file ([layout files](containers/layout-files.md)) | none | none |
 | `rengl-examples` | The demos. Not meant as a dependency | none | none |
-| **`RenGL`** | Every module above except the examples, in one dependency, as before the split | all of them | all of them |
+| **`RenGL`** | Every module above except the examples and `rengl-upscale`, in one dependency, as before the split | all of them | all of them |
 
 ## Using them
 

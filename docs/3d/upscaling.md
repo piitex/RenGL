@@ -41,8 +41,48 @@ pixel every frame), blends in the last picture along the motion vectors, and cla
 the pixel so that what changed does not leave a ghost. It is clearly sharper than a smooth enlargement of the same scene,
 but it is a simple one: vendor upscalers do better on thin lines and fast motion.
 
-Vendor upscalers (AMD FidelityFX, NVIDIA DLSS, Intel XeSS) are meant to come from a module of their own, so that nothing in the
-3D layer depends on their libraries or licences.
+Vendor upscalers (AMD FidelityFX, NVIDIA DLSS, Intel XeSS) come from a module of their own, so that nothing in the
+3D layer depends on their libraries or licences. Today that is [FSR](#fsr).
+
+## FSR
+
+The `rengl-upscale` module has AMD FidelityFX Super Resolution on Vulkan: **FSR 4** on the GPUs that run it and **FSR 3** on any
+other Vulkan GPU. Add the module and it is found by `Upscalers.available(device)`, or use it directly:
+
+```java nocompile
+scene.setRenderScale(0.67f);
+scene.setUpscaler(new FsrProvider());         // me.piitex.engine.upscale.fsr
+```
+
+The module is only the binding: it carries none of AMD's code. The libraries come from the
+[FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) (`Kits/FidelityFX/signedbin`): copy
+`amd_fidelityfx_loader_vk.dll` and `amd_fidelityfx_upscaler_vk.dll` into one folder and name it with
+`-Drengl.fsr.dir=<folder>` (or `RENGL_FSR_DIR`). Without them `FsrProvider.isAvailable` is false and
+`FsrProvider.unavailableReason()` says why. The libraries are Windows-only.
+
+| System property | Meaning |
+|---|---|
+| `rengl.fsr.dir` | The folder of the two libraries (also searched: the working directory, `natives`, `lib`, `java.library.path`) |
+| `rengl.fsr.version` | Use only the version whose name contains this text, such as `3.1`; unset, the library picks its newest and the others are the fallback |
+| `rengl.fsr.debug` | Turn on the SDK's checks of what it is given; its messages go to the log |
+
+It works on the colour, depth and motion pictures the 3D layer already makes, as `UpscaleInputs` describes them, and needs a
+GPU whose depth buffer is 32-bit float. FSR keeps its own history, so `previousOutput` is not used.
+
+## Vulkan work of your own
+
+An upscaler that calls a library on the GPU needs the device's raw handles and a command buffer to record into. `VkGpuDevice`
+has them:
+
+| Method | Description |
+|---|---|
+| `vkInstance()`, `vkPhysicalDevice()`, `vkDevice()`, `deviceProcAddr()` | The window's Vulkan objects, shared with Skia |
+| `imageOf(GpuTexture)` | A `VkImageInfo`: the `VkImage`, its view, format, aspect, size, usage, and the layout a pass leaves it in |
+| `record(commands)` | Records into a command buffer of your own and submits it in order with the passes before and after |
+| `createStorageTarget(w, h)` | A 16-bit float target a compute shader can write; an upscaler asks for it with `writesStorageImage()` |
+
+`UpscaleInputs.color()`, `depth()` and `motion()` are textures of that device, and `imageOf` gives the handles behind them.
+`VulkanInteropGpuTest` is a small example that writes the output this way.
 
 ## What drawing for an upscaler changes
 
