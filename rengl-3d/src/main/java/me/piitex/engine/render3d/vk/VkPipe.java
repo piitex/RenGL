@@ -45,7 +45,8 @@ final class VkPipe implements Pipeline {
                 ShaderCompiler.Binding binding = bindings.get(i);
                 layoutBindings.get(i)
                         .binding(binding.binding())
-                        .descriptorType(binding.sampler() ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                        .descriptorType(binding.accel() ? KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
+                                : binding.sampler() ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
                                 : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
                         .descriptorCount(1)
                         .stageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);

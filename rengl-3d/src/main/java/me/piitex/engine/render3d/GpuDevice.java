@@ -134,6 +134,33 @@ public interface GpuDevice extends AutoCloseable {
     }
 
     /**
+     * Whether shaders can trace rays on this device: Vulkan on a GPU with ray queries, which the window's device was made with
+     * (see {@code -Drengl.3d.raytracing}). Everywhere else false, and the ray calls below throw.
+     */
+    default boolean supportsRayTracing() {
+        return false;
+    }
+
+    /**
+     * Builds the triangles of a mesh into a {@link RayGeometry}. The vertices are interleaved, {@code floatsPerVertex} floats
+     * each, with the position in the first three; the indices are triangles. The data is copied.
+     *
+     * @throws UnsupportedOperationException where {@link #supportsRayTracing()} is false
+     */
+    default RayGeometry createRayGeometry(float[] vertices, int vertexCount, int floatsPerVertex, int[] indices) {
+        throw new UnsupportedOperationException("This device can not trace rays");
+    }
+
+    /**
+     * An empty {@link RayScene} that holds up to {@code capacity} instances.
+     *
+     * @throws UnsupportedOperationException where {@link #supportsRayTracing()} is false
+     */
+    default RayScene createRayScene(int capacity) {
+        throw new UnsupportedOperationException("This device can not trace rays");
+    }
+
+    /**
      * The most samples a render target can have on this GPU: at least 1, at most 8.
      */
     int maxSamples();

@@ -41,6 +41,14 @@ public interface RenderPass extends AutoCloseable {
 
     void bindTexture(int binding, GpuTexture texture);
 
+    /**
+     * Binds a {@link RayScene} to the {@code accelerationStructureEXT} at a binding, for the shaders that follow to trace rays
+     * through. Only where {@link GpuDevice#supportsRayTracing()}.
+     */
+    default void bindAccelerationStructure(int binding, RayScene scene) {
+        throw new UnsupportedOperationException("This device can not trace rays");
+    }
+
     default void draw(int vertexCount) {
         draw(vertexCount, 1, 0);
     }

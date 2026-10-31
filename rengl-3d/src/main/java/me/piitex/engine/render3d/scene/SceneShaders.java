@@ -320,6 +320,18 @@ final class SceneShaders {
      * are shaded after the ones every pixel tests. The grid is three textures at bindings 11 to 13.
      */
     static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered) {
+        return fragment(env, filters, falloffs, clustered, false);
+    }
+
+    /** The binding of the acceleration structure the ray traced shadows trace through. */
+    static final int RAY_BINDING = 14;
+
+    /**
+     * The same, and with {@code rayTraced} the lights marked as ray traced in the frame block (a filter id of -1 in
+     * {@code lightShadow}) are shadowed by a ray query through the acceleration structure at {@link #RAY_BINDING}. Vulkan only,
+     * on a GPU with ray queries.
+     */
+    static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced) {
         StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
         for (int i = 0; i < filters.size(); i++) {
             filterFunctions.append("float customFilter").append(i).append("(vec2 uv, float depth, vec2 texel, float softness) {\n")
@@ -332,7 +344,10 @@ final class SceneShaders {
                     .append(falloffs.get(i).glsl()).append("\n}\n");
             falloffCases.append("if (id == ").append(3 + i).append(") return customFalloff").append(i).append("(dist, range);\n");
         }
-        return "#version 450\n#define ENV_KIND " + env + "\n" + FRAGMENT_BODY
+        return (rayTraced ? "#version 460\n#extension GL_EXT_ray_query : require\n" : "#version 450\n") + "#define ENV_KIND " + env + "\n" + FRAGMENT_BODY
+                .replace("//@RAY_DECLS", rayTraced ? RAY_DECLS : "")
+                .replace("//@RAY_FUNCTIONS", rayTraced ? RAY_FUNCTIONS : "")
+                .replace("//@RAY_SHADOW", rayTraced ? "if (info.z < -0.5) return rayShadow(i, worldPos, n, l);" : "")
                 .replace("//@CLUSTER_FUNCTIONS", clustered ? CLUSTER_FUNCTIONS : "")
                 .replace("//@CLUSTER_PBR", clustered ? CLUSTER_PBR : "")
                 .replace("//@CLUSTER_CLASSIC", clustered ? CLUSTER_CLASSIC : "")
@@ -341,6 +356,26 @@ final class SceneShaders {
                 .replace("//@FALLOFF_FUNCTIONS", falloffFunctions)
                 .replace("//@FALLOFF_CASES", falloffCases);
     }
+
+    private static final String RAY_DECLS = "layout(set = 0, binding = " + RAY_BINDING + ") uniform accelerationStructureEXT sceneWorld;";
+
+    /**
+     * A hard shadow by one ray from the point to the light: 1 when nothing solid is in the way. The ray starts a little off the
+     * surface along its normal (more the farther the camera is, since a distant surface is seen with less precision) so that it
+     * does not hit the triangle it starts on. A directional light's ray runs on far past the scene; a point or spot light's
+     * stops at the light.
+     */
+    private static final String RAY_FUNCTIONS = """
+            float rayShadow(int i, vec3 worldPos, vec3 n, vec3 l) {
+                float reach = lightVec[i].w < 0.5 ? 100000.0 : max(length(lightVec[i].xyz - worldPos) - 0.02, 0.0);
+                float eps = 0.005 + 0.0005 * length(worldPos - cameraPos.xyz);
+                rayQueryEXT query;
+                rayQueryInitializeEXT(query, sceneWorld, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFF,
+                        worldPos + n * eps, eps, l, reach);
+                while (rayQueryProceedEXT(query)) { }
+                return rayQueryGetIntersectionTypeEXT(query, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
+            }
+            """;
 
     /**
      * The tone mappers: 0 cuts off at white, 1 is c / (1 + c), 2 a fit of the ACES film curve (Narkowicz), which expects
@@ -370,6 +405,7 @@ final class SceneShaders {
             layout(set = 0, binding = 5) uniform sampler2D occlusionTexture;
             layout(set = 0, binding = 6) uniform sampler2D emissiveTexture;
             layout(set = 0, binding = 7) uniform sampler2D shadowMap;
+            //@RAY_DECLS
             #if ENV_KIND == 2
             layout(set = 0, binding = 8) uniform samplerCube envMap;
             #elif ENV_KIND >= 3
@@ -461,12 +497,15 @@ final class SceneShaders {
                 return lit / total;
             }
 
+            //@RAY_FUNCTIONS
+
             // 1 where light i reaches the point, 0 where something is in the way, with a soft edge. Picks the light's view:
             // a directional light's cascade by how far the point is from the camera, a point light's side by the direction
             // from the light. A spot or point light's map is perspective and holds the distance along the view axis scaled
             // to 0..1; a directional light's holds depth.
             float shadowFor(int i, vec3 worldPos, vec3 n, vec3 l) {
                 vec4 info = lightShadow[i];
+                //@RAY_SHADOW
                 int first = int(info.x + 0.5);
                 int count = int(info.y + 0.5);
                 int kind = int(lightVec[i].w + 0.5);
