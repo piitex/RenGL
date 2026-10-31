@@ -1,6 +1,7 @@
 package me.piitex.engine.upscale.fsr;
 
 import me.piitex.engine.render3d.vk.VkGpuDevice;
+import me.piitex.engine.upscale.CStruct;
 import me.piitex.engine.render3d.vk.VkImageInfo;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
