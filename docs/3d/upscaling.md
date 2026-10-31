@@ -91,12 +91,15 @@ The module carries none of NVIDIA's code. From the Streamline SDK's `bin/x64` fo
 `sl.dlss.dll` and `nvngx_dlss.dll` (and `NvLowLatencyVk.dll`, which Streamline loads and logs an error without) into one folder and
 name it with `-Drengl.dlss.dir=<folder>` (or `RENGL_DLSS_DIR`). Without them `DlssProvider.isAvailable` is false and
 `DlssProvider.unavailableReason()` says why; nothing is started and nothing is slowed.
+Frame generation, below, wants four more libraries.
 
 | System property | Meaning |
 |---|---|
 | `rengl.dlss.dir` | The folder of the libraries (also searched: the working directory, `natives`, `lib`, `java.library.path`) |
 | `rengl.dlss` | `false` turns DLSS off |
 | `rengl.dlss.log` | Show Streamline's own log (otherwise it is at debug level) |
+| `rengl.dlss.framegen` | `true` starts Streamline with frame generation (see below) |
+| `rengl.dlss.framegen.on` | `false` starts with frame generation loaded but switched off |
 
 DLSS has to be known when the window's Vulkan device is made, because it wants extensions and features on it
 (`VK_NVX_binary_import`, `VK_NVX_image_view_handle`, `VK_KHR_push_descriptor`, and the Vulkan 1.2 features
@@ -111,6 +114,39 @@ scales from 33% to 100%, with the jitter and motion conventions of the table bel
 smooth enlargement each time. Validation draws one notice at the first frame about the layout of DLSS's own
 images; it comes from inside the library.
 
+## DLSS frame generation
+
+NVIDIA **frame generation** (DLSS 3 and up) shows a second frame between each two the engine draws: the GPU makes it from the
+scene's depth and motion, so the picture updates about twice as often as the scene is drawn. It needs more than DLSS
+super resolution does, so it is only started when asked for:
+
+- Run with `-Drengl.dlss.framegen=true` and copy `sl.dlss_g.dll`, `nvngx_dlssg.dll`, `sl.reflex.dll` and `sl.pcl.dll` from the
+  Streamline SDK's `bin/x64` into the folder of the DLSS libraries. Without them (or without the property) nothing changes.
+- The GPU has to be a GeForce RTX 40 or newer (RTX 50 can make more than one frame, see `State.maxFramesToGenerate()`), and on
+  Windows hardware-accelerated GPU scheduling has to be on. `DlssFrameGeneration.unavailableReason()` says what is missing.
+- The scene is drawn through a DLSS upscaler (`DlssProvider`; at render scale 1 that is DLAA), which hands over its depth and
+  motion. The 3D viewport should fill the window: everything drawn around it is interpolated along with it.
+- Turn vsync off: Streamline does not support it with frame generation on Vulkan.
+
+```java nocompile
+scene.setUpscaler(new DlssProvider());
+DlssFrameGeneration.setEnabled(true);                    // on by default once the libraries are loaded
+DlssFrameGeneration.State state = DlssFrameGeneration.state();   // active? how many frames were shown since the last call?
+```
+
+What the engine does for it, with no work from the application: the window's device is made with the extra queues Streamline
+asks for and the extensions it lists (low latency needs `VK_KHR_present_id` as well); the window's surface and swapchain are made
+through Streamline's `sl.interposer.dll`, which then presents the real and the generated frames from its own queue; every frame is
+bracketed with Reflex's sleep and latency markers (frame generation refuses to run without Reflex); the back buffer is told to
+Streamline in its layout before each present; and frame generation is switched off while the swapchain is rebuilt (the window
+was resized). It is meant for one window.
+
+`DlssFrameGenGpuTest` runs it on an RTX 4090 in a visible window (it skips elsewhere): with frame generation on, Streamline
+reported two frames shown for each drawn one with status ok; turned off, one for one; turned on again, and again after the
+window was resized, two for one. **Not checked by eye:** that the generated frames look right (the test counts them), and only
+the single generated frame of an RTX 40 card was tried. Streamline's own first-use notices from the validation layer (layouts of
+its internal images, a semaphore it reuses, Reflex's sleep against its present thread) are not ours.
+
 ## Extensions for libraries
 
 A library that has to be told about the Vulkan device when it is made (DLSS is one) lists a `VulkanExtensionProvider` in
@@ -118,6 +154,12 @@ A library that has to be told about the Vulkan device when it is made (DLSS is o
 provider is asked for instance extensions, device extensions and features of Vulkan 1.2 and 1.3 (by name, such as `timelineSemaphore`);
 those the GPU has are turned on and the others left out. `deviceCreated()` and `deviceDestroying()` tell it when to start and
 to let go of what it made on the device. A provider that is missing or throws is skipped.
+
+A library that sits in the swapchain (frame generation does) can also ask for queues of the engine's family besides the engine's
+(`extraQueues()`; the library gets queues 1 and up, as `DeviceInfo.queueCount()` says), make the window's surface itself
+(`createWindowSurface`, Windows), take over the five swapchain calls (`swapchainHooks()`), hear the back buffer before each present
+(`beforePresent`) and be told at each point of a window frame (`frameEvent`: the frame starts, drawing starts and ends, the present
+starts and ends, the swapchain is about to be rebuilt).
 
 ## Vulkan work of your own
 

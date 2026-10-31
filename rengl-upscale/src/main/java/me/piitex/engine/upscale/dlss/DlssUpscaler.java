@@ -28,7 +28,7 @@ import static org.lwjgl.vulkan.VK10.vkDeviceWaitIdle;
  * queue, then puts the images back.
  */
 final class DlssUpscaler implements Upscaler {
-    private static final AtomicInteger viewports = new AtomicInteger(1), frames = new AtomicInteger();
+    private static final AtomicInteger viewports = new AtomicInteger(1);
 
     // sl::DLSSMode
     private static final int MAX_PERFORMANCE = 1, BALANCED = 2, MAX_QUALITY = 3, ULTRA_PERFORMANCE = 4, DLAA = 6;
@@ -157,7 +157,7 @@ final class DlssUpscaler implements Upscaler {
         device.record(cmd -> {
             UpscaleBarriers.before(cmd, color, depth, motion, output);
             try (Arena arena = Arena.ofConfined()) {
-                MemorySegment frame = sl.newFrameToken(arena, frames.getAndIncrement());
+                MemorySegment frame = FrameClock.current(sl);
                 MemorySegment handle = Sl.viewport(arena, viewport);
                 check("slSetConstants", sl.setConstants(constants(arena, in, reset), frame, handle));
                 try {
@@ -169,18 +169,37 @@ final class DlssUpscaler implements Upscaler {
                 } catch (Throwable t) {
                     throw new IllegalStateException(t);
                 }
+                // Where frame generation is on it wants depth and motion until the present, and Streamline copies anything it is told
+                // is only good until the evaluate; so they are said to stay valid, and tagged again below once they are where they will be.
+                int lifetime = DlssFrameGeneration.wantsInputs() ? Sl.VALID_UNTIL_PRESENT : Sl.VALID_UNTIL_EVALUATE;
                 MemorySegment tags = arena.allocate(64 * 4, 8);
                 MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, color, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_SCALING_INPUT_COLOR), 0, tags, 0, 64);
                 MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, output, VK_IMAGE_LAYOUT_GENERAL), Sl.BUFFER_SCALING_OUTPUT_COLOR), 0, tags, 64, 64);
-                MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, depth, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_DEPTH), 0, tags, 128, 64);
-                MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, motion, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_MOTION_VECTORS), 0, tags, 192, 64);
+                MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, depth, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_DEPTH, lifetime), 0, tags, 128, 64);
+                MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, motion, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_MOTION_VECTORS, lifetime), 0, tags, 192, 64);
                 check("slSetTagForFrame", sl.setTagForFrame(frame, handle, tags, 4, cmd.address()));
                 MemorySegment inputs = arena.allocate(8);
                 inputs.set(ADDRESS, 0, handle);
                 check("slEvaluateFeature", sl.evaluate(Sl.FEATURE_DLSS, frame, inputs, 1, cmd.address()));
+                if (DlssFrameGeneration.wantsInputs()) tagForFrameGeneration(arena, frame, handle, cmd.address(), depth, motion);
             }
             UpscaleBarriers.after(cmd, depth, output);
         });
+    }
+
+    /**
+     * Frame generation makes its frame when the window presents, long after this one's passes were recorded, so the depth and
+     * the motion are tagged again to stay valid until then, in the layouts they will be in by that time (the motion was left
+     * readable by the upscale, the depth was put back).
+     */
+    private void tagForFrameGeneration(Arena arena, MemorySegment frame, MemorySegment handle, long commands, VkImageInfo depth, VkImageInfo motion) {
+        MemorySegment tags = arena.allocate(64 * 2, 8);
+        MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, depth, depth.layout()), Sl.BUFFER_DEPTH, Sl.VALID_UNTIL_PRESENT, depth.width(), depth.height()),
+                0, tags, 0, 64);
+        MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, motion, motion.layout()), Sl.BUFFER_MOTION_VECTORS,
+                Sl.VALID_UNTIL_PRESENT, motion.width(), motion.height()), 0, tags, 64, 64);
+        check("slSetTagForFrame (frame generation)", sl.setTagForFrame(frame, handle, tags, 2, commands));
+        DlssFrameGeneration.inputsTagged(viewport);
     }
 
     @Override
