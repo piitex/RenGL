@@ -116,6 +116,15 @@ public interface GpuDevice extends AutoCloseable {
     RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear, boolean hdr, int samples);
 
     /**
+     * A sampled target (see {@link #createSampledTarget(int, int, boolean, boolean, boolean, int)}) with one sample per
+     * pixel whose depth buffer a later pass can read too, as {@link RenderTarget#depthTexture()}: the depth and motion
+     * pictures a temporal upscaler is given.
+     *
+     * @param hdr keep 16-bit floating point colour instead of 8-bit
+     */
+    RenderTarget createDepthSampledTarget(int width, int height, boolean linear, boolean hdr);
+
+    /**
      * The most samples a render target can have on this GPU: at least 1, at most 8.
      */
     int maxSamples();

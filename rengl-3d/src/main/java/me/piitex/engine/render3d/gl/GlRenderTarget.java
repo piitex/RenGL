@@ -13,8 +13,9 @@ import static org.lwjgl.opengl.GL30C.*;
 
 public final class GlRenderTarget implements RenderTarget {
     private final int width, height, samples;
-    private final boolean depth, sampled, hdr;
-    private GlTexture texture;
+    private final boolean depth, sampled, hdr, readableDepth;
+    private GlTexture texture, depthView;
+    private int depthTexture;
     /**
      * The framebuffer holding the finished picture: the texture. Skia wraps this one.
      */
@@ -37,12 +38,22 @@ public final class GlRenderTarget implements RenderTarget {
      * @param hdr     16-bit floating point colour instead of 8-bit
      */
     GlRenderTarget(int width, int height, boolean depth, int samples, boolean sampled, boolean linear, boolean hdr) {
+        this(width, height, depth, samples, sampled, linear, hdr, false);
+    }
+
+    /**
+     * @param readableDepth keep the depth in a texture that later passes can read ({@link #depthTexture()}); needs depth
+     *                      and one sample per pixel
+     */
+    GlRenderTarget(int width, int height, boolean depth, int samples, boolean sampled, boolean linear, boolean hdr, boolean readableDepth) {
+        if (readableDepth && (!depth || samples > 1)) throw new IllegalArgumentException("A readable depth buffer needs depth and one sample per pixel");
         this.width = Math.max(1, width);
         this.height = Math.max(1, height);
         this.depth = depth;
         this.samples = samples;
         this.sampled = sampled;
         this.hdr = hdr;
+        this.readableDepth = readableDepth;
 
         int previous = glGetInteger(GL_FRAMEBUFFER_BINDING);
         colorTexture = glGenTextures();
@@ -58,7 +69,18 @@ public final class GlRenderTarget implements RenderTarget {
         framebuffer = glGenFramebuffers();
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
-        if (depth) {
+        if (readableDepth) {
+            // 32-bit float so the upscaler gets the depth with all its precision; read with nearest filtering.
+            depthTexture = glGenTextures();
+            glBindTexture(GL_TEXTURE_2D, depthTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, this.width, this.height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, (java.nio.FloatBuffer) null);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
+        } else if (depth) {
             depthBuffer = glGenRenderbuffers();
             glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
             if (samples <= 1) {
@@ -125,6 +147,18 @@ public final class GlRenderTarget implements RenderTarget {
         return texture;
     }
 
+    @Override
+    public boolean hasReadableDepth() {
+        return readableDepth;
+    }
+
+    @Override
+    public GpuTexture depthTexture() {
+        if (!readableDepth) return RenderTarget.super.depthTexture();
+        if (depthView == null) depthView = new GlTexture(depthTexture, width, height);
+        return depthView;
+    }
+
     /**
      * Averages the multisampled picture into the texture. The caller keeps its own framebuffer binding.
      */
@@ -186,6 +220,7 @@ public final class GlRenderTarget implements RenderTarget {
         if (colorTexture != 0) glDeleteTextures(colorTexture);
         if (depthBuffer != 0) glDeleteRenderbuffers(depthBuffer);
         if (msaaColor != 0) glDeleteRenderbuffers(msaaColor);
-        framebuffer = drawFramebuffer = colorTexture = depthBuffer = msaaColor = 0;
+        if (depthTexture != 0) glDeleteTextures(depthTexture);
+        framebuffer = drawFramebuffer = colorTexture = depthBuffer = msaaColor = depthTexture = 0;
     }
 }

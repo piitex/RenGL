@@ -62,6 +62,8 @@ public final class VkGpuDevice implements GpuDevice {
     final long allocator;
     final int depthFormat;
     final int depthAspect;
+    /** Whether the depth format can also be sampled by a shader, which a readable depth target needs. */
+    final boolean canReadDepth;
     /**
      * The sampler for ordinary textures: linear, repeating, and anisotropic where the GPU can.
      */
@@ -118,6 +120,9 @@ public final class VkGpuDevice implements GpuDevice {
             depthFormat = pickDepthFormat(stack);
             depthAspect = depthFormat == VK_FORMAT_D32_SFLOAT ? VK_IMAGE_ASPECT_DEPTH_BIT
                     : VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+            VkFormatProperties depthProperties = VkFormatProperties.calloc(stack);
+            vkGetPhysicalDeviceFormatProperties(physical, depthFormat, depthProperties);
+            canReadDepth = (depthProperties.optimalTilingFeatures() & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) != 0;
             VkFormatProperties colorProperties = VkFormatProperties.calloc(stack);
             vkGetPhysicalDeviceFormatProperties(physical, COLOR_FORMAT, colorProperties);
             int blitFeatures = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT
@@ -325,6 +330,12 @@ public final class VkGpuDevice implements GpuDevice {
     public RenderTarget createSampledTarget(int width, int height, boolean depth, boolean linear, boolean hdr, int samples) {
         int wanted = Integer.highestOneBit(Math.max(1, samples));
         return new VkTarget(this, width, height, depth, Math.min(wanted, maxSamples), true, linear, hdr);
+    }
+
+    @Override
+    public RenderTarget createDepthSampledTarget(int width, int height, boolean linear, boolean hdr) {
+        if (!canReadDepth) throw new UnsupportedOperationException("This GPU can not sample its depth format");
+        return new VkTarget(this, width, height, true, 1, true, linear, hdr, true);
     }
 
     @Override
@@ -586,8 +597,16 @@ public final class VkGpuDevice implements GpuDevice {
      * @param hdr     16-bit floating point colour instead of 8-bit
      */
     long renderPass(boolean depth, int samples, boolean sampled, boolean hdr) {
+        return renderPass(depth, samples, sampled, hdr, false);
+    }
+
+    /**
+     * @param depthRead keep the depth image and leave it in {@code DEPTH_STENCIL_READ_ONLY_OPTIMAL} for shaders to sample
+     *                  (needs {@code depth}, one sample, and {@link #canReadDepth})
+     */
+    long renderPass(boolean depth, int samples, boolean sampled, boolean hdr, boolean depthRead) {
         int colorFormat = hdr ? HDR_FORMAT : COLOR_FORMAT;
-        int key = (samples << 3) | (hdr ? 4 : 0) | (sampled ? 2 : 0) | (depth ? 1 : 0);
+        int key = (samples << 3) | (hdr ? 4 : 0) | (sampled ? 2 : 0) | (depth ? 1 : 0) | (depthRead ? 1 << 20 : 0);
         Long existing = renderPasses.get(key);
         if (existing != null) return existing;
         boolean multisampled = samples > 1;
@@ -614,10 +633,10 @@ public final class VkGpuDevice implements GpuDevice {
             if (depth) {
                 attachments.get(depthIndex)
                         .format(depthFormat).samples(sampleBit)
-                        .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR).storeOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                        .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR).storeOp(depthRead ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE)
                         .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE).stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
                         .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
-                        .finalLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                        .finalLayout(depthRead ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
             }
             VkAttachmentReference.Buffer color = VkAttachmentReference.calloc(1, stack)
                     .attachment(0).layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -647,9 +666,10 @@ public final class VkGpuDevice implements GpuDevice {
             // samples the image next.
             dependencies.get(1)
                     .srcSubpass(0).dstSubpass(VK_SUBPASS_EXTERNAL)
-                    .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                    .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                            | (depthRead ? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT : 0))
                     .dstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
-                    .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                    .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | (depthRead ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : 0))
                     .dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_SHADER_READ_BIT);
 
             VkRenderPassCreateInfo info = VkRenderPassCreateInfo.calloc(stack).sType$Default()

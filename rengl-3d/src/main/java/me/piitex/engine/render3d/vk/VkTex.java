@@ -22,6 +22,10 @@ final class VkTex implements GpuTexture {
      * The sampler a draw reads this texture with.
      */
     final long sampler;
+    /**
+     * The layout the image is in whenever a pass reads it: shader-read for a colour image, depth-read for a depth one.
+     */
+    final int layout;
     private final boolean owned;
     private final int format, pixelBytes;
     private boolean closed;
@@ -46,6 +50,7 @@ final class VkTex implements GpuTexture {
         this.height = height;
         this.layers = layers;
         this.sampler = device.sampler;
+        this.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         this.owned = true;
         this.format = format;
         this.pixelBytes = pixelBytes;
@@ -85,6 +90,14 @@ final class VkTex implements GpuTexture {
      * {@code SHADER_READ_ONLY_OPTIMAL} whenever a pass reads it, and closing it frees nothing.
      */
     VkTex(VkGpuDevice device, int width, int height, long view, long sampler) {
+        this(device, width, height, view, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+
+    /**
+     * The same for an image a pass leaves in another layout, such as a depth buffer.
+     */
+    VkTex(VkGpuDevice device, int width, int height, long view, long sampler, int layout) {
+        this.layout = layout;
         this.device = device;
         this.width = width;
         this.height = height;

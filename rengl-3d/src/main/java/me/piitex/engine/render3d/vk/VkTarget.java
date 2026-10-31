@@ -23,10 +23,10 @@ public final class VkTarget implements RenderTarget {
 
     private final VkGpuDevice device;
     private final int width, height, samples;
-    private final boolean depth, sampled, hdr;
+    private final boolean depth, sampled, hdr, readableDepth;
     private final int colorFormat;
     private final long sampler;
-    private VkTex texture;
+    private VkTex texture, depthTexture;
     /**
      * The single-sample colour image: the finished picture. With multisampling it is what the pass resolves into.
      */
@@ -34,6 +34,8 @@ public final class VkTarget implements RenderTarget {
     private final VkGpuDevice.Alloc depthImage;
     private final VkGpuDevice.Alloc msaaColor;
     private final long colorView, depthView, msaaColorView;
+    /** A view of the depth image's depth aspect alone, which is what a shader samples; 0 unless the depth is readable. */
+    private final long depthSampleView;
     final long framebuffer;
     private boolean closed;
 
@@ -44,6 +46,15 @@ public final class VkTarget implements RenderTarget {
      * @param hdr     16-bit floating point colour instead of 8-bit
      */
     VkTarget(VkGpuDevice device, int width, int height, boolean depth, int samples, boolean sampled, boolean linear, boolean hdr) {
+        this(device, width, height, depth, samples, sampled, linear, hdr, false);
+    }
+
+    /**
+     * @param readableDepth the depth image can be sampled afterwards ({@link #depthTexture()}); needs depth and one sample
+     */
+    VkTarget(VkGpuDevice device, int width, int height, boolean depth, int samples, boolean sampled, boolean linear, boolean hdr, boolean readableDepth) {
+        if (readableDepth && (!depth || samples > 1)) throw new IllegalArgumentException("A readable depth buffer needs depth and one sample per pixel");
+        this.readableDepth = readableDepth;
         this.device = device;
         this.width = Math.max(1, width);
         this.height = Math.max(1, height);
@@ -66,11 +77,13 @@ public final class VkTarget implements RenderTarget {
         }
         if (depth) {
             depthImage = device.createImage(this.width, this.height, device.depthFormat,
-                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 1, samples);
+                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | (readableDepth ? VK_IMAGE_USAGE_SAMPLED_BIT : 0), 1, samples);
             depthView = device.createImageView(depthImage.handle(), device.depthFormat, device.depthAspect);
+            depthSampleView = readableDepth ? device.createImageView(depthImage.handle(), device.depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT) : VK_NULL_HANDLE;
         } else {
             depthImage = null;
             depthView = VK_NULL_HANDLE;
+            depthSampleView = VK_NULL_HANDLE;
         }
         try (MemoryStack stack = stackPush()) {
             // The order the render pass declares: multisampled colour and its resolve target, or the colour alone; depth last.
@@ -80,7 +93,7 @@ public final class VkTarget implements RenderTarget {
             if (depth) attachments.put(depthView);
             attachments.flip();
             VkFramebufferCreateInfo info = VkFramebufferCreateInfo.calloc(stack).sType$Default()
-                    .renderPass(device.renderPass(depth, samples, sampled, hdr)).pAttachments(attachments)
+                    .renderPass(device.renderPass(depth, samples, sampled, hdr, readableDepth)).pAttachments(attachments)
                     .width(this.width).height(this.height).layers(1);
             LongBuffer out = stack.mallocLong(1);
             VkGpuDevice.check(vkCreateFramebuffer(device.device, info, null, out), "create a framebuffer");
@@ -94,6 +107,10 @@ public final class VkTarget implements RenderTarget {
 
     boolean hdr() {
         return hdr;
+    }
+
+    boolean readableDepth() {
+        return readableDepth;
     }
 
     /**
@@ -161,6 +178,19 @@ public final class VkTarget implements RenderTarget {
     }
 
     @Override
+    public boolean hasReadableDepth() {
+        return readableDepth;
+    }
+
+    @Override
+    public me.piitex.engine.render3d.GpuTexture depthTexture() {
+        if (!readableDepth) return RenderTarget.super.depthTexture();
+        if (depthTexture == null) depthTexture = new VkTex(device, width, height, depthSampleView, device.clampNearestSampler,
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+        return depthTexture;
+    }
+
+    @Override
     public boolean isBottomLeftOrigin() {
         return false;
     }
@@ -214,6 +244,7 @@ public final class VkTarget implements RenderTarget {
                 vmaDestroyImage(device.allocator, msaaColor.handle(), msaaColor.allocation());
             }
             if (depthImage != null) {
+                if (depthSampleView != VK_NULL_HANDLE) vkDestroyImageView(device.device, depthSampleView, null);
                 vkDestroyImageView(device.device, depthView, null);
                 vmaDestroyImage(device.allocator, depthImage.handle(), depthImage.allocation());
             }

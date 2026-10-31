@@ -26,7 +26,7 @@ final class VkPass implements RenderPass {
     VkPass(VkGpuDevice device, VkTarget target, float r, float g, float b, float a) {
         this.device = device;
         this.target = target;
-        this.renderPass = device.renderPass(target.hasDepth(), target.samples(), target.sampled(), target.hdr());
+        this.renderPass = device.renderPass(target.hasDepth(), target.samples(), target.sampled(), target.hdr(), target.readableDepth());
         cmd = device.allocateFrameCommandBuffer();
         try (MemoryStack stack = stackPush()) {
             VkGpuDevice.check(vkBeginCommandBuffer(cmd, VkCommandBufferBeginInfo.calloc(stack).sType$Default()
@@ -114,7 +114,7 @@ final class VkPass implements RenderPass {
                     write.descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                             .pImageInfo(VkDescriptorImageInfo.calloc(1, stack)
                                     .sampler(texture.sampler).imageView(texture.view)
-                                    .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+                                    .imageLayout(texture.layout));
                 } else {
                     VkBuf buffer = uniformBuffers.get(binding.binding());
                     if (buffer == null) throw new IllegalStateException("No uniform buffer bound at binding " + binding.binding());
