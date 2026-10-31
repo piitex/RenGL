@@ -28,6 +28,9 @@ final class VkTex implements GpuTexture {
     final int layout;
     private final boolean owned;
     private final int format, pixelBytes;
+    /** The image behind the view, with its format, aspect and usage, for {@link VkGpuDevice#imageOf}. */
+    private final long imageHandle;
+    private final int aspect, usage;
     private boolean closed;
 
     /**
@@ -60,6 +63,9 @@ final class VkTex implements GpuTexture {
         int usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
                 | (mipLevels > 1 ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0);
         image = device.createImage(width, height, format, usage, mipLevels, VK_SAMPLE_COUNT_1_BIT, layers);
+        this.imageHandle = image.handle();
+        this.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        this.usage = usage;
         VkGpuDevice.Alloc staging = device.createMappedBuffer(bytes * layers, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
         for (int layer = 0; layer < layers; layer++) {
             device.upload(staging, bytes * layer, data[layer].duplicate().limit(data[layer].position() + (int) bytes));
@@ -86,17 +92,12 @@ final class VkTex implements GpuTexture {
     }
 
     /**
-     * Another name for an image someone else owns, such as a sampled render target's colour. It is already in
-     * {@code SHADER_READ_ONLY_OPTIMAL} whenever a pass reads it, and closing it frees nothing.
+     * Another name for an image someone else owns, such as a sampled render target's colour or its depth buffer. A pass
+     * leaves it in {@code layout} (shader-read for a colour image, depth-read for a depth one) whenever it is read, and
+     * closing the name frees nothing.
      */
-    VkTex(VkGpuDevice device, int width, int height, long view, long sampler) {
-        this(device, width, height, view, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    }
-
-    /**
-     * The same for an image a pass leaves in another layout, such as a depth buffer.
-     */
-    VkTex(VkGpuDevice device, int width, int height, long view, long sampler, int layout) {
+    VkTex(VkGpuDevice device, int width, int height, long view, long sampler, int layout,
+          long imageHandle, int format, int aspect, int usage) {
         this.layout = layout;
         this.device = device;
         this.width = width;
@@ -107,8 +108,18 @@ final class VkTex implements GpuTexture {
         this.view = view;
         this.sampler = sampler;
         this.owned = false;
-        this.format = VkGpuDevice.COLOR_FORMAT;
+        this.format = format;
         this.pixelBytes = 4;
+        this.imageHandle = imageHandle;
+        this.aspect = aspect;
+        this.usage = usage;
+    }
+
+    /**
+     * The Vulkan image behind this texture, in the layout a pass reads it in.
+     */
+    VkImageInfo info() {
+        return new VkImageInfo(imageHandle, view, format, aspect, width, height, layout, usage);
     }
 
     @Override

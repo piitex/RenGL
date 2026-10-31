@@ -125,6 +125,15 @@ public interface GpuDevice extends AutoCloseable {
     RenderTarget createDepthSampledTarget(int width, int height, boolean linear, boolean hdr);
 
     /**
+     * A sampled target with 16-bit floating point colour, linear filtering, one sample per pixel and no depth, whose
+     * picture a compute shader can also write as a storage image: where an upscaler that works in compute shaders puts
+     * its result. Only Vulkan has it; elsewhere this throws.
+     */
+    default RenderTarget createStorageTarget(int width, int height) {
+        throw new UnsupportedOperationException("This device has no storage images");
+    }
+
+    /**
      * The most samples a render target can have on this GPU: at least 1, at most 8.
      */
     int maxSamples();

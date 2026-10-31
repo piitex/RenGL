@@ -82,6 +82,7 @@ public final class VkGpuDevice implements GpuDevice {
      */
     final boolean canBlitHdr;
 
+    private final VulkanContext context;
     private final String name;
     private final LongSupplier frames;
     private final long uploadPool;
@@ -106,6 +107,7 @@ public final class VkGpuDevice implements GpuDevice {
     boolean frameActive;
 
     public VkGpuDevice(VulkanContext context, LongSupplier frames) {
+        this.context = context;
         this.frames = frames;
         if (VK_API_VERSION_MAJOR(context.apiVersion()) == 1 && VK_API_VERSION_MINOR(context.apiVersion()) < 1) {
             throw new IllegalStateException("The 3D layer needs Vulkan 1.1 or newer; this GPU reports "
@@ -336,6 +338,81 @@ public final class VkGpuDevice implements GpuDevice {
     public RenderTarget createDepthSampledTarget(int width, int height, boolean linear, boolean hdr) {
         if (!canReadDepth) throw new UnsupportedOperationException("This GPU can not sample its depth format");
         return new VkTarget(this, width, height, true, 1, true, linear, hdr, true);
+    }
+
+    /**
+     * A sampled target (see {@link #createSampledTarget}) with 16-bit floating point colour, one sample per pixel and no
+     * depth, whose colour image a compute shader can also write as a storage image: where a vendor's upscaler puts its
+     * picture. Texture reads see it filtered linearly.
+     */
+    @Override
+    public RenderTarget createStorageTarget(int width, int height) {
+        return new VkTarget(this, width, height, false, 1, true, true, true, false, true);
+    }
+
+    // ---- for code that records Vulkan work of its own (a vendor's upscaler) -------------------------------------
+
+    /**
+     * The window's Vulkan instance, GPU and device, which this device shares with Skia.
+     */
+    public VkInstance vkInstance() {
+        return context.vkInstance();
+    }
+
+    public VkPhysicalDevice vkPhysicalDevice() {
+        return physical;
+    }
+
+    public org.lwjgl.vulkan.VkDevice vkDevice() {
+        return device;
+    }
+
+    /**
+     * The address of {@code vkGetDeviceProcAddr}, which libraries that make their own Vulkan calls are given.
+     */
+    public long deviceProcAddr() {
+        return context.deviceProcAddr();
+    }
+
+    /**
+     * The depth format of the render targets made by {@link #createDepthSampledTarget}.
+     */
+    public int depthFormat() {
+        return depthFormat;
+    }
+
+    /**
+     * The Vulkan handles behind a texture of this device: a loaded texture or a render target's colour or depth.
+     *
+     * @throws IllegalArgumentException for a texture that is not from this device
+     */
+    public VkImageInfo imageOf(GpuTexture texture) {
+        if (!(texture instanceof VkTex tex)) throw new IllegalArgumentException("Not a Vulkan texture of this device: " + texture);
+        return tex.info();
+    }
+
+    /**
+     * Records commands of your own into a command buffer and submits it to the queue, in order with the passes before and
+     * after: it runs after every pass already made and before every pass made later, and the textures a pass left behind
+     * are in the layouts {@link VkImageInfo#layout()} says. The commands must leave every image they touched in that
+     * layout again (or in the layout of the next use, which for a render target's colour or depth is always
+     * {@code UNDEFINED}, since a pass clears it), and may not begin a render pass over the caller's.
+     * Call it between {@link #beginFrame()} and {@link #endFrame()}, on the render thread.
+     */
+    public void record(Consumer<VkCommandBuffer> commands) {
+        if (!frameActive) throw new IllegalStateException("Call beginFrame() before record()");
+        VkCommandBuffer cmd = allocateFrameCommandBuffer();
+        try (MemoryStack stack = stackPush()) {
+            check(vkBeginCommandBuffer(cmd, VkCommandBufferBeginInfo.calloc(stack).sType$Default()
+                    .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)), "begin a command buffer");
+            commands.accept(cmd);
+            check(vkEndCommandBuffer(cmd), "end a command buffer");
+            // Uploads made so far go first, in the same submission, as they do for a pass.
+            VkCommandBuffer uploads = takeUploads();
+            VkSubmitInfo submit = VkSubmitInfo.calloc(stack).sType$Default()
+                    .pCommandBuffers(uploads == null ? stack.pointers(cmd) : stack.pointers(uploads, cmd));
+            check(vkQueueSubmit(queue, submit, VK_NULL_HANDLE), "submit recorded commands");
+        }
     }
 
     @Override

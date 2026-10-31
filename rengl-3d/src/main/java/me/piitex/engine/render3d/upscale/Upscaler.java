@@ -37,6 +37,15 @@ public interface Upscaler extends AutoCloseable {
     }
 
     /**
+     * True when the upscaler writes {@link UpscaleInputs#output()} from compute shaders, as a storage image, instead of
+     * drawing into it. The output is then made with {@link me.piitex.engine.render3d.GpuDevice#createStorageTarget} and
+     * its previous contents do not matter. Only on Vulkan.
+     */
+    default boolean writesStorageImage() {
+        return false;
+    }
+
+    /**
      * Records the work of one frame: reads {@link UpscaleInputs#color()} (and the depth and motion for a temporal
      * upscaler) and writes the picture into {@link UpscaleInputs#output()}, which has the display size and 16-bit floating
      * point colour.

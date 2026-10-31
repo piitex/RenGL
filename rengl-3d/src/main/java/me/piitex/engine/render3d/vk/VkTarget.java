@@ -24,7 +24,7 @@ public final class VkTarget implements RenderTarget {
     private final VkGpuDevice device;
     private final int width, height, samples;
     private final boolean depth, sampled, hdr, readableDepth;
-    private final int colorFormat;
+    private final int colorFormat, colorUsage;
     private final long sampler;
     private VkTex texture, depthTexture;
     /**
@@ -53,7 +53,18 @@ public final class VkTarget implements RenderTarget {
      * @param readableDepth the depth image can be sampled afterwards ({@link #depthTexture()}); needs depth and one sample
      */
     VkTarget(VkGpuDevice device, int width, int height, boolean depth, int samples, boolean sampled, boolean linear, boolean hdr, boolean readableDepth) {
+        this(device, width, height, depth, samples, sampled, linear, hdr, readableDepth, false);
+    }
+
+    /**
+     * @param storage the colour image can also be written by a compute shader as a storage image, which is what a vendor's
+     *                upscaler writes its picture with; needs one sample
+     */
+    VkTarget(VkGpuDevice device, int width, int height, boolean depth, int samples, boolean sampled, boolean linear, boolean hdr, boolean readableDepth,
+             boolean storage) {
         if (readableDepth && (!depth || samples > 1)) throw new IllegalArgumentException("A readable depth buffer needs depth and one sample per pixel");
+        if (storage && samples > 1) throw new IllegalArgumentException("A storage image needs one sample per pixel");
+        this.colorUsage = storage ? COLOR_USAGE | VK_IMAGE_USAGE_STORAGE_BIT : COLOR_USAGE;
         this.readableDepth = readableDepth;
         this.device = device;
         this.width = Math.max(1, width);
@@ -65,7 +76,7 @@ public final class VkTarget implements RenderTarget {
         this.colorFormat = hdr ? VkGpuDevice.HDR_FORMAT : VkGpuDevice.COLOR_FORMAT;
         this.sampler = linear ? device.clampLinearSampler : device.clampNearestSampler;
 
-        color = device.createImage(this.width, this.height, colorFormat, COLOR_USAGE);
+        color = device.createImage(this.width, this.height, colorFormat, colorUsage);
         colorView = device.createImageView(color.handle(), colorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
         if (samples > 1) {
             msaaColor = device.createImage(this.width, this.height, colorFormat,
@@ -142,7 +153,7 @@ public final class VkTarget implements RenderTarget {
     }
 
     public int imageUsage() {
-        return COLOR_USAGE;
+        return colorUsage;
     }
 
     @Override
@@ -173,7 +184,8 @@ public final class VkTarget implements RenderTarget {
     @Override
     public me.piitex.engine.render3d.GpuTexture texture() {
         if (!sampled) return RenderTarget.super.texture();
-        if (texture == null) texture = new VkTex(device, width, height, colorView, sampler);
+        if (texture == null) texture = new VkTex(device, width, height, colorView, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                color.handle(), colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, colorUsage);
         return texture;
     }
 
@@ -186,7 +198,8 @@ public final class VkTarget implements RenderTarget {
     public me.piitex.engine.render3d.GpuTexture depthTexture() {
         if (!readableDepth) return RenderTarget.super.depthTexture();
         if (depthTexture == null) depthTexture = new VkTex(device, width, height, depthSampleView, device.clampNearestSampler,
-                VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, depthImage.handle(), device.depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT,
+                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
         return depthTexture;
     }
 
