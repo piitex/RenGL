@@ -425,6 +425,9 @@ public final class VulkanContext implements RenderBackend.Context {
         // MoltenVK is a "portability" driver: newer loaders only list it when asked to.
         boolean portability = available.contains(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
         if (portability) extensions.add(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+        for (String name : VulkanExtensionProvider.allInstanceExtensions()) {
+            if (available.contains(name) && !extensions.contains(name)) extensions.add(name);
+        }
 
         List<String> layers = new ArrayList<>();
         if (validation) {
@@ -662,6 +665,22 @@ public final class VulkanContext implements RenderBackend.Context {
                     .computeDerivativeGroupLinear(true);
         }
 
+        // What other libraries asked for (see VulkanExtensionProvider).
+        for (String name : VulkanExtensionProvider.allDeviceExtensions()) {
+            if (available.contains(name) && !extensions.contains(name)) extensions.add(name);
+        }
+        // Libraries that make buffers addressable by the GPU (DLSS) need the feature on as well as the extension.
+        VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferAddress = null;
+        if (extensions.contains(KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)) {
+            VkPhysicalDeviceBufferDeviceAddressFeaturesKHR addressSupport = VkPhysicalDeviceBufferDeviceAddressFeaturesKHR.calloc(stack).sType$Default();
+            vkGetPhysicalDeviceFeatures2(physicalDevice, VkPhysicalDeviceFeatures2.calloc(stack).sType$Default().pNext(addressSupport.address()));
+            if (addressSupport.bufferDeviceAddress()) {
+                bufferAddress = VkPhysicalDeviceBufferDeviceAddressFeaturesKHR.calloc(stack).sType$Default().bufferDeviceAddress(true);
+            } else {
+                extensions.remove(KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+            }
+        }
+
         VkDeviceQueueCreateInfo.Buffer queues = VkDeviceQueueCreateInfo.calloc(1, stack);
         queues.get(0).sType$Default().queueFamilyIndex(queueFamily).pQueuePriorities(stack.floats(1f));
 
@@ -670,6 +689,10 @@ public final class VulkanContext implements RenderBackend.Context {
                 .ppEnabledExtensionNames(namesOf(stack, extensions))
                 .pEnabledFeatures(features);
         if (derivatives != null) info.pNext(derivatives.address());
+        if (bufferAddress != null) {
+            bufferAddress.pNext(info.pNext());
+            info.pNext(bufferAddress.address());
+        }
         PointerBuffer pDevice = stack.mallocPointer(1);
         check(vkCreateDevice(physicalDevice, info, null, pDevice), "create the Vulkan device");
         device = new VkDevice(pDevice.get(0), physicalDevice, info);

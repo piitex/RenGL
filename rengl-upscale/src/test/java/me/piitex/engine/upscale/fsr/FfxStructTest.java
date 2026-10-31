@@ -1,6 +1,7 @@
 package me.piitex.engine.upscale.fsr;
 
 import me.piitex.engine.render3d.vk.VkImageInfo;
+import me.piitex.engine.upscale.CStruct;
 import me.piitex.engine.utils.flags.GeneratedClass;
 import org.junit.jupiter.api.Test;
 
