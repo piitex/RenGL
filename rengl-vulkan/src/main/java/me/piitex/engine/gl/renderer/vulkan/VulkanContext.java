@@ -19,11 +19,13 @@ import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.*;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
+import static org.lwjgl.vulkan.KHRComputeShaderDerivatives.VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRPortabilityEnumeration.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1;
+import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceFeatures2;
 
 /**
  * Everything Vulkan the engine owns for one GLFW window: the instance, the GPU and its queue, the window surface and
@@ -629,6 +631,14 @@ public final class VulkanContext implements RenderBackend.Context {
         return formats.get(0) > 0 && modes.get(0) > 0;
     }
 
+    /** Whether the chosen GPU can do derivatives in a linear compute group (the extension alone does not say). */
+    private boolean physicalDeviceSupportsDerivatives(MemoryStack stack) {
+        VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR supported = VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR.calloc(stack).sType$Default();
+        VkPhysicalDeviceFeatures2 features2 = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default().pNext(supported.address());
+        vkGetPhysicalDeviceFeatures2(physicalDevice, features2); // every device here is Vulkan 1.1 or later
+        return supported.computeDerivativeGroupLinear();
+    }
+
     private void createDevice(MemoryStack stack, Candidate chosen) {
         // Skiko hands Skia no feature list, so Skia assumes every feature the GPU supports is on. Turn them all on,
         // except robust buffer access, which costs speed and which Skia doesn't need.
@@ -639,8 +649,18 @@ public final class VulkanContext implements RenderBackend.Context {
         List<String> extensions = new ArrayList<>();
         extensions.add(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
         // A device that advertises the portability subset (MoltenVK) requires it to be enabled.
-        if (deviceExtensions(physicalDevice).contains("VK_KHR_portability_subset"))
+        Set<String> available = deviceExtensions(physicalDevice);
+        if (available.contains("VK_KHR_portability_subset"))
             extensions.add("VK_KHR_portability_subset");
+
+        // The compute shaders of AMD's FidelityFX upscaler (loaded by rengl-upscale) declare derivatives in a compute
+        // group, so the device has to have them on when the GPU can.
+        VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR derivatives = null;
+        if (available.contains(VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME) && physicalDeviceSupportsDerivatives(stack)) {
+            extensions.add(VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME);
+            derivatives = VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR.calloc(stack).sType$Default()
+                    .computeDerivativeGroupLinear(true);
+        }
 
         VkDeviceQueueCreateInfo.Buffer queues = VkDeviceQueueCreateInfo.calloc(1, stack);
         queues.get(0).sType$Default().queueFamilyIndex(queueFamily).pQueuePriorities(stack.floats(1f));
@@ -649,6 +669,7 @@ public final class VulkanContext implements RenderBackend.Context {
                 .pQueueCreateInfos(queues)
                 .ppEnabledExtensionNames(namesOf(stack, extensions))
                 .pEnabledFeatures(features);
+        if (derivatives != null) info.pNext(derivatives.address());
         PointerBuffer pDevice = stack.mallocPointer(1);
         check(vkCreateDevice(physicalDevice, info, null, pDevice), "create the Vulkan device");
         device = new VkDevice(pDevice.get(0), physicalDevice, info);
