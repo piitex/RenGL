@@ -82,6 +82,8 @@ final class FsrUpscaler implements Upscaler {
                         in.near(), in.far(), in.fovYRadians());
                 int result = context.dispatch(description);
                 if (result != 0) throw new IllegalStateException("ffxDispatch of the FSR upscaler returned " + result);
+                // Frame generation reads the same depth and motion, while they are still in the layout the upscaler read them in.
+                FsrFrameGeneration.prepare(in, cmd.address(), depth, motion, milliseconds, fresh);
             }
             UpscaleBarriers.after(cmd, depth, output);
         });

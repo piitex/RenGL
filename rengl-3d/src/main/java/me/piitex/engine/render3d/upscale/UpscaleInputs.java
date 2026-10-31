@@ -3,6 +3,7 @@ package me.piitex.engine.render3d.upscale;
 import me.piitex.engine.render3d.GpuDevice;
 import me.piitex.engine.render3d.GpuTexture;
 import me.piitex.engine.render3d.RenderTarget;
+import me.piitex.engine.render3d.math.Vec3;
 
 /**
  * What an {@link Upscaler} is given for one frame.
@@ -36,6 +37,10 @@ import me.piitex.engine.render3d.RenderTarget;
  * @param near            the camera's near plane
  * @param far             the camera's far plane
  * @param fovYRadians     the camera's vertical field of view
+ * @param cameraPosition  where the camera is, in world space
+ * @param cameraRight     the camera's right, up and forward as unit vectors in world space (frame generation wants them)
+ * @param cameraUp        the camera's up
+ * @param cameraForward   the way the camera looks
  * @param deltaSeconds    the time since the last frame
  * @param frame           the number of frames drawn since the history was last dropped, so 0 on the first
  * @param reset           true when the history must be ignored: the first frame, a resize, a change of upscaler, or a
@@ -44,6 +49,6 @@ import me.piitex.engine.render3d.RenderTarget;
  */
 public record UpscaleInputs(GpuDevice device, GpuTexture color, GpuTexture depth, GpuTexture motion, RenderTarget output,
                             RenderTarget previousOutput, int renderWidth, int renderHeight, int displayWidth, int displayHeight,
-                            float jitterX, float jitterY, float near, float far, float fovYRadians, float deltaSeconds,
-                            long frame, boolean reset, boolean bottomLeftOrigin) {
+                            float jitterX, float jitterY, float near, float far, float fovYRadians, Vec3 cameraPosition, Vec3 cameraRight,
+                            Vec3 cameraUp, Vec3 cameraForward, float deltaSeconds, long frame, boolean reset, boolean bottomLeftOrigin) {
 }

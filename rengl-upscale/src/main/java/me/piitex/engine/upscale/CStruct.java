@@ -67,6 +67,16 @@ public final class CStruct {
     }
 
     /**
+     * Copies {@code bytes} of a struct that is already in memory into this one, as a nested struct taken by value.
+     */
+    public CStruct raw(MemorySegment from, long bytes) {
+        align(8);
+        MemorySegment.copy(from, 0, segment, position, bytes);
+        position += bytes;
+        return this;
+    }
+
+    /**
      * Leaves the next {@code bytes} zero, as a field or a nested struct that is not used.
      */
     public CStruct skip(long bytes) {

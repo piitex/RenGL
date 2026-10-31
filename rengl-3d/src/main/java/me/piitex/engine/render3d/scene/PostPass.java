@@ -10,6 +10,7 @@ import me.piitex.engine.render3d.RenderPass;
 import me.piitex.engine.render3d.RenderTarget;
 import me.piitex.engine.render3d.VertexFormat;
 import me.piitex.engine.render3d.VertexLayout;
+import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.upscale.JitterSequence;
 import me.piitex.engine.render3d.upscale.UpscaleInputs;
 import me.piitex.engine.render3d.upscale.Upscaler;
@@ -495,10 +496,12 @@ final class PostPass {
         }
         RenderTarget output = upscaled[current], before = upscaled[1 - current];
         boolean fresh = frame.reset();
+        Vec3 forward = camera.getTarget().sub(camera.getPosition()).normalized();
+        Vec3 right = forward.cross(camera.getUp()).normalized();
         upscaler.upscale(new UpscaleInputs(device, scene.texture(), motion ? velocity.depthTexture() : null, motion ? velocity.texture() : null,
                 output, fresh ? null : before, width, height, displayWidth, displayHeight, frame.jitterX(), frame.jitterY(),
-                camera.getNear(), camera.getFar(), (float) Math.toRadians(camera.getFovYDegrees()), delta, temporal.frame, fresh,
-                bottomLeft));
+                camera.getNear(), camera.getFar(), (float) Math.toRadians(camera.getFovYDegrees()), camera.getPosition(), right,
+                right.cross(forward), forward, delta, temporal.frame, fresh, bottomLeft));
         current = 1 - current;
         return output.texture();
     }

@@ -1,5 +1,6 @@
 package me.piitex.engine.upscale.dlss;
 
+import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.upscale.UpscaleInputs;
 import me.piitex.engine.render3d.vk.VkImageInfo;
 import me.piitex.engine.utils.flags.GeneratedClass;
@@ -23,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @GeneratedClass(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 class SlStructTest {
     private static UpscaleInputs inputs() {
-        return new UpscaleInputs(null, null, null, null, null, null, 64, 48, 128, 96, 0.25f, -0.25f, 0.5f, 20f, 1.0f, 0.016f, 3, false, false);
+        return new UpscaleInputs(null, null, null, null, null, null, 64, 48, 128, 96, 0.25f, -0.25f, 0.5f, 20f, 1.0f, Vec3.ZERO, Vec3.X, Vec3.UP, Vec3.Z, 0.016f, 3, false, false);
     }
 
     @Test

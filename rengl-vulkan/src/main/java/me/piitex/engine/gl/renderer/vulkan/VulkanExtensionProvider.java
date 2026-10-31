@@ -149,6 +149,15 @@ public interface VulkanExtensionProvider {
 
         /** {@code vkQueuePresentKHR(queue, pPresentInfo)} */
         int present(long queue, long presentInfo);
+
+        /**
+         * The layout the window's image is left in for {@link #present}, or 0 for {@code PRESENT_SRC_KHR}, which an image
+         * handed over by the driver is. A swapchain that is made of the library's own images may want them in another
+         * ({@code SHADER_READ_ONLY_OPTIMAL}). Asked for every frame.
+         */
+        default int presentLayout() {
+            return 0;
+        }
     }
 
     static void notifyDeviceCreated(DeviceInfo info) {
