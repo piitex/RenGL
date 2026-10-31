@@ -40,6 +40,8 @@ final class SceneRenderer {
     private static final int FRAME_BLOCK_SIZE = 64 + 16 * 4 + 16 + 16 * Scene3D.MAX_LIGHTS * 6 + SHADOW_VIEW_BYTES * MAX_SHADOW_VIEWS + 32 + 16 * 13;
     private static final int SHADOW_BLOCK_SIZE = 64 + 16;
     private static final int INSTANCE_BYTES = INSTANCE_FLOATS * 4;
+    /** A model matrix, which is what the previous-frame stream holds for each record. */
+    private static final int PREV_BYTES = 64;
     private static final int JOINT_BLOCK_SIZE = Skin.MAX_JOINTS * 64;
     private static final int SKY_BLOCK_SIZE = 16 * 6;
     /**
@@ -183,6 +185,10 @@ final class SceneRenderer {
         final List<GpuBuffer> shadowViews = new ArrayList<>();
         GpuBuffer instances;
         long instanceCapacity;
+        /** The previous frame's model matrix of every record in {@link #instances}, for the velocity pass. */
+        GpuBuffer prevInstances;
+        long prevCapacity;
+        GpuBuffer velocityBlock, skyMotionBlock;
         final List<GpuBuffer> joints = new ArrayList<>();
         final List<GpuBuffer> morphBlocks = new ArrayList<>();
         final List<GpuBuffer> sortedIndices = new ArrayList<>();
@@ -200,6 +206,9 @@ final class SceneRenderer {
             for (GpuBuffer b : shadowViews) b.close();
             sky.close();
             if (instances != null) instances.close();
+            if (prevInstances != null) prevInstances.close();
+            if (velocityBlock != null) velocityBlock.close();
+            if (skyMotionBlock != null) skyMotionBlock.close();
             for (GpuBuffer b : joints) b.close();
             for (GpuBuffer b : morphBlocks) b.close();
             for (GpuBuffer b : sortedIndices) if (b != null) b.close();
@@ -281,6 +290,14 @@ final class SceneRenderer {
     private final List<Variant> variants = new ArrayList<>(List.of(Variant.NONE));
     private final java.util.Set<Integer> brokenVariants = new java.util.HashSet<>();
     private final Map<Skybox.Kind, Pipeline> skyPipelines = new HashMap<>();
+    private final Map<Integer, Pipeline> velocityPipelines = new HashMap<>();
+    private Pipeline skyMotionPipeline;
+    /** The previous frame's model matrices of the records, in step with {@link #instanceScratch}; written only while a temporal upscaler is on. */
+    private ByteBuffer prevScratch = MemoryUtil.memAlloc(PREV_BYTES * 256).order(ByteOrder.nativeOrder());
+    /** The history of the render call being built, or null when it has no temporal upscaler. */
+    private TemporalState writingTemporal;
+    private final VertexLayout prevLayout = VertexLayout.of(12, VertexLayout.Rate.INSTANCE,
+            VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4, VertexFormat.FLOAT4);
     private final Map<Mesh, GpuMesh> meshes = new HashMap<>();
     private final Map<TextureData, GpuImage> images = new IdentityHashMap<>();
     private final Map<Skybox, GpuImage> skies = new IdentityHashMap<>();
@@ -370,7 +387,7 @@ final class SceneRenderer {
 
     // ---- one render --------------------------------------------------------------------------------------------
 
-    void render(Scene3D scene, RenderTarget target) {
+    void render(Scene3D scene, RenderTarget target, float delta) {
         frame++;
         long deviceFrame = device.frameNumber();
         if (deviceFrame != lastDeviceFrame) {
@@ -385,7 +402,26 @@ final class SceneRenderer {
 
         float aspect = (float) target.width() / Math.max(1, target.height());
         Camera camera = scene.camera();
-        Mat4 viewProj = camera.projection(aspect).mul(camera.view());
+        boolean postProcessed = scene.usesPostProcessing();
+        // How big to draw, and with which upscaler: decided first, since a temporal upscaler moves the camera.
+        PostPass.Frame upFrame = null;
+        if (postProcessed) {
+            if (res.post == null) res.post = new PostPass(device, skyTriangle);
+            upFrame = res.post.beginFrame(scene, target.width(), target.height());
+        }
+        boolean temporal = upFrame != null && upFrame.temporal();
+        writingTemporal = temporal ? res.post.temporal() : null;
+        Mat4 view = camera.view();
+        // Culling, shadows and the light grid use the camera as it is; only the picture is drawn with the jitter.
+        Mat4 viewProj = camera.projection(aspect).mul(view);
+        Mat4 drawViewProj = temporal
+                ? camera.projection(aspect, 2f * upFrame.jitterX() / upFrame.renderWidth(), -2f * upFrame.jitterY() / upFrame.renderHeight()).mul(view)
+                : viewProj;
+        // Textures are sampled as sharply as the picture will be shown, not as the smaller one is drawn.
+        float lodBias = 0f;
+        if (upFrame != null && upFrame.upscaler() != null) {
+            lodBias = (float) (Math.log((double) upFrame.renderWidth() / upFrame.displayWidth()) / Math.log(2)) - (temporal ? 1f : 0f);
+        }
 
         List<Draw> opaque = new ArrayList<>();
         List<Draw> blended = new ArrayList<>();
@@ -405,6 +441,7 @@ final class SceneRenderer {
 
         int[] cursor = {0};
         instanceScratch.clear();
+        prevScratch.clear();
         List<Group> opaqueGroups = build(opaque, res, cursor);
         List<Group> blendedGroups = build(blended, res, cursor);
         uploadInstances(res, cursor[0]);
@@ -444,8 +481,7 @@ final class SceneRenderer {
         ShadowFrame shadowFrame = planShadows(scene, lights, camera, aspect, planes, opaque);
         if (!shadowFrame.plans().isEmpty()) shadowPass(res, opaqueGroups, shadowFrame);
         int variant = variantFor(lights, split.local(), shadowFrame, env, clusters != null);
-        boolean postProcessed = scene.usesPostProcessing();
-        writeFrameBlock(res.frame, scene, lights, camera, viewProj, shadowFrame, env, variants.get(variant), postProcessed, clusters);
+        writeFrameBlock(res.frame, scene, lights, camera, drawViewProj, shadowFrame, env, variants.get(variant), postProcessed, clusters, lodBias);
         if (clusters != null) uploadClusters(res, clusters, split.local(), variants.get(variant));
         int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (clusters != null ? KEY_CLUSTER : 0);
         if (sky != null) writeSky(res.sky, scene, camera, aspect, sky, postProcessed);
@@ -457,8 +493,8 @@ final class SceneRenderer {
         RenderTarget drawTarget = target;
         boolean hasDepth = false;
         if (postProcessed) {
-            if (res.post == null) res.post = new PostPass(device, skyTriangle);
-            drawTarget = res.post.sceneTarget(target.width(), target.height(), target.samples());
+            // A temporal upscaler anti-aliases by itself, from the jitter.
+            drawTarget = res.post.sceneTarget(upFrame, temporal ? 1 : target.samples());
             if (scene.getAmbientOcclusion() > 0f) {
                 depthPass(res, opaqueGroups, viewProj, camera);
                 hasDepth = true;
@@ -484,7 +520,10 @@ final class SceneRenderer {
                 }
             }
         }
-        if (postProcessed) res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth);
+        if (temporal) velocityPass(res, opaqueGroups, drawViewProj, viewProj, camera, upFrame);
+        if (postProcessed) res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth, upFrame, temporal, camera, delta);
+        if (temporal) res.post.temporal().endFrame(viewProj.toArray());
+        writingTemporal = null;
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
                 shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight(), clusters == null ? 0 : split.local().size(), counts[2], glowCount));
         if (frame % SWEEP_EVERY == 0) sweep();
@@ -941,6 +980,13 @@ final class SceneRenderer {
             MemoryUtil.memFree(instanceScratch);
             instanceScratch = bigger;
         }
+        if (writingTemporal != null && (long) records * PREV_BYTES > prevScratch.capacity()) {
+            ByteBuffer bigger = MemoryUtil.memAlloc((int) Math.max((long) records * PREV_BYTES, prevScratch.capacity() * 2L)).order(ByteOrder.nativeOrder());
+            prevScratch.flip();
+            bigger.put(prevScratch);
+            MemoryUtil.memFree(prevScratch);
+            prevScratch = bigger;
+        }
     }
 
     private void uploadInstances(Resources res, int records) {
@@ -954,6 +1000,18 @@ final class SceneRenderer {
         if (records == 0) instanceScratch.limit(4);
         res.instances.update(instanceScratch);
         instanceScratch.clear();
+        if (writingTemporal != null) {
+            long prevBytes = (long) Math.max(records, 1) * PREV_BYTES;
+            if (res.prevInstances == null || res.prevCapacity < prevBytes) {
+                if (res.prevInstances != null) res.prevInstances.close();
+                res.prevCapacity = Math.max(prevBytes, Math.max(res.prevCapacity * 2, PREV_BYTES * 64L));
+                res.prevInstances = device.createDynamicBuffer(BufferType.VERTEX, res.prevCapacity);
+            }
+            prevScratch.flip();
+            if (records == 0) prevScratch.limit(4);
+            res.prevInstances.update(prevScratch);
+            prevScratch.clear();
+        }
     }
 
     /**
@@ -1034,6 +1092,14 @@ final class SceneRenderer {
     private void writeRecords(Draw draw, Instances instances, boolean skinned) {
         Material m = draw.material;
         float[] world = draw.world.toArray();
+        // Where the node was in the last frame, for the motion of a temporal upscaler; a node that was not drawn then has not moved.
+        float[] before = null;
+        float[] beforeModel = new float[16];
+        if (writingTemporal != null) {
+            before = writingTemporal.previousWorld(draw.node);
+            writingTemporal.remember(draw.node, world);
+            if (before == null) before = world;
+        }
         int flags = (m.getNormalTexture() != null ? FLAG_NORMAL_MAP : 0) | (draw.receive ? FLAG_RECEIVE_SHADOW : 0) | (m.texCoordBits() << FLAG_UV1_SHIFT);
         int mode = m.isUnlit() || draw.mesh.isLines() ? MODE_UNLIT : m.isPbr() ? MODE_PBR : MODE_CLASSIC;
         float p0 = m.isPbr() ? m.getMetallic() : m.getSpecular();
@@ -1059,6 +1125,13 @@ final class SceneRenderer {
                     tb *= t[i * 4 + 2];
                     ta *= t[i * 4 + 3];
                 }
+            }
+            if (before != null) {
+                // A skinned mesh has the identity here: its joints are its transform, and it counts as not having moved on its own.
+                if (skinned) System.arraycopy(model, 0, beforeModel, 0, 16);
+                else if (instances == null) System.arraycopy(before, 0, beforeModel, 0, 16);
+                else multiply(before, instances.matrixData(), i * 16, beforeModel);
+                for (float v : beforeModel) prevScratch.putFloat(v);
             }
             for (float v : model) b.putFloat(v);
             b.putFloat(tr).putFloat(tg).putFloat(tb).putFloat(ta);
@@ -1134,6 +1207,87 @@ final class SceneRenderer {
             plans.add(plan);
         }
         return new ShadowFrame(plans, target.width(), target.height(), target.isBottomLeftOrigin());
+    }
+
+    private Pipeline velocityPipeline(int key) {
+        Pipeline existing = velocityPipelines.get(key);
+        if (existing != null) return existing;
+        boolean skinned = (key & KEY_SKINNED) != 0, morph = (key & KEY_MORPH) != 0;
+        // The instance stream, then the skin or, for a mesh that is not skinned, the previous frame's matrices.
+        List<VertexLayout> extra = List.of(instanceLayout, skinned ? skinLayout : prevLayout);
+        Pipeline created = device.createPipeline(new PipelineDesc(velocityVertex(skinned, morph), VELOCITY_FRAGMENT, meshLayout, true,
+                (key & KEY_CULL) != 0, false, (key & KEY_MIRRORED) != 0, extra));
+        velocityPipelines.put(key, created);
+        return created;
+    }
+
+    /**
+     * Draws the solid objects in view again, with the jitter the scene was drawn with, into the post pass's velocity target:
+     * how far each pixel moved since the last frame in its colour, and the depth in its depth buffer. The sky is drawn
+     * first, as the far plane, with the motion of the camera's turning.
+     */
+    private void velocityPass(Resources res, List<Group> groups, Mat4 drawViewProj, Mat4 viewProj, Camera camera, PostPass.Frame upFrame) {
+        RenderTarget velocity = res.post.velocityTarget();
+        float rowSign = velocity.isBottomLeftOrigin() ? 1f : -1f;
+        float[] before = res.post.temporal().previousViewProj;
+        if (before == null) before = viewProj.toArray();
+        if (res.velocityBlock == null) res.velocityBlock = device.createDynamicBuffer(BufferType.UNIFORM, 64 * 3 + 16);
+        if (res.skyMotionBlock == null) res.skyMotionBlock = device.createDynamicBuffer(BufferType.UNIFORM, 64 * 2 + 32);
+        scratch.clear();
+        drawViewProj.put(scratch);
+        viewProj.put(scratch);
+        for (float v : before) scratch.putFloat(v);
+        scratch.putFloat(upFrame.renderWidth()).putFloat(upFrame.renderHeight()).putFloat(rowSign).putFloat(0f);
+        scratch.flip();
+        res.velocityBlock.update(scratch);
+        scratch.clear();
+        viewProj.inverse().put(scratch);
+        for (float v : before) scratch.putFloat(v);
+        Vec3 eye = camera.getPosition();
+        scratch.putFloat(eye.x()).putFloat(eye.y()).putFloat(eye.z()).putFloat(0f);
+        scratch.putFloat(upFrame.renderWidth()).putFloat(upFrame.renderHeight()).putFloat(rowSign).putFloat(0f);
+        scratch.flip();
+        res.skyMotionBlock.update(scratch);
+        if (skyMotionPipeline == null) {
+            skyMotionPipeline = device.createPipeline(new PipelineDesc(SKY_MOTION_VERTEX, SKY_MOTION_FRAGMENT, VertexLayout.of(VertexFormat.FLOAT2), true, false, false));
+        }
+        try (RenderPass pass = device.beginPass(velocity, 0f, 0f, 0f, 1f)) {
+            pass.bindPipeline(skyMotionPipeline);
+            pass.bindUniformBuffer(0, res.skyMotionBlock);
+            pass.bindVertexBuffer(0, skyTriangle);
+            pass.draw(3);
+            int bound = -1;
+            Material lastMaterial = null;
+            for (Group group : groups) {
+                if (!group.inView || group.viewCount == 0 || (group.key & KEY_LINES) != 0) continue;
+                int key = group.key & (KEY_SKINNED | KEY_MORPH | KEY_CULL | KEY_MIRRORED);
+                if (key != bound) {
+                    pass.bindPipeline(velocityPipeline(key));
+                    pass.bindUniformBuffer(0, res.velocityBlock);
+                    bound = key;
+                    lastMaterial = null;
+                }
+                GpuMesh mesh = gpuMesh(group.mesh);
+                if (group.joints >= 0) pass.bindUniformBuffer(1, res.joints.get(group.joints));
+                if (group.morph >= 0) {
+                    pass.bindUniformBuffer(10, res.morphBlocks.get(group.morph));
+                    pass.bindTexture(9, group.morphTexture);
+                }
+                if (group.material != lastMaterial) {
+                    pass.bindTexture(2, group.material.getTexture() == null ? whiteTexture : gpuImage(group.material.getTexture()));
+                    lastMaterial = group.material;
+                }
+                pass.bindVertexBuffer(0, group.vertices != null ? group.vertices : mesh.vertices);
+                pass.bindVertexBuffer(1, res.instances);
+                if ((key & KEY_SKINNED) != 0) {
+                    if (mesh.skin != null) pass.bindVertexBuffer(2, mesh.skin);
+                } else {
+                    pass.bindVertexBuffer(2, res.prevInstances);
+                }
+                pass.bindIndexBuffer(group.indices != null ? group.indices : mesh.indices);
+                pass.drawIndexed(mesh.indexCount, group.viewCount, group.first);
+            }
+        }
     }
 
     /**
@@ -1327,13 +1481,13 @@ final class SceneRenderer {
         return (float) Math.pow(Math.max(0f, srgb), 2.2);
     }
 
-    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, List<Light> lights, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput, LightClusters clusters) {
+    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, List<Light> lights, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput, LightClusters clusters, float lodBias) {
         scratch.clear();
         viewProj.put(scratch);
         Vec3 eye = camera.getPosition();
         Vec3 forward = camera.getTarget().sub(eye).normalized();
         scratch.putFloat(eye.x()).putFloat(eye.y()).putFloat(eye.z()).putFloat(1f);
-        scratch.putFloat(forward.x()).putFloat(forward.y()).putFloat(forward.z()).putFloat(0f);
+        scratch.putFloat(forward.x()).putFloat(forward.y()).putFloat(forward.z()).putFloat(lodBias);
         Color ambient = scene.getAmbient();
         float ai = scene.getAmbientIntensity();
         scratch.putFloat(linear(ambient.getR()) * ai).putFloat(linear(ambient.getG()) * ai).putFloat(linear(ambient.getB()) * ai).putFloat(1f);
@@ -1716,6 +1870,9 @@ final class SceneRenderer {
         for (Resources r : resourcePool) r.close();
         for (Pipeline pipeline : pipelines.values()) pipeline.close();
         for (Pipeline pipeline : skyPipelines.values()) pipeline.close();
+        for (Pipeline pipeline : velocityPipelines.values()) pipeline.close();
+        velocityPipelines.clear();
+        if (skyMotionPipeline != null) skyMotionPipeline.close();
         atlas.close();
         skyTriangle.close();
         whiteTexture.close();
@@ -1728,6 +1885,7 @@ final class SceneRenderer {
         pipelines.clear();
         skyPipelines.clear();
         MemoryUtil.memFree(instanceScratch);
+        MemoryUtil.memFree(prevScratch);
         MemoryUtil.memFree(scratch);
     }
 }

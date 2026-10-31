@@ -7,6 +7,7 @@ import me.piitex.engine.render3d.math.Mat4;
 import me.piitex.engine.render3d.math.Ray;
 import me.piitex.engine.render3d.math.Vec3;
 import me.piitex.engine.render3d.physics.PhysicsWorld;
+import me.piitex.engine.render3d.upscale.UpscalerProvider;
 import me.piitex.engine.ui.color.Color;
 
 import java.util.ArrayList;
@@ -94,6 +95,9 @@ public class Scene3D implements Viewport3D.Content {
     private Color shadowTint = Color.WHITE, highlightTint = Color.WHITE;
     private float chromaticAberration, vignette;
     private float ambientOcclusion, ambientOcclusionRadius = 0.5f;
+    private float renderScale = 1f;
+    private UpscalerProvider upscaler;
+    private volatile int temporalResets;
     private final List<AnimationPlayer> animators = new ArrayList<>();
     private final List<LightAnimation> lightAnimations = new CopyOnWriteArrayList<>();
 
@@ -568,7 +572,59 @@ public class Scene3D implements Viewport3D.Content {
      */
     boolean usesPostProcessing() {
         return bloom > 0f || ambientOcclusion > 0f || chromaticAberration > 0f || vignette > 0f
-                || saturation != 1f || contrast != 1f || !isWhite(shadowTint) || !isWhite(highlightTint);
+                || saturation != 1f || contrast != 1f || !isWhite(shadowTint) || !isWhite(highlightTint)
+                || renderScale < 1f || upscaler != null;
+    }
+
+    /**
+     * How big the scene is drawn compared to the picture it is shown in, from 0.25 to 1 (1 by default). Below 1 the scene is
+     * drawn at that share of the width and height (0.5 draws a quarter of the pixels) and enlarged to the viewport: with
+     * the {@link #setUpscaler upscaler}, if there is one, and otherwise smoothly, which is soft. The bloom, occlusion and
+     * colour grade work at the full size, so the picture keeps its crisp effects. Turns on the offscreen drawing the
+     * effects use.
+     */
+    public Scene3D setRenderScale(float scale) {
+        this.renderScale = Math.max(0.25f, Math.min(1f, scale));
+        return this;
+    }
+
+    public float getRenderScale() {
+        return renderScale;
+    }
+
+    /**
+     * What enlarges the scene when it is drawn smaller than it is shown ({@link #setRenderScale}), and cleans up its edges
+     * from one frame to the next; null (the default) for none. Take one from {@link me.piitex.engine.render3d.upscale.Upscalers}.
+     * <p>
+     * A temporal upscaler moves the camera by a fraction of a pixel every frame, so the picture a viewport shows is made
+     * from several frames, which it needs the scene to draw without multisampling for, and a second pass of the solid objects
+     * to find how far each pixel has moved. Even at a render scale of 1 it is worth using, as anti-aliasing. With one, the
+     * viewport's {@link Viewport3D#setSamples samples} are not used.
+     */
+    public Scene3D setUpscaler(UpscalerProvider upscaler) {
+        if (this.upscaler != upscaler) temporalResets++;
+        this.upscaler = upscaler;
+        return this;
+    }
+
+    public UpscalerProvider getUpscaler() {
+        return upscaler;
+    }
+
+    /**
+     * Drops what a temporal upscaler remembers of the frames before, so the next one is drawn from itself alone: call it
+     * when the camera jumps somewhere else (a cut, a teleport), or the old place smears into the new one for a moment.
+     */
+    public void resetTemporalHistory() {
+        temporalResets++;
+    }
+
+    /**
+     * How many times the history has been asked to be dropped; a place that draws the scene drops its own when this is not
+     * the number it saw last, so every viewport that shows the scene does.
+     */
+    int temporalResets() {
+        return temporalResets;
     }
 
     private static boolean isWhite(Color c) {
@@ -774,7 +830,7 @@ public class Scene3D implements Viewport3D.Content {
             if (updateHandler != null) updateHandler.update(this, delta);
         }
         shared.updatedFrame = frame;
-        shared.renderer.render(this, target);
+        shared.renderer.render(this, target, delta);
     }
 
     @Override
