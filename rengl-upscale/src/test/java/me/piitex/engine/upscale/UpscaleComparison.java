@@ -100,7 +100,7 @@ public final class UpscaleComparison {
         }
     }
 
-    static byte[] pixels(RenderTarget target) {
+    public static byte[] pixels(RenderTarget target) {
         ByteBuffer data = target.readPixels();
         try {
             byte[] bytes = new byte[data.remaining()];

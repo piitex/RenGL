@@ -156,8 +156,12 @@ again just before the device is destroyed.
 
 It reads the same colour, depth and motion pictures as FSR and writes a storage image. The render size picks DLSS's mode (DLAA at
 full size, then Quality, Balanced, Performance and Ultra Performance at about 67%, 58%, 50% and 33%); a size in between is given
-the nearest mode. It has been run on an RTX 4090 with Streamline 2.14.16, in a still scene and with a panning camera, at render
-scales from 33% to 100%, with the jitter and motion conventions of the table below, and was closer to the full-size picture than a
+the nearest mode. DLSS does not take every size, though: Ultra Performance takes one width (a third of the display's) and the other
+modes 50% to 100%, and anything between comes back as a black picture. So `DlssProvider.supportedRenderScale` moves the scale to the
+nearest width DLSS says it takes (`slDLSSGetOptimalSettings`), and the scene draws at that: 40% of a 1280 x 720 display is drawn at
+427 x 240, 45% at 640 x 360. A settings screen can ask the provider for the size that will be drawn. It has been run on an RTX 4090
+with Streamline 2.14.16, in a still scene and with a panning camera, at render
+scales from 25% to 100% (no black picture at any whole percent), with the jitter and motion conventions of the table below, and was closer to the full-size picture than a
 smooth enlargement each time. Validation draws one notice at the first frame about the layout of DLSS's own
 images; it comes from inside the library.
 

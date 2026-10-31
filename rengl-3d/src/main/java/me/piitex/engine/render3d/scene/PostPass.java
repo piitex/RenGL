@@ -346,6 +346,7 @@ final class PostPass {
             reset = true;
         }
         float scale = scene.getRenderScale();
+        if (provider != null && scale < 1f) scale = provider.supportedRenderScale(scale, displayWidth, displayHeight);
         int renderWidth = scale >= 1f ? displayWidth : Math.max(1, Math.round(displayWidth * scale));
         int renderHeight = scale >= 1f ? displayHeight : Math.max(1, Math.round(displayHeight * scale));
         if (renderWidth != width || renderHeight != height || displayWidth != this.displayWidth || displayHeight != this.displayHeight) reset = true;

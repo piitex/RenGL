@@ -463,7 +463,10 @@ public class UpscalingDemo {
             if (generationBox != null) generationBox.setEnabled(generation.equals("dlss") || generation.equals("fsr"));
 
             int outW = view.getPixelWidth(), outH = view.getPixelHeight();
-            sizeLine = String.format("Drawn at %d x %d, shown at %d x %d", Math.round(outW * renderScale), Math.round(outH * renderScale), outW, outH);
+            // A vendor's library may take only some sizes (DLSS has none between a third and a half), and moves the scale to one.
+            var provider = scene.getUpscaler();
+            float drawnScale = provider != null && renderScale < 1f ? provider.supportedRenderScale(renderScale, outW, outH) : renderScale;
+            sizeLine = String.format("Drawn at %d x %d, shown at %d x %d", Math.round(outW * drawnScale), Math.round(outH * drawnScale), outW, outH);
             upscalerLine = "Upscaler: " + providerName + (providerName.equals(UPSCALERS[0]) && renderScale >= 1f ? " (native)" : "");
             rateLine = String.format("Drawn %.0f fps (%.1f ms)  |  Shown %.0f fps", drawnFps, 1000 / Math.max(drawnFps, 1), shownFps);
             framesSince = 0;

@@ -9,10 +9,15 @@ import org.apache.logging.log4j.Logger;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.invoke.MethodHandle;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+
+import static java.lang.foreign.ValueLayout.JAVA_INT;
 
 /**
  * NVIDIA DLSS super resolution on Vulkan, on a GeForce RTX card, through NVIDIA's Streamline libraries. Listed for discovery in
@@ -136,6 +141,62 @@ public final class DlssProvider implements UpscalerProvider {
             log.warn("DLSS is not available on {}: {}", device.name(), e.toString());
             return "DLSS would not start on " + device.name() + ": " + e;
         }
+    }
+
+    /**
+     * What DLSS says of one mode at a display size ({@code sl::DLSSOptimalSettings}): the render widths it takes. Outside them the
+     * picture it gives back is black.
+     */
+    record Range(int mode, int optimalWidth, int minWidth, int maxWidth) {
+    }
+
+    // sl::DLSSMode, from the smallest picture to the largest
+    private static final int[] MODES = {4, 1, 2, 3, 6};
+
+    private static MethodHandle getOptimalSettings;
+    private static List<Range> ranges = List.of();
+    private static long rangesFor = -1;
+
+    /** The render widths each mode takes when the picture is {@code displayWidth} by {@code displayHeight}; empty if DLSS would not say. */
+    static synchronized List<Range> ranges(int displayWidth, int displayHeight) {
+        long key = (long) displayWidth << 32 | displayHeight;
+        if (key == rangesFor) return ranges;
+        List<Range> found = new ArrayList<>();
+        Sl sl = Sl.load();
+        if (sl != null) {
+            try (Arena arena = Arena.ofConfined()) {
+                if (getOptimalSettings == null) getOptimalSettings = sl.featureFunction(Sl.FEATURE_DLSS, "slDLSSGetOptimalSettings", 2);
+                for (int mode : MODES) {
+                    MemorySegment settings = Sl.struct(arena, 64, "EF1D0957-FD58-4DF7-B504-8B69D8AA6B76", 1);
+                    int result = (int) getOptimalSettings.invokeExact(DlssUpscaler.options(arena, mode, displayWidth, displayHeight), settings);
+                    if (result == Sl.OK) found.add(new Range(mode, settings.get(JAVA_INT, 32), settings.get(JAVA_INT, 44), settings.get(JAVA_INT, 52)));
+                }
+            } catch (Throwable t) {
+                log.warn("DLSS would not say which render sizes it takes: {}", t.toString());
+            }
+        }
+        log.debug("DLSS render widths at {}x{}: {}", displayWidth, displayHeight, found);
+        ranges = found;
+        rangesFor = key;
+        return found;
+    }
+
+    /**
+     * DLSS takes the render widths of the modes it has, and between them there are gaps: at 1920 wide, Ultra Performance takes
+     * only 640 and the other modes 960 to 1920, so 700 or 900 come back black. The scale moves to the nearest width it takes.
+     */
+    @Override
+    public float supportedRenderScale(float requested, int displayWidth, int displayHeight) {
+        if (requested >= 1f || displayWidth <= 0) return requested;
+        List<Range> modes = ranges(displayWidth, displayHeight);
+        int wanted = Math.max(1, Math.round(displayWidth * requested)), best = -1;
+        for (Range range : modes) {
+            if (wanted >= range.minWidth() && wanted <= range.maxWidth()) return requested;
+            for (int edge : new int[]{range.minWidth(), range.maxWidth()}) {
+                if (edge > 0 && (best < 0 || Math.abs(edge - wanted) < Math.abs(best - wanted))) best = edge;
+            }
+        }
+        return best < 0 ? requested : (float) best / displayWidth;
     }
 
     @Override
