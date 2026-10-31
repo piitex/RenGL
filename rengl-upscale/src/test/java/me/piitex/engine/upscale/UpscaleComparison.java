@@ -32,6 +32,8 @@ import java.util.function.Function;
 @GeneratedClass(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public final class UpscaleComparison {
     public static final int VIEW = 128;
+    /** The share of the size the scene is drawn at; {@code -Drengl.upscale.test.scale} tries another. */
+    private static final float SCALE = Float.parseFloat(System.getProperty("rengl.upscale.test.scale", "0.5"));
     private static final int REFERENCE = 3, SMOOTH = 6, VENDOR = 48, BUILTIN = 100;
 
     /** The four pictures (full size, smooth, vendor, built-in) as RGBA bytes, and how the run went. */
@@ -109,20 +111,20 @@ public final class UpscaleComparison {
         }
     }
 
-    /**
-     * Runs the comparison in a hidden Vulkan window.
-     *
-     * @param provider the vendor upscaler
-     * @param reason   why the provider can not run on a device, or null where it can
-     */
-    public static Result run(UpscalerProvider provider, Function<GpuDevice, String> reason) {
-        Scene3D scene = scene();
-        byte[][] shots = new byte[4][];
-        String[] unavailable = new String[1];
-        Throwable[] failure = new Throwable[1];
-        boolean[] rendered = new boolean[1], done = new boolean[1];
-        RenderAPI[] api = new RenderAPI[1];
+    /** What the frames of a script do; {@code frame} counts from 1. Return true to end the run. */
+    private interface Script {
+        boolean frame(int frame, GpuDevice device, RenderTarget target, float delta);
+    }
 
+    /** How a run in a window went. */
+    private record Run(Throwable failure, boolean rendered, RenderAPI api) {
+    }
+
+    /** Draws the scene in a hidden Vulkan window, one script step for each frame, until the script ends the run. */
+    private static Run drive(Scene3D scene, Script script) {
+        Throwable[] failure = new Throwable[1];
+        boolean[] rendered = new boolean[1];
+        RenderAPI[] api = new RenderAPI[1];
         Window window = new Window(new WindowOptions("RenGL upscaler test").setDimensions(VIEW + 40, VIEW + 40)
                 .setRenderer(RenderAPI.VULKAN).setVsync(false));
         window.hide();
@@ -146,29 +148,8 @@ public final class UpscaleComparison {
                     window.close();
                     return;
                 }
-                frame++;
                 try {
-                    if (frame == REFERENCE - 1) {
-                        scene.setRenderScale(1f);
-                        scene.setUpscaler(null);
-                    } else if (frame == REFERENCE + 1) {
-                        scene.setRenderScale(0.5f);
-                    } else if (frame == SMOOTH + 1) {
-                        unavailable[0] = reason.apply(device);
-                        if (unavailable[0] == null) scene.setUpscaler(provider);
-                    } else if (frame == VENDOR + 1) {
-                        scene.setUpscaler(Upscalers.builtIn());
-                        scene.resetTemporalHistory();
-                    }
-                    scene.render(device, target, delta);
-                    if (frame == REFERENCE) shots[0] = pixels(target);
-                    if (frame == SMOOTH) shots[1] = pixels(target);
-                    if (frame == VENDOR) shots[2] = pixels(target);
-                    if (frame == BUILTIN) {
-                        shots[3] = pixels(target);
-                        done[0] = true;
-                    }
-                    if (frame == BUILTIN || unavailable[0] != null) window.close();
+                    if (script.frame(++frame, device, target, delta)) window.close();
                 } catch (Throwable t) {
                     failure[0] = t;
                     window.close();
@@ -195,7 +176,94 @@ public final class UpscaleComparison {
         } finally {
             watchdog.interrupt();
         }
-        return new Result(shots, unavailable[0], failure[0], rendered[0], api[0], done[0]);
+        return new Run(failure[0], rendered[0], api[0]);
+    }
+
+    /**
+     * Runs the comparison in a hidden Vulkan window.
+     *
+     * @param provider the vendor upscaler
+     * @param reason   why the provider can not run on a device, or null where it can
+     */
+    public static Result run(UpscalerProvider provider, Function<GpuDevice, String> reason) {
+        Scene3D scene = scene();
+        byte[][] shots = new byte[4][];
+        String[] unavailable = new String[1];
+        boolean[] done = new boolean[1];
+        Run run = drive(scene, (frame, device, target, delta) -> {
+            if (frame == REFERENCE - 1) {
+                scene.setRenderScale(1f);
+                scene.setUpscaler(null);
+            } else if (frame == REFERENCE + 1) {
+                scene.setRenderScale(SCALE);
+            } else if (frame == SMOOTH + 1) {
+                unavailable[0] = reason.apply(device);
+                if (unavailable[0] == null) scene.setUpscaler(provider);
+            } else if (frame == VENDOR + 1) {
+                scene.setUpscaler(Upscalers.builtIn());
+                scene.resetTemporalHistory();
+            }
+            scene.render(device, target, delta);
+            if (frame == REFERENCE) shots[0] = pixels(target);
+            if (frame == SMOOTH) shots[1] = pixels(target);
+            if (frame == VENDOR) shots[2] = pixels(target);
+            if (frame == BUILTIN) {
+                shots[3] = pixels(target);
+                done[0] = true;
+            }
+            return frame == BUILTIN || unavailable[0] != null;
+        });
+        return new Result(shots, unavailable[0], run.failure(), run.rendered(), run.api(), done[0]);
+    }
+
+    /**
+     * What a camera that pans steadily does to an upscaler: the picture of the last of {@link #MOVING} frames of panning, the
+     * same pose drawn at full size and drawn smaller and enlarged smoothly, for the vendor's upscaler and then for the built-in
+     * one. The motion vectors are what carries the history along, so a wrong sign or scale shows up as a blur or ghost here and
+     * not in the still scene.
+     *
+     * @param shots vendor, its full-size reference, its smooth enlargement, then the same three for the built-in upscaler
+     */
+    public record MovingResult(byte[][] shots, String unavailable, Throwable failure, boolean rendered, RenderAPI api, boolean done) {
+    }
+
+    public static final int MOVING = 40;
+    private static final float PAN_PER_FRAME = 0.06f;
+
+    public static MovingResult runMoving(UpscalerProvider provider, Function<GpuDevice, String> reason) {
+        Scene3D scene = scene();
+        byte[][] shots = new byte[6][];
+        String[] unavailable = new String[1];
+        boolean[] done = new boolean[1];
+        Run run = drive(scene, (frame, device, target, delta) -> {
+            int phase = (frame - 1) / (MOVING + 2); // 0: the vendor's, 1: the built-in one
+            int step = (frame - 1) % (MOVING + 2) + 1;
+            if (step == 1) {
+                scene.setRenderScale(SCALE);
+                if (phase == 0) {
+                    unavailable[0] = reason.apply(device);
+                    if (unavailable[0] != null) return true;
+                    scene.setUpscaler(provider);
+                } else {
+                    scene.setUpscaler(Upscalers.builtIn());
+                }
+                scene.resetTemporalHistory();
+            }
+            if (step <= MOVING) {
+                float x = PAN_PER_FRAME * (step + phase * MOVING);
+                scene.camera().lookAt(new Vec3(x, 0, 3.5f), new Vec3(x, 0, 0));
+            } else if (step == MOVING + 1) {
+                scene.setRenderScale(1f);
+                scene.setUpscaler(null);
+            } else {
+                scene.setRenderScale(SCALE);
+            }
+            scene.render(device, target, delta);
+            if (step >= MOVING) shots[phase * 3 + (step - MOVING)] = pixels(target);
+            if (frame == 2 * (MOVING + 2)) done[0] = true;
+            return frame == 2 * (MOVING + 2);
+        });
+        return new MovingResult(shots, unavailable[0], run.failure(), run.rendered(), run.api(), done[0]);
     }
 
     /** Writes the four pictures, enlarged four times, to a folder, for looking at. */

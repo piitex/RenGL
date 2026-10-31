@@ -46,6 +46,26 @@ class FsrGpuTest {
     }
 
     @Test
+    void fsrKeepsUpWithAPanningCamera() {
+        assumeTrue(Ffx.load() != null, "the FidelityFX libraries were not found: " + Ffx.failure());
+        FsrProvider provider = new FsrProvider();
+        UpscaleComparison.MovingResult result = UpscaleComparison.runMoving(provider, device ->
+                provider.isAvailable(device) ? null : FsrProvider.unavailableReason() != null ? FsrProvider.unavailableReason()
+                        : "the SDK would not make an upscaler on " + device.name());
+
+        assumeTrue(result.rendered() && result.api() == RenderAPI.VULKAN, "no Vulkan window: " + result.api());
+        assumeTrue(result.unavailable() == null, "FSR is not usable here: " + result.unavailable());
+        if (result.failure() != null) throw new AssertionError("FSR failed: " + result.failure(), result.failure());
+        assertTrue(result.done(), "the run did not finish");
+        byte[][] shots = result.shots();
+        double fsr = UpscaleComparison.error(shots[0], shots[1]), smooth = UpscaleComparison.error(shots[2], shots[1]),
+                builtIn = UpscaleComparison.error(shots[3], shots[4]);
+        System.out.printf("FSR panning: smooth enlargement %.5f, FSR %.5f, built-in %.5f%n", smooth, fsr, builtIn);
+        // The motion vectors carry the history along: with a wrong sign or scale the picture is worse than a plain enlargement.
+        assertTrue(fsr < smooth * 0.9, "FSR in motion is closer to the full-size picture than the smooth enlargement: FSR " + fsr + ", smooth " + smooth);
+    }
+
+    @Test
     void withoutTheLibrariesTheProviderSaysSo() {
         assumeTrue(Ffx.load() == null, "the libraries are present");
         assertTrue(FsrProvider.unavailableReason() != null && !FsrProvider.unavailableReason().isBlank());
