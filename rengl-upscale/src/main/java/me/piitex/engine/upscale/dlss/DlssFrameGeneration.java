@@ -50,7 +50,7 @@ public final class DlssFrameGeneration {
      *
      * @param status                0 where everything is as it should be, otherwise the {@code sl::DLSSGStatus} bits
      * @param statusText            the status in words
-     * @param framesPresented       the frames shown since the last call, generated ones included
+     * @param framesPresented       the frames shown for the last frame drawn, generated ones included (2 with one generated)
      * @param maxFramesToGenerate   the most frames the GPU can make between two drawn ones
      * @param estimatedVramBytes    the memory the feature is expected to use
      */
@@ -110,7 +110,7 @@ public final class DlssFrameGeneration {
         framesToGenerate = Math.max(1, frames);
     }
 
-    /** What frame generation did since the last call. Call it on the thread that draws the window. */
+    /** What frame generation did for the last frame drawn. Call it on the thread that draws the window. */
     public static State state() {
         synchronized (lock) {
             if (!supported || viewport < 0 || getState == null) return new State(false, 0, "not running", 0, 0, 0);

@@ -178,7 +178,7 @@ super resolution does, so it is only started when asked for:
 ```java nocompile
 scene.setUpscaler(new DlssProvider());
 DlssFrameGeneration.setEnabled(true);                    // on by default once the libraries are loaded
-DlssFrameGeneration.State state = DlssFrameGeneration.state();   // active? how many frames were shown since the last call?
+DlssFrameGeneration.State state = DlssFrameGeneration.state();   // active? how many frames were shown for the last one drawn?
 ```
 
 What the engine does for it, with no work from the application: the window's device is made with the extra queues Streamline
@@ -193,6 +193,27 @@ reported two frames shown for each drawn one with status ok; turned off, one for
 window was resized, two for one. **Not checked by eye:** that the generated frames look right (the test counts them), and only
 the single generated frame of an RTX 40 card was tried. Streamline's own first-use notices from the validation layer (layouts of
 its internal images, a semaphore it reuses, Reflex's sleep against its present thread) are not ours.
+
+## The demo
+
+`me.piitex.examples.demo.UpscalingDemo` (in `rengl-examples`) flies a camera through a yard that is hard on a smaller picture
+(thin fences, a ground of hard-edged tiles, spinning rotors, glowing orbs) with a panel to choose the upscaler (smooth
+enlargement, built-in, FSR, DLSS), the render scale (the vendors' presets or any size), the number of shadow-casting crates, the camera
+(fly-through or orbit), and to freeze the motion. The numbers show the size drawn and shown, the frames drawn and the frames shown.
+The vendors' libraries are not in the repository: it lists the ones it cannot find, and which of them to name.
+
+Run it from the repository folder with the folders of the libraries, and for frame generation say which one to start (it is
+started with the window, so it is chosen at launch; each wants its own upscaler, which the demo begins with):
+
+```
+--enable-native-access=ALL-UNNAMED
+-Drengl.dlss.dir=C:/path/to/dlss          (sl.*.dll, nvngx_*.dll, NvLowLatencyVk.dll)
+-Drengl.fsr.dir=C:/path/to/fsr            (amd_fidelityfx_*_vk.dll)
+-Drengl.demo.framegen=dlss                (or fsr, or leave it out)
+```
+
+The window draws with Vulkan without vsync, and its 3D view fills it. DLSS frame generation only runs while the window has
+focus.
 
 ## Extensions for libraries
 
