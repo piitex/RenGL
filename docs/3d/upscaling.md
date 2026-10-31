@@ -42,7 +42,7 @@ the pixel so that what changed does not leave a ghost. It is clearly sharper tha
 but it is a simple one: vendor upscalers do better on thin lines and fast motion.
 
 Vendor upscalers (AMD FidelityFX, NVIDIA DLSS, Intel XeSS) come from a module of their own, so that nothing in the
-3D layer depends on their libraries or licences. Today that is [FSR](#fsr).
+3D layer depends on their libraries or licences. Today those are [FSR](#fsr) and [DLSS](#dlss).
 
 ## FSR
 
@@ -75,6 +75,49 @@ FSR 3.1.6 ran. FSR 4 is offered on the GPUs that support it; the module asks for
 on one. With `-Drengl.vulkan.validation=true` the SDK's own storage images draw warnings about their format (the library's
 shaders declare 32-bit formats for images it makes 16-bit); they come from inside the library. The window's Vulkan device
 turns on `VK_KHR_compute_shader_derivatives` where the GPU has it, which the library's shaders use.
+
+## DLSS
+
+The same module has NVIDIA **DLSS** super resolution on Vulkan, for GeForce RTX cards, through NVIDIA's
+[Streamline](https://github.com/NVIDIA-RTX/Streamline) libraries (Windows only). It is found by `Upscalers.available(device)`,
+ahead of FSR, or used directly:
+
+```java nocompile
+scene.setRenderScale(0.67f);
+scene.setUpscaler(new DlssProvider());        // me.piitex.engine.upscale.dlss
+```
+
+The module carries none of NVIDIA's code. From the Streamline SDK's `bin/x64` folder copy `sl.interposer.dll`, `sl.common.dll`,
+`sl.dlss.dll` and `nvngx_dlss.dll` (and `NvLowLatencyVk.dll`, which Streamline loads and logs an error without) into one folder and
+name it with `-Drengl.dlss.dir=<folder>` (or `RENGL_DLSS_DIR`). Without them `DlssProvider.isAvailable` is false and
+`DlssProvider.unavailableReason()` says why; nothing is started and nothing is slowed.
+
+| System property | Meaning |
+|---|---|
+| `rengl.dlss.dir` | The folder of the libraries (also searched: the working directory, `natives`, `lib`, `java.library.path`) |
+| `rengl.dlss` | `false` turns DLSS off |
+| `rengl.dlss.log` | Show Streamline's own log (otherwise it is at debug level) |
+
+DLSS has to be known when the window's Vulkan device is made, because it wants extensions and features on it
+(`VK_NVX_binary_import`, `VK_NVX_image_view_handle`, `VK_KHR_push_descriptor`, and the Vulkan 1.2 features
+`timelineSemaphore`, `descriptorIndexing` and `bufferDeviceAddress`). Streamline is started at that moment, only if its libraries
+are there, and the device is made with what it reports ([Extensions for libraries](#extensions-for-libraries) below). It is stopped
+again just before the device is destroyed.
+
+It reads the same colour, depth and motion pictures as FSR and writes a storage image. The render size picks DLSS's mode (DLAA at
+full size, then Quality, Balanced, Performance and Ultra Performance at about 67%, 58%, 50% and 33%); a size in between is given
+the nearest mode. It has been run on an RTX 4090 with Streamline 2.14.16, in a still scene and with a panning camera, at render
+scales from 33% to 100%, with the jitter and motion conventions of the table below, and was closer to the full-size picture than a
+smooth enlargement each time. Validation draws one notice at the first frame about the layout of DLSS's own
+images; it comes from inside the library.
+
+## Extensions for libraries
+
+A library that has to be told about the Vulkan device when it is made (DLSS is one) lists a `VulkanExtensionProvider` in
+`META-INF/services/me.piitex.engine.gl.renderer.vulkan.VulkanExtensionProvider`. When the window's instance and device are made, each
+provider is asked for instance extensions, device extensions and features of Vulkan 1.2 and 1.3 (by name, such as `timelineSemaphore`);
+those the GPU has are turned on and the others left out. `deviceCreated()` and `deviceDestroying()` tell it when to start and
+to let go of what it made on the device. A provider that is missing or throws is skipped.
 
 ## Vulkan work of your own
 

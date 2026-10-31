@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -25,6 +26,8 @@ import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1;
+import static org.lwjgl.vulkan.VK12.VK_API_VERSION_1_2;
+import static org.lwjgl.vulkan.VK13.VK_API_VERSION_1_3;
 import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceFeatures2;
 
 /**
@@ -147,6 +150,7 @@ public final class VulkanContext implements RenderBackend.Context {
             apiVersion = Math.min(chosen.apiVersion, API_VERSION_CAP);
 
             createDevice(stack, chosen);
+            VulkanExtensionProvider.notifyDeviceCreated();
             createCommandObjects(stack);
             createSwapchain(stack);
         } catch (RuntimeException e) {
@@ -397,6 +401,7 @@ public final class VulkanContext implements RenderBackend.Context {
                 if (inFlight[i] != VK_NULL_HANDLE) vkDestroyFence(device, inFlight[i], null);
             }
             if (commandPool != VK_NULL_HANDLE) vkDestroyCommandPool(device, commandPool, null);
+            VulkanExtensionProvider.notifyDeviceDestroying();
             vkDestroyDevice(device, null);
             device = null;
         }
@@ -642,6 +647,54 @@ public final class VulkanContext implements RenderBackend.Context {
         return supported.computeDerivativeGroupLinear();
     }
 
+    /**
+     * A {@code VkPhysicalDeviceVulkan12Features} or {@code ...13Features} with the named features on, those the GPU lacks left
+     * off, chained in front of {@code next}; or {@code next} itself where nothing was asked for or the device is older. The
+     * names are the feature's own, as the Vulkan header spells them ({@code timelineSemaphore}).
+     */
+    private long coreFeatures(MemoryStack stack, int version, Collection<String> wanted, long next) {
+        if (wanted.isEmpty() || apiVersion < version) return next;
+        boolean v13 = version == VK_API_VERSION_1_3;
+        VkPhysicalDeviceFeatures2 query = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
+        Object supported, enable;
+        long enableAddress;
+        if (v13) {
+            VkPhysicalDeviceVulkan13Features have = VkPhysicalDeviceVulkan13Features.calloc(stack).sType$Default();
+            VkPhysicalDeviceVulkan13Features want = VkPhysicalDeviceVulkan13Features.calloc(stack).sType$Default();
+            query.pNext(have.address());
+            supported = have;
+            enable = want;
+            enableAddress = want.address();
+            vkGetPhysicalDeviceFeatures2(physicalDevice, query);
+            applyFeatures(supported, enable, wanted);
+            want.pNext(next);
+        } else {
+            VkPhysicalDeviceVulkan12Features have = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
+            VkPhysicalDeviceVulkan12Features want = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
+            query.pNext(have.address());
+            supported = have;
+            enable = want;
+            enableAddress = want.address();
+            vkGetPhysicalDeviceFeatures2(physicalDevice, query);
+            applyFeatures(supported, enable, wanted);
+            want.pNext(next);
+        }
+        return enableAddress;
+    }
+
+    /** Turns {@code enable}'s feature of each name on when {@code supported} has it. The structs' methods are named for the features. */
+    private static void applyFeatures(Object supported, Object enable, Collection<String> wanted) {
+        for (String name : wanted) {
+            try {
+                boolean has = (boolean) supported.getClass().getMethod(name).invoke(supported);
+                if (has) enable.getClass().getMethod(name, boolean.class).invoke(enable, true);
+                else log.warn("The GPU lacks the Vulkan feature {} that a library asked for.", name);
+            } catch (ReflectiveOperationException e) {
+                log.warn("The Vulkan feature {} that a library asked for is not known: {}", name, e.toString());
+            }
+        }
+    }
+
     private void createDevice(MemoryStack stack, Candidate chosen) {
         // Skiko hands Skia no feature list, so Skia assumes every feature the GPU supports is on. Turn them all on,
         // except robust buffer access, which costs speed and which Skia doesn't need.
@@ -669,17 +722,15 @@ public final class VulkanContext implements RenderBackend.Context {
         for (String name : VulkanExtensionProvider.allDeviceExtensions()) {
             if (available.contains(name) && !extensions.contains(name)) extensions.add(name);
         }
-        // Libraries that make buffers addressable by the GPU (DLSS) need the feature on as well as the extension.
-        VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferAddress = null;
-        if (extensions.contains(KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)) {
-            VkPhysicalDeviceBufferDeviceAddressFeaturesKHR addressSupport = VkPhysicalDeviceBufferDeviceAddressFeaturesKHR.calloc(stack).sType$Default();
-            vkGetPhysicalDeviceFeatures2(physicalDevice, VkPhysicalDeviceFeatures2.calloc(stack).sType$Default().pNext(addressSupport.address()));
-            if (addressSupport.bufferDeviceAddress()) {
-                bufferAddress = VkPhysicalDeviceBufferDeviceAddressFeaturesKHR.calloc(stack).sType$Default().bufferDeviceAddress(true);
-            } else {
-                extensions.remove(KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-            }
+        // Features of Vulkan 1.2 and 1.3 that they asked for (turned on where the GPU has them). The extension that lets
+        // buffers be addressed by the GPU (VK_EXT_buffer_device_address) conflicts with the feature of the same name that Vulkan
+        // 1.2 has built in, so where that feature is asked for the older extension is left out.
+        if (apiVersion >= VK_API_VERSION_1_2 && VulkanExtensionProvider.allDeviceFeatures12().contains("bufferDeviceAddress")) {
+            extensions.remove("VK_EXT_buffer_device_address");
         }
+        long chain = derivatives != null ? derivatives.address() : 0L;
+        chain = coreFeatures(stack, VK_API_VERSION_1_3, VulkanExtensionProvider.allDeviceFeatures13(), chain);
+        chain = coreFeatures(stack, VK_API_VERSION_1_2, VulkanExtensionProvider.allDeviceFeatures12(), chain);
 
         VkDeviceQueueCreateInfo.Buffer queues = VkDeviceQueueCreateInfo.calloc(1, stack);
         queues.get(0).sType$Default().queueFamilyIndex(queueFamily).pQueuePriorities(stack.floats(1f));
@@ -688,11 +739,7 @@ public final class VulkanContext implements RenderBackend.Context {
                 .pQueueCreateInfos(queues)
                 .ppEnabledExtensionNames(namesOf(stack, extensions))
                 .pEnabledFeatures(features);
-        if (derivatives != null) info.pNext(derivatives.address());
-        if (bufferAddress != null) {
-            bufferAddress.pNext(info.pNext());
-            info.pNext(bufferAddress.address());
-        }
+        if (chain != 0L) info.pNext(chain);
         PointerBuffer pDevice = stack.mallocPointer(1);
         check(vkCreateDevice(physicalDevice, info, null, pDevice), "create the Vulkan device");
         device = new VkDevice(pDevice.get(0), physicalDevice, info);

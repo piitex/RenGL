@@ -375,6 +375,13 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     /**
+     * The queue family of the device's one queue, which draws and presents.
+     */
+    public int queueFamily() {
+        return family;
+    }
+
+    /**
      * The depth format of the render targets made by {@link #createDepthSampledTarget}.
      */
     public int depthFormat() {
