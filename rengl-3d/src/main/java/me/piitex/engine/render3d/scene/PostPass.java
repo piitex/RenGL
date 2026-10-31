@@ -300,6 +300,7 @@ final class PostPass {
     /** The upscaler's output, this frame's and last frame's, taking turns. */
     private final RenderTarget[] upscaled = new RenderTarget[2];
     private int upscaledWidth, upscaledHeight, current;
+    private boolean upscaledStorage;
     private UpscalerProvider provider;
     private Upscaler upscaler;
     private final TemporalState temporal = new TemporalState();
@@ -481,13 +482,16 @@ final class PostPass {
      * Runs the upscaler on the scene's picture and returns the picture it made.
      */
     private GpuTexture upscale(Frame frame, boolean motion, Camera camera, float delta, boolean bottomLeft) {
-        if (upscaled[0] == null || upscaledWidth != displayWidth || upscaledHeight != displayHeight) {
+        boolean storage = upscaler.writesStorageImage();
+        if (upscaled[0] == null || upscaledWidth != displayWidth || upscaledHeight != displayHeight || upscaledStorage != storage) {
             for (int i = 0; i < 2; i++) {
                 if (upscaled[i] != null) upscaled[i].close();
-                upscaled[i] = device.createSampledTarget(displayWidth, displayHeight, false, true, true, 1);
+                upscaled[i] = storage ? device.createStorageTarget(displayWidth, displayHeight)
+                        : device.createSampledTarget(displayWidth, displayHeight, false, true, true, 1);
             }
             upscaledWidth = displayWidth;
             upscaledHeight = displayHeight;
+            upscaledStorage = storage;
         }
         RenderTarget output = upscaled[current], before = upscaled[1 - current];
         boolean fresh = frame.reset();
