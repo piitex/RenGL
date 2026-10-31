@@ -10,6 +10,10 @@ import me.piitex.engine.render3d.RenderPass;
 import me.piitex.engine.render3d.RenderTarget;
 import me.piitex.engine.render3d.VertexFormat;
 import me.piitex.engine.render3d.VertexLayout;
+import me.piitex.engine.render3d.upscale.JitterSequence;
+import me.piitex.engine.render3d.upscale.UpscaleInputs;
+import me.piitex.engine.render3d.upscale.Upscaler;
+import me.piitex.engine.render3d.upscale.UpscalerProvider;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -32,6 +36,10 @@ import java.nio.ByteOrder;
  *   <li>The last pass draws the picture, the glow and the occlusion into the viewport's target together: tone mapped and
  *   gamma encoded there, with the colour fringes, the grade and the vignette.</li>
  * </ul>
+ * When the scene is drawn smaller than it is shown, or an {@link Upscaler} is on, the scene target has the render size and
+ * everything after it the display size: the upscaler (or the composite's own smooth filtering, without one) enlarges the
+ * picture first, in linear light, and the effects that follow work at the size the picture is shown at.
+ * <p>
  * One of these belongs to each render call of a scene (like the buffers the scene fills every frame), so a scene shown by
  * two viewports in a frame doesn't have one overwrite what the other is about to read.
  */
@@ -280,8 +288,23 @@ final class PostPass {
     private final GpuBuffer[] uniforms = new GpuBuffer[PASSES];
     private final ByteBuffer scratch = MemoryUtil.memAlloc(UNIFORM_BYTES).order(ByteOrder.nativeOrder());
     private RenderTarget scene, half1, half2, quarter1, quarter2, depth, aoA, aoB;
+    /** The size the scene is drawn at. */
     private int width, height, samples;
     private int depthWidth, depthHeight;
+    /** The size of the picture shown, which the bloom and the upscaler's output follow. */
+    private int displayWidth, displayHeight;
+
+    /** The depth and motion of the solid objects at the render size, for a temporal upscaler. */
+    private RenderTarget velocity;
+    private int velocityWidth, velocityHeight;
+    /** The upscaler's output, this frame's and last frame's, taking turns. */
+    private final RenderTarget[] upscaled = new RenderTarget[2];
+    private int upscaledWidth, upscaledHeight, current;
+    private UpscalerProvider provider;
+    private Upscaler upscaler;
+    private final TemporalState temporal = new TemporalState();
+    private int seenResets;
+    private final float[] jitter = new float[2];
 
     PostPass(GpuDevice device, GpuBuffer fullScreenTriangle) {
         this.device = device;
@@ -296,18 +319,71 @@ final class PostPass {
     }
 
     /**
-     * The target the scene is drawn into, the size of the one it will be shown in, with floating point colour and the
-     * same multisampling (the GPU's limit permitting). Its picture, resolved to one sample per pixel, is what the later
-     * passes read.
+     * What one frame is drawn with: the size to draw the scene at, the upscaler (null for none), and for a temporal one the
+     * camera's jitter this frame.
+     *
+     * @param reset the history is to be ignored this frame
      */
-    RenderTarget sceneTarget(int width, int height, int samples) {
-        if (scene == null || this.width != width || this.height != height || this.samples != samples) {
+    record Frame(int renderWidth, int renderHeight, int displayWidth, int displayHeight, Upscaler upscaler, boolean temporal,
+                 float jitterX, float jitterY, boolean reset) {
+    }
+
+    /**
+     * Decides how the frame is drawn: at what size, with which upscaler, and where the camera is moved to. Makes the
+     * upscaler when the scene's provider is not the one this pass has, and drops the history when anything it was built on
+     * changed.
+     */
+    Frame beginFrame(Scene3D scene, int displayWidth, int displayHeight) {
+        UpscalerProvider wanted = scene.getUpscaler();
+        boolean reset = false;
+        if (wanted != provider) {
+            if (upscaler != null) upscaler.close();
+            upscaler = null;
+            provider = wanted;
+            if (wanted != null) upscaler = wanted.create(device);
+            reset = true;
+        }
+        float scale = scene.getRenderScale();
+        int renderWidth = scale >= 1f ? displayWidth : Math.max(1, Math.round(displayWidth * scale));
+        int renderHeight = scale >= 1f ? displayHeight : Math.max(1, Math.round(displayHeight * scale));
+        if (renderWidth != width || renderHeight != height || displayWidth != this.displayWidth || displayHeight != this.displayHeight) reset = true;
+        int resets = scene.temporalResets();
+        if (resets != seenResets) {
+            seenResets = resets;
+            reset = true;
+        }
+        if (reset) temporal.reset();
+        boolean isTemporal = upscaler != null && upscaler.isTemporal();
+        if (isTemporal) {
+            JitterSequence.offset(temporal.frame, upscaler.jitterPhases(renderWidth, displayWidth), jitter);
+        } else {
+            jitter[0] = jitter[1] = 0f;
+        }
+        return new Frame(renderWidth, renderHeight, displayWidth, displayHeight, upscaler, isTemporal, jitter[0], jitter[1], reset || temporal.frame == 0);
+    }
+
+    TemporalState temporal() {
+        return temporal;
+    }
+
+    /**
+     * The target the scene is drawn into, at the size the frame wants, with floating point colour and the same
+     * multisampling (the GPU's limit permitting). Its picture, resolved to one sample per pixel, is what the later passes
+     * read.
+     */
+    RenderTarget sceneTarget(Frame frame, int samples) {
+        int width = frame.renderWidth(), height = frame.renderHeight();
+        if (scene == null || this.width != width || this.height != height || this.samples != samples
+                || displayWidth != frame.displayWidth() || displayHeight != frame.displayHeight()) {
             closeTargets();
             this.width = width;
             this.height = height;
             this.samples = samples;
+            displayWidth = frame.displayWidth();
+            displayHeight = frame.displayHeight();
             scene = device.createSampledTarget(width, height, true, true, true, samples);
-            int hw = Math.max(1, (width + 1) / 2), hh = Math.max(1, (height + 1) / 2);
+            // The glow follows the size the picture is shown at, not the size it was drawn at.
+            int hw = Math.max(1, (displayWidth + 1) / 2), hh = Math.max(1, (displayHeight + 1) / 2);
             int qw = Math.max(1, (hw + 1) / 2), qh = Math.max(1, (hh + 1) / 2);
             half1 = device.createSampledTarget(hw, hh, false, true, true, 1);
             half2 = device.createSampledTarget(hw, hh, false, true, true, 1);
@@ -315,6 +391,19 @@ final class PostPass {
             quarter2 = device.createSampledTarget(qw, qh, false, true, true, 1);
         }
         return scene;
+    }
+
+    /**
+     * The target the velocity pass draws into: motion in the colour, depth in the readable depth buffer, at the render size.
+     */
+    RenderTarget velocityTarget() {
+        if (velocity == null || velocityWidth != width || velocityHeight != height) {
+            if (velocity != null) velocity.close();
+            velocity = device.createDepthSampledTarget(width, height, false, true);
+            velocityWidth = width;
+            velocityHeight = height;
+        }
+        return velocity;
     }
 
     /**
@@ -340,15 +429,19 @@ final class PostPass {
      * Turns the scene target's picture into the shown picture.
      *
      * @param hasDepth whether {@link #depthTarget()} was drawn this frame, which occlusion needs
+     * @param frame    how the frame was drawn
+     * @param motion   whether {@link #velocityTarget()} was drawn this frame, which a temporal upscaler needs
      */
-    void apply(RenderTarget output, Settings s, boolean hasDepth) {
+    void apply(RenderTarget output, Settings s, boolean hasDepth, Frame frame, boolean motion, Camera camera, float delta) {
         int pass = 0;
+        GpuTexture source = scene.texture();
+        if (frame.upscaler() != null) source = upscale(frame, motion, camera, delta, output.isBottomLeftOrigin());
         boolean glow = s.glows();
         if (glow) {
             float shoulder = 0.5f * Math.max(s.bloomThreshold(), 0.05f);
             // Bright parts, at half size.
             fullScreen(half1, bright, uniforms[pass++], new float[]{1f / half1.width(), 1f / half1.height(), s.bloomThreshold(), shoulder}, null, null,
-                    scene.texture(), null, null, null);
+                    source, null, null, null);
             // A soft glow at half size, then a wide one at a quarter.
             // The spread is a share of the picture's height, not a count of pixels: the same glow on a high-density display
             // as on a plain one, and in a small viewport as in a full-screen one. A 1080 pixel high picture has a step of one texel.
@@ -374,7 +467,7 @@ final class PostPass {
                     new float[]{0f, halfH, s.occlusionRadius(), 0f}, new float[]{0f, 1f, 0f, 0f}, aoB.texture(), depth.texture(), null, null);
         }
         // And the picture with the glow and the occlusion in.
-        GpuTexture picture = scene.texture();
+        GpuTexture picture = source;
         float[] shadow = s.shadowTint(), highlight = s.highlightTint();
         fullScreen(output, composite, uniforms[pass++],
                 new float[]{1f / output.width(), 1f / output.height(), glow ? s.bloom() : 0f, s.toneMap()},
@@ -382,6 +475,28 @@ final class PostPass {
                 new float[]{shadow[0], shadow[1], shadow[2], occluded ? s.occlusion() : 0f},
                 picture, glow ? half1.texture() : picture, glow ? quarter1.texture() : picture, occluded ? aoA.texture() : picture,
                 new float[]{highlight[0], highlight[1], highlight[2], 0f});
+    }
+
+    /**
+     * Runs the upscaler on the scene's picture and returns the picture it made.
+     */
+    private GpuTexture upscale(Frame frame, boolean motion, Camera camera, float delta, boolean bottomLeft) {
+        if (upscaled[0] == null || upscaledWidth != displayWidth || upscaledHeight != displayHeight) {
+            for (int i = 0; i < 2; i++) {
+                if (upscaled[i] != null) upscaled[i].close();
+                upscaled[i] = device.createSampledTarget(displayWidth, displayHeight, false, true, true, 1);
+            }
+            upscaledWidth = displayWidth;
+            upscaledHeight = displayHeight;
+        }
+        RenderTarget output = upscaled[current], before = upscaled[1 - current];
+        boolean fresh = frame.reset();
+        upscaler.upscale(new UpscaleInputs(device, scene.texture(), motion ? velocity.depthTexture() : null, motion ? velocity.texture() : null,
+                output, fresh ? null : before, width, height, displayWidth, displayHeight, frame.jitterX(), frame.jitterY(),
+                camera.getNear(), camera.getFar(), (float) Math.toRadians(camera.getFovYDegrees()), delta, temporal.frame, fresh,
+                bottomLeft));
+        current = 1 - current;
+        return output.texture();
     }
 
     private void fullScreen(RenderTarget into, Pipeline pipeline, GpuBuffer uniform, float[] a, float[] b, float[] c,
@@ -410,12 +525,16 @@ final class PostPass {
     }
 
     private void closeTargets() {
-        for (RenderTarget t : new RenderTarget[]{scene, half1, half2, quarter1, quarter2, depth, aoA, aoB}) if (t != null) t.close();
-        scene = half1 = half2 = quarter1 = quarter2 = depth = aoA = aoB = null;
+        for (RenderTarget t : new RenderTarget[]{scene, half1, half2, quarter1, quarter2, depth, aoA, aoB, velocity, upscaled[0], upscaled[1]}) if (t != null) t.close();
+        scene = half1 = half2 = quarter1 = quarter2 = depth = aoA = aoB = velocity = null;
+        upscaled[0] = upscaled[1] = null;
+        depthWidth = depthHeight = velocityWidth = velocityHeight = upscaledWidth = upscaledHeight = 0;
     }
 
     void close() {
         closeTargets();
+        if (upscaler != null) upscaler.close();
+        upscaler = null;
         bright.close();
         blur.close();
         composite.close();

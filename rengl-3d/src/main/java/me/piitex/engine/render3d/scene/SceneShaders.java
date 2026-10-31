@@ -136,7 +136,7 @@ final class SceneShaders {
             layout(set = 0, binding = 0) uniform Frame {
                 mat4 viewProj;
                 vec4 cameraPos;
-                vec4 cameraFwd;
+                vec4 cameraFwd; // w: the bias added to every texture's level of detail, negative while drawing below the display size
                 vec4 ambient;
                 vec4 params;
                 vec4 shadowGlobal;
@@ -561,7 +561,7 @@ final class SceneShaders {
                 vec2 uvMetalRough = (flags & 16) != 0 ? vUv1 : vUv;
                 vec2 uvOcclusion = (flags & 32) != 0 ? vUv1 : vUv;
                 vec2 uvEmissive = (flags & 64) != 0 ? vUv1 : vUv;
-                vec4 tex = texture(baseTexture, uvBase);
+                vec4 tex = texture(baseTexture, uvBase, cameraFwd.w);
                 vec3 albedo = pow(tex.rgb * vTint.rgb, vec3(2.2));
                 float alpha = tex.a * vTint.a;
                 if (alpha < vParams.w) discard;
@@ -585,7 +585,7 @@ final class SceneShaders {
                         t = t - n * dot(n, t);
                         b = b - n * dot(n, b);
                         float invMax = inversesqrt(max(max(dot(t, t), dot(b, b)), 1e-20));
-                        vec3 tn = texture(normalTexture, uvNormal).xyz * 2.0 - 1.0;
+                        vec3 tn = texture(normalTexture, uvNormal, cameraFwd.w).xyz * 2.0 - 1.0;
                         tn.xy *= vExtra2.x;
                         n = normalize(mat3(t * invMax, b * invMax, n) * tn);
                     }
@@ -594,10 +594,10 @@ final class SceneShaders {
                     bool receives = (flags & 2) != 0;
 
                     if (mode == 1) {
-                        vec4 mr = texture(metalRoughTexture, uvMetalRough);
+                        vec4 mr = texture(metalRoughTexture, uvMetalRough, cameraFwd.w);
                         float roughness = clamp(vParams.y * mr.g, 0.04, 1.0);
                         float metallic = clamp(vParams.x * mr.b, 0.0, 1.0);
-                        float occlusion = texture(occlusionTexture, uvOcclusion).r;
+                        float occlusion = texture(occlusionTexture, uvOcclusion, cameraFwd.w).r;
                         vec3 f0 = mix(vec3(0.04), albedo, metallic);
                         vec3 diffuseColor = albedo * (1.0 - metallic);
                         float a = roughness * roughness;
@@ -631,7 +631,7 @@ final class SceneShaders {
                             lit += ((vec3(1.0) - f) * diffuseColor + PI * spec) * lightColor[i].rgb * atten * nl;
                         }
                         //@CLUSTER_PBR
-                        lit += vExtra.xyz * pow(texture(emissiveTexture, uvEmissive).rgb, vec3(2.2));
+                        lit += vExtra.xyz * pow(texture(emissiveTexture, uvEmissive, cameraFwd.w).rgb, vec3(2.2));
                     } else {
             #if ENV_KIND != 0
                         lit = envDiffuse(n) * albedo;
@@ -666,6 +666,120 @@ final class SceneShaders {
                 // Bloom keeps the light as it is (fogParams.w is 1) and tone maps the whole picture afterwards.
                 outColor = fogParams.w > 0.5 ? vec4(min(exposed, vec3(65000.0)), alpha)
                         : vec4(pow(toneMap(exposed, int(fogParams.z + 0.5)), vec3(1.0 / 2.2)), alpha);
+            }
+            """;
+
+    // ---- velocity pass ---------------------------------------------------------------------------------------
+
+    /**
+     * The previous frame's model matrix of each instance, at locations 12 to 15 of a vertex buffer of its own. A skinned
+     * mesh has none (its joints are the transform), and its previous position is taken to be this one.
+     */
+    private static final String PREV_INPUTS = """
+            layout(location = 12) in vec4 iPrev0;
+            layout(location = 13) in vec4 iPrev1;
+            layout(location = 14) in vec4 iPrev2;
+            layout(location = 15) in vec4 iPrev3;
+            """;
+
+    /**
+     * What the velocity pass and its sky read: the jittered view-projection the picture is drawn with, the same without the
+     * jitter, last frame's without it, and {@code screen}: the render size and, in z, +1 where the image's rows run up
+     * the picture (OpenGL) and -1 where they run down (Vulkan).
+     */
+    private static final String VELOCITY_BLOCK = """
+            layout(set = 0, binding = 0) uniform Velocity {
+                mat4 viewProj;
+                mat4 unjittered;
+                mat4 previous;
+                vec4 screen;
+            };
+            """;
+
+    /**
+     * Draws the solid objects where the scene does (with the same jitter) and works out in the fragment shader how far each
+     * pixel moved since the last frame: the clip position of the point now and of the same point in the previous frame,
+     * both without jitter, interpolated across the triangle and divided there.
+     */
+    static String velocityVertex(boolean skinned, boolean morph) {
+        return "#version 450\n" + INPUTS + (skinned ? SKIN_INPUTS : PREV_INPUTS) + (morph ? MORPH_INPUTS : "") + UV_TRANSFORM + VELOCITY_BLOCK + """
+                layout(location = 0) out vec2 vUv;
+                layout(location = 1) flat out vec4 vTint;
+                layout(location = 2) flat out vec4 vParams;
+                layout(location = 3) out vec4 vCurrent;
+                layout(location = 4) out vec4 vPrevious;
+                void main() {
+                """ + morphed(morph) + (skinned ? """
+                    mat4 skin = aWeights.x * joints[int(aJoints.x)] + aWeights.y * joints[int(aJoints.y)]
+                              + aWeights.z * joints[int(aJoints.z)] + aWeights.w * joints[int(aJoints.w)];
+                    vec4 world = skin * vec4(mPos, 1.0);
+                    vec4 worldBefore = world;
+                """ : """
+                    vec4 world = mat4(iModel0, iModel1, iModel2, iModel3) * vec4(mPos, 1.0);
+                    vec4 worldBefore = mat4(iPrev0, iPrev1, iPrev2, iPrev3) * vec4(mPos, 1.0);
+                """) + """
+                    vUv = transformUv(aUv);
+                    vTint = iTint;
+                    vParams = iParams;
+                    gl_Position = viewProj * world;
+                    vCurrent = unjittered * world;
+                    vPrevious = previous * worldBefore;
+                }
+                """;
+    }
+
+    /**
+     * The motion in render pixels along the image's own axes, previous position minus this one, in the first two channels.
+     */
+    static final String VELOCITY_FRAGMENT = "#version 450\n" + """
+            layout(location = 0) in vec2 vUv;
+            layout(location = 1) flat in vec4 vTint;
+            layout(location = 2) flat in vec4 vParams;
+            layout(location = 3) in vec4 vCurrent;
+            layout(location = 4) in vec4 vPrevious;
+            """ + VELOCITY_BLOCK + """
+            layout(set = 0, binding = 2) uniform sampler2D baseTexture;
+            layout(location = 0) out vec4 outColor;
+            void main() {
+                if (vParams.w > 0.0 && texture(baseTexture, vUv).a * vTint.a < vParams.w) discard;
+                vec2 delta = vec2(0.0);
+                // A point behind the camera last frame has no position on the screen to come from.
+                if (vPrevious.w > 1e-4) delta = vPrevious.xy / vPrevious.w - vCurrent.xy / vCurrent.w;
+                outColor = vec4(delta.x * 0.5 * screen.x, delta.y * 0.5 * screen.y * screen.z, 0.0, 1.0);
+            }
+            """;
+
+    /**
+     * The sky for the velocity pass: a triangle over the whole picture, a hair in front of the far plane, whose motion is
+     * the turning of the camera alone. The direction through each pixel is found with the inverse of the view-projection,
+     * and put through last frame's as a direction (w of 0), which has no position, since the sky is infinitely far.
+     * {@code eye} is the camera's position now.
+     */
+    static final String SKY_MOTION_VERTEX = "#version 450\n" + """
+            layout(location = 0) in vec2 aPos;
+            layout(location = 0) out vec2 vNdc;
+            void main() {
+                vNdc = aPos;
+                gl_Position = vec4(aPos, 0.99999994, 1.0);
+            }
+            """;
+
+    static final String SKY_MOTION_FRAGMENT = "#version 450\n" + """
+            layout(location = 0) in vec2 vNdc;
+            layout(set = 0, binding = 0) uniform SkyMotion {
+                mat4 invViewProj;
+                mat4 prevViewProj;
+                vec4 eye;
+                vec4 screen;
+            };
+            layout(location = 0) out vec4 outColor;
+            void main() {
+                vec4 farPoint = invViewProj * vec4(vNdc, 1.0, 1.0);
+                vec3 direction = farPoint.xyz / farPoint.w - eye.xyz;
+                vec4 before = prevViewProj * vec4(direction, 0.0);
+                vec2 delta = vec2(0.0);
+                if (before.w > 1e-4) delta = before.xy / before.w - vNdc;
+                outColor = vec4(delta.x * 0.5 * screen.x, delta.y * 0.5 * screen.y * screen.z, 0.0, 1.0);
             }
             """;
 

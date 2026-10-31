@@ -93,6 +93,22 @@ public final class Camera {
     }
 
     /**
+     * The projection moved sideways by a fraction of the picture, for a temporal upscaler to see a slightly different
+     * place of the scene every frame (see {@link me.piitex.engine.render3d.upscale.JitterSequence}).
+     *
+     * @param ndcOffsetX how far to move the picture to the right, in normalised device coordinates (the whole picture is 2
+     *                   wide, so one pixel of a picture {@code w} wide is {@code 2 / w})
+     * @param ndcOffsetY how far to move it up, the same way
+     */
+    public Mat4 projection(float aspect, float ndcOffsetX, float ndcOffsetY) {
+        float[] m = projection(aspect).toArray();
+        // The third column multiplies the depth, which is the divisor too, so what it adds is a fixed shift on screen.
+        m[8] = -ndcOffsetX;
+        m[9] = -ndcOffsetY;
+        return new Mat4(m);
+    }
+
+    /**
      * The ray from the camera through a point of the picture, for finding what is under the mouse. The point is in
      * the same units as the picture's size, from its top-left corner, as the mouse positions of a
      * {@link me.piitex.engine.render3d.Viewport3D.InputListener} are, so pass the viewport's own size.

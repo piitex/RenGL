@@ -58,17 +58,24 @@ final class GpuHarness {
     }
 
     static Run run(RenderAPI api, int viewportSize, Consumer<Viewport3D> setup, Checks checks) {
+        return run(api, viewportSize, setup, checks, 6);
+    }
+
+    /**
+     * The same, drawing {@code frames} frames before the checks run, for what builds up over time.
+     */
+    static Run run(RenderAPI api, int viewportSize, Consumer<Viewport3D> setup, Checks checks, int frames) {
         if (api == RenderAPI.OPENGL && System.getProperty("os.name", "").toLowerCase().contains("mac")) {
-            return runHeadlessGl(viewportSize, setup, checks); // the engine would log a fatal error for an OpenGL window here
+            return runHeadlessGl(viewportSize, setup, checks, frames); // the engine would log a fatal error for an OpenGL window here
         }
         try {
             if (RenderAPI.resolve(api) != api) {
-                return api == RenderAPI.OPENGL ? runHeadlessGl(viewportSize, setup, checks)
+                return api == RenderAPI.OPENGL ? runHeadlessGl(viewportSize, setup, checks, frames)
                         : new Run(false, api + " does not exist on this platform", null, null, Map.of());
             }
         } catch (IllegalStateException e) {
             // macOS: the engine refuses OpenGL windows, but a bare GLFW context still gives the 3D layer a GL device to test.
-            return api == RenderAPI.OPENGL ? runHeadlessGl(viewportSize, setup, checks)
+            return api == RenderAPI.OPENGL ? runHeadlessGl(viewportSize, setup, checks, frames)
                     : new Run(false, api + " does not exist on this platform", null, null, Map.of());
         }
         Recorder recorder = new Recorder();
@@ -106,7 +113,7 @@ final class GpuHarness {
                 actual[0] = device.api();
                 info[0] = device.name();
                 if (inner != null) inner.render(device, target, delta);
-                if (++frame == 6) {
+                if (++frame == frames) {
                     try {
                         checks.run(device, target, recorder);
                     } catch (Throwable t) {
@@ -159,7 +166,7 @@ final class GpuHarness {
      * path doesn't exist on macOS, but the 3D layer's GL backend does, and this is how it gets tested there. The content is
      * drawn six times into a target of the viewport's size, then the checks run, as in a real window.
      */
-    private static Run runHeadlessGl(int viewportSize, Consumer<Viewport3D> setup, Checks checks) {
+    private static Run runHeadlessGl(int viewportSize, Consumer<Viewport3D> setup, Checks checks, int frames) {
         Viewport3D viewport = new Viewport3D(viewportSize, viewportSize);
         setup.accept(viewport);
         Viewport3D.Content content = viewport.getContent();
@@ -187,7 +194,7 @@ final class GpuHarness {
             try {
                 content.init(device);
                 content.resize(device, viewportSize, viewportSize);
-                for (int i = 0; i < 6; i++) {
+                for (int i = 0; i < frames; i++) {
                     frame[0]++;
                     device.beginFrame();
                     try {
