@@ -122,16 +122,44 @@ public final class UpscaleComparison {
 
     /** Draws the scene in a hidden Vulkan window, one script step for each frame, until the script ends the run. */
     private static Run drive(Scene3D scene, Script script) {
+        return drive(scene, VIEW, 20, true, w -> {
+        }, script);
+    }
+
+    /** How a frame step of {@link #runWindow} ends the run, and what it was given. */
+    public interface Step {
+        boolean frame(int frame, Scene3D scene, GpuDevice device, RenderTarget target, float delta, Window window);
+    }
+
+    /** How a run in a window went. */
+    public record Outcome(Throwable failure, boolean rendered, RenderAPI api) {
+    }
+
+    /**
+     * Draws the test scene in a Vulkan window whose 3D view fills it (as frame generation wants it), {@code size} pixels square,
+     * one step for each frame, until a step returns true. The window is not hidden when {@code visible}: a hidden window is
+     * not presented to the display, which frame generation needs.
+     */
+    public static Outcome runWindow(int size, boolean visible, Step step) {
+        Scene3D scene = scene();
+        Window[] window = new Window[1];
+        Run run = drive(scene, size, 0, !visible, w -> window[0] = w,
+                (frame, device, target, delta) -> step.frame(frame, scene, device, target, delta, window[0]));
+        return new Outcome(run.failure(), run.rendered(), run.api());
+    }
+
+    private static Run drive(Scene3D scene, int view, int margin, boolean hidden, java.util.function.Consumer<Window> windowSink, Script script) {
         Throwable[] failure = new Throwable[1];
         boolean[] rendered = new boolean[1];
         RenderAPI[] api = new RenderAPI[1];
-        Window window = new Window(new WindowOptions("RenGL upscaler test").setDimensions(VIEW + 40, VIEW + 40)
+        Window window = new Window(new WindowOptions("RenGL upscaler test").setDimensions(view + 2 * margin, view + 2 * margin)
                 .setRenderer(RenderAPI.VULKAN).setVsync(false));
-        window.hide();
-        Container root = new Container(VIEW + 40, VIEW + 40);
+        windowSink.accept(window);
+        if (hidden) window.hide();
+        Container root = new Container(view + 2 * margin, view + 2 * margin);
         window.addContainer(root);
-        Viewport3D viewport = new Viewport3D(VIEW, VIEW);
-        viewport.setPosition(20, 20);
+        Viewport3D viewport = new Viewport3D(view, view);
+        viewport.setPosition(margin, margin);
         viewport.setContent(new Viewport3D.Content() {
             int frame;
 
@@ -164,7 +192,7 @@ public final class UpscaleComparison {
         root.addElement(viewport);
         Thread watchdog = new Thread(() -> {
             try {
-                Thread.sleep(40_000);
+                Thread.sleep(60_000);
                 window.close();
             } catch (InterruptedException ignored) {
             }

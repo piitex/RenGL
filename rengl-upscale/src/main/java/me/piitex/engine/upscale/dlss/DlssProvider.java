@@ -95,17 +95,28 @@ public final class DlssProvider implements UpscalerProvider {
     }
 
     /** Tells Streamline about the device, once. */
-    static synchronized boolean attach(Sl sl, VkGpuDevice device) {
-        if (attached.contains(device.vkDevice().address())) return true;
+    static boolean attach(Sl sl, VkGpuDevice device) {
+        return attach(sl, device.vkDevice().address(), device.vkInstance().address(), device.vkPhysicalDevice().address(),
+                device.queueFamily(), 0, 0);
+    }
+
+    /** The same from raw handles, with the queues of the family that Streamline's work runs on (see {@link Sl#vulkanInfo}). */
+    static synchronized boolean attach(Sl sl, long device, long instance, long physicalDevice, int queueFamily, int graphicsQueueIndex,
+                                       int computeQueueIndex) {
+        synchronized (attached) {
+            if (attached.contains(device)) return true;
+        }
         try (Arena arena = Arena.ofConfined()) {
-            int result = sl.setVulkanInfo(Sl.vulkanInfo(arena, device.vkDevice().address(), device.vkInstance().address(),
-                    device.vkPhysicalDevice().address(), device.queueFamily()));
+            int result = sl.setVulkanInfo(Sl.vulkanInfo(arena, device, instance, physicalDevice, queueFamily, graphicsQueueIndex,
+                    computeQueueIndex));
             if (result != Sl.OK) {
                 log.warn("slSetVulkanInfo returned {}", Sl.describe(result));
                 return false;
             }
         }
-        attached.add(device.vkDevice().address());
+        synchronized (attached) {
+            attached.add(device);
+        }
         return true;
     }
 

@@ -41,11 +41,13 @@ final class Sl {
     static final int OK = 0;
 
     /** sl::Feature */
-    static final int FEATURE_DLSS = 0;
+    static final int FEATURE_DLSS = 0, FEATURE_REFLEX = 3, FEATURE_PCL = 4, FEATURE_DLSS_G = 1000;
     /** sl::BufferType */
-    static final int BUFFER_DEPTH = 0, BUFFER_MOTION_VECTORS = 1, BUFFER_SCALING_INPUT_COLOR = 3, BUFFER_SCALING_OUTPUT_COLOR = 4;
+    static final int BUFFER_DEPTH = 0, BUFFER_MOTION_VECTORS = 1, BUFFER_SCALING_INPUT_COLOR = 3, BUFFER_SCALING_OUTPUT_COLOR = 4, BUFFER_BACKBUFFER = 53;
     /** sl::ResourceLifecycle */
-    static final int VALID_UNTIL_EVALUATE = 2;
+    static final int VALID_UNTIL_PRESENT = 1, VALID_UNTIL_EVALUATE = 2;
+    /** The libraries frame generation needs besides the ones of DLSS (Reflex and the latency markers are required by it). */
+    static final String[] FRAME_GENERATION_LIBRARIES = {"sl.dlss_g.dll", "nvngx_dlssg.dll", "sl.reflex.dll", "sl.pcl.dll"};
     /** sl::PreferenceFlags */
     static final long FLAG_DISABLE_CL_STATE_TRACKING = 1L, FLAG_USE_MANUAL_HOOKING = 1L << 2, FLAG_USE_FRAME_BASED_RESOURCE_TAGGING = 1L << 7;
     /** sl::kSDKVersion: major 2, minor 14, patch 16 and the magic number. The libraries refuse a host built for another major version. */
@@ -69,6 +71,19 @@ final class Sl {
     record Requirements(List<String> instanceExtensions, List<String> deviceExtensions, List<String> features12, List<String> features13,
                         int computeQueues, int graphicsQueues) {
         static final Requirements NONE = new Requirements(List.of(), List.of(), List.of(), List.of(), 0, 0);
+
+        /** What both need. */
+        Requirements and(Requirements other) {
+            return new Requirements(union(instanceExtensions, other.instanceExtensions), union(deviceExtensions, other.deviceExtensions),
+                    union(features12, other.features12), union(features13, other.features13),
+                    computeQueues + other.computeQueues, graphicsQueues + other.graphicsQueues);
+        }
+
+        private static List<String> union(List<String> a, List<String> b) {
+            java.util.Set<String> all = new java.util.LinkedHashSet<>(a);
+            all.addAll(b);
+            return List.copyOf(all);
+        }
     }
 
     private static Sl instance;
@@ -78,12 +93,14 @@ final class Sl {
     private final Path folder;
     private final MethodHandle init, shutdown, getRequirements, setVulkanInfo, newFrameToken, setConstants, setTagForFrame, evaluate,
             freeResources, getFeatureFunction, isFeatureSupported;
-    private boolean started;
-    private String startFailure;
+    private final SymbolLookup lib;
+    private boolean started, frameGeneration;
+    private String startFailure, frameGenerationFailure;
     private Requirements requirements = Requirements.NONE;
 
     private Sl(Path interposer, SymbolLookup lib) {
         folder = interposer.getParent();
+        this.lib = lib;
         Linker linker = Linker.nativeLinker();
         init = function(linker, lib, "slInit", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG));
         shutdown = function(linker, lib, "slShutdown", FunctionDescriptor.of(JAVA_INT));
@@ -206,10 +223,12 @@ final class Sl {
             prefs.set(ADDRESS, 56, wide(arena, data.toString()));
             prefs.set(ADDRESS, 80, messageCallback());
             prefs.set(JAVA_LONG, 88, FLAG_DISABLE_CL_STATE_TRACKING | FLAG_USE_MANUAL_HOOKING | FLAG_USE_FRAME_BASED_RESOURCE_TAGGING);
-            MemorySegment features = arena.allocate(4);
-            features.set(JAVA_INT, 0, FEATURE_DLSS);
+            int[] wanted = frameGenerationRequested()
+                    ? new int[]{FEATURE_DLSS, FEATURE_REFLEX, FEATURE_PCL, FEATURE_DLSS_G} : new int[]{FEATURE_DLSS};
+            MemorySegment features = arena.allocate(4L * wanted.length);
+            for (int i = 0; i < wanted.length; i++) features.setAtIndex(JAVA_INT, i, wanted[i]);
             prefs.set(ADDRESS, 96, features);
-            prefs.set(JAVA_INT, 104, 1);
+            prefs.set(JAVA_INT, 104, wanted.length);
             prefs.set(ADDRESS, 120, arena.allocateFrom("1.0"));
             prefs.set(ADDRESS, 128, arena.allocateFrom("6b4c2d1e-7a0f-4f2e-9d53-52656e474c33"));
             prefs.set(JAVA_INT, 136, 2); // RenderAPI::eVulkan
@@ -219,16 +238,33 @@ final class Sl {
                 log.warn("DLSS is not available: {}", startFailure);
                 return requirements;
             }
-            MemorySegment fr = struct(arena, 192, "66714097-AC6D-4BC6-8915-1E0F55A6B61F", 2);
-            result = (int) getRequirements.invokeExact(FEATURE_DLSS, fr);
-            if (result != OK) {
-                startFailure = "slGetFeatureRequirements returned " + describe(result);
-                log.warn("DLSS is not available: {}", startFailure);
-                shutdownQuietly();
-                return requirements;
+            Requirements all = Requirements.NONE;
+            for (int feature : wanted) {
+                MemorySegment fr = struct(arena, 192, "66714097-AC6D-4BC6-8915-1E0F55A6B61F", 2);
+                result = (int) getRequirements.invokeExact(feature, fr);
+                if (result != OK) {
+                    String reason = "slGetFeatureRequirements(" + feature + ") returned " + describe(result);
+                    if (feature == FEATURE_DLSS) {
+                        startFailure = reason;
+                        log.warn("DLSS is not available: {}", startFailure);
+                        shutdownQuietly();
+                        return requirements;
+                    }
+                    frameGenerationFailure = reason;
+                    log.warn("DLSS frame generation is not available: {}", reason);
+                    continue;
+                }
+                if (Boolean.getBoolean("rengl.dlss.log")) {
+                    log.info("[Streamline] feature {} wants {} graphics and {} compute queues, {} optical flow, device extensions {}",
+                            feature, fr.get(JAVA_INT, 108), fr.get(JAVA_INT, 104), fr.get(JAVA_INT, 176), strings(fr, 112, 120));
+                }
+                all = all.and(new Requirements(strings(fr, 128, 136), strings(fr, 112, 120), strings(fr, 144, 152), strings(fr, 160, 168),
+                        fr.get(JAVA_INT, 104), fr.get(JAVA_INT, 108)));
+                if (feature == FEATURE_DLSS_G) frameGeneration = true;
             }
-            requirements = new Requirements(strings(fr, 128, 136), strings(fr, 112, 120), strings(fr, 144, 152), strings(fr, 160, 168),
-                    fr.get(JAVA_INT, 104), fr.get(JAVA_INT, 108));
+            if (wanted.length == 1 && frameGenerationFailure == null) frameGenerationFailure = "frame generation is off (set -Drengl.dlss.framegen=true and put "
+                    + String.join(", ", FRAME_GENERATION_LIBRARIES) + " beside " + INTERPOSER + ")";
+            requirements = all;
             started = true;
         } catch (Throwable t) {
             startFailure = "Streamline would not start: " + t;
@@ -244,6 +280,31 @@ final class Sl {
 
     synchronized boolean started() {
         return started;
+    }
+
+    /** Whether Streamline was started with frame generation (and the libraries it wants) loaded. */
+    synchronized boolean frameGenerationLoaded() {
+        return started && frameGeneration;
+    }
+
+    synchronized String frameGenerationFailure() {
+        return frameGeneration ? null : frameGenerationFailure != null ? frameGenerationFailure : startFailure;
+    }
+
+    /**
+     * Frame generation is wanted ({@code -Drengl.dlss.framegen=true}) and the libraries it needs are beside the interposer. It
+     * costs extra queues, an off-screen swapchain and a load of more libraries, so it is only started when asked for.
+     */
+    private boolean frameGenerationRequested() {
+        if (!Boolean.getBoolean("rengl.dlss.framegen")) return false;
+        for (String library : FRAME_GENERATION_LIBRARIES) {
+            if (!Files.isRegularFile(folder.resolve(library))) {
+                frameGenerationFailure = library + " is not beside " + INTERPOSER + " (frame generation needs " + String.join(", ", FRAME_GENERATION_LIBRARIES) + ")";
+                log.warn("DLSS frame generation is not available: {}", frameGenerationFailure);
+                return false;
+            }
+        }
+        return true;
     }
 
     private void shutdownQuietly() {
@@ -307,6 +368,18 @@ final class Sl {
         return s;
     }
 
+    /**
+     * The same where Streamline's own queues are among those the device was made with: its graphics queues start at
+     * {@code graphicsQueueIndex} and its compute queues at {@code computeQueueIndex}, all of {@code queueFamily}.
+     */
+    static MemorySegment vulkanInfo(Arena arena, long device, long instance, long physicalDevice, int queueFamily,
+                                    int graphicsQueueIndex, int computeQueueIndex) {
+        MemorySegment s = vulkanInfo(arena, device, instance, physicalDevice, queueFamily);
+        s.set(JAVA_INT, 56, computeQueueIndex);
+        s.set(JAVA_INT, 64, graphicsQueueIndex);
+        return s;
+    }
+
     /** An {@code sl::AdapterInfo} naming a Vulkan GPU. */
     static MemorySegment adapter(Arena arena, long physicalDevice) {
         MemorySegment s = struct(arena, 56, "0677315F-A746-4492-9F42-CB6142C9C3D4", 1);
@@ -335,11 +408,48 @@ final class Sl {
 
     /** An {@code sl::ResourceTag} (64 bytes): the resource, what it is for, how long it stays valid, and no extent (all of it). */
     static MemorySegment tag(Arena arena, MemorySegment resource, int bufferType) {
+        return tag(arena, resource, bufferType, VALID_UNTIL_EVALUATE);
+    }
+
+    static MemorySegment tag(Arena arena, MemorySegment resource, int bufferType, int lifecycle) {
         MemorySegment s = struct(arena, 64, "4C6A5AAD-B445-496C-87FF-1AF3845BE653", 1);
         s.set(ADDRESS, 32, resource);
         s.set(JAVA_INT, 40, bufferType);
-        s.set(JAVA_INT, 44, VALID_UNTIL_EVALUATE);
+        s.set(JAVA_INT, 44, lifecycle);
         return s;
+    }
+
+    /** The same with the part of the resource to use named: from the corner, {@code width} by {@code height}. */
+    static MemorySegment tag(Arena arena, MemorySegment resource, int bufferType, int lifecycle, int width, int height) {
+        MemorySegment s = tag(arena, resource, bufferType, lifecycle);
+        s.set(JAVA_INT, 56, width);
+        s.set(JAVA_INT, 60, height);
+        return s;
+    }
+
+    /** An {@code sl::ReflexOptions} (48 bytes): the mode (0 off, 1 low latency, 2 with boost) and no frame limit. */
+    static MemorySegment reflexOptions(Arena arena, int mode) {
+        MemorySegment s = struct(arena, 48, "F03AF81A-6D0B-4902-A651-C4965E215434", 1);
+        s.set(JAVA_INT, 32, mode);
+        return s;
+    }
+
+    /**
+     * An {@code sl::DLSSGOptions} (version 5, 120 bytes): the mode (0 off, 1 on), how many frames to make between two drawn
+     * ones, and the flags. Everything else is left for Streamline to find out.
+     */
+    static MemorySegment dlssgOptions(Arena arena, int mode, int framesToGenerate, int flags) {
+        MemorySegment s = struct(arena, 120, "FAC5F1CB-2DFD-4F36-A1E6-3A9E865256C5", 5);
+        s.set(JAVA_INT, 32, mode);
+        s.set(JAVA_INT, 36, framesToGenerate);
+        s.set(JAVA_INT, 40, flags);
+        s.set(JAVA_BYTE, 104, (byte) 2); // bReserved15: eInvalid, as the header defaults it
+        return s;
+    }
+
+    /** An empty {@code sl::DLSSGState} (version 4, 88 bytes) for {@code slDLSSGGetState} to fill. */
+    static MemorySegment dlssgState(Arena arena) {
+        return struct(arena, 88, "CC8AC8E1-A179-44F5-97FA-E74112F9BC61", 4);
     }
 
     // ---- calls --------------------------------------------------------------------------------------------------------
@@ -363,8 +473,13 @@ final class Sl {
     }
 
     boolean isSupported(int feature, MemorySegment adapter) {
+        return support(feature, adapter) == OK;
+    }
+
+    /** What {@code slIsFeatureSupported} says of the feature on the adapter ({@link #describe(int)} turns it into words). */
+    int support(int feature, MemorySegment adapter) {
         try {
-            return (int) isFeatureSupported.invokeExact(feature, adapter) == OK;
+            return (int) isFeatureSupported.invokeExact(feature, adapter);
         } catch (Throwable t) {
             throw rethrow(t);
         }
@@ -417,13 +532,46 @@ final class Sl {
 
     /** A function of a feature ({@code slDLSSSetOptions}), as a handle taking pointers and returning the result. */
     MethodHandle featureFunction(int feature, String name, int pointerArguments) {
+        return featureFunction(feature, name, pointerArguments == 1 ? FunctionDescriptor.of(JAVA_INT, ADDRESS)
+                : FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
+    }
+
+    /** A function of a feature with the given signature; only after {@code slSetVulkanInfo}. */
+    MethodHandle featureFunction(int feature, String name, FunctionDescriptor descriptor) {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment out = arena.allocate(8);
             int result = (int) getFeatureFunction.invokeExact(feature, arena.allocateFrom(name), out);
             if (result != OK) throw new IllegalStateException("slGetFeatureFunction(" + name + ") returned " + describe(result));
-            FunctionDescriptor descriptor = pointerArguments == 1 ? FunctionDescriptor.of(JAVA_INT, ADDRESS)
-                    : FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS);
             return Linker.nativeLinker().downcallHandle(out.get(ADDRESS, 0), descriptor);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    /** What Streamline's {@code vkGetInstanceProcAddr} gives for a function of the instance (the surface calls it stands in for). */
+    MemorySegment instanceProcAddress(long instance, String name) {
+        try (Arena arena = Arena.ofConfined()) {
+            MethodHandle get = Linker.nativeLinker().downcallHandle(lib.find("vkGetInstanceProcAddr")
+                    .orElseThrow(() -> new IllegalStateException("vkGetInstanceProcAddr is not in " + INTERPOSER)),
+                    FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
+            MemorySegment function = (MemorySegment) get.invokeExact(MemorySegment.ofAddress(instance), arena.allocateFrom(name));
+            return function.equals(MemorySegment.NULL) ? null : function;
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    /**
+     * What Streamline's {@code vkGetDeviceProcAddr} gives for a Vulkan function: the driver's own, except for the few it stands
+     * in for (the swapchain calls). Null if there is none.
+     */
+    MemorySegment deviceProcAddress(long device, String name) {
+        try (Arena arena = Arena.ofConfined()) {
+            MethodHandle get = Linker.nativeLinker().downcallHandle(lib.find("vkGetDeviceProcAddr")
+                    .orElseThrow(() -> new IllegalStateException("vkGetDeviceProcAddr is not in " + INTERPOSER)),
+                    FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
+            MemorySegment function = (MemorySegment) get.invokeExact(MemorySegment.ofAddress(device), arena.allocateFrom(name));
+            return function.equals(MemorySegment.NULL) ? null : function;
         } catch (Throwable t) {
             throw rethrow(t);
         }
@@ -433,6 +581,7 @@ final class Sl {
     synchronized void stop() {
         if (!started) return;
         started = false;
+        frameGeneration = false;
         shutdownQuietly();
     }
 }

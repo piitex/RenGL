@@ -95,6 +95,53 @@ class SlStructTest {
     }
 
     @Test
+    void theFrameGenerationStructsAreWhereTheHeadersPutThem() {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment reflex = Sl.reflexOptions(arena, 1);
+            assertEquals(48, reflex.byteSize());
+            assertEquals(1L, reflex.get(JAVA_LONG, 24), "version 1");
+            assertEquals(1, reflex.get(JAVA_INT, 32), "mode");
+
+            MemorySegment options = Sl.dlssgOptions(arena, 1, 3, 8);
+            assertEquals(120, options.byteSize());
+            assertEquals(5L, options.get(JAVA_LONG, 24), "version 5");
+            assertEquals(0xFAC5F1CB, options.get(JAVA_INT, 8), "its GUID");
+            assertEquals(1, options.get(JAVA_INT, 32), "mode");
+            assertEquals(3, options.get(JAVA_INT, 36), "numFramesToGenerate");
+            assertEquals(8, options.get(JAVA_INT, 40), "flags");
+
+            MemorySegment state = Sl.dlssgState(arena);
+            assertEquals(88, state.byteSize());
+            assertEquals(4L, state.get(JAVA_LONG, 24), "version 4");
+            assertEquals(0xCC8AC8E1, state.get(JAVA_INT, 8), "its GUID");
+        }
+    }
+
+    @Test
+    void aTagCanNameTheAreaOfTheResourceToUse() {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment tag = Sl.tag(arena, MemorySegment.NULL, Sl.BUFFER_BACKBUFFER, Sl.VALID_UNTIL_PRESENT, 640, 480);
+            assertEquals(53, tag.get(JAVA_INT, 40), "the back buffer");
+            assertEquals(Sl.VALID_UNTIL_PRESENT, tag.get(JAVA_INT, 44));
+            assertEquals(0, tag.get(JAVA_INT, 48), "top");
+            assertEquals(0, tag.get(JAVA_INT, 52), "left");
+            assertEquals(640, tag.get(JAVA_INT, 56), "width");
+            assertEquals(480, tag.get(JAVA_INT, 60), "height");
+        }
+    }
+
+    @Test
+    void streamlinesOwnQueuesFollowTheEnginesInTheVulkanInfo() {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment info = Sl.vulkanInfo(arena, 1L, 2L, 3L, 7, 1, 2);
+            assertEquals(1, info.get(JAVA_INT, 64), "graphics queues start at 1");
+            assertEquals(2, info.get(JAVA_INT, 56), "compute queues start at 2");
+            assertEquals(7, info.get(JAVA_INT, 68), "graphics family");
+            assertEquals(7, info.get(JAVA_INT, 60), "compute family");
+        }
+    }
+
+    @Test
     void theModeFollowsTheRatioOfTheSizes() {
         assertEquals(6, DlssUpscaler.modeFor(1920, 1920), "DLAA");
         assertEquals(3, DlssUpscaler.modeFor(1280, 1920), "quality at two thirds");

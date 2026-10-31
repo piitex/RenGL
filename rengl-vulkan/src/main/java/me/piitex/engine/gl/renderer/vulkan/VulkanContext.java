@@ -8,6 +8,7 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.util.ArrayList;
@@ -68,6 +69,10 @@ public final class VulkanContext implements RenderBackend.Context {
     private VkDevice device;
     private VkQueue queue;
     private int queueFamily;
+    private int queueCount = 1;
+    private List<VulkanExtensionProvider> providers = List.of();
+    private VulkanExtensionProvider.SwapchainHooks hooks;
+    private VulkanExtensionProvider surfaceMaker; // the provider that made the surface, if one did
     private int apiVersion;
     private String gpuName;
     private long surface;
@@ -138,6 +143,7 @@ public final class VulkanContext implements RenderBackend.Context {
             instance = createInstance(stack, VALIDATION);
             if (VALIDATION) installDebugMessenger(stack);
 
+            providers = VulkanExtensionProvider.loadAll();
             LongBuffer pSurface = stack.mallocLong(1);
             check(glfwCreateWindowSurface(instance, windowHandle, null, pSurface), "create the window surface");
             surface = pSurface.get(0);
@@ -150,7 +156,23 @@ public final class VulkanContext implements RenderBackend.Context {
             apiVersion = Math.min(chosen.apiVersion, API_VERSION_CAP);
 
             createDevice(stack, chosen);
-            VulkanExtensionProvider.notifyDeviceCreated();
+            VulkanExtensionProvider.notifyDeviceCreated(new VulkanExtensionProvider.DeviceInfo(instance.address(),
+                    physicalDevice.address(), device.address(), queueFamily, queueCount));
+            for (VulkanExtensionProvider provider : providers) {
+                try {
+                    hooks = provider.swapchainHooks();
+                } catch (RuntimeException | LinkageError e) {
+                    log.warn("{} could not hook the swapchain: {}", provider.getClass().getName(), e.toString());
+                }
+                if (hooks != null) break;
+            }
+            // A library in the swapchain has to see the surface made, which it can only do once it knows the device; the
+            // surface the GPU was picked with is then not needed any more.
+            long made = providerSurface();
+            if (made != VK_NULL_HANDLE) {
+                vkDestroySurfaceKHR(instance, surface, null);
+                surface = made;
+            }
             createCommandObjects(stack);
             createSwapchain(stack);
         } catch (RuntimeException e) {
@@ -160,6 +182,25 @@ public final class VulkanContext implements RenderBackend.Context {
         log.info("Vulkan: {} (API {}.{}.{}), {}x{} swapchain with {} images, present mode {}", gpuName,
                 VK_API_VERSION_MAJOR(apiVersion), VK_API_VERSION_MINOR(apiVersion), VK_API_VERSION_PATCH(apiVersion),
                 width, height, images.length, presentModeName(presentMode));
+    }
+
+    /** The window's surface as a library that sits in the swapchain wants it made, or 0 where none does. */
+    private long providerSurface() {
+        if (!System.getProperty("os.name", "").toLowerCase().contains("win")) return VK_NULL_HANDLE;
+        long hwnd = 0L;
+        for (VulkanExtensionProvider provider : providers) {
+            try {
+                if (hwnd == 0L) hwnd = org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(windowHandle);
+                long made = provider.createWindowSurface(instance.address(), hwnd);
+                if (made != VK_NULL_HANDLE) {
+                    surfaceMaker = provider;
+                    return made;
+                }
+            } catch (RuntimeException | LinkageError e) {
+                log.warn("{} could not make the window surface: {}", provider.getClass().getName(), e.toString());
+            }
+        }
+        return VK_NULL_HANDLE;
     }
 
     // ---- handles Skia needs -------------------------------------------------------------------------------------
@@ -290,6 +331,7 @@ public final class VulkanContext implements RenderBackend.Context {
      * frame is skipped and {@link #endFrame()} must not be called.
      */
     public boolean beginFrame() {
+        frameEvent(VulkanExtensionProvider.FrameEvent.FRAME_STARTED);
         try (MemoryStack stack = stackPush()) {
             for (int attempt = 0; attempt < 2; attempt++) {
                 if (needsRecreate || swapchain == VK_NULL_HANDLE) {
@@ -300,7 +342,9 @@ public final class VulkanContext implements RenderBackend.Context {
                 check(vkWaitForFences(device, inFlight[slot], true, Long.MAX_VALUE), "wait for the frame fence");
 
                 IntBuffer pIndex = stack.mallocInt(1);
-                int result = vkAcquireNextImageKHR(device, swapchain, ACQUIRE_TIMEOUT_NANOS, acquired[slot], VK_NULL_HANDLE, pIndex);
+                int result = hooks != null
+                        ? hooks.acquireNextImage(device.address(), swapchain, ACQUIRE_TIMEOUT_NANOS, acquired[slot], VK_NULL_HANDLE, memAddress(pIndex))
+                        : vkAcquireNextImageKHR(device, swapchain, ACQUIRE_TIMEOUT_NANOS, acquired[slot], VK_NULL_HANDLE, pIndex);
                 if (result == VK_ERROR_OUT_OF_DATE_KHR) {
                     needsRecreate = true;
                     continue;
@@ -325,6 +369,7 @@ public final class VulkanContext implements RenderBackend.Context {
                         .pWaitDstStageMask(stack.ints(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT))
                         .pCommandBuffers(stack.pointers(cmd));
                 check(vkQueueSubmit(queue, submit, VK_NULL_HANDLE), "submit the acquire barrier");
+                frameEvent(VulkanExtensionProvider.FrameEvent.RENDER_STARTED);
                 return true;
             }
             return false;
@@ -345,6 +390,7 @@ public final class VulkanContext implements RenderBackend.Context {
      *                 instead of a colour attachment
      */
     public void endFrame(boolean readBack) {
+        frameEvent(VulkanExtensionProvider.FrameEvent.RENDER_FINISHED);
         try (MemoryStack stack = stackPush()) {
             VkCommandBuffer cmd = postBuffers[slot];
             if (readBack) {
@@ -368,7 +414,18 @@ public final class VulkanContext implements RenderBackend.Context {
                     .swapchainCount(1)
                     .pSwapchains(stack.longs(swapchain))
                     .pImageIndices(stack.ints(imageIndex));
-            int result = vkQueuePresentKHR(queue, present);
+            VulkanExtensionProvider.SwapchainImage presented = new VulkanExtensionProvider.SwapchainImage(images[imageIndex],
+                    swapchainFormat, width, height, swapchainUsage, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            for (VulkanExtensionProvider provider : providers) {
+                try {
+                    provider.beforePresent(presented);
+                } catch (RuntimeException | LinkageError e) {
+                    log.warn("{} failed before the present: {}", provider.getClass().getName(), e.toString());
+                }
+            }
+            frameEvent(VulkanExtensionProvider.FrameEvent.PRESENT_STARTED);
+            int result = hooks != null ? hooks.present(queue.address(), present.address()) : vkQueuePresentKHR(queue, present);
+            frameEvent(VulkanExtensionProvider.FrameEvent.PRESENT_FINISHED);
             if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) needsRecreate = true;
             else check(result, "present");
 
@@ -406,7 +463,10 @@ public final class VulkanContext implements RenderBackend.Context {
             device = null;
         }
         if (instance != null) {
-            if (surface != VK_NULL_HANDLE) vkDestroySurfaceKHR(instance, surface, null);
+            if (surface != VK_NULL_HANDLE) {
+                if (surfaceMaker != null) surfaceMaker.destroyWindowSurface(instance.address(), surface);
+                else vkDestroySurfaceKHR(instance, surface, null);
+            }
             surface = VK_NULL_HANDLE;
             if (debugMessenger != VK_NULL_HANDLE) vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, null);
             debugMessenger = VK_NULL_HANDLE;
@@ -729,11 +789,29 @@ public final class VulkanContext implements RenderBackend.Context {
             extensions.remove("VK_EXT_buffer_device_address");
         }
         long chain = derivatives != null ? derivatives.address() : 0L;
+        // Low latency (Reflex) wants presents to carry ids.
+        if (extensions.contains("VK_KHR_present_id")) {
+            VkPhysicalDevicePresentIdFeaturesKHR supported = VkPhysicalDevicePresentIdFeaturesKHR.calloc(stack).sType$Default();
+            vkGetPhysicalDeviceFeatures2(physicalDevice, VkPhysicalDeviceFeatures2.calloc(stack).sType$Default().pNext(supported.address()));
+            if (supported.presentId()) {
+                chain = VkPhysicalDevicePresentIdFeaturesKHR.calloc(stack).sType$Default().presentId(true).pNext(chain).address();
+            } else {
+                extensions.remove("VK_KHR_present_id");
+            }
+        }
         chain = coreFeatures(stack, VK_API_VERSION_1_3, VulkanExtensionProvider.allDeviceFeatures13(), chain);
         chain = coreFeatures(stack, VK_API_VERSION_1_2, VulkanExtensionProvider.allDeviceFeatures12(), chain);
 
+        // The engine's queue is the first of its family; libraries that run work of their own asked for more.
+        IntBuffer familyCount = stack.mallocInt(1);
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, familyCount, null);
+        VkQueueFamilyProperties.Buffer families = VkQueueFamilyProperties.malloc(familyCount.get(0), stack);
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, familyCount, families);
+        queueCount = Math.max(1, Math.min(1 + VulkanExtensionProvider.allExtraQueues(), families.get(queueFamily).queueCount()));
+        FloatBuffer priorities = stack.mallocFloat(queueCount);
+        for (int i = 0; i < queueCount; i++) priorities.put(i, 1f);
         VkDeviceQueueCreateInfo.Buffer queues = VkDeviceQueueCreateInfo.calloc(1, stack);
-        queues.get(0).sType$Default().queueFamilyIndex(queueFamily).pQueuePriorities(stack.floats(1f));
+        queues.get(0).sType$Default().queueFamilyIndex(queueFamily).pQueuePriorities(priorities);
 
         VkDeviceCreateInfo info = VkDeviceCreateInfo.calloc(stack).sType$Default()
                 .pQueueCreateInfos(queues)
@@ -780,6 +858,7 @@ public final class VulkanContext implements RenderBackend.Context {
     // ---- swapchain ----------------------------------------------------------------------------------------------
 
     private void recreateSwapchain(MemoryStack stack) {
+        frameEvent(VulkanExtensionProvider.FrameEvent.SWAPCHAIN_CHANGING);
         vkDeviceWaitIdle(device); // Skia may still be using the old images
         createSwapchain(stack);
     }
@@ -855,7 +934,8 @@ public final class VulkanContext implements RenderBackend.Context {
         info.imageExtent().set(w, h);
 
         LongBuffer pSwapchain = stack.mallocLong(1);
-        int result = vkCreateSwapchainKHR(device, info, null, pSwapchain);
+        int result = hooks != null ? hooks.createSwapchain(device.address(), info.address(), memAddress(pSwapchain))
+                : vkCreateSwapchainKHR(device, info, null, pSwapchain);
         destroySwapchain(); // the old one is retired by now (we waited for idle)
         check(result, "create the swapchain");
 
@@ -865,9 +945,9 @@ public final class VulkanContext implements RenderBackend.Context {
         width = w;
         height = h;
 
-        vkGetSwapchainImagesKHR(device, swapchain, count, null);
+        swapchainImages(count, null);
         LongBuffer pImages = stack.mallocLong(count.get(0));
-        vkGetSwapchainImagesKHR(device, swapchain, count, pImages);
+        swapchainImages(count, pImages);
         images = new long[count.get(0)];
         pImages.get(images);
 
@@ -905,8 +985,26 @@ public final class VulkanContext implements RenderBackend.Context {
         renderFinished = new long[0];
         images = new long[0];
         if (swapchain != VK_NULL_HANDLE) {
-            vkDestroySwapchainKHR(device, swapchain, null);
+            if (hooks != null) hooks.destroySwapchain(device.address(), swapchain);
+            else vkDestroySwapchainKHR(device, swapchain, null);
             swapchain = VK_NULL_HANDLE;
+        }
+    }
+
+    private void swapchainImages(IntBuffer count, LongBuffer images) {
+        int result = hooks != null
+                ? hooks.swapchainImages(device.address(), swapchain, memAddress(count), images == null ? 0L : memAddress(images))
+                : vkGetSwapchainImagesKHR(device, swapchain, count, images);
+        check(result, "get the swapchain images");
+    }
+
+    private void frameEvent(VulkanExtensionProvider.FrameEvent event) {
+        for (VulkanExtensionProvider provider : providers) {
+            try {
+                provider.frameEvent(event);
+            } catch (RuntimeException | LinkageError e) {
+                log.warn("{} failed at {}: {}", provider.getClass().getName(), event, e.toString());
+            }
         }
     }
 
