@@ -214,8 +214,9 @@ class FsrGpuTest {
         for (int i = 0; i < shots[2].length; i += 4) brightness += (shots[2][i] & 255) + (shots[2][i + 1] & 255) + (shots[2][i + 2] & 255);
         brightness /= shots[2].length / 4 * 3 * 255.0;
         assertTrue(brightness > 0.1, "the FSR picture is not empty, mean brightness " + brightness);
-        // The checked wall is drawn with a finer pattern at half the size than at full size (the built-in upscaler's picture
-        // has it too), which puts a floor under both errors; FSR measures about 0.75 of the smooth enlargement here.
+        // The wall's checks are only two pixels wide at half the size, so every picture drawn that small, whatever enlarges it,
+        // is a little off the full-size one at each edge; that puts a floor under both errors. FSR measures about 0.75 of the
+        // smooth enlargement here.
         assertTrue(fsr < smooth * 0.9, "FSR is closer to the full-size picture than the smooth enlargement: FSR " + fsr + ", smooth " + smooth);
     }
 
