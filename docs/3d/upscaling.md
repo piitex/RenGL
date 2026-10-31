@@ -69,6 +69,13 @@ The module is only the binding: it carries none of AMD's code. The libraries com
 It works on the colour, depth and motion pictures the 3D layer already makes, as `UpscaleInputs` describes them, and needs a
 GPU whose depth buffer is 32-bit float. FSR keeps its own history, so `previousOutput` is not used.
 
+Which version runs is the SDK's decision: it lists what the GPU can run, newest first, and the module takes the first that
+makes a context. It has been run with SDK 2.x on an NVIDIA RTX 4090, where the library offers FSR 3.1.6 and 2.3.4, and
+FSR 3.1.6 ran. FSR 4 is offered on the GPUs that support it; the module asks for it the same way, but it has not been run
+on one. With `-Drengl.vulkan.validation=true` the SDK's own storage images draw warnings about their format (the library's
+shaders declare 32-bit formats for images it makes 16-bit); they come from inside the library. The window's Vulkan device
+turns on `VK_KHR_compute_shader_derivatives` where the GPU has it, which the library's shaders use.
+
 ## Vulkan work of your own
 
 An upscaler that calls a library on the GPU needs the device's raw handles and a command buffer to record into. `VkGpuDevice`
