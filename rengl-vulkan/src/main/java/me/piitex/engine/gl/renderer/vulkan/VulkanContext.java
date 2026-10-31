@@ -393,14 +393,15 @@ public final class VulkanContext implements RenderBackend.Context {
         frameEvent(VulkanExtensionProvider.FrameEvent.RENDER_FINISHED);
         try (MemoryStack stack = stackPush()) {
             VkCommandBuffer cmd = postBuffers[slot];
+            int finalLayout = hooks != null && hooks.presentLayout() != 0 ? hooks.presentLayout() : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
             if (readBack) {
                 record(stack, cmd, images[imageIndex],
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, finalLayout,
                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                         0, 0);
             } else {
                 record(stack, cmd, images[imageIndex],
-                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalLayout,
                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0);
             }
@@ -415,7 +416,7 @@ public final class VulkanContext implements RenderBackend.Context {
                     .pSwapchains(stack.longs(swapchain))
                     .pImageIndices(stack.ints(imageIndex));
             VulkanExtensionProvider.SwapchainImage presented = new VulkanExtensionProvider.SwapchainImage(images[imageIndex],
-                    swapchainFormat, width, height, swapchainUsage, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                    swapchainFormat, width, height, swapchainUsage, finalLayout);
             for (VulkanExtensionProvider provider : providers) {
                 try {
                     provider.beforePresent(presented);

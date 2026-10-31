@@ -190,6 +190,13 @@ public final class UpscaleComparison {
             }
         });
         root.addElement(viewport);
+        // The view fills the window as it is resized (frame generation works on the whole window).
+        window.onResize((w, h) -> {
+            root.setWidth(w);
+            root.setHeight(h);
+            viewport.setWidth(w - 2 * margin);
+            viewport.setHeight(h - 2 * margin);
+        });
         Thread watchdog = new Thread(() -> {
             try {
                 Thread.sleep(60_000);

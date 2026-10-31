@@ -76,6 +76,53 @@ on one. With `-Drengl.vulkan.validation=true` the SDK's own storage images draw 
 shaders declare 32-bit formats for images it makes 16-bit); they come from inside the library. The window's Vulkan device
 turns on `VK_KHR_compute_shader_derivatives` where the GPU has it, which the library's shaders use.
 
+## FSR frame generation
+
+AMD's **frame generation** (FSR 3, and FSR 4 on the GPUs that have it) shows a second frame between each two the engine draws,
+made from the scene's depth and motion and the two pictures. Unlike NVIDIA's it runs on any Vulkan GPU, and it is only started
+when asked for:
+
+- Run with `-Drengl.fsr.framegen=true` and copy `amd_fidelityfx_framegeneration_vk.dll` from the FidelityFX SDK's
+  `Kits/FidelityFX/signedbin` next to the other two. Without it (or without the property) nothing changes.
+- The scene is drawn through the FSR upscaler (`FsrProvider`; at render scale 1 it is anti-aliasing), which hands over its depth
+  and motion; the 3D layer also gives it the camera's position and axes. The 3D viewport has to fill the window, since the
+  generated frame is made from the finished window picture: the library puts the depth and motion at the top left of it. A view
+  of another size is not given to frame generation (the log says so once) and frames are shown as drawn. Whatever else is drawn in
+  the window is interpolated along with the scene.
+- The library paces the presents itself, with threads of its own. It has been run with vsync off; vsync on (which holds the scene to
+  half the display's rate) was not tried.
+
+```java nocompile
+scene.setUpscaler(new FsrProvider());
+FsrFrameGeneration.setEnabled(true);                      // on by default once the swapchain is the library's
+FsrFrameGeneration.State state = FsrFrameGeneration.state();   // frames shown since the swapchain was made, frames drawn
+```
+
+| System property | Meaning |
+|---|---|
+| `rengl.fsr.framegen` | `true` turns frame generation on for the window |
+| `rengl.fsr.framegen.on` | `false` starts with it switched off |
+| `rengl.fsr.framegen.debug` | The library marks the frames it generates with coloured bars at the sides |
+
+What the engine does for it, with no work from the application: the window's device is made with three more queues (the library
+generates, presents and acquires images on queues of its own) and with timeline semaphores; the window's swapchain is the
+library's, which gives the engine images of its own to draw into and copies each to the real swapchain, so the engine leaves the
+window's image in `SHADER_READ_ONLY_OPTIMAL` and not `PRESENT_SRC_KHR` before presenting
+(`SwapchainHooks.presentLayout()`); after the upscaler has run the depth, motion, jitter and camera are handed over, and the
+swapchain calls back during the present to have the generated frame recorded. When a frame did not draw the scene it is
+presented as it is. Frame generation is taken down while the swapchain is rebuilt (the window was resized or vsync changed) and
+made again for the next frame. Where the library will not make its swapchain the window falls back to Vulkan's own and
+`FsrFrameGeneration.unavailableReason()` says why. It is meant for one window.
+
+`FsrFrameGenGpuTest` runs it on an RTX 4090 in a visible window (it skips elsewhere): with frame generation on, the library
+presented two frames for each one drawn; turned off, one for one; turned on again, and after the window was resized, two for one. With the
+debug bars on, frames captured from the window showed the bars on some and not on others, and the ones with bars were a clean,
+plausible picture between the drawn ones. The validation layer reports a few things from inside the library: its composition
+shader writes three components to a four-component storage image, and at device destruction it has not freed its composition pipeline, some descriptor sets and
+the semaphores of its real swapchain's images (13 objects, with or without frame generation switched on). **Not tried:** FSR 4's
+frame generation (it needs an AMD Radeon RX 9000), generating with the DLSS upscaler or the built-in one, a view that
+does not fill the window, HDR, more than one window.
+
 ## DLSS
 
 The same module has NVIDIA **DLSS** super resolution on Vulkan, for GeForce RTX cards, through NVIDIA's
@@ -159,7 +206,8 @@ A library that sits in the swapchain (frame generation does) can also ask for qu
 (`extraQueues()`; the library gets queues 1 and up, as `DeviceInfo.queueCount()` says), make the window's surface itself
 (`createWindowSurface`, Windows), take over the five swapchain calls (`swapchainHooks()`), hear the back buffer before each present
 (`beforePresent`) and be told at each point of a window frame (`frameEvent`: the frame starts, drawing starts and ends, the present
-starts and ends, the swapchain is about to be rebuilt).
+starts and ends, the swapchain is about to be rebuilt). A swapchain made of the library's own images may want them left in another
+layout than `PRESENT_SRC_KHR` (`SwapchainHooks.presentLayout()`). Only one provider's swapchain is used, so one frame generation at a time.
 
 ## Vulkan work of your own
 

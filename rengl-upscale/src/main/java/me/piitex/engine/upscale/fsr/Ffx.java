@@ -45,11 +45,21 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_USAGE_STORAGE_BIT;
 final class Ffx {
     private static final Logger log = LogManager.getLogger("Engine");
 
-    static final String LOADER = "amd_fidelityfx_loader_vk.dll", UPSCALER = "amd_fidelityfx_upscaler_vk.dll";
+    static final String LOADER = "amd_fidelityfx_loader_vk.dll", UPSCALER = "amd_fidelityfx_upscaler_vk.dll",
+            FRAME_GENERATION = "amd_fidelityfx_framegeneration_vk.dll";
 
     // Structure types: FFX_API_MAKE_EFFECT_SUB_ID(effect, n) puts the effect in bits 16 to 23, FFX_API_MAKE_BACKEND_SUB_ID(backend, n) in bits 24 to 31.
     static final long CREATE_UPSCALE = 0x00010000L, DISPATCH_UPSCALE = 0x00010001L, CREATE_UPSCALE_VERSION = 0x0001000BL;
     static final long CREATE_BACKEND_VK = 0x01000003L;
+
+    // Frame generation (effect 0x20000) and its Vulkan swapchain (effect 0x40000).
+    static final long CREATE_FRAME_GENERATION = 0x00020001L, CONFIGURE_FRAME_GENERATION = 0x00020002L,
+            DISPATCH_FRAME_GENERATION_PREPARE_V2 = 0x0002000CL, CREATE_FRAME_GENERATION_VERSION = 0x0002000EL;
+    static final long CREATE_SWAPCHAIN = 0x00040001L, QUERY_SWAPCHAIN_FUNCTIONS = 0x00040005L, DISPATCH_SWAPCHAIN_WAIT = 0x00040007L,
+            CREATE_SWAPCHAIN_VERSION = 0x0004000AL;
+
+    /** FFX_FRAMEGENERATION_VERSION (4.0.2) and FFX_FRAMEGENERATION_SWAPCHAIN_VK_VERSION (4.0.0): the headers these structs follow. */
+    static final int FRAME_GENERATION_HEADER_VERSION = (4 << 22) | 2, SWAPCHAIN_HEADER_VERSION = 4 << 22;
     static final long QUERY_GET_VERSIONS = 4L, OVERRIDE_VERSION = 5L, QUERY_GET_PROVIDER_VERSION = 6L;
 
     /** FFX_UPSCALER_MAKE_VERSION(4, 1, 2): (major << 22) | (minor << 12) | patch, the version of the header these structs follow. */
@@ -66,7 +76,7 @@ final class Ffx {
     private static boolean tried;
     private static String failure = "not looked for yet";
 
-    private final MethodHandle create, destroy, query, dispatch;
+    private final MethodHandle create, destroy, query, dispatch, configure;
     private final Path loader;
 
     private Ffx(Path loader, SymbolLookup library) {
@@ -79,6 +89,8 @@ final class Ffx {
         query = linker.downcallHandle(library.find("ffxQuery").orElseThrow(),
                 FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
         dispatch = linker.downcallHandle(library.find("ffxDispatch").orElseThrow(),
+                FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
+        configure = linker.downcallHandle(library.find("ffxConfigure").orElseThrow(),
                 FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
     }
 
@@ -143,6 +155,11 @@ final class Ffx {
         return loader;
     }
 
+    /** True when the frame generation library sits beside the loader, which finds it there. */
+    boolean hasFrameGeneration() {
+        return Files.isRegularFile(loader.resolveSibling(FRAME_GENERATION));
+    }
+
     // ---- the five functions -------------------------------------------------------------------------------------
 
     private int call(MethodHandle function, MemorySegment... arguments) {
@@ -178,6 +195,10 @@ final class Ffx {
         return call(dispatch, context, description);
     }
 
+    int configure(MemorySegment context, MemorySegment description) {
+        return call(configure, context, description);
+    }
+
     // ---- messages from the library ------------------------------------------------------------------------------
 
     private static MemorySegment messageCallback;
@@ -188,7 +209,7 @@ final class Ffx {
         else log.warn("[FidelityFX] {}", text);
     }
 
-    private static synchronized MemorySegment messageCallback() {
+    static synchronized MemorySegment messageCallback() {
         if (messageCallback == null) {
             try {
                 MethodHandle target = MethodHandles.lookup().findStatic(Ffx.class, "onMessage",
@@ -217,6 +238,13 @@ final class Ffx {
     static CStruct backend(Arena arena, VkGpuDevice device) {
         return new CStruct(arena, 40).header(CREATE_BACKEND_VK).ptr(device.vkDevice().address())
                 .ptr(device.vkPhysicalDevice().address()).ptr(device.deviceProcAddr()).end();
+    }
+
+    /**
+     * An {@code ffxCreateBackendVKDesc} from raw handles.
+     */
+    static CStruct backend(Arena arena, long device, long physicalDevice, long deviceProcAddr) {
+        return new CStruct(arena, 40).header(CREATE_BACKEND_VK).ptr(device).ptr(physicalDevice).ptr(deviceProcAddr).end();
     }
 
     /**
