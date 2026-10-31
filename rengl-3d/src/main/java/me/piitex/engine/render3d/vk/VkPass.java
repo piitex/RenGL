@@ -18,6 +18,7 @@ final class VkPass implements RenderPass {
     private final VkCommandBuffer cmd;
     private final Map<Integer, VkBuf> uniformBuffers = new HashMap<>();
     private final Map<Integer, VkTex> textures = new HashMap<>();
+    private final Map<Integer, VkRay.Scene> structures = new HashMap<>();
     private final long renderPass;
     private VkPipe pipeline;
     private boolean descriptorsDirty;
@@ -94,6 +95,12 @@ final class VkPass implements RenderPass {
         if (textures.put(binding, (VkTex) texture) != texture) descriptorsDirty = true;
     }
 
+    @Override
+    public void bindAccelerationStructure(int binding, RayScene scene) {
+        if (!(scene instanceof VkRay.Scene vk)) throw new IllegalArgumentException("Not a ray scene of this device: " + scene);
+        if (structures.put(binding, vk) != scene) descriptorsDirty = true;
+    }
+
     /**
      * Allocates a descriptor set for the bound resources, once per change, from the frame's pool.
      */
@@ -108,7 +115,13 @@ final class VkPass implements RenderPass {
                 ShaderCompiler.Binding binding = pipeline.bindings.get(i);
                 VkWriteDescriptorSet write = writes.get(i).sType$Default()
                         .dstSet(set.get(0)).dstBinding(binding.binding()).descriptorCount(1);
-                if (binding.sampler()) {
+                if (binding.accel()) {
+                    VkRay.Scene scene = structures.get(binding.binding());
+                    if (scene == null) throw new IllegalStateException("No acceleration structure bound at binding " + binding.binding());
+                    write.descriptorType(KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
+                            .pNext(VkWriteDescriptorSetAccelerationStructureKHR.calloc(stack).sType$Default()
+                                    .pAccelerationStructures(stack.longs(scene.structure())).address());
+                } else if (binding.sampler()) {
                     VkTex texture = textures.get(binding.binding());
                     if (texture == null) throw new IllegalStateException("No texture bound at binding " + binding.binding());
                     write.descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)

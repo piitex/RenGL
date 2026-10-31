@@ -81,6 +81,8 @@ public class Scene3D implements Viewport3D.Content {
     private int shadowMapSize = 2048;
     private int shadowAtlasSize = 4096;
     private float shadowDistance = 60f;
+    private boolean rayTracedShadows;
+    private boolean usingRayTracedShadows;
     private float shadowBias = 1f;
     private float shadowSoftness = 1f;
     private float environmentLighting;
@@ -223,6 +225,36 @@ public class Scene3D implements Viewport3D.Content {
     public Scene3D setShadowDistance(float distance) {
         this.shadowDistance = Math.max(0.1f, distance);
         return this;
+    }
+
+    public boolean isRayTracedShadows() {
+        return rayTracedShadows;
+    }
+
+    /**
+     * Casts the shadows of every light that has them by tracing rays through the scene instead of drawing shadow maps (off by
+     * default). The shadows are exact at any distance and size: no map resolution, no cascades, no bias to tune, and no
+     * limit of {@link #MAX_SHADOW_LIGHTS} lights. They are hard edged.
+     * <p>
+     * Needs Vulkan on a GPU with ray queries (NVIDIA RTX, AMD RDNA 2 and later, Intel Arc); anywhere else the scene
+     * keeps drawing shadow maps, and {@link #isUsingRayTracedShadows()} says which it is doing. Opaque nodes that cast shadows
+     * are traced; skinned and blend-shaped nodes, see-through ones and those with an alpha cutoff cast none yet, though they
+     * receive them. Ignores the shadow quality, filter, bias, softness, distance and cascade settings, which belong to maps.
+     */
+    public Scene3D setRayTracedShadows(boolean rayTraced) {
+        this.rayTracedShadows = rayTraced;
+        return this;
+    }
+
+    /**
+     * Whether the last frame was drawn with ray traced shadows: {@link #isRayTracedShadows()} is on, and the GPU can do it.
+     */
+    public boolean isUsingRayTracedShadows() {
+        return usingRayTracedShadows;
+    }
+
+    void setUsingRayTracedShadows(boolean using) {
+        this.usingRayTracedShadows = using;
     }
 
     public float getShadowSoftness() {

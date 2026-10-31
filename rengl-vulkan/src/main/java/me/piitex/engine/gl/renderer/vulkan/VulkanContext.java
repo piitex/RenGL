@@ -74,6 +74,7 @@ public final class VulkanContext implements RenderBackend.Context {
     private VulkanExtensionProvider.SwapchainHooks hooks;
     private VulkanExtensionProvider surfaceMaker; // the provider that made the surface, if one did
     private int apiVersion;
+    private boolean rayTracing;
     private String gpuName;
     private long surface;
     private final long windowHandle;
@@ -743,6 +744,46 @@ public final class VulkanContext implements RenderBackend.Context {
         return enableAddress;
     }
 
+    /**
+     * Ray queries need the acceleration structure and ray query extensions with their features, and buffers the GPU can address
+     * ({@code bufferDeviceAddress}, which a library asks for through {@link VulkanExtensionProvider#deviceFeatures12()}). They are
+     * on only where the GPU has all of it and was asked for all of it; otherwise the extensions are taken out of the list again, so
+     * a GPU without ray tracing is made exactly as it was.
+     */
+    private long rayTracingFeatures(MemoryStack stack, List<String> extensions, Set<String> available, long next) {
+        List<String> names = List.of("VK_KHR_acceleration_structure", "VK_KHR_ray_query", "VK_KHR_deferred_host_operations");
+        if (!extensions.containsAll(names)) {
+            extensions.removeAll(names);
+            return next;
+        }
+        boolean usable = apiVersion >= VK_API_VERSION_1_2 && available.containsAll(names)
+                && VulkanExtensionProvider.allDeviceFeatures12().contains("bufferDeviceAddress");
+        if (usable) {
+            VkPhysicalDeviceAccelerationStructureFeaturesKHR structures = VkPhysicalDeviceAccelerationStructureFeaturesKHR.calloc(stack).sType$Default();
+            VkPhysicalDeviceRayQueryFeaturesKHR queries = VkPhysicalDeviceRayQueryFeaturesKHR.calloc(stack).sType$Default();
+            VkPhysicalDeviceVulkan12Features core = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
+            structures.pNext(queries.address());
+            queries.pNext(core.address());
+            vkGetPhysicalDeviceFeatures2(physicalDevice, VkPhysicalDeviceFeatures2.calloc(stack).sType$Default().pNext(structures.address()));
+            usable = structures.accelerationStructure() && queries.rayQuery() && core.bufferDeviceAddress();
+        }
+        if (!usable) {
+            extensions.removeAll(names);
+            return next;
+        }
+        rayTracing = true;
+        VkPhysicalDeviceRayQueryFeaturesKHR queries = VkPhysicalDeviceRayQueryFeaturesKHR.calloc(stack).sType$Default().rayQuery(true).pNext(next);
+        return VkPhysicalDeviceAccelerationStructureFeaturesKHR.calloc(stack).sType$Default().accelerationStructure(true).pNext(queries.address()).address();
+    }
+
+    /**
+     * Whether the device was made with ray queries and acceleration structures (and with buffers the GPU can address): the GPU has
+     * them and something asked for them.
+     */
+    public boolean rayTracing() {
+        return rayTracing;
+    }
+
     /** Turns {@code enable}'s feature of each name on when {@code supported} has it. The structs' methods are named for the features. */
     private static void applyFeatures(Object supported, Object enable, Collection<String> wanted) {
         for (String name : wanted) {
@@ -800,6 +841,7 @@ public final class VulkanContext implements RenderBackend.Context {
                 extensions.remove("VK_KHR_present_id");
             }
         }
+        chain = rayTracingFeatures(stack, extensions, available, chain);
         chain = coreFeatures(stack, VK_API_VERSION_1_3, VulkanExtensionProvider.allDeviceFeatures13(), chain);
         chain = coreFeatures(stack, VK_API_VERSION_1_2, VulkanExtensionProvider.allDeviceFeatures12(), chain);
 

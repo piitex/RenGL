@@ -42,9 +42,12 @@ public final class ShaderCompiler {
      * @param binding the {@code binding} number in the GLSL
      * @param sampler true for a texture sampler, false for a uniform block
      * @param glName  the name OpenGL knows it by: the block's name, or the sampler variable's name
+     * @param accel   true for an acceleration structure ({@code accelerationStructureEXT}), which only Vulkan has
      */
-    public record Binding(int binding, boolean sampler, String glName) {
-
+    public record Binding(int binding, boolean sampler, String glName, boolean accel) {
+        public Binding(int binding, boolean sampler, String glName) {
+            this(binding, sampler, glName, false);
+        }
     }
 
     public static final class Compiled {
@@ -98,7 +101,12 @@ public final class ShaderCompiler {
         long options = shaderc_compile_options_initialize();
         long result = NULL;
         try {
-            shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_0);
+            if (source.contains("GL_EXT_ray_query")) {
+                // Ray queries are Vulkan 1.2 and the SPIR-V that goes with it (1.5); a shader that uses one never goes to OpenGL.
+                shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
+            } else {
+                shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_0);
+            }
             result = shaderc_compile_into_spv(compiler, source, kind, stage + ".glsl", "main", options);
             if (result == NULL) throw new IllegalStateException("shaderc failed on the " + stage + " shader");
             if (shaderc_result_get_compilation_status(result) != shaderc_compilation_status_success) {
@@ -167,6 +175,7 @@ public final class ShaderCompiler {
             List<Binding> found = new ArrayList<>();
             collect(stack, context, compiler, resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, false, found);
             collect(stack, context, compiler, resources, SPVC_RESOURCE_TYPE_SAMPLED_IMAGE, true, found);
+            collect(stack, context, compiler, resources, SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE, false, found);
             return found;
         });
     }
@@ -186,7 +195,7 @@ public final class ShaderCompiler {
             // OpenGL finds a block by the name of its type, and a sampler by its variable's name.
             String name = sampler ? spvc_compiler_get_name(compiler, resource.id())
                     : spvc_compiler_get_name(compiler, resource.base_type_id());
-            into.add(new Binding(binding, sampler, name));
+            into.add(new Binding(binding, sampler, name, type == SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE));
         }
     }
 

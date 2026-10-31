@@ -22,6 +22,8 @@ import static org.lwjgl.system.MemoryUtil.*;
 import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1;
+import static org.lwjgl.vulkan.VK12.VK_API_VERSION_1_2;
+import static org.lwjgl.vulkan.KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 
 /**
  * {@link GpuDevice} on Vulkan, sharing the device and queue of the window's {@link VulkanContext}, which is also the
@@ -83,6 +85,8 @@ public final class VkGpuDevice implements GpuDevice {
     final boolean canBlitHdr;
 
     private final VulkanContext context;
+    private final boolean rayTracing;
+    private VkRay ray;
     private final String name;
     private final LongSupplier frames;
     private final long uploadPool;
@@ -113,6 +117,7 @@ public final class VkGpuDevice implements GpuDevice {
             throw new IllegalStateException("The 3D layer needs Vulkan 1.1 or newer; this GPU reports "
                     + VK_API_VERSION_MAJOR(context.apiVersion()) + "." + VK_API_VERSION_MINOR(context.apiVersion()));
         }
+        rayTracing = context.rayTracing();
         device = context.vkDevice();
         physical = context.vkPhysicalDevice();
         queue = context.vkQueue();
@@ -151,7 +156,9 @@ public final class VkGpuDevice implements GpuDevice {
                     .device(device)
                     .instance(context.vkInstance())
                     .pVulkanFunctions(functions)
-                    .vulkanApiVersion(VK_API_VERSION_1_1);
+                    // Buffers the GPU can address (the memory of acceleration structures) need the allocator to say so.
+                    .flags(rayTracing ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : 0)
+                    .vulkanApiVersion(rayTracing ? VK_API_VERSION_1_2 : VK_API_VERSION_1_1);
             PointerBuffer pAllocator = stack.mallocPointer(1);
             check(vmaCreateAllocator(info, pAllocator), "create the memory allocator");
             allocator = pAllocator.get(0);
@@ -189,11 +196,13 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     private long createDescriptorPool(MemoryStack stack) {
+        VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.calloc(rayTracing ? 3 : 2, stack)
+                .apply(0, s -> s.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(SETS_PER_POOL * BUFFERS_PER_SET))
+                .apply(1, s -> s.type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(SETS_PER_POOL * SAMPLERS_PER_SET));
+        if (rayTracing) sizes.apply(2, s -> s.type(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR).descriptorCount(SETS_PER_POOL));
         VkDescriptorPoolCreateInfo pool = VkDescriptorPoolCreateInfo.calloc(stack).sType$Default()
                 .maxSets(SETS_PER_POOL)
-                .pPoolSizes(VkDescriptorPoolSize.calloc(2, stack)
-                        .apply(0, s -> s.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(SETS_PER_POOL * BUFFERS_PER_SET))
-                        .apply(1, s -> s.type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(SETS_PER_POOL * SAMPLERS_PER_SET)));
+                .pPoolSizes(sizes);
         LongBuffer out = stack.mallocLong(1);
         check(vkCreateDescriptorPool(device, pool, null, out), "create a descriptor pool");
         return out.get(0);
@@ -348,6 +357,27 @@ public final class VkGpuDevice implements GpuDevice {
     @Override
     public RenderTarget createStorageTarget(int width, int height) {
         return new VkTarget(this, width, height, false, 1, true, true, true, false, true);
+    }
+
+    @Override
+    public boolean supportsRayTracing() {
+        return rayTracing;
+    }
+
+    private VkRay ray() {
+        if (!rayTracing) throw new UnsupportedOperationException("This GPU has no ray queries, or the device was made without them");
+        if (ray == null) ray = new VkRay(this);
+        return ray;
+    }
+
+    @Override
+    public RayGeometry createRayGeometry(float[] vertices, int vertexCount, int floatsPerVertex, int[] indices) {
+        return ray().geometry(vertices, vertexCount, floatsPerVertex, indices);
+    }
+
+    @Override
+    public RayScene createRayScene(int capacity) {
+        return ray().scene(capacity);
     }
 
     // ---- for code that records Vulkan work of its own (a vendor's upscaler) -------------------------------------

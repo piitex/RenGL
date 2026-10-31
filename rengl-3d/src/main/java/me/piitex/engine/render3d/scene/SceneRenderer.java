@@ -61,9 +61,11 @@ final class SceneRenderer {
     /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
     private static final int KEY_ENV_MASK = 7;
     /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
-    private static final int KEY_VARIANT_SHIFT = 13;
+    private static final int KEY_VARIANT_SHIFT = 14;
     /** The program also shades the lights listed in the cluster grid for the pixel's cell. */
     private static final int KEY_CLUSTER = 1 << 12;
+    /** The program shadows the lights marked as ray traced with a ray query through the scene's acceleration structure. */
+    private static final int KEY_RAY = 1 << 13;
 
     /**
      * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
@@ -195,6 +197,8 @@ final class SceneRenderer {
         PostPass post;
         GpuBuffer depthView;
         ClusterTextures cluster;
+        /** The scene's meshes placed for ray queries, rebuilt every frame, or null until a scene with ray traced shadows is drawn. */
+        RayScene rayScene;
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
@@ -215,6 +219,7 @@ final class SceneRenderer {
             if (post != null) post.close();
             if (depthView != null) depthView.close();
             if (cluster != null) cluster.close();
+            if (rayScene != null) rayScene.close();
         }
     }
 
@@ -327,6 +332,11 @@ final class SceneRenderer {
     private boolean warnedLights, warnedShadowLights, warnedShadowShrink, warnedLocalLights, warnedCellFull;
     /** The light grid's shader did not compile, so every scene shades its lights directly. */
     private boolean clusterBroken;
+    /** The meshes built for ray queries, made the first time a scene asks for ray traced shadows. */
+    private RayWorld rayWorld;
+    /** The ray traced shadow shader did not compile, so every scene draws shadow maps. */
+    private boolean rayBroken;
+    private boolean warnedRay;
 
     SceneRenderer(GpuDevice device) {
         this.device = device;
@@ -367,7 +377,7 @@ final class SceneRenderer {
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
             desc = new PipelineDesc(vertex(skinned, uv2, morph), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
-                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0), meshLayout, true, (key & KEY_CULL) != 0, blend,
+                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
                     .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
         }
@@ -478,12 +488,13 @@ final class SceneRenderer {
             warnedLocalLights = true;
             log.warn("A Scene3D sorts at most {} lights without shadows into the light grid; the ones farthest from the camera are left out of the frame.", LightClusters.MAX_LIGHTS);
         }
-        ShadowFrame shadowFrame = planShadows(scene, lights, camera, aspect, planes, opaque);
+        boolean rayShadows = prepareRayShadows(scene, res, lights, env, clusters != null);
+        ShadowFrame shadowFrame = rayShadows ? ShadowFrame.NONE : planShadows(scene, lights, camera, aspect, planes, opaque);
         if (!shadowFrame.plans().isEmpty()) shadowPass(res, opaqueGroups, shadowFrame);
         int variant = variantFor(lights, split.local(), shadowFrame, env, clusters != null);
-        writeFrameBlock(res.frame, scene, lights, camera, drawViewProj, shadowFrame, env, variants.get(variant), postProcessed, clusters, lodBias);
+        writeFrameBlock(res.frame, scene, lights, camera, drawViewProj, shadowFrame, env, variants.get(variant), postProcessed, clusters, lodBias, rayShadows);
         if (clusters != null) uploadClusters(res, clusters, split.local(), variants.get(variant));
-        int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (clusters != null ? KEY_CLUSTER : 0);
+        int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (clusters != null ? KEY_CLUSTER : 0) | (rayShadows ? KEY_RAY : 0);
         if (sky != null) writeSky(res.sky, scene, camera, aspect, sky, postProcessed);
 
         Color bg = scene.getBackground();
@@ -503,6 +514,7 @@ final class SceneRenderer {
         try (RenderPass pass = device.beginPass(drawTarget, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
             pass.bindTexture(7, shadowFrame.plans().isEmpty() ? whiteTexture : atlas.texture());
+            if (rayShadows) pass.bindAccelerationStructure(RAY_BINDING, res.rayScene);
             if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
             if (clusters != null) {
                 pass.bindTexture(11, res.cluster.lights);
@@ -1172,6 +1184,45 @@ final class SceneRenderer {
     /**
      * Picks the lights that get shadows, gives each a tile size that fits the atlas, builds their views and lays the tiles out.
      */
+    /**
+     * Whether this frame's shadows are traced, and if so the scene's meshes are placed for the rays. False when the scene did not
+     * ask for it, has no light with a shadow, or the GPU can not do it (reported once), and then the shadows are drawn as maps.
+     */
+    private boolean prepareRayShadows(Scene3D scene, Resources res, List<Light> lights, int env, boolean clustered) {
+        if (!scene.isRayTracedShadows()) {
+            scene.setUsingRayTracedShadows(false);
+            return false;
+        }
+        boolean possible = device.supportsRayTracing() && !rayBroken;
+        if (possible) {
+            // The shader is compiled now, so a mistake shows up here and not in the middle of the draw.
+            try {
+                pipeline((env << KEY_ENV_SHIFT) | KEY_RAY | (clustered ? KEY_CLUSTER : 0));
+            } catch (RuntimeException e) {
+                rayBroken = true;
+                possible = false;
+                log.error("The ray traced shadow shader does not compile on this GPU; shadows are drawn as maps instead.", e);
+            }
+        } else if (!warnedRay && !rayBroken) {
+            warnedRay = true;
+            log.warn("Ray traced shadows were asked for, but this device can not trace rays (Vulkan on a GPU with ray queries is needed); shadows are drawn as maps instead.");
+        }
+        scene.setUsingRayTracedShadows(possible);
+        if (!possible) return false;
+        boolean any = false;
+        for (Light light : lights) any |= light.isCastShadow();
+        if (!any) return false;
+        if (rayWorld == null) rayWorld = new RayWorld(device);
+        List<RayInstance> placed = new ArrayList<>();
+        rayWorld.collect(scene.root(), placed);
+        if (res.rayScene == null || res.rayScene.capacity() < placed.size()) {
+            if (res.rayScene != null) res.rayScene.close();
+            res.rayScene = device.createRayScene(Math.max(64, nextPowerOfTwo(placed.size())));
+        }
+        res.rayScene.update(placed);
+        return true;
+    }
+
     private ShadowFrame planShadows(Scene3D scene, List<Light> lights, Camera camera, float aspect, float[] cameraPlanes, List<Draw> opaque) {
         List<float[]> casters = new ArrayList<>();
         for (Draw d : opaque) if (d.cast) casters.add(d.sphere);
@@ -1481,7 +1532,7 @@ final class SceneRenderer {
         return (float) Math.pow(Math.max(0f, srgb), 2.2);
     }
 
-    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, List<Light> lights, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput, LightClusters clusters, float lodBias) {
+    private void writeFrameBlock(GpuBuffer buffer, Scene3D scene, List<Light> lights, Camera camera, Mat4 viewProj, ShadowFrame shadows, int env, Variant variant, boolean linearOutput, LightClusters clusters, float lodBias, boolean rayShadows) {
         scratch.clear();
         viewProj.put(scratch);
         Vec3 eye = camera.getPosition();
@@ -1545,7 +1596,12 @@ final class SceneRenderer {
         for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) {
             ShadowPlanner.LightPlan plan = planOf[i];
             if (plan == null) {
-                scratch.putFloat(-1f).putFloat(0f).putFloat(0f).putFloat(1f);
+                if (rayShadows && i < count && lights.get(i).isCastShadow()) {
+                    // A filter id of -1 sends the shader to trace a ray instead of looking in the atlas.
+                    scratch.putFloat(0f).putFloat(1f).putFloat(-1f).putFloat(1f);
+                } else {
+                    scratch.putFloat(-1f).putFloat(0f).putFloat(0f).putFloat(1f);
+                }
             } else {
                 scratch.putFloat(first[i]).putFloat(plan.views().size()).putFloat(filterId(plan.shadows().resolveFilter(), variant))
                         .putFloat(plan.shadows().resolveSoftness(scene));
@@ -1824,6 +1880,7 @@ final class SceneRenderer {
      */
     private void sweep() {
         if (frame - atlasUsed > KEEP_FRAMES) atlas.close();
+        if (rayWorld != null) rayWorld.sweep(KEEP_FRAMES);
         for (Iterator<GpuMesh> it = meshes.values().iterator(); it.hasNext(); ) {
             GpuMesh mesh = it.next();
             if (frame - mesh.lastUsed > KEEP_FRAMES) {
@@ -1874,6 +1931,7 @@ final class SceneRenderer {
         velocityPipelines.clear();
         if (skyMotionPipeline != null) skyMotionPipeline.close();
         atlas.close();
+        if (rayWorld != null) rayWorld.close();
         skyTriangle.close();
         whiteTexture.close();
         flatNormalTexture.close();
