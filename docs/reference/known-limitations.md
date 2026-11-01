@@ -39,8 +39,8 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   two million shape-vertices, so those cost frame time when their weights change every frame
   ([details](../3d/animation.md#morph-targets)).
 - **Frustum culling is by spheres** (a node, each copy of an [instanced](../3d/instancing.md) node, a skinned mesh's joints),
-  so something just outside the view can still be drawn. There is no occlusion culling, so things hidden behind other
-  things are still drawn.
+  so something just outside the view can still be drawn. [Occlusion culling](../3d/scenes.md#occlusion-culling) is
+  opt-in and only knows the nodes you mark as occluders, so other hidden things are still drawn.
 - **Skinned and morphed meshes are picked by posing them on the CPU,** once per pose (the result is kept while nothing moves),
   which follows the animation but costs a pass over the vertices when it changes.
 - **Blended surfaces are sorted per node (and per copy of an instanced node), by the centre of its mesh,** so overlapping
