@@ -246,6 +246,36 @@ zero. The depth and motion are the ones every temporal upscaler gets.
 It needs a temporal upscaler whose `denoisesPathTracing()` is true, and path tracing on; with any other upscaler, with the setting
 off, or where the GPU can not trace rays, the scene's own filter is used as before. Switching between them restarts the history.
 
+## The demo
+
+`me.piitex.examples.demo.RayTracingDemo` (in `rengl-examples`) is a white room, open on the side the camera looks in from, with a red
+wall, a green one, a polished floor, a mirror ball, a tall box, a spinning cube, a lamp in the ceiling and an orange orb that circles
+inside with a light of its own. The panel has a preset (rasterized, shadows, shadows with reflections and occlusion, one bounce of
+global illumination, path tracing) and a check box for each effect, sliders for the path bounces and the rays per pixel, the upscaler
+and render scale of [the upscaling demo](upscaling.md#the-demo), a check box for Ray Reconstruction, one for the ceiling lamp and one to
+freeze the motion, and the camera either sweeps in front of the room or is orbited with the mouse. Under them are the frame rate and the
+sizes drawn and shown, which effects the last frame really used, and what cleaned up the noise: DLSS Ray Reconstruction, the engine's own
+filter, or nothing where nothing is noisy. Things worth trying:
+
+- the mirror ball and the floor go from black and the sky to the room as reflections are switched on;
+- with path tracing the red and green walls tint the box, the floor and the ceiling beside them, which one bounce only half does;
+- turn the lamp off: the room is lit by the orb alone, by light that went round the walls, and it follows the orb about a few frames
+  late (the denoiser averages over frames);
+- at 33% or 50% with DLSS, switch Ray Reconstruction off and on to compare it with the engine's filter, and the upscalers with each other.
+
+It starts with path tracing and the best upscaler there is. Run it from the repository folder; the libraries of the vendors are found
+as for the upscaling demo, and the extra options choose where it starts:
+
+```
+--enable-native-access=ALL-UNNAMED
+-Drengl.dlss.dir=C:/path/to/dlss          (sl.*.dll, nvngx_*.dll; add sl.dlss_d.dll and nvngx_dlssd.dll for Ray Reconstruction)
+-Drengl.demo.preset=0                     (0 rasterized ... 4 path tracing)
+-Drengl.demo.upscaler=builtin             (smooth, builtin, fsr or dlss)
+-Drengl.demo.reconstruction=false         (start without Ray Reconstruction)
+```
+
+It draws with Vulkan, without vsync. On a GPU without ray queries it says so and draws the room without the rays.
+
 ## How it works
 
 The 3D layer turns each mesh into a **bottom-level acceleration structure** (once, when it first has to be traced, and freed

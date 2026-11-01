@@ -40,7 +40,7 @@
             <artifactId>rengl-vulkan</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- Only UpscalingDemo uses it. It carries none of the vendors' libraries; they are found at run time. -->
+        <!-- Only UpscalingDemo and RayTracingDemo use it. It carries none of the vendors' libraries; they are found at run time. -->
         <dependency>
             <groupId>me.piitex.engine</groupId>
             <artifactId>rengl-upscale</artifactId>

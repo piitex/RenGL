@@ -249,6 +249,9 @@ started with the window, so it is chosen at launch; each wants its own upscaler,
 The window draws with Vulkan without vsync, and its 3D view fills it. DLSS frame generation only runs while the window has
 focus.
 
+`RayTracingDemo` has the same upscaler and render scale controls over a [ray traced and path traced room](ray-tracing.md#the-demo),
+where the upscaler also decides who cleans up the noise (with DLSS, Ray Reconstruction; otherwise the engine's own filter).
+
 ## Extensions for libraries
 
 A library that has to be told about the Vulkan device when it is made (DLSS is one) lists a `VulkanExtensionProvider` in
