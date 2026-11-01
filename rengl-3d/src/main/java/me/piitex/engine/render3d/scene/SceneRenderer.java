@@ -61,11 +61,13 @@ final class SceneRenderer {
     /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
     private static final int KEY_ENV_MASK = 7;
     /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
-    private static final int KEY_VARIANT_SHIFT = 14;
+    private static final int KEY_VARIANT_SHIFT = 15;
     /** The program also shades the lights listed in the cluster grid for the pixel's cell. */
     private static final int KEY_CLUSTER = 1 << 12;
     /** The program shadows the lights marked as ray traced with a ray query through the scene's acceleration structure. */
     private static final int KEY_RAY = 1 << 13;
+    /** The program reflects what a ray from a smooth surface hits, shaded where it landed, in place of the sky alone. */
+    private static final int KEY_REFLECT = 1 << 14;
 
     /**
      * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
@@ -199,6 +201,8 @@ final class SceneRenderer {
         ClusterTextures cluster;
         /** The scene's meshes placed for ray queries, rebuilt every frame, or null until a scene with ray traced shadows is drawn. */
         RayScene rayScene;
+        /** Where a reflection ray finds what it hit: the scene's table of instances, and the reflection settings. */
+        GpuBuffer rayBlock;
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
@@ -220,6 +224,7 @@ final class SceneRenderer {
             if (depthView != null) depthView.close();
             if (cluster != null) cluster.close();
             if (rayScene != null) rayScene.close();
+            if (rayBlock != null) rayBlock.close();
         }
     }
 
@@ -337,6 +342,12 @@ final class SceneRenderer {
     /** The ray traced shadow shader did not compile, so every scene draws shadow maps. */
     private boolean rayBroken;
     private boolean warnedRay;
+    /** The reflection shader did not compile, so every scene reflects the sky alone. */
+    private boolean reflectBroken;
+    private boolean warnedReflect;
+    /** The base colour textures this frame's reflections can show, by place in the array the shader reads. */
+    private final java.util.IdentityHashMap<GpuTexture, Integer> raySlots = new java.util.IdentityHashMap<>();
+    private final List<GpuTexture> rayTextureList = new ArrayList<>();
 
     SceneRenderer(GpuDevice device) {
         this.device = device;
@@ -377,7 +388,7 @@ final class SceneRenderer {
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
             desc = new PipelineDesc(vertex(skinned, uv2, morph), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
-                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0), meshLayout, true, (key & KEY_CULL) != 0, blend,
+                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0, (key & KEY_REFLECT) != 0), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
                     .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
         }
@@ -488,13 +499,14 @@ final class SceneRenderer {
             warnedLocalLights = true;
             log.warn("A Scene3D sorts at most {} lights without shadows into the light grid; the ones farthest from the camera are left out of the frame.", LightClusters.MAX_LIGHTS);
         }
-        boolean rayShadows = prepareRayShadows(scene, res, lights, env, clusters != null);
+        RayFrame rays = prepareRays(scene, res, lights, env, clusters != null, postProcessed);
+        boolean rayShadows = rays.shadows();
         ShadowFrame shadowFrame = rayShadows ? ShadowFrame.NONE : planShadows(scene, lights, camera, aspect, planes, opaque);
         if (!shadowFrame.plans().isEmpty()) shadowPass(res, opaqueGroups, shadowFrame);
         int variant = variantFor(lights, split.local(), shadowFrame, env, clusters != null);
         writeFrameBlock(res.frame, scene, lights, camera, drawViewProj, shadowFrame, env, variants.get(variant), postProcessed, clusters, lodBias, rayShadows);
         if (clusters != null) uploadClusters(res, clusters, split.local(), variants.get(variant));
-        int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (clusters != null ? KEY_CLUSTER : 0) | (rayShadows ? KEY_RAY : 0);
+        int fragmentBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (clusters != null ? KEY_CLUSTER : 0) | (rayShadows ? KEY_RAY : 0) | (rays.reflections() ? KEY_REFLECT : 0);
         if (sky != null) writeSky(res.sky, scene, camera, aspect, sky, postProcessed);
 
         Color bg = scene.getBackground();
@@ -514,7 +526,12 @@ final class SceneRenderer {
         try (RenderPass pass = device.beginPass(drawTarget, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
             pass.bindTexture(7, shadowFrame.plans().isEmpty() ? whiteTexture : atlas.texture());
-            if (rayShadows) pass.bindAccelerationStructure(RAY_BINDING, res.rayScene);
+            if (rayShadows || rays.reflections()) pass.bindAccelerationStructure(RAY_BINDING, res.rayScene);
+            if (rays.reflections()) {
+                writeRayBlock(res, scene, temporal);
+                pass.bindUniformBuffer(RAY_BLOCK_BINDING, res.rayBlock);
+                pass.bindTextures(RAY_TEXTURES_BINDING, rayTextureArray());
+            }
             if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
             if (clusters != null) {
                 pass.bindTexture(11, res.cluster.lights);
@@ -533,7 +550,13 @@ final class SceneRenderer {
             }
         }
         if (temporal) velocityPass(res, opaqueGroups, drawViewProj, viewProj, camera, upFrame);
-        if (postProcessed) res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth, upFrame, temporal, camera, delta);
+        if (postProcessed) {
+            boolean traced = res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth, upFrame, temporal, camera, delta,
+                    rays.occlusion() ? res.rayScene : null, temporal ? (int) (frame & 7) : 0);
+            scene.setUsingRayTracedAmbientOcclusion(traced);
+        } else {
+            scene.setUsingRayTracedAmbientOcclusion(false);
+        }
         if (temporal) res.post.temporal().endFrame(viewProj.toArray());
         writingTemporal = null;
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
@@ -1182,47 +1205,119 @@ final class SceneRenderer {
     }
 
     /**
-     * Picks the lights that get shadows, gives each a tile size that fits the atlas, builds their views and lays the tiles out.
+     * What the rays of one frame do: shadows traced in place of maps, reflections traced from smooth surfaces, and ambient
+     * occlusion traced in place of the one read from the depth picture.
      */
+    private record RayFrame(boolean shadows, boolean reflections, boolean occlusion) {
+        static final RayFrame NONE = new RayFrame(false, false, false);
+    }
+
     /**
-     * Whether this frame's shadows are traced, and if so the scene's meshes are placed for the rays. False when the scene did not
-     * ask for it, has no light with a shadow, or the GPU can not do it (reported once), and then the shadows are drawn as maps.
+     * Works out which of the ray traced effects this frame uses, and if any, places the scene's meshes for the rays. An effect
+     * the scene did not ask for is off; one it asked for that the GPU can not do (reported once), or whose shader does not
+     * compile here, is off too and the scene is drawn the usual way: shadow maps, the sky's reflection, screen-space occlusion.
      */
-    private boolean prepareRayShadows(Scene3D scene, Resources res, List<Light> lights, int env, boolean clustered) {
-        if (!scene.isRayTracedShadows()) {
+    private RayFrame prepareRays(Scene3D scene, Resources res, List<Light> lights, int env, boolean clustered, boolean postProcessed) {
+        boolean wantShadows = scene.isRayTracedShadows(), wantReflections = scene.isRayTracedReflections();
+        boolean wantOcclusion = scene.isRayTracedAmbientOcclusion() && scene.getAmbientOcclusion() > 0f && postProcessed;
+        if (!wantShadows && !wantReflections && !wantOcclusion) {
             scene.setUsingRayTracedShadows(false);
-            return false;
+            scene.setUsingRayTracedReflections(false);
+            return RayFrame.NONE;
         }
-        boolean possible = device.supportsRayTracing() && !rayBroken;
-        if (possible) {
+        boolean capable = device.supportsRayTracing();
+        if (!capable && !warnedRay && !rayBroken) {
+            warnedRay = true;
+            log.warn("Ray tracing was asked for, but this device can not trace rays (Vulkan on a GPU with ray queries is needed); shadows are drawn as maps, reflections show the sky and occlusion is read from the depth picture instead.");
+        }
+        int clusterBit = clustered ? KEY_CLUSTER : 0;
+        boolean shadows = wantShadows && capable && !rayBroken;
+        if (shadows) {
             // The shader is compiled now, so a mistake shows up here and not in the middle of the draw.
             try {
-                pipeline((env << KEY_ENV_SHIFT) | KEY_RAY | (clustered ? KEY_CLUSTER : 0));
+                pipeline((env << KEY_ENV_SHIFT) | KEY_RAY | clusterBit);
             } catch (RuntimeException e) {
                 rayBroken = true;
-                possible = false;
+                shadows = false;
                 log.error("The ray traced shadow shader does not compile on this GPU; shadows are drawn as maps instead.", e);
             }
-        } else if (!warnedRay && !rayBroken) {
-            warnedRay = true;
-            log.warn("Ray traced shadows were asked for, but this device can not trace rays (Vulkan on a GPU with ray queries is needed); shadows are drawn as maps instead.");
         }
-        scene.setUsingRayTracedShadows(possible);
-        if (!possible) return false;
-        boolean any = false;
-        for (Light light : lights) any |= light.isCastShadow();
-        if (!any) return false;
+        scene.setUsingRayTracedShadows(shadows);
+        boolean reflections = wantReflections && capable && !reflectBroken;
+        if (reflections) {
+            try {
+                pipeline((env << KEY_ENV_SHIFT) | (shadows ? KEY_RAY : 0) | KEY_REFLECT | clusterBit);
+            } catch (RuntimeException e) {
+                reflectBroken = true;
+                reflections = false;
+                if (!warnedReflect) {
+                    warnedReflect = true;
+                    log.error("The ray traced reflection shader does not compile on this GPU; the sky is reflected instead.", e);
+                }
+            }
+        }
+        scene.setUsingRayTracedReflections(reflections);
+        boolean occlusion = wantOcclusion && capable;
+        boolean anyCaster = false;
+        for (Light light : lights) anyCaster |= light.isCastShadow();
+        boolean tracedShadows = shadows && anyCaster;
+        if (!tracedShadows && !reflections && !occlusion) return RayFrame.NONE;
         if (rayWorld == null) rayWorld = new RayWorld(device);
+        raySlots.clear();
+        rayTextureList.clear();
         List<RayInstance> placed = new ArrayList<>();
-        rayWorld.collect(scene.root(), placed);
+        // Reflections and occlusion see every solid node; shadows only the ones that cast.
+        rayWorld.collect(scene.root(), placed, reflections || occlusion, reflections ? this::rayTextureSlot : material -> 0);
         if (res.rayScene == null || res.rayScene.capacity() < placed.size()) {
             if (res.rayScene != null) res.rayScene.close();
             res.rayScene = device.createRayScene(Math.max(64, nextPowerOfTwo(placed.size())));
         }
         res.rayScene.update(placed);
-        return true;
+        return new RayFrame(tracedShadows, reflections, occlusion);
     }
 
+    /**
+     * The place, plus one, of a material's base colour texture in the array the reflection shader reads; 0 for a material
+     * without one, or when the frame already shows as many textures as the array holds.
+     */
+    private int rayTextureSlot(Material material) {
+        if (material.getTexture() == null) return 0;
+        GpuTexture texture = gpuImage(material.getTexture());
+        Integer slot = raySlots.get(texture);
+        if (slot != null) return slot + 1;
+        if (rayTextureList.size() >= RAY_TEXTURES) return 0;
+        raySlots.put(texture, rayTextureList.size());
+        rayTextureList.add(texture);
+        return rayTextureList.size();
+    }
+
+    /**
+     * The array of textures the reflection shader reads: this frame's, then white for the places no material uses.
+     */
+    private GpuTexture[] rayTextureArray() {
+        GpuTexture[] array = new GpuTexture[RAY_TEXTURES];
+        for (int i = 0; i < array.length; i++) array[i] = i < rayTextureList.size() ? rayTextureList.get(i) : whiteTexture;
+        return array;
+    }
+
+    /**
+     * Writes the block reflection rays read: where the ray scene keeps its table of instances, which frame this is (the
+     * pattern a rough surface scatters its rays in turns with it while a temporal upscaler is there to average them), how far a
+     * ray goes, and the roughness up to which a surface reflects by ray.
+     */
+    private void writeRayBlock(Resources res, Scene3D scene, boolean temporal) {
+        if (res.rayBlock == null) res.rayBlock = device.createDynamicBuffer(BufferType.UNIFORM, RAY_BLOCK_BYTES);
+        scratch.clear();
+        scratch.putLong(res.rayScene.dataAddress()).putLong(0L);
+        scratch.putFloat(temporal ? (float) (frame & 7) : 0f).putFloat(scene.getRayTracedReflectionDistance()).putFloat(0f).putFloat(0f);
+        scratch.putFloat(scene.getRayTracedReflectionRoughness()).putFloat(0f).putFloat(0f).putFloat(0f);
+        scratch.flip();
+        res.rayBlock.update(scratch);
+    }
+
+    /**
+     * Picks the lights that get shadows, gives each a tile size that fits the atlas, builds their views and lays the tiles out.
+     */
     private ShadowFrame planShadows(Scene3D scene, List<Light> lights, Camera camera, float aspect, float[] cameraPlanes, List<Draw> opaque) {
         List<float[]> casters = new ArrayList<>();
         for (Draw d : opaque) if (d.cast) casters.add(d.sphere);

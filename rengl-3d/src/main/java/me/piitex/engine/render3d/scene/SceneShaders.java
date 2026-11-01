@@ -325,6 +325,14 @@ final class SceneShaders {
 
     /** The binding of the acceleration structure the ray traced shadows trace through. */
     static final int RAY_BINDING = 14;
+    /** The binding of the block that tells a ray traced reflection where to read what it hit: the table of instances, and the settings. */
+    static final int RAY_BLOCK_BINDING = 15;
+    /** The binding of the array of base colour textures a ray traced reflection reads at what it hit. */
+    static final int RAY_TEXTURES_BINDING = 16;
+    /** How many textures a ray traced reflection can show at once; a frame with more shows the others in their colour alone. */
+    static final int RAY_TEXTURES = 32;
+    /** Bytes of the block at {@link #RAY_BLOCK_BINDING}: the table's address and two vec4s of settings. */
+    static final int RAY_BLOCK_BYTES = 48;
 
     /**
      * The same, and with {@code rayTraced} the lights marked as ray traced in the frame block (a filter id of -1 in
@@ -332,6 +340,15 @@ final class SceneShaders {
      * on a GPU with ray queries.
      */
     static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced) {
+        return fragment(env, filters, falloffs, clustered, rayTraced, false);
+    }
+
+    /**
+     * The same, and with {@code reflections} the shiny parts of a surface (roughness under the limit in the ray block) reflect
+     * what a ray from them hits, shaded where it landed, in place of the sky alone. Needs the blocks at {@link #RAY_BLOCK_BINDING}
+     * and {@link #RAY_TEXTURES_BINDING} as well as the acceleration structure.
+     */
+    static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections) {
         StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
         for (int i = 0; i < filters.size(); i++) {
             filterFunctions.append("float customFilter").append(i).append("(vec2 uv, float depth, vec2 texel, float softness) {\n")
@@ -344,9 +361,14 @@ final class SceneShaders {
                     .append(falloffs.get(i).glsl()).append("\n}\n");
             falloffCases.append("if (id == ").append(3 + i).append(") return customFalloff").append(i).append("(dist, range);\n");
         }
-        return (rayTraced ? "#version 460\n#extension GL_EXT_ray_query : require\n" : "#version 450\n") + "#define ENV_KIND " + env + "\n" + FRAGMENT_BODY
-                .replace("//@RAY_DECLS", rayTraced ? RAY_DECLS : "")
-                .replace("//@RAY_FUNCTIONS", rayTraced ? RAY_FUNCTIONS : "")
+        boolean rays = rayTraced || reflections;
+        String header = !rays ? "#version 450\n" : "#version 460\n#extension GL_EXT_ray_query : require\n"
+                + (reflections ? "#extension GL_EXT_buffer_reference : require\n#extension GL_EXT_nonuniform_qualifier : require\n" : "");
+        return header + "#define ENV_KIND " + env + "\n" + FRAGMENT_BODY
+                .replace("//@RAY_DECLS", rays ? RAY_DECLS + (reflections ? RAY_REFLECT_DECLS : "") : "")
+                .replace("//@RAY_FUNCTIONS", rays ? RAY_FUNCTIONS : "")
+                .replace("//@RAY_REFLECT_FUNCTIONS", reflections ? RAY_REFLECT_FUNCTIONS : "")
+                .replace("//@PBR_AMBIENT", reflections ? PBR_AMBIENT_TRACED : PBR_AMBIENT)
                 .replace("//@RAY_SHADOW", rayTraced ? "if (info.z < -0.5) return rayShadow(i, worldPos, n, l);" : "")
                 .replace("//@CLUSTER_FUNCTIONS", clustered ? CLUSTER_FUNCTIONS : "")
                 .replace("//@CLUSTER_PBR", clustered ? CLUSTER_PBR : "")
@@ -357,7 +379,191 @@ final class SceneShaders {
                 .replace("//@FALLOFF_CASES", falloffCases);
     }
 
-    private static final String RAY_DECLS = "layout(set = 0, binding = " + RAY_BINDING + ") uniform accelerationStructureEXT sceneWorld;";
+    /** The sky or flat ambient light on a PBR surface: the part of its shading that does not come from a light. */
+    private static final String PBR_AMBIENT = """
+            #if ENV_KIND != 0
+                        vec3 refl = reflect(-v, n);
+                        refl = normalize(mix(refl, n, a));
+                        vec3 reflectance = envBrdf(f0, roughness, nv);
+                        lit = occlusion * (envDiffuse(n) * diffuseColor * (1.0 - reflectance) + envSpecular(refl, roughness) * reflectance);
+            #else
+                        lit = ambient.rgb * occlusion * (diffuseColor + f0 * mix(1.0, 0.3, roughness));
+            #endif
+            """;
+
+    /**
+     * The same where the smooth parts of the surface reflect what a ray from them hits. The reflection is what the sky (or the
+     * flat ambient light, with no sky) would give wherever the ray hits nothing, and fades back to it from a roughness of half
+     * the limit to the limit, since rougher surfaces blur what they reflect and one ray can not.
+     */
+    private static final String PBR_AMBIENT_TRACED = """
+                        vec3 reflSharp = reflect(-v, n);
+                        vec3 reflectance = envBrdf(f0, roughness, nv);
+                        float traceWeight = 1.0 - smoothstep(0.5 * rayB.x, rayB.x, roughness);
+            #if ENV_KIND != 0
+                        vec3 reflSky = normalize(mix(reflSharp, n, a));
+                        vec3 skyColor = envSpecular(reflSky, roughness);
+                        vec3 specColor = traceWeight > 0.0 ? mix(skyColor, tracedReflection(vWorldPos, n, reflSharp, roughness, skyColor), traceWeight) : skyColor;
+                        lit = occlusion * (envDiffuse(n) * diffuseColor * (1.0 - reflectance) + specColor * reflectance);
+            #else
+                        vec3 specColor = traceWeight > 0.0 ? mix(ambient.rgb, tracedReflection(vWorldPos, n, reflSharp, roughness, ambient.rgb), traceWeight) : ambient.rgb;
+                        lit = occlusion * (ambient.rgb * diffuseColor + specColor * f0 * mix(1.0, 0.3, roughness));
+            #endif
+            """;
+
+    private static final String RAY_REFLECT_DECLS = """
+            layout(buffer_reference) buffer RayVertices;
+            layout(buffer_reference) buffer RayIndices;
+            layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer RayVertices { float v[]; };
+            layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer RayIndices { uint i[]; };
+            struct RayRecord {
+                RayVertices vertices;
+                RayIndices indices;
+                vec4 tint;
+                vec4 params;   // the material's two parameters, its mode, and its base colour texture's place in rayTextures plus one (0 for none)
+                vec4 emissive;
+                vec4 uvA;      // the texture transform: offset, then scale
+                vec4 uvB;      // the cosine and sine of its turn
+            };
+            layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer RayTable { RayRecord rec[]; };
+            layout(set = 0, binding = %BLOCK%) uniform RayBlock {
+                RayTable table;
+                vec4 rayA; // x: which frame this is (the pattern the rays are scattered in turns with it), y: how far a reflection ray goes
+                vec4 rayB; // x: the roughness up to which a surface reflects by ray
+            };
+            layout(set = 0, binding = %TEXTURES%) uniform sampler2D rayTextures[%COUNT%];
+            """.replace("%BLOCK%", "" + RAY_BLOCK_BINDING).replace("%TEXTURES%", "" + RAY_TEXTURES_BINDING).replace("%COUNT%", "" + RAY_TEXTURES);
+
+    /**
+     * Tracing a reflection and shading what it hit. A hit is read from the table the ray scene keeps: its triangle's three
+     * vertices (position, normal, texture coordinates), interpolated, and its instance's material. It is lit by the lights the
+     * frame holds, shadowed by rays where they have shadows, and by the sky (or the flat ambient light) for the rest; a light
+     * from the clustered grid does not reach it, nor does a reflection show a second reflection.
+     */
+    private static final String RAY_REFLECT_FUNCTIONS = """
+            struct RayHit {
+                vec3 pos;
+                vec3 n;
+                vec2 uv;
+                int id;
+                float t;
+            };
+
+            bool traceScene(vec3 origin, vec3 dir, float tmin, float tmax, out RayHit hit) {
+                rayQueryEXT query;
+                rayQueryInitializeEXT(query, sceneWorld, gl_RayFlagsOpaqueEXT, 0x02, origin, tmin, dir, tmax);
+                while (rayQueryProceedEXT(query)) { }
+                if (rayQueryGetIntersectionTypeEXT(query, true) == gl_RayQueryCommittedIntersectionNoneEXT) return false;
+                hit.id = rayQueryGetIntersectionInstanceCustomIndexEXT(query, true);
+                hit.t = rayQueryGetIntersectionTEXT(query, true);
+                hit.pos = origin + dir * hit.t;
+                int prim = rayQueryGetIntersectionPrimitiveIndexEXT(query, true);
+                vec2 bc = rayQueryGetIntersectionBarycentricsEXT(query, true);
+                vec3 w = vec3(1.0 - bc.x - bc.y, bc.x, bc.y);
+                RayVertices verts = table.rec[hit.id].vertices;
+                RayIndices ids = table.rec[hit.id].indices;
+                uint o0 = ids.i[prim * 3] * 8u, o1 = ids.i[prim * 3 + 1] * 8u, o2 = ids.i[prim * 3 + 2] * 8u;
+                vec3 n0 = vec3(verts.v[o0 + 3u], verts.v[o0 + 4u], verts.v[o0 + 5u]);
+                vec3 n1 = vec3(verts.v[o1 + 3u], verts.v[o1 + 4u], verts.v[o1 + 5u]);
+                vec3 n2 = vec3(verts.v[o2 + 3u], verts.v[o2 + 4u], verts.v[o2 + 5u]);
+                hit.uv = vec2(verts.v[o0 + 6u], verts.v[o0 + 7u]) * w.x + vec2(verts.v[o1 + 6u], verts.v[o1 + 7u]) * w.y
+                       + vec2(verts.v[o2 + 6u], verts.v[o2 + 7u]) * w.z;
+                mat3 m3 = mat3(rayQueryGetIntersectionObjectToWorldEXT(query, true));
+                vec3 local = n0 * w.x + n1 * w.y + n2 * w.z;
+                // The inverse transpose keeps the normal square to the surface under stretching, like the vertex shader.
+                vec3 world = (abs(determinant(m3)) < 1e-20 ? m3 : transpose(inverse(m3))) * local;
+                hit.n = dot(world, world) > 1e-20 ? normalize(world) : -dir;
+                // Both sides of a surface are shaded as the side the ray came from.
+                if (dot(hit.n, dir) > 0.0) hit.n = -hit.n;
+                return true;
+            }
+
+            // The light at a hit: the same models as the surface itself, from the lights every pixel tests.
+            vec3 shadeHit(RayHit hit, vec3 dir, float lod) {
+                RayTable rows = table;
+                vec4 tint = rows.rec[hit.id].tint;
+                vec4 mp = rows.rec[hit.id].params;
+                int mode = int(mp.z + 0.5);
+                int slot = int(mp.w + 0.5) - 1;
+                vec3 colour = tint.rgb;
+                if (slot >= 0) {
+                    vec4 ta = rows.rec[hit.id].uvA, tb = rows.rec[hit.id].uvB;
+                    vec2 s = hit.uv * ta.zw;
+                    vec2 uv = vec2(tb.x * s.x + tb.y * s.y, -tb.y * s.x + tb.x * s.y) + ta.xy;
+                    colour *= textureLod(rayTextures[nonuniformEXT(slot)], uv, lod).rgb;
+                }
+                vec3 albedo = pow(colour, vec3(2.2));
+                if (mode == 2) return albedo;
+                vec3 n = hit.n;
+                vec3 v = -dir;
+                bool pbr = mode == 1;
+                float metallic = pbr ? clamp(mp.x, 0.0, 1.0) : 0.0;
+                float roughness = pbr ? clamp(mp.y, 0.04, 1.0) : 1.0;
+                vec3 f0 = mix(vec3(0.04), albedo, metallic);
+                vec3 diffuseColor = albedo * (1.0 - metallic);
+                float a2 = roughness * roughness * roughness * roughness;
+                float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
+                float nv = max(dot(n, v), 1e-4);
+            #if ENV_KIND != 0
+                vec3 lit = envDiffuse(n) * diffuseColor;
+            #else
+                vec3 lit = ambient.rgb * diffuseColor;
+            #endif
+                int count = int(params.x);
+                for (int i = 0; i < """ + Scene3D.MAX_LIGHTS + """
+            ; i++) {
+                    if (i >= count) break;
+                    vec3 l;
+                    float atten = lightAt(i, hit.pos, l);
+                    if (atten <= 0.0) continue;
+                    float nl = max(dot(n, l), 0.0);
+                    if (nl <= 0.0) continue;
+                    if (lightShadow[i].y > 0.5) atten *= rayShadow(i, hit.pos, n, l);
+                    if (atten <= 0.0) continue;
+                    vec3 radiance = lightColor[i].rgb * atten;
+                    vec3 h = normalize(l + v);
+                    float nh = max(dot(n, h), 0.0);
+                    if (pbr) {
+                        float vh = max(dot(v, h), 0.0);
+                        vec3 f = f0 + (1.0 - f0) * pow(1.0 - vh, 5.0);
+                        float g = (nv / (nv * (1.0 - k) + k)) * (nl / (nl * (1.0 - k) + k));
+                        vec3 spec = distributionGGX(nh, a2) * g * f / max(4.0 * nv * nl, 1e-4);
+                        lit += ((vec3(1.0) - f) * diffuseColor + PI * spec) * radiance * nl;
+                    } else {
+                        lit += albedo * radiance * nl + radiance * mp.x * pow(nh, mp.y) * nl;
+                    }
+                }
+                return lit + rows.rec[hit.id].emissive.rgb;
+            }
+
+            float scatter(vec2 p) {
+                return fract(52.9829189 * fract(dot(p + rayA.x * 5.588238, vec2(0.06711056, 0.00583715))));
+            }
+
+            // What a surface at worldPos facing n shows along r: the first thing a ray finds, lit; or missColor where it finds nothing.
+            // A surface that is not quite smooth sends the ray a little off r, a different way at each pixel.
+            vec3 tracedReflection(vec3 worldPos, vec3 n, vec3 r, float roughness, vec3 missColor) {
+                if (roughness > 0.04) {
+                    vec3 t = normalize(abs(r.y) < 0.9 ? cross(r, vec3(0.0, 1.0, 0.0)) : cross(r, vec3(1.0, 0.0, 0.0)));
+                    vec3 bt = cross(r, t);
+                    float angle = 6.2831853 * scatter(gl_FragCoord.xy);
+                    float spread = roughness * roughness * sqrt(scatter(gl_FragCoord.yx + 17.0));
+                    r = normalize(r + (t * cos(angle) + bt * sin(angle)) * spread);
+                    // A ray that would dive under the surface turns back to skim it.
+                    float below = dot(r, n);
+                    if (below < 0.02) r = normalize(r + n * (0.02 - below));
+                }
+                float dist = length(worldPos - cameraPos.xyz);
+                float eps = 0.005 + 0.0005 * dist;
+                RayHit hit;
+                if (!traceScene(worldPos + n * eps, r, eps, rayA.y, hit)) return missColor;
+                // A farther thing is seen smaller, so from a smaller level of its texture.
+                float lod = max(log2(0.25 * (dist + hit.t) + 1.0) + roughness * 4.0, 0.0);
+                return shadeHit(hit, r, lod);
+            }
+            """;
+
+    private static final String RAY_DECLS = "layout(set = 0, binding = " + RAY_BINDING + ") uniform accelerationStructureEXT sceneWorld;\n";
 
     /**
      * A hard shadow by one ray from the point to the light: 1 when nothing solid is in the way. The ray starts a little off the
@@ -370,7 +576,7 @@ final class SceneShaders {
                 float reach = lightVec[i].w < 0.5 ? 100000.0 : max(length(lightVec[i].xyz - worldPos) - 0.02, 0.0);
                 float eps = 0.005 + 0.0005 * length(worldPos - cameraPos.xyz);
                 rayQueryEXT query;
-                rayQueryInitializeEXT(query, sceneWorld, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFF,
+                rayQueryInitializeEXT(query, sceneWorld, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0x01,
                         worldPos + n * eps, eps, l, reach);
                 while (rayQueryProceedEXT(query)) { }
                 return rayQueryGetIntersectionTypeEXT(query, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
@@ -443,6 +649,8 @@ final class SceneShaders {
             #endif
             }
 
+            #endif
+
             // How much of a surface's reflection the sky supplies: a fit to the split-sum integral.
             vec3 envBrdf(vec3 f0, float roughness, float nv) {
                 const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
@@ -452,7 +660,6 @@ final class SceneShaders {
                 vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
                 return f0 * ab.x + ab.y;
             }
-            #endif
 
             float unpackDepth(vec3 c) {
                 return dot(c, vec3(1.0, 1.0 / 255.0, 1.0 / 65025.0));
@@ -591,6 +798,8 @@ final class SceneShaders {
                 return a2 / (PI * d * d);
             }
 
+            //@RAY_REFLECT_FUNCTIONS
+
             void main() {
                 int mode = int(vParams.z + 0.5);
                 int flags = int(vExtra.w + 0.5);
@@ -643,14 +852,7 @@ final class SceneShaders {
                         float a2 = a * a;
                         float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
                         float nv = max(dot(n, v), 1e-4);
-            #if ENV_KIND != 0
-                        vec3 refl = reflect(-v, n);
-                        refl = normalize(mix(refl, n, a));
-                        vec3 reflectance = envBrdf(f0, roughness, nv);
-                        lit = occlusion * (envDiffuse(n) * diffuseColor * (1.0 - reflectance) + envSpecular(refl, roughness) * reflectance);
-            #else
-                        lit = ambient.rgb * occlusion * (diffuseColor + f0 * mix(1.0, 0.3, roughness));
-            #endif
+                        //@PBR_AMBIENT
                         for (int i = 0; i < """ + Scene3D.MAX_LIGHTS + """
             ; i++) {
                             if (i >= count) break;

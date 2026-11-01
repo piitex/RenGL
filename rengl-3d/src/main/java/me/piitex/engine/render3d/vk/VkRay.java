@@ -34,7 +34,10 @@ final class VkRay {
     /** A transform of 12 floats, three rows of a column-major 4x4's upper part. */
     private static final int INSTANCE_BYTES = 64;
     private static final int ADDRESSED = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    private static final int BUILD_INPUT = ADDRESSED | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    /** Vertices and indices are read by the build, and kept for the shaders that read what a ray hit through their address. */
+    private static final int BUILD_INPUT = ADDRESSED | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    /** One record of the table a scene keeps for its instances: two addresses, then the instance's data. */
+    private static final int RECORD_BYTES = 16 + RayInstance.DATA_FLOATS * 4;
     private static final int STRUCTURE_STORAGE = ADDRESSED | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
     private static final int SCRATCH = ADDRESSED | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
@@ -139,12 +142,9 @@ final class VkRay {
                 // Whatever builds a top level over this one, in this command buffer or a later one, sees it finished.
                 barrier(cmd, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
                         VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR, VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR);
-            }, () -> {
-                free(vertexBuffer);
-                free(indexBuffer);
-                free(scratch);
-            });
-            return new Geometry(structure, address, storage, triangles);
+            }, () -> free(scratch));
+            return new Geometry(structure, address, storage, triangles, vertexBuffer, indexBuffer,
+                    addressOf(vertexBuffer.handle()), addressOf(indexBuffer.handle()));
         }
     }
 
@@ -153,13 +153,30 @@ final class VkRay {
         final long address;
         private final VkGpuDevice.Alloc storage;
         private final int triangles;
+        private final VkGpuDevice.Alloc vertexBuffer, indexBuffer;
+        private final long vertexAddress, indexAddress;
         private boolean closed;
 
-        Geometry(long structure, long address, VkGpuDevice.Alloc storage, int triangles) {
+        Geometry(long structure, long address, VkGpuDevice.Alloc storage, int triangles, VkGpuDevice.Alloc vertexBuffer,
+                 VkGpuDevice.Alloc indexBuffer, long vertexAddress, long indexAddress) {
             this.structure = structure;
             this.address = address;
             this.storage = storage;
             this.triangles = triangles;
+            this.vertexBuffer = vertexBuffer;
+            this.indexBuffer = indexBuffer;
+            this.vertexAddress = vertexAddress;
+            this.indexAddress = indexAddress;
+        }
+
+        @Override
+        public long vertexAddress() {
+            return vertexAddress;
+        }
+
+        @Override
+        public long indexAddress() {
+            return indexAddress;
         }
 
         @Override
@@ -174,6 +191,8 @@ final class VkRay {
             device.destroyLater(() -> {
                 vkDestroyAccelerationStructureKHR(device.device, structure, null);
                 free(storage);
+                free(vertexBuffer);
+                free(indexBuffer);
             });
         }
     }
@@ -189,6 +208,8 @@ final class VkRay {
         private final VkGpuDevice.Alloc[] instances = new VkGpuDevice.Alloc[VkGpuDevice.FRAMES];
         private final VkGpuDevice.Alloc[] storage = new VkGpuDevice.Alloc[VkGpuDevice.FRAMES];
         private final VkGpuDevice.Alloc[] scratch = new VkGpuDevice.Alloc[VkGpuDevice.FRAMES];
+        private final VkGpuDevice.Alloc[] table = new VkGpuDevice.Alloc[VkGpuDevice.FRAMES];
+        private final long[] tableAddress = new long[VkGpuDevice.FRAMES];
         private final long[] structures = new long[VkGpuDevice.FRAMES];
         private boolean closed;
 
@@ -202,6 +223,8 @@ final class VkRay {
                         stack.ints(capacity), sizes);
                 for (int i = 0; i < structures.length; i++) {
                     instances[i] = input((long) capacity * INSTANCE_BYTES);
+                    table[i] = input((long) capacity * RECORD_BYTES);
+                    tableAddress[i] = addressOf(table[i].handle());
                     storage[i] = device.createBuffer(sizes.accelerationStructureSize(), STRUCTURE_STORAGE, 0);
                     scratch[i] = device.createBuffer(sizes.buildScratchSize() + scratchAlignment, SCRATCH, 0);
                     structures[i] = createStructure(stack, storage[i].handle(), sizes.accelerationStructureSize(), VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR);
@@ -232,6 +255,11 @@ final class VkRay {
             return capacity;
         }
 
+        @Override
+        public long dataAddress() {
+            return tableAddress[device.slot];
+        }
+
         /** The structure of the frame being recorded, for a descriptor to point at. */
         long structure() {
             return structures[device.slot];
@@ -243,6 +271,7 @@ final class VkRay {
             int slot = device.slot;
             int count = Math.min(placed.size(), capacity);
             VkAccelerationStructureInstanceKHR.Buffer buffer = VkAccelerationStructureInstanceKHR.create(instances[slot].mapped(), capacity);
+            java.nio.ByteBuffer records = MemoryUtil.memByteBuffer(table[slot].mapped(), capacity * RECORD_BYTES).order(java.nio.ByteOrder.nativeOrder());
             for (int i = 0; i < count; i++) {
                 RayInstance instance = placed.get(i);
                 float[] m = instance.transform();
@@ -252,12 +281,18 @@ final class VkRay {
                 for (int row = 0; row < 3; row++) {
                     for (int column = 0; column < 4; column++) rows.put(row * 4 + column, m[column * 4 + row]);
                 }
-                slotInstance.instanceCustomIndex(i).mask(0xFF).instanceShaderBindingTableRecordOffset(0)
+                Geometry geometry = (Geometry) instance.geometry();
+                int at = i * RECORD_BYTES;
+                records.putLong(at, geometry.vertexAddress).putLong(at + 8, geometry.indexAddress);
+                float[] data = instance.data();
+                for (int k = 0; k < RayInstance.DATA_FLOATS; k++) records.putFloat(at + 16 + k * 4, data != null && k < data.length ? data[k] : 0f);
+                slotInstance.instanceCustomIndex(i).mask(instance.mask()).instanceShaderBindingTableRecordOffset(0)
                         // Shadows come from closed meshes seen from either side, so no triangle is skipped for facing away.
                         .flags(VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR)
-                        .accelerationStructureReference(((Geometry) instance.geometry()).address);
+                        .accelerationStructureReference(geometry.address);
             }
             vmaFlushAllocation(device.allocator, instances[slot].allocation(), 0, VK_WHOLE_SIZE);
+            vmaFlushAllocation(device.allocator, table[slot].allocation(), 0, VK_WHOLE_SIZE);
 
             device.upload(cmd -> {
                 try (MemoryStack stack = stackPush()) {
@@ -291,6 +326,7 @@ final class VkRay {
                     free(storage[i]);
                     free(scratch[i]);
                     free(instances[i]);
+                    free(table[i]);
                 }
             });
         }

@@ -2,21 +2,23 @@
 
 [Documentation](../README.md) › [3D](README.md)
 
-On a GPU that can trace rays, a scene's shadows can be **traced** instead of drawn into shadow maps. A ray goes from the
-point being shaded to the light, and the point is in shadow if the ray hits something on the way. There is no map to size,
-no cascades, no bias to tune, no halo or shimmer at the edge and no limit on how far away or how small a shadow can be.
+On a GPU that can trace rays, a scene can have three things **traced** in place of the usual approximations:
+
+| Setting | Replaces | What it gives |
+|---|---|---|
+| [`setRayTracedShadows`](#shadows) | Shadow maps | Exact hard shadows at any distance: no map to size, no cascades, no bias |
+| [`setRayTracedReflections`](#reflections) | The sky's reflection on smooth surfaces | A polished floor, a metal ball or a window shows the objects around it, lit and textured |
+| [`setRayTracedAmbientOcclusion`](#ambient-occlusion) | Occlusion read from the depth picture | Darkening in corners and under objects from what is really there, off screen or thin included |
 
 ```java nocompile
 scene.setRayTracedShadows(true);
+scene.setRayTracedReflections(true);
+scene.setAmbientOcclusion(1.5f).setRayTracedAmbientOcclusion(true);
 ```
 
-It is off by default, and a scene that asks for it where the GPU can not do it keeps drawing shadow maps, so the setting is
-safe to leave on. `scene.isUsingRayTracedShadows()` says which one the last frame used.
-
-| Method | Description |
-|---|---|
-| `setRayTracedShadows(boolean)` | Trace the shadows of every light that has them (`light.setCastShadow(true)`), in place of maps |
-| `isUsingRayTracedShadows()` | Whether the last frame was drawn that way: asked for, and the GPU can trace rays |
+All are off by default, and a scene that asks for one where the GPU can not do it keeps what it had (maps, the sky, the depth
+picture), so the settings are safe to leave on. `isUsingRayTracedShadows()`, `isUsingRayTracedReflections()` and
+`isUsingRayTracedAmbientOcclusion()` say which one the last frame used.
 
 ## What you need
 
@@ -26,7 +28,16 @@ safe to leave on. `scene.isUsingRayTracedShadows()` says which one the last fram
 - Nothing to install and no vendor code: the 3D layer asks for the extensions when the window's device is made, and a GPU
   that lacks them is made exactly as before. `-Drengl.3d.raytracing=false` leaves them off on a GPU that has them.
 
-## What it does
+## Shadows
+
+A ray goes from the point being shaded to the light, and the point is in shadow if the ray hits something on the way. There is
+no map to size, no cascades, no bias to tune, no halo or shimmer at the edge and no limit on how far away or how small a shadow
+can be.
+
+| Method | Description |
+|---|---|
+| `setRayTracedShadows(boolean)` | Trace the shadows of every light that has them (`light.setCastShadow(true)`), in place of maps |
+| `isUsingRayTracedShadows()` | Whether the last frame was drawn that way: asked for, and the GPU can trace rays |
 
 | | Shadow maps | Ray traced |
 |---|---|---|
@@ -41,14 +52,78 @@ blend-shaped, with every instance of an [instanced](instancing.md) node. What do
 them): a **skinned** or **blend-shaped** node, because its shape is not its mesh's; a **see-through** one; and a material with
 an **alpha cutoff** (leaves, fences), whose holes a ray can not tell from solid. Shadow-map shadows keep all of these.
 
+## Reflections
+
+```java nocompile
+scene.setRayTracedReflections(true)
+        .setRayTracedReflectionRoughness(0.3f)   // the roughest surface that reflects by ray
+        .setRayTracedReflectionDistance(500f);   // how far a reflection ray looks
+floor.setMaterial(new Material(Color.WHITE).setMetallic(1f).setRoughness(0.05f));
+```
+
+Every pixel of a physically based (see [scenes](scenes.md)) surface sends a ray along its reflection. What the ray hits is shaded where it
+landed: the material's colour and **base colour texture** (the level of the texture picked by how far away it is), its
+emissive colour, and light from the scene's lights, **shadowed by rays** wherever a light has shadows, plus the sky or the flat
+ambient light. A ray that hits nothing shows what the sky would have, so the traced reflection joins the old one seamlessly
+at the horizon.
+
+| Method | Description |
+|---|---|
+| `setRayTracedReflections(boolean)` | Reflect what is really there on the smooth parts of PBR surfaces |
+| `isUsingRayTracedReflections()` | Whether the last frame did |
+| `setRayTracedReflectionRoughness(float)` | The roughness up to which a surface reflects by ray (0.3 by default); between half this and this it fades back to the sky |
+| `setRayTracedReflectionDistance(float)` | How far a reflection ray looks (500 by default); past it the sky shows |
+
+Only the smooth part of a material reflects by ray, because one ray can not blur a reflection the way a rough surface does.
+Mirror-like surfaces (roughness under about 0.1) are sharp and clean. A surface that is a little rough scatters its rays, a
+different way at each pixel, so the reflection is slightly grainy at its edges; a [temporal upscaler](upscaling.md) averages the
+grain away over frames. Rougher surfaces keep the sky's blurred reflection, as before.
+
+What a reflection shows is what ray traced shadows show, plus every node that does not cast a shadow: opaque nodes drawn as
+triangles, not skinned or blend-shaped, see-through or alpha-cut ones. It does **not** show a reflection in a reflection (a ray
+is one bounce), normal maps, metallic-roughness, occlusion or emissive textures, the second set of texture coordinates, fog, or
+the lights of the [light grid](lighting.md) (the lights every pixel tests are all there). At most 32 different base colour
+textures are shown in one frame; a material beyond that shows in its colour alone.
+
+## Ambient occlusion
+
+```java nocompile
+scene.setAmbientOcclusion(1.5f)            // the strength, as ever
+        .setAmbientOcclusionRadius(1.0f)   // how far a blocker darkens
+        .setRayTracedAmbientOcclusion(true);
+```
+
+The [screen-space occlusion](scenes.md) reads a depth picture: it can not see what is off the screen or behind
+something, and it darkens a surface because of something far in front of it. With rays, each pixel (at half size, then blurred
+the same way) sends eight rays over the hemisphere above its surface as far as the radius, and counts the ones that hit, the
+nearer the hit the more. Nothing is darkened by what is merely in front of it in the picture, and a thin post, a ledge out of
+sight or a wall behind the camera counts like anything else. It takes its strength and radius from the same two settings, so
+turning it on changes nothing else, and nothing shows until the strength is above 0.
+
+| Method | Description |
+|---|---|
+| `setRayTracedAmbientOcclusion(boolean)` | Work the occlusion out by rays |
+| `isUsingRayTracedAmbientOcclusion()` | Whether the last frame did: asked for, strength above 0, and the GPU can trace rays |
+
+The same nodes are traced as for reflections. Skinned and blend-shaped nodes are darkened like any other but do not darken what
+is around them.
+
 ## How it works
 
-The 3D layer turns each mesh into a **bottom-level acceleration structure** (once, when it first casts a ray traced shadow, and
-freed when the scene stops using it) and, every frame, places them all in a **top-level acceleration structure** with the
-transform of each node and instance. The scene's fragment shader holds that structure and, for each pixel a light reaches,
-shoots one ray at the light with a `rayQueryEXT`. Moving nodes cost nothing extra: the top level is rebuilt from their current
-transforms. The rebuild is one copy of the structure for each frame in flight, so the frame being drawn never reads one that
-is being rebuilt.
+The 3D layer turns each mesh into a **bottom-level acceleration structure** (once, when it first has to be traced, and freed
+when the scene stops using it) and, every frame, places them all in a **top-level acceleration structure** with the transform of
+each node and instance. The scene's fragment shader (shadows, reflections) and the occlusion pass hold that structure and shoot
+their rays with a `rayQueryEXT`. Moving nodes cost nothing extra: the top level is rebuilt from their current transforms. The
+rebuild is one copy of the structure for each frame in flight, so the frame being drawn never reads one that is being rebuilt.
+
+Each placement carries a ray mask: shadow rays see the nodes that cast shadows, reflection and occlusion rays see every solid
+node.
+
+What a reflection reads where it hits is in a table the top level keeps next to it, one record for each placement: the
+address of the mesh's vertices and indices (the shader reads them through a buffer reference, so a hit's normal and texture
+coordinates are interpolated from its triangle), the material's colour and parameters, and the place of its texture in an
+array of up to 32 that is bound with the frame (picked per pixel, which the ray tracing devices allow). That is the
+"bindless" part of hit shading: nothing is bound per draw for it.
 
 ## Using it yourself
 
@@ -57,6 +132,13 @@ The same pieces are on `GpuDevice` for [custom rendering](custom-rendering.md): 
 `RayScene.update(instances)` for a world of `RayInstance`s, and `RenderPass.bindAccelerationStructure(binding, scene)` to give
 one to a shader, which declares it with `layout(set = 0, binding = N) uniform accelerationStructureEXT world;`. A shader that
 uses `GL_EXT_ray_query` has to be `#version 460` and only compiles on Vulkan.
+
+A `RayInstance` also takes a ray `mask` (a ray only hits an instance whose mask shares a bit with its cull mask) and up to 20
+floats of `data` of your own. `RayScene.dataAddress()` is the GPU address of a table with one 96 byte record for each
+instance, in order (the address of its geometry's vertices, the address of its indices, then the data), and
+`RayGeometry.vertexAddress()` / `indexAddress()` are the addresses of one mesh's; a shader with `GL_EXT_buffer_reference` reads a
+hit through them, the `gl_InstanceCustomIndexEXT` of the hit being its place in the table.
+`RenderPass.bindTextures(binding, textures)` binds an array of samplers.
 
 ```glsl nocompile
 #version 460
@@ -71,6 +153,5 @@ bool hit = rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIn
 
 ## Not done yet
 
-Soft shadows from a light with a size, ray traced reflections, ambient occlusion and global illumination, shadows from skinned
-and alpha-cut nodes, and a denoiser, are what come next. They need what this much does not: a way for a ray that hit something to
-read its material (the vertices and textures of what it hit), and noise removal for the rays that do not all go the same way.
+Soft shadows from a light with a size, reflections of reflections, rough reflections that blur (they need many rays and a
+denoiser), global illumination, shadows and reflections of skinned and alpha-cut nodes, and a denoiser, are what come next.
