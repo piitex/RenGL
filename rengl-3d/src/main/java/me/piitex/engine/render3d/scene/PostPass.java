@@ -358,6 +358,142 @@ final class PostPass {
             }
             """;
 
+    /**
+     * What the two passes that filter the indirect light read. a.xy is one over the size and a.zw the tangent of half the field of
+     * view across and up; b.x and b.y the near and far plane, b.z +1 where the image's rows run bottom-up and -1 where they run
+     * top-down, b.w the step between taps (spatial) or the share of this frame in the picture (temporal). eye, right, up and
+     * forward are the camera's, lastEye to lastForward last frame's, and last holds last frame's tangents and, in z, 1 where it has
+     * a picture to reproject. src is the packed depth, noisy the light the rays found (the depth at its pixel is in alpha too).
+     */
+    private static final String GI_HEAD = """
+            #version 450
+            layout(set = 0, binding = 0) uniform GiBlock {
+                vec4 a;
+                vec4 b;
+                vec4 eye;
+                vec4 right;
+                vec4 up;
+                vec4 forward;
+                vec4 lastEye;
+                vec4 lastRight;
+                vec4 lastUp;
+                vec4 lastForward;
+                vec4 last;
+            };
+            layout(set = 0, binding = 1) uniform sampler2D src;
+            layout(set = 0, binding = 2) uniform sampler2D noisy;
+            //@HISTORY
+            layout(location = 0) out vec4 outColor;
+            """ + DEPTH + """
+            vec3 viewPos(ivec2 p, float d) {
+                vec2 uv = (vec2(p) + 0.5) * a.xy;
+                vec2 ndc = vec2(uv.x * 2.0 - 1.0, (uv.y * 2.0 - 1.0) * b.z);
+                return vec3(ndc.x * a.z * d, ndc.y * a.w * d, -d);
+            }
+            // The normal of the surface from the depth of its neighbours, taking the closer side on each axis so an edge doesn't bend it.
+            vec3 viewNormal(ivec2 p, float d, vec3 pos) {
+                float dl = viewDepth(p + ivec2(-1, 0)), dr = viewDepth(p + ivec2(1, 0));
+                float du = viewDepth(p + ivec2(0, -1)), dd = viewDepth(p + ivec2(0, 1));
+                if (dl < 0.0) dl = d;
+                if (dr < 0.0) dr = d;
+                if (du < 0.0) du = d;
+                if (dd < 0.0) dd = d;
+                vec3 px = abs(dr - d) < abs(dl - d) ? viewPos(p + ivec2(1, 0), dr) - pos : pos - viewPos(p + ivec2(-1, 0), dl);
+                vec3 py = abs(dd - d) < abs(du - d) ? viewPos(p + ivec2(0, 1), dd) - pos : pos - viewPos(p + ivec2(0, -1), du);
+                vec3 n = normalize(cross(px, py));
+                return dot(n, pos) > 0.0 ? -n : n;
+            }
+            """;
+
+    /**
+     * Averages the light the rays found over frames: each pixel is found where it was last frame (its place in the world seen
+     * from last frame's camera), and last frame's filtered light there is blended with this frame's, the share of this frame
+     * being b.w. A pixel whose last place shows a different surface (the depth along the view differs) has no history and takes
+     * this frame's light alone, for the spatial pass to smooth. Alpha is the depth.
+     */
+    private static final String GI_TEMPORAL = GI_HEAD.replace("//@HISTORY", "layout(set = 0, binding = 3) uniform sampler2D history;") + """
+            void main() {
+                ivec2 p = ivec2(gl_FragCoord.xy);
+                float d = viewDepth(p);
+                if (d < 0.0) {
+                    outColor = vec4(0.0, 0.0, 0.0, -1.0);
+                    return;
+                }
+                vec3 current = texelFetch(noisy, p, 0).rgb;
+                vec3 result = current;
+                if (last.z > 0.5) {
+                    vec3 pos = viewPos(p, d);
+                    vec3 world = eye.xyz + right.xyz * pos.x + up.xyz * pos.y - forward.xyz * pos.z;
+                    vec3 seen = world - lastEye.xyz;
+                    float z = dot(seen, lastForward.xyz);
+                    if (z > 0.0) {
+                        vec2 ndc = vec2(dot(seen, lastRight.xyz) / (last.x * z), dot(seen, lastUp.xyz) / (last.y * z));
+                        vec2 at = vec2(ndc.x * 0.5 + 0.5, ndc.y * b.z * 0.5 + 0.5) / a.xy - 0.5;
+                        ivec2 base = ivec2(floor(at));
+                        vec2 f = at - vec2(base);
+                        ivec2 size = textureSize(history, 0);
+                        vec3 sum = vec3(0.0);
+                        float weight = 0.0;
+                        for (int j = 0; j < 2; j++) {
+                            for (int i = 0; i < 2; i++) {
+                                ivec2 q = base + ivec2(i, j);
+                                if (q.x < 0 || q.y < 0 || q.x >= size.x || q.y >= size.y) continue;
+                                vec4 h = texelFetch(history, q, 0);
+                                if (abs(h.a - z) > 0.03 * z + 0.01) continue;
+                                float w = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+                                sum += h.rgb * w;
+                                weight += w;
+                            }
+                        }
+                        if (weight > 0.01) result = mix(sum / weight, current, b.w);
+                    }
+                }
+                outColor = vec4(result, d);
+            }
+            """;
+
+    /**
+     * One step of an edge-stopping wavelet filter (a 5 by 5 spread of taps b.w pixels apart): a tap counts for its place in the
+     * B-spline kernel, less the farther its surface is from the plane of this pixel's, so light never crosses from one surface
+     * to another. Alpha is the depth.
+     */
+    private static final String GI_SPATIAL = GI_HEAD.replace("//@HISTORY", "") + """
+            void main() {
+                ivec2 p = ivec2(gl_FragCoord.xy);
+                float d = viewDepth(p);
+                if (d < 0.0) {
+                    outColor = vec4(0.0, 0.0, 0.0, -1.0);
+                    return;
+                }
+                vec3 pos = viewPos(p, d);
+                vec3 n = viewNormal(p, d, pos);
+                float reach = 0.004 * d + 0.01;
+                int stride = int(b.w + 0.5);
+                ivec2 size = textureSize(noisy, 0);
+                float kernel[3] = float[3](1.0, 0.6666667, 0.1666667);
+                vec3 sum = texelFetch(noisy, p, 0).rgb;
+                float weight = 1.0;
+                for (int j = -2; j <= 2; j++) {
+                    for (int i = -2; i <= 2; i++) {
+                        if (i == 0 && j == 0) continue;
+                        ivec2 q = p + ivec2(i, j) * stride;
+                        if (q.x < 0 || q.y < 0 || q.x >= size.x || q.y >= size.y) continue;
+                        float dq = viewDepth(q);
+                        if (dq < 0.0) continue;
+                        float off = abs(dot(n, viewPos(q, dq) - pos));
+                        float w = kernel[abs(i)] * kernel[abs(j)] * exp(-off / reach);
+                        sum += texelFetch(noisy, q, 0).rgb * w;
+                        weight += w;
+                    }
+                }
+                outColor = vec4(sum / weight, d);
+            }
+            """;
+
+    /** The share of a frame's own light in the picture the next frame starts from: about the last ten frames count. */
+    private static final float GI_BLEND = 0.1f;
+    private static final int GI_BLOCK_BYTES = 192;
+
     private static final int UNIFORM_BYTES = 64;
     private static final int PASSES = 12;
     private static final float REFERENCE_HEIGHT = 1080f;
@@ -369,6 +505,21 @@ final class PostPass {
     private Pipeline rayOcclusion;
     private boolean rayOcclusionBroken;
     private GpuBuffer rayOcclusionBlock;
+    /**
+     * The indirect light: the rays' own noisy picture (with the depth buffer the surfaces are drawn with), the filtered one of
+     * this frame and last frame's taking turns as the history, and the one the spatial passes pass through. Made when first
+     * wanted, with the pipelines, which are null until then or when they do not compile here.
+     */
+    private RenderTarget giRaw, giFilter;
+    private final RenderTarget[] giHistory = new RenderTarget[2];
+    private int giWidth, giHeight, giCurrent;
+    private Pipeline giTemporal, giSpatial;
+    private boolean giBroken;
+    private final GpuBuffer[] giBlocks = new GpuBuffer[4];
+    /** Last frame's camera (position, right, up, forward) and field of view, for finding where a pixel was; valid once a frame has been filtered. */
+    private final float[] giLastCamera = new float[14];
+    private boolean giHistoryValid;
+    private int giSeenResets = -1;
     private final GpuBuffer[] uniforms = new GpuBuffer[PASSES];
     private final ByteBuffer scratch = MemoryUtil.memAlloc(UNIFORM_BYTES).order(ByteOrder.nativeOrder());
     private RenderTarget scene, half1, half2, quarter1, quarter2, depth, aoA, aoB;
@@ -617,6 +768,114 @@ final class PostPass {
     }
 
     /**
+     * Whether the passes that filter the indirect light compile on this GPU (made on the first ask, and reported once if not).
+     */
+    boolean giAvailable() {
+        if (giBroken) return false;
+        if (giTemporal == null) {
+            try {
+                VertexLayout layout = VertexLayout.of(VertexFormat.FLOAT2);
+                giTemporal = device.createPipeline(new PipelineDesc(VERTEX, GI_TEMPORAL, layout, false, false, false));
+                giSpatial = device.createPipeline(new PipelineDesc(VERTEX, GI_SPATIAL, layout, false, false, false));
+            } catch (RuntimeException e) {
+                giBroken = true;
+                if (giTemporal != null) giTemporal.close();
+                giTemporal = giSpatial = null;
+                log.error("The indirect light filter does not compile on this GPU; global illumination is off.", e);
+                return false;
+            }
+            for (int i = 0; i < giBlocks.length; i++) giBlocks[i] = device.createDynamicBuffer(BufferType.UNIFORM, GI_BLOCK_BYTES);
+        }
+        return true;
+    }
+
+    /**
+     * The target the rays' light is drawn into, at the size of the scene's target: colour in half floats, and a depth buffer for
+     * the surfaces to be drawn with. Call {@link #sceneTarget} first.
+     */
+    RenderTarget giTarget() {
+        if (giRaw == null || giWidth != width || giHeight != height) {
+            closeGi();
+            giRaw = device.createSampledTarget(width, height, true, false, true, 1);
+            giFilter = device.createSampledTarget(width, height, false, false, true, 1);
+            giHistory[0] = device.createSampledTarget(width, height, false, false, true, 1);
+            giHistory[1] = device.createSampledTarget(width, height, false, false, true, 1);
+            giWidth = width;
+            giHeight = height;
+            giHistoryValid = false;
+        }
+        return giRaw;
+    }
+
+    /**
+     * Cleans up the light the rays found (in {@link #giTarget()}): blends it with last frame's, found where each pixel was, then
+     * smooths it three times without crossing an edge. Needs {@link #depthTarget()} drawn this frame. The picture it returns holds
+     * the light in colour and the depth along the view in alpha.
+     *
+     * @param resets how many times the scene has asked for its history to be dropped; a change starts the average again
+     */
+    GpuTexture denoiseGi(Camera camera, Settings s, float ySign, int resets) {
+        if (resets != giSeenResets) {
+            giSeenResets = resets;
+            giHistoryValid = false;
+        }
+        Vec3 eye = camera.getPosition();
+        Vec3 forward = camera.getTarget().sub(eye).normalized();
+        Vec3 right = forward.cross(camera.getUp()).normalized();
+        Vec3 up = right.cross(forward);
+        RenderTarget out = giHistory[giCurrent], before = giHistory[1 - giCurrent];
+        // With no history the shader does not read it, but it still has to be bound to something that has been drawn into.
+        giPass(out, giTemporal, giBlocks[0], GI_BLEND, s, ySign, eye, right, up, forward, depth.texture(), giRaw.texture(),
+                giHistoryValid ? before.texture() : giRaw.texture());
+        giPass(giFilter, giSpatial, giBlocks[1], 1f, s, ySign, eye, right, up, forward, depth.texture(), out.texture(), null);
+        giPass(giRaw, giSpatial, giBlocks[2], 2f, s, ySign, eye, right, up, forward, depth.texture(), giFilter.texture(), null);
+        giPass(giFilter, giSpatial, giBlocks[3], 4f, s, ySign, eye, right, up, forward, depth.texture(), giRaw.texture(), null);
+        float[] now = {eye.x(), eye.y(), eye.z(), right.x(), right.y(), right.z(), up.x(), up.y(), up.z(), forward.x(), forward.y(), forward.z(),
+                s.tanHalfFovX(), s.tanHalfFovY()};
+        System.arraycopy(now, 0, giLastCamera, 0, now.length);
+        giHistoryValid = true;
+        giCurrent = 1 - giCurrent;
+        return giFilter.texture();
+    }
+
+    private void giPass(RenderTarget into, Pipeline pipeline, GpuBuffer block, float step, Settings s, float ySign,
+                        Vec3 eye, Vec3 right, Vec3 up, Vec3 forward, GpuTexture packedDepth, GpuTexture noisy, GpuTexture history) {
+        ByteBuffer data = MemoryUtil.memAlloc(GI_BLOCK_BYTES).order(ByteOrder.nativeOrder());
+        try {
+            data.putFloat(1f / into.width()).putFloat(1f / into.height()).putFloat(s.tanHalfFovX()).putFloat(s.tanHalfFovY());
+            data.putFloat(s.near()).putFloat(s.far()).putFloat(ySign).putFloat(step);
+            for (Vec3 v : new Vec3[]{eye, right, up, forward}) data.putFloat(v.x()).putFloat(v.y()).putFloat(v.z()).putFloat(0f);
+            for (int i = 0; i < 4; i++) data.putFloat(giLastCamera[i * 3]).putFloat(giLastCamera[i * 3 + 1]).putFloat(giLastCamera[i * 3 + 2]).putFloat(0f);
+            data.putFloat(giLastCamera[12]).putFloat(giLastCamera[13]).putFloat(giHistoryValid ? 1f : 0f).putFloat(0f);
+            data.flip();
+            block.update(data);
+        } finally {
+            MemoryUtil.memFree(data);
+        }
+        try (RenderPass pass = device.beginPass(into, 0f, 0f, 0f, 0f)) {
+            pass.bindPipeline(pipeline);
+            pass.bindUniformBuffer(0, block);
+            pass.bindTexture(1, packedDepth);
+            pass.bindTexture(2, noisy);
+            if (history != null) pass.bindTexture(3, history);
+            pass.bindVertexBuffer(0, triangle);
+            pass.draw(3);
+        }
+    }
+
+    /** A frame went by without indirect light, so what the history holds no longer follows the camera. */
+    void dropGiHistory() {
+        giHistoryValid = false;
+    }
+
+    private void closeGi() {
+        for (RenderTarget t : new RenderTarget[]{giRaw, giFilter, giHistory[0], giHistory[1]}) if (t != null) t.close();
+        giRaw = giFilter = giHistory[0] = giHistory[1] = null;
+        giWidth = giHeight = 0;
+        giHistoryValid = false;
+    }
+
+    /**
      * Runs the upscaler on the scene's picture and returns the picture it made.
      */
     private GpuTexture upscale(Frame frame, boolean motion, Camera camera, float delta, boolean bottomLeft) {
@@ -672,6 +931,7 @@ final class PostPass {
         for (RenderTarget t : new RenderTarget[]{scene, half1, half2, quarter1, quarter2, depth, aoA, aoB, velocity, upscaled[0], upscaled[1]}) if (t != null) t.close();
         scene = half1 = half2 = quarter1 = quarter2 = depth = aoA = aoB = velocity = null;
         upscaled[0] = upscaled[1] = null;
+        closeGi();
         depthWidth = depthHeight = velocityWidth = velocityHeight = upscaledWidth = upscaledHeight = 0;
     }
 
@@ -686,6 +946,9 @@ final class PostPass {
         occlusionBlur.close();
         if (rayOcclusion != null) rayOcclusion.close();
         if (rayOcclusionBlock != null) rayOcclusionBlock.close();
+        if (giTemporal != null) giTemporal.close();
+        if (giSpatial != null) giSpatial.close();
+        for (GpuBuffer b : giBlocks) if (b != null) b.close();
         for (GpuBuffer b : uniforms) b.close();
         MemoryUtil.memFree(scratch);
     }

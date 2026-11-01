@@ -86,6 +86,9 @@ public class Scene3D implements Viewport3D.Content {
     private boolean rayTracedReflections, usingRayTracedReflections;
     private float rayTracedReflectionRoughness = 0.3f, rayTracedReflectionDistance = 500f;
     private boolean rayTracedAmbientOcclusion, usingRayTracedAmbientOcclusion;
+    private boolean rayTracedGlobalIllumination, usingRayTracedGlobalIllumination;
+    private int rayTracedGlobalIlluminationRays = 1;
+    private float rayTracedGlobalIlluminationDistance = 100f, rayTracedGlobalIlluminationStrength = 1f;
     private float shadowBias = 1f;
     private float shadowSoftness = 1f;
     private float environmentLighting;
@@ -350,6 +353,81 @@ public class Scene3D implements Viewport3D.Content {
 
     void setUsingRayTracedAmbientOcclusion(boolean using) {
         this.usingRayTracedAmbientOcclusion = using;
+    }
+
+    public boolean isRayTracedGlobalIllumination() {
+        return rayTracedGlobalIllumination;
+    }
+
+    /**
+     * Lights surfaces with the light that bounces off the others (off by default): a red wall tints the floor beside it, a
+     * glowing box lights its surroundings, and a room open to the sky is lit by the sky it can see. Each pixel traces rays over
+     * the hemisphere above its surface, shades what they hit (the colour, the texture, the scene's lights shadowed by rays, the
+     * glow, and the sky for what they miss) and takes the average as the light the surface receives from around it. That replaces
+     * the flat {@link #setAmbient flat ambient light} or the {@link #setEnvironmentLighting sky's} in the diffuse light of lit
+     * surfaces, so it already holds the darkening of {@linkplain #setAmbientOcclusion(float) ambient occlusion}, and the specular
+     * light is as before. The rays are few, so the picture they make is noisy, and a denoiser averages it over frames and over
+     * the surface around each pixel without crossing an edge: the light of a moving object or light follows it a few frames late.
+     * <p>
+     * Turns on the offscreen drawing the effects use. Needs Vulkan on a GPU with ray queries; anywhere else the flat or sky
+     * ambient light is used, and {@link #isUsingRayTracedGlobalIllumination()} says which. What bounces light is what reflections
+     * show (see {@link #setRayTracedReflections(boolean)}); opaque surfaces drawn on top of everything else, see-through ones and
+     * lines receive none.
+     */
+    public Scene3D setRayTracedGlobalIllumination(boolean rayTraced) {
+        this.rayTracedGlobalIllumination = rayTraced;
+        return this;
+    }
+
+    /**
+     * Whether the last frame was drawn with ray traced global illumination: {@link #isRayTracedGlobalIllumination()} is on and
+     * the GPU can do it.
+     */
+    public boolean isUsingRayTracedGlobalIllumination() {
+        return usingRayTracedGlobalIllumination;
+    }
+
+    void setUsingRayTracedGlobalIllumination(boolean using) {
+        this.usingRayTracedGlobalIllumination = using;
+    }
+
+    public int getRayTracedGlobalIlluminationRays() {
+        return rayTracedGlobalIlluminationRays;
+    }
+
+    /**
+     * How many rays each pixel traces for {@linkplain #setRayTracedGlobalIllumination global illumination}, from 1 to 8 (1 by
+     * default). More rays make a smoother picture sooner and cost that many times as much; one is enough for a still view, and
+     * the denoiser makes up for the rest.
+     */
+    public Scene3D setRayTracedGlobalIlluminationRays(int rays) {
+        this.rayTracedGlobalIlluminationRays = Math.clamp(rays, 1, 8);
+        return this;
+    }
+
+    public float getRayTracedGlobalIlluminationDistance() {
+        return rayTracedGlobalIlluminationDistance;
+    }
+
+    /**
+     * How far a global illumination ray looks for something to bounce off (100 by default); past it the sky shows. Shorter keeps
+     * the light local and the picture steadier.
+     */
+    public Scene3D setRayTracedGlobalIlluminationDistance(float distance) {
+        this.rayTracedGlobalIlluminationDistance = Math.max(0.1f, distance);
+        return this;
+    }
+
+    public float getRayTracedGlobalIlluminationStrength() {
+        return rayTracedGlobalIlluminationStrength;
+    }
+
+    /**
+     * How much of the indirect light is added: 1 (the default) is what is there, 0 none of it, above 1 more than is there.
+     */
+    public Scene3D setRayTracedGlobalIlluminationStrength(float strength) {
+        this.rayTracedGlobalIlluminationStrength = Math.clamp(strength, 0f, 10f);
+        return this;
     }
 
     public float getShadowSoftness() {
@@ -698,7 +776,7 @@ public class Scene3D implements Viewport3D.Content {
      * True when the scene needs the offscreen path (bloom, the look, lens effects or occlusion).
      */
     boolean usesPostProcessing() {
-        return bloom > 0f || ambientOcclusion > 0f || chromaticAberration > 0f || vignette > 0f
+        return bloom > 0f || ambientOcclusion > 0f || rayTracedGlobalIllumination || chromaticAberration > 0f || vignette > 0f
                 || saturation != 1f || contrast != 1f || !isWhite(shadowTint) || !isWhite(highlightTint)
                 || renderScale < 1f || upscaler != null;
     }
