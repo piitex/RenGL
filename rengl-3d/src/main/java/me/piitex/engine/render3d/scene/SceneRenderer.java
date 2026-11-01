@@ -61,13 +61,17 @@ final class SceneRenderer {
     /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
     private static final int KEY_ENV_MASK = 7;
     /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
-    private static final int KEY_VARIANT_SHIFT = 15;
+    private static final int KEY_VARIANT_SHIFT = 17;
     /** The program also shades the lights listed in the cluster grid for the pixel's cell. */
     private static final int KEY_CLUSTER = 1 << 12;
     /** The program shadows the lights marked as ray traced with a ray query through the scene's acceleration structure. */
     private static final int KEY_RAY = 1 << 13;
     /** The program reflects what a ray from a smooth surface hits, shaded where it landed, in place of the sky alone. */
     private static final int KEY_REFLECT = 1 << 14;
+    /** The program lights the diffuse part of a surface with the indirect light picture in place of the flat or sky ambient light. */
+    private static final int KEY_GI = 1 << 15;
+    /** The program works out the indirect light a surface gets (into the picture {@link #KEY_GI} reads) in place of shading it. */
+    private static final int KEY_GI_TRACE = 1 << 16;
 
     /**
      * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
@@ -345,6 +349,8 @@ final class SceneRenderer {
     /** The reflection shader did not compile, so every scene reflects the sky alone. */
     private boolean reflectBroken;
     private boolean warnedReflect;
+    /** The global illumination shaders did not compile, so every scene keeps its flat or sky ambient light. */
+    private boolean giBroken;
     /** The base colour textures this frame's reflections can show, by place in the array the shader reads. */
     private final java.util.IdentityHashMap<GpuTexture, Integer> raySlots = new java.util.IdentityHashMap<>();
     private final List<GpuTexture> rayTextureList = new ArrayList<>();
@@ -388,7 +394,8 @@ final class SceneRenderer {
             // Blended surfaces test against the depth buffer but don't write to it, so a see-through pixel never hides
             // something drawn after it.
             desc = new PipelineDesc(vertex(skinned, uv2, morph), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
-                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0, (key & KEY_REFLECT) != 0), meshLayout, true, (key & KEY_CULL) != 0, blend,
+                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0, (key & KEY_REFLECT) != 0,
+                    (key & KEY_GI_TRACE) != 0 ? GI_TRACE : (key & KEY_GI) != 0 ? GI_APPLY : GI_NONE), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
                     .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
         }
@@ -518,20 +525,29 @@ final class SceneRenderer {
         if (postProcessed) {
             // A temporal upscaler anti-aliases by itself, from the jitter.
             drawTarget = res.post.sceneTarget(upFrame, temporal ? 1 : target.samples());
-            if (scene.getAmbientOcclusion() > 0f) {
+            if (scene.getAmbientOcclusion() > 0f || rays.gi()) {
                 depthPass(res, opaqueGroups, viewProj, camera);
                 hasDepth = true;
             }
+        }
+        if (rays.reflections() || rays.gi()) writeRayBlock(res, scene, temporal);
+        // The light that bounces: traced and filtered before the scene is drawn, which then reads it as its diffuse ambient light.
+        GpuTexture indirect = null;
+        if (rays.gi()) {
+            int traceBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (rayShadows ? KEY_RAY : 0) | KEY_GI_TRACE;
+            indirect = indirectLight(res, scene, camera, opaqueGroups, traceBits, env, sky, aspect, target.isBottomLeftOrigin());
+        } else if (postProcessed) {
+            res.post.dropGiHistory();
         }
         try (RenderPass pass = device.beginPass(drawTarget, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
             pass.bindTexture(7, shadowFrame.plans().isEmpty() ? whiteTexture : atlas.texture());
             if (rayShadows || rays.reflections()) pass.bindAccelerationStructure(RAY_BINDING, res.rayScene);
             if (rays.reflections()) {
-                writeRayBlock(res, scene, temporal);
                 pass.bindUniformBuffer(RAY_BLOCK_BINDING, res.rayBlock);
                 pass.bindTextures(RAY_TEXTURES_BINDING, rayTextureArray());
             }
+            if (indirect != null) pass.bindTexture(GI_BINDING, indirect);
             if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
             if (clusters != null) {
                 pass.bindTexture(11, res.cluster.lights);
@@ -543,7 +559,8 @@ final class SceneRenderer {
             for (List<Group> list : List.of(opaqueGroups, blendedGroups)) {
                 for (Group group : list) {
                     if (!group.inView || group.viewCount == 0) continue;
-                    drawGroup(pass, res, group, state, lastMaterial, false, fragmentBits, null);
+                    // What is see-through is lit by the sky as ever: the picture holds the surface behind it.
+                    drawGroup(pass, res, group, state, lastMaterial, false, indirect != null && list == opaqueGroups ? fragmentBits | KEY_GI : fragmentBits, null);
                     drawCalls++;
                     drawnRecords += group.viewCount;
                 }
@@ -557,6 +574,7 @@ final class SceneRenderer {
         } else {
             scene.setUsingRayTracedAmbientOcclusion(false);
         }
+        scene.setUsingRayTracedGlobalIllumination(indirect != null);
         if (temporal) res.post.temporal().endFrame(viewProj.toArray());
         writingTemporal = null;
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
@@ -1208,8 +1226,8 @@ final class SceneRenderer {
      * What the rays of one frame do: shadows traced in place of maps, reflections traced from smooth surfaces, and ambient
      * occlusion traced in place of the one read from the depth picture.
      */
-    private record RayFrame(boolean shadows, boolean reflections, boolean occlusion) {
-        static final RayFrame NONE = new RayFrame(false, false, false);
+    private record RayFrame(boolean shadows, boolean reflections, boolean occlusion, boolean gi) {
+        static final RayFrame NONE = new RayFrame(false, false, false, false);
     }
 
     /**
@@ -1220,7 +1238,8 @@ final class SceneRenderer {
     private RayFrame prepareRays(Scene3D scene, Resources res, List<Light> lights, int env, boolean clustered, boolean postProcessed) {
         boolean wantShadows = scene.isRayTracedShadows(), wantReflections = scene.isRayTracedReflections();
         boolean wantOcclusion = scene.isRayTracedAmbientOcclusion() && scene.getAmbientOcclusion() > 0f && postProcessed;
-        if (!wantShadows && !wantReflections && !wantOcclusion) {
+        boolean wantGi = scene.isRayTracedGlobalIllumination() && postProcessed;
+        if (!wantShadows && !wantReflections && !wantOcclusion && !wantGi) {
             scene.setUsingRayTracedShadows(false);
             scene.setUsingRayTracedReflections(false);
             return RayFrame.NONE;
@@ -1257,23 +1276,58 @@ final class SceneRenderer {
             }
         }
         scene.setUsingRayTracedReflections(reflections);
+        boolean gi = wantGi && capable && !giBroken && res.post.giAvailable();
+        if (gi) {
+            try {
+                pipeline((env << KEY_ENV_SHIFT) | (shadows ? KEY_RAY : 0) | KEY_GI_TRACE);
+                pipeline((env << KEY_ENV_SHIFT) | (shadows ? KEY_RAY : 0) | (reflections ? KEY_REFLECT : 0) | KEY_GI | clusterBit);
+            } catch (RuntimeException e) {
+                giBroken = true;
+                gi = false;
+                log.error("The global illumination shader does not compile on this GPU; surfaces keep the flat or sky ambient light.", e);
+            }
+        }
         boolean occlusion = wantOcclusion && capable;
         boolean anyCaster = false;
         for (Light light : lights) anyCaster |= light.isCastShadow();
         boolean tracedShadows = shadows && anyCaster;
-        if (!tracedShadows && !reflections && !occlusion) return RayFrame.NONE;
+        if (!tracedShadows && !reflections && !occlusion && !gi) return RayFrame.NONE;
         if (rayWorld == null) rayWorld = new RayWorld(device);
         raySlots.clear();
         rayTextureList.clear();
         List<RayInstance> placed = new ArrayList<>();
-        // Reflections and occlusion see every solid node; shadows only the ones that cast.
-        rayWorld.collect(scene.root(), placed, reflections || occlusion, reflections ? this::rayTextureSlot : material -> 0);
+        // Reflections, occlusion and bounced light see every solid node; shadows only the ones that cast.
+        rayWorld.collect(scene.root(), placed, reflections || occlusion || gi, reflections || gi ? this::rayTextureSlot : material -> 0);
         if (res.rayScene == null || res.rayScene.capacity() < placed.size()) {
             if (res.rayScene != null) res.rayScene.close();
             res.rayScene = device.createRayScene(Math.max(64, nextPowerOfTwo(placed.size())));
         }
         res.rayScene.update(placed);
-        return new RayFrame(tracedShadows, reflections, occlusion);
+        return new RayFrame(tracedShadows, reflections, occlusion, gi);
+    }
+
+    /**
+     * Traces the indirect light the solid objects in view receive and filters it: they are drawn once more, with the same camera
+     * as the scene, into a picture that holds in each pixel the light that reaches that surface from around it; the post pass
+     * then averages it over frames and neighbours. Returns that picture, which the scene reads as its diffuse ambient light.
+     */
+    private GpuTexture indirectLight(Resources res, Scene3D scene, Camera camera, List<Group> groups, int traceBits, int env, Skybox sky,
+                                     float aspect, boolean bottomLeft) {
+        RenderTarget raw = res.post.giTarget();
+        try (RenderPass pass = device.beginPass(raw, 0f, 0f, 0f, 0f)) {
+            pass.bindTexture(7, whiteTexture);
+            pass.bindAccelerationStructure(RAY_BINDING, res.rayScene);
+            pass.bindUniformBuffer(RAY_BLOCK_BINDING, res.rayBlock);
+            pass.bindTextures(RAY_TEXTURES_BINDING, rayTextureArray());
+            if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
+            int[] state = {-1, 0};
+            Material[] lastMaterial = {null};
+            for (Group group : groups) {
+                if (!group.inView || group.viewCount == 0 || (group.key & KEY_LINES) != 0) continue;
+                drawGroup(pass, res, group, state, lastMaterial, false, traceBits, null);
+            }
+        }
+        return res.post.denoiseGi(camera, PostPass.Settings.of(scene, aspect), bottomLeft ? 1f : -1f, scene.temporalResets());
     }
 
     /**
@@ -1309,8 +1363,10 @@ final class SceneRenderer {
         if (res.rayBlock == null) res.rayBlock = device.createDynamicBuffer(BufferType.UNIFORM, RAY_BLOCK_BYTES);
         scratch.clear();
         scratch.putLong(res.rayScene.dataAddress()).putLong(0L);
-        scratch.putFloat(temporal ? (float) (frame & 7) : 0f).putFloat(scene.getRayTracedReflectionDistance()).putFloat(0f).putFloat(0f);
-        scratch.putFloat(scene.getRayTracedReflectionRoughness()).putFloat(0f).putFloat(0f).putFloat(0f);
+        // The bounced light's rays turn every frame, whatever the upscaler: the filter is what averages them.
+        scratch.putFloat(temporal ? (float) (frame & 7) : 0f).putFloat(scene.getRayTracedReflectionDistance()).putFloat((float) (frame & 63)).putFloat(0f);
+        scratch.putFloat(scene.getRayTracedReflectionRoughness()).putFloat(scene.getRayTracedGlobalIlluminationRays())
+                .putFloat(scene.getRayTracedGlobalIlluminationDistance()).putFloat(scene.getRayTracedGlobalIlluminationStrength());
         scratch.flip();
         res.rayBlock.update(scratch);
     }

@@ -333,6 +333,14 @@ final class SceneShaders {
     static final int RAY_TEXTURES = 32;
     /** Bytes of the block at {@link #RAY_BLOCK_BINDING}: the table's address and two vec4s of settings. */
     static final int RAY_BLOCK_BYTES = 48;
+    /** The binding of the picture of indirect light a surface reads in place of the flat or sky ambient light, with {@link #GI_APPLY}. */
+    static final int GI_BINDING = 17;
+    /** No global illumination: the diffuse ambient light is the flat colour or the sky's. */
+    static final int GI_NONE = 0;
+    /** The diffuse ambient light is read from the picture at {@link #GI_BINDING}. */
+    static final int GI_APPLY = 1;
+    /** The shader traces the indirect light a surface gets and writes it (with the depth in alpha) in place of the surface's colour. */
+    static final int GI_TRACE = 2;
 
     /**
      * The same, and with {@code rayTraced} the lights marked as ray traced in the frame block (a filter id of -1 in
@@ -349,6 +357,18 @@ final class SceneShaders {
      * and {@link #RAY_TEXTURES_BINDING} as well as the acceleration structure.
      */
     static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections) {
+        return fragment(env, filters, falloffs, clustered, rayTraced, reflections, GI_NONE);
+    }
+
+    /**
+     * The same, and with {@code gi} {@link #GI_APPLY} the diffuse ambient light of a surface is the indirect light read from the
+     * picture at {@link #GI_BINDING}, or with {@link #GI_TRACE} the shader does not shade the surface but works out the indirect
+     * light it gets, by one or more rays over the hemisphere above it shaded where they land (the blocks of reflections are
+     * needed for that), and writes it with the depth along the view axis in alpha.
+     */
+    static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi) {
+        boolean tracingGi = gi == GI_TRACE;
+        reflections |= tracingGi;
         StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
         for (int i = 0; i < filters.size(); i++) {
             filterFunctions.append("float customFilter").append(i).append("(vec2 uv, float depth, vec2 texel, float softness) {\n")
@@ -368,7 +388,11 @@ final class SceneShaders {
                 .replace("//@RAY_DECLS", rays ? RAY_DECLS + (reflections ? RAY_REFLECT_DECLS : "") : "")
                 .replace("//@RAY_FUNCTIONS", rays ? RAY_FUNCTIONS : "")
                 .replace("//@RAY_REFLECT_FUNCTIONS", reflections ? RAY_REFLECT_FUNCTIONS : "")
-                .replace("//@PBR_AMBIENT", reflections ? PBR_AMBIENT_TRACED : PBR_AMBIENT)
+                .replace("//@GI_FUNCTIONS", gi == GI_APPLY ? GI_APPLY_FUNCTIONS.replace("%GI%", "" + GI_BINDING) : tracingGi ? GI_TRACE_FUNCTIONS : "")
+                .replace("//@GI_UNLIT", tracingGi ? GI_TRACE_UNLIT : "")
+                .replace("//@GI_OUTPUT", tracingGi ? GI_TRACE_OUTPUT : "")
+                .replace("//@CLASSIC_AMBIENT", gi == GI_APPLY ? "lit = giDiffuse(n) * albedo;\n" : CLASSIC_AMBIENT)
+                .replace("//@PBR_AMBIENT", pbrAmbient(reflections, gi == GI_APPLY))
                 .replace("//@RAY_SHADOW", rayTraced ? "if (info.z < -0.5) return rayShadow(i, worldPos, n, l);" : "")
                 .replace("//@CLUSTER_FUNCTIONS", clustered ? CLUSTER_FUNCTIONS : "")
                 .replace("//@CLUSTER_PBR", clustered ? CLUSTER_PBR : "")
@@ -409,6 +433,144 @@ final class SceneShaders {
                         vec3 specColor = traceWeight > 0.0 ? mix(ambient.rgb, tracedReflection(vWorldPos, n, reflSharp, roughness, ambient.rgb), traceWeight) : ambient.rgb;
                         lit = occlusion * (ambient.rgb * diffuseColor + specColor * f0 * mix(1.0, 0.3, roughness));
             #endif
+            """;
+
+    /** The diffuse ambient light of a classic (not PBR) surface: the flat colour, or the sky's. */
+    private static final String CLASSIC_AMBIENT = """
+            #if ENV_KIND != 0
+                        lit = envDiffuse(n) * albedo;
+            #else
+                        lit = ambient.rgb * albedo;
+            #endif
+            """;
+
+    /**
+     * The ambient light of a PBR surface, with its diffuse part read from the indirect light picture where {@code gi}: that
+     * picture already holds the sky (or the flat ambient light) that reaches the surface, and what the rays found on the way.
+     */
+    private static String pbrAmbient(boolean reflections, boolean gi) {
+        String ambient = reflections ? PBR_AMBIENT_TRACED : PBR_AMBIENT;
+        if (!gi) return ambient;
+        ambient = swap(ambient, "envDiffuse(n) * diffuseColor * (1.0 - reflectance)", "giDiffuse(n) * diffuseColor * (1.0 - reflectance)");
+        return reflections
+                ? swap(ambient, "ambient.rgb * diffuseColor + specColor", "giDiffuse(n) * diffuseColor + specColor")
+                : swap(ambient, "lit = ambient.rgb * occlusion * (diffuseColor + f0 * mix(1.0, 0.3, roughness));",
+                        "lit = occlusion * (giDiffuse(n) * diffuseColor + ambient.rgb * f0 * mix(1.0, 0.3, roughness));");
+    }
+
+    private static String swap(String text, String from, String to) {
+        if (!text.contains(from)) throw new IllegalStateException("The ambient light shader no longer has: " + from);
+        return text.replace(from, to);
+    }
+
+    /**
+     * Reading the indirect light: the picture is the size of the one being drawn, so a pixel reads its own texel. At the edge of
+     * an object a texel can belong to the surface behind it (the picture is not multisampled), so one whose depth does not match
+     * gives way to the neighbour that does, and where none matches the surface keeps the sky's or the flat ambient light.
+     */
+    private static final String GI_APPLY_FUNCTIONS = """
+            layout(set = 0, binding = %GI%) uniform sampler2D giTexture;
+
+            vec3 giDiffuse(vec3 n) {
+                ivec2 p = ivec2(gl_FragCoord.xy);
+                ivec2 last = textureSize(giTexture, 0) - 1;
+                float z = dot(vWorldPos - cameraPos.xyz, cameraFwd.xyz);
+                vec4 best = texelFetch(giTexture, clamp(p, ivec2(0), last), 0);
+                float err = abs(best.a - z);
+                float tol = 0.03 * z + 0.02;
+                if (err > tol) {
+                    for (int j = -1; j <= 1; j++) {
+                        for (int i = -1; i <= 1; i++) {
+                            vec4 c = texelFetch(giTexture, clamp(p + ivec2(i, j), ivec2(0), last), 0);
+                            float e = abs(c.a - z);
+                            if (e < err) {
+                                err = e;
+                                best = c;
+                            }
+                        }
+                    }
+                }
+                if (err > tol) {
+            #if ENV_KIND != 0
+                    return envDiffuse(n);
+            #else
+                    return ambient.rgb;
+            #endif
+                }
+                return best.rgb;
+            }
+            """;
+
+    /**
+     * Tracing the indirect light. A surface facing n gets, from each ray, what the ray finds along a direction chosen with more
+     * of them near n (so the average is the light the surface receives, divided by pi like the sky's): what is lit where it lands,
+     * or the sky, or the flat ambient light, where it finds nothing. The directions turn from pixel to pixel and from frame to
+     * frame (rayA.z), and the picture that comes out is noisy by design: the post pass averages it over frames and neighbours.
+     * rayB.y is how many rays, rayB.z how far they go and rayB.w the strength.
+     */
+    private static final String GI_TRACE_FUNCTIONS = """
+            float giNoise(vec2 p) {
+                return fract(52.9829189 * fract(dot(p + rayA.z * 5.588238, vec2(0.06711056, 0.00583715))));
+            }
+
+            vec3 giSky(vec3 dir) {
+            #if ENV_KIND != 0
+                return envSpecular(dir, 0.5);
+            #else
+                return ambient.rgb;
+            #endif
+            }
+
+            vec3 giIrradiance(vec3 worldPos, vec3 n) {
+                float dist = length(worldPos - cameraPos.xyz);
+                float eps = 0.005 + 0.0005 * dist;
+                vec3 t = normalize(abs(n.y) < 0.9 ? cross(n, vec3(0.0, 1.0, 0.0)) : cross(n, vec3(1.0, 0.0, 0.0)));
+                vec3 bt = cross(n, t);
+                int count = clamp(int(rayB.y + 0.5), 1, 8);
+                vec3 sum = vec3(0.0);
+                for (int s = 0; s < 8; s++) {
+                    if (s >= count) break;
+                    vec2 u = vec2(giNoise(gl_FragCoord.xy + float(s) * 19.19), giNoise(gl_FragCoord.yx + 41.7 + float(s) * 7.37));
+                    float r = sqrt(u.x);
+                    float phi = 6.2831853 * u.y;
+                    vec3 dir = normalize(t * (r * cos(phi)) + bt * (r * sin(phi)) + n * sqrt(1.0 - u.x));
+                    vec3 radiance;
+                    RayHit hit;
+                    if (traceScene(worldPos + n * eps, dir, eps, rayB.z, hit)) {
+                        // The sky lights what the ray landed on only as far as it sees it: one more ray from there over its own
+                        // hemisphere. Where that ray finds something the sky is hidden, and a share of the light that would
+                        // arrive after more bounces stands in for it.
+                        vec2 w = vec2(giNoise(gl_FragCoord.xy + 73.1 + float(s) * 11.3), giNoise(gl_FragCoord.yx + 29.9 + float(s) * 5.9));
+                        vec3 ht = normalize(abs(hit.n.y) < 0.9 ? cross(hit.n, vec3(0.0, 1.0, 0.0)) : cross(hit.n, vec3(1.0, 0.0, 0.0)));
+                        vec3 hb = cross(hit.n, ht);
+                        float hr = sqrt(w.x);
+                        vec3 up = normalize(ht * (hr * cos(6.2831853 * w.y)) + hb * (hr * sin(6.2831853 * w.y)) + hit.n * sqrt(1.0 - w.x));
+                        float heps = 0.005 + 0.0005 * (dist + hit.t);
+                        RayHit second;
+                        hitAmbient = traceScene(hit.pos + hit.n * heps, up, heps, rayB.z, second) ? 0.15 : 1.0;
+                        radiance = shadeHit(hit, dir, max(log2(0.25 * (dist + hit.t) + 1.0) + 2.0, 0.0));
+                        hitAmbient = 1.0;
+                    } else {
+                        radiance = giSky(dir);
+                    }
+                    // A single very bright sample would take many frames to average away.
+                    sum += min(radiance, vec3(32.0));
+                }
+                return sum / float(count);
+            }
+            """;
+
+    /** A surface that is not lit has no indirect light to receive; it still leaves its depth. */
+    private static final String GI_TRACE_UNLIT = """
+            if (mode == 2) {
+                outColor = vec4(0.0, 0.0, 0.0, dot(vWorldPos - cameraPos.xyz, cameraFwd.xyz));
+                return;
+            }
+            """;
+
+    private static final String GI_TRACE_OUTPUT = """
+                    outColor = vec4(giIrradiance(vWorldPos, n) * rayB.w, dot(vWorldPos - cameraPos.xyz, cameraFwd.xyz));
+                    return;
             """;
 
     private static final String RAY_REFLECT_DECLS = """
@@ -478,6 +640,9 @@ final class SceneShaders {
                 return true;
             }
 
+            // How much of the sky (or flat ambient light) reaches the next hit shaded: 1 unless the caller found it hidden.
+            float hitAmbient = 1.0;
+
             // The light at a hit: the same models as the surface itself, from the lights every pixel tests.
             vec3 shadeHit(RayHit hit, vec3 dir, float lod) {
                 RayTable rows = table;
@@ -505,9 +670,9 @@ final class SceneShaders {
                 float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
                 float nv = max(dot(n, v), 1e-4);
             #if ENV_KIND != 0
-                vec3 lit = envDiffuse(n) * diffuseColor;
+                vec3 lit = envDiffuse(n) * diffuseColor * hitAmbient;
             #else
-                vec3 lit = ambient.rgb * diffuseColor;
+                vec3 lit = ambient.rgb * diffuseColor * hitAmbient;
             #endif
                 int count = int(params.x);
                 for (int i = 0; i < """ + Scene3D.MAX_LIGHTS + """
@@ -800,6 +965,8 @@ final class SceneShaders {
 
             //@RAY_REFLECT_FUNCTIONS
 
+            //@GI_FUNCTIONS
+
             void main() {
                 int mode = int(vParams.z + 0.5);
                 int flags = int(vExtra.w + 0.5);
@@ -814,6 +981,7 @@ final class SceneShaders {
                 float alpha = tex.a * vTint.a;
                 if (alpha < vParams.w) discard;
 
+                //@GI_UNLIT
                 vec3 lit = albedo;
                 if (mode != 2) {
                     vec3 n = normalize(vNormal);
@@ -837,6 +1005,7 @@ final class SceneShaders {
                         tn.xy *= vExtra2.x;
                         n = normalize(mat3(t * invMax, b * invMax, n) * tn);
                     }
+                    //@GI_OUTPUT
                     vec3 v = normalize(cameraPos.xyz - vWorldPos);
                     int count = int(params.x);
                     bool receives = (flags & 2) != 0;
@@ -874,11 +1043,7 @@ final class SceneShaders {
                         //@CLUSTER_PBR
                         lit += vExtra.xyz * pow(texture(emissiveTexture, uvEmissive, cameraFwd.w).rgb, vec3(2.2));
                     } else {
-            #if ENV_KIND != 0
-                        lit = envDiffuse(n) * albedo;
-            #else
-                        lit = ambient.rgb * albedo;
-            #endif
+                        //@CLASSIC_AMBIENT
                         for (int i = 0; i < """ + Scene3D.MAX_LIGHTS + """
             ; i++) {
                             if (i >= count) break;
