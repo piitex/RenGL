@@ -406,12 +406,37 @@ final class PostPass {
             """;
 
     /**
+     * Where a pixel was last frame (its place in the world seen from last frame's camera): the texel at the corner of the 2 by 2
+     * block around that place, the fraction across it, and the depth along last frame's view, for matching it against the
+     * history's. False where there is no history to look in, or the place is behind last frame's camera.
+     */
+    private static final String GI_REPROJECT = GI_HEAD + """
+            bool reproject(ivec2 p, float d, out ivec2 base, out vec2 f, out float z) {
+                base = ivec2(0);
+                f = vec2(0.0);
+                z = 0.0;
+                if (last.z < 0.5) return false;
+                vec3 pos = viewPos(p, d);
+                vec3 world = eye.xyz + right.xyz * pos.x + up.xyz * pos.y - forward.xyz * pos.z;
+                vec3 seen = world - lastEye.xyz;
+                z = dot(seen, lastForward.xyz);
+                if (z <= 0.0) return false;
+                vec2 ndc = vec2(dot(seen, lastRight.xyz) / (last.x * z), dot(seen, lastUp.xyz) / (last.y * z));
+                vec2 at = vec2(ndc.x * 0.5 + 0.5, ndc.y * b.z * 0.5 + 0.5) / a.xy - 0.5;
+                base = ivec2(floor(at));
+                f = at - vec2(base);
+                return true;
+            }
+            """;
+
+    /**
      * Averages the light the rays found over frames: each pixel is found where it was last frame (its place in the world seen
      * from last frame's camera), and last frame's filtered light there is blended with this frame's, the share of this frame
      * being b.w. A pixel whose last place shows a different surface (the depth along the view differs) has no history and takes
      * this frame's light alone, for the spatial pass to smooth. Alpha is the depth.
      */
-    private static final String GI_TEMPORAL = GI_HEAD.replace("//@HISTORY", "layout(set = 0, binding = 3) uniform sampler2D history;") + """
+    private static final String GI_TEMPORAL = GI_REPROJECT.replace("//@HISTORY", "layout(set = 0, binding = 3) uniform sampler2D history;\n"
+            + "layout(set = 0, binding = 4) uniform sampler2D counts;") + """
             void main() {
                 ivec2 p = ivec2(gl_FragCoord.xy);
                 float d = viewDepth(p);
@@ -421,34 +446,65 @@ final class PostPass {
                 }
                 vec3 current = texelFetch(noisy, p, 0).rgb;
                 vec3 result = current;
-                if (last.z > 0.5) {
-                    vec3 pos = viewPos(p, d);
-                    vec3 world = eye.xyz + right.xyz * pos.x + up.xyz * pos.y - forward.xyz * pos.z;
-                    vec3 seen = world - lastEye.xyz;
-                    float z = dot(seen, lastForward.xyz);
-                    if (z > 0.0) {
-                        vec2 ndc = vec2(dot(seen, lastRight.xyz) / (last.x * z), dot(seen, lastUp.xyz) / (last.y * z));
-                        vec2 at = vec2(ndc.x * 0.5 + 0.5, ndc.y * b.z * 0.5 + 0.5) / a.xy - 0.5;
-                        ivec2 base = ivec2(floor(at));
-                        vec2 f = at - vec2(base);
-                        ivec2 size = textureSize(history, 0);
-                        vec3 sum = vec3(0.0);
-                        float weight = 0.0;
-                        for (int j = 0; j < 2; j++) {
-                            for (int i = 0; i < 2; i++) {
-                                ivec2 q = base + ivec2(i, j);
-                                if (q.x < 0 || q.y < 0 || q.x >= size.x || q.y >= size.y) continue;
-                                vec4 h = texelFetch(history, q, 0);
-                                if (abs(h.a - z) > 0.03 * z + 0.01) continue;
-                                float w = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
-                                sum += h.rgb * w;
-                                weight += w;
-                            }
+                // The share of this frame is one over the number of frames the history holds, down to b.w: a pixel that just
+                // showed up takes its first frames as they come, and one that has been there a while settles.
+                float count = texelFetch(counts, p, 0).r;
+                ivec2 base;
+                vec2 f;
+                float z;
+                if (count > 1.5 && reproject(p, d, base, f, z)) {
+                    ivec2 size = textureSize(history, 0);
+                    vec3 sum = vec3(0.0);
+                    float weight = 0.0;
+                    for (int j = 0; j < 2; j++) {
+                        for (int i = 0; i < 2; i++) {
+                            ivec2 q = base + ivec2(i, j);
+                            if (q.x < 0 || q.y < 0 || q.x >= size.x || q.y >= size.y) continue;
+                            vec4 h = texelFetch(history, q, 0);
+                            if (abs(h.a - z) > 0.03 * z + 0.01) continue;
+                            float w = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+                            sum += h.rgb * w;
+                            weight += w;
                         }
-                        if (weight > 0.01) result = mix(sum / weight, current, b.w);
                     }
+                    if (weight > 0.01) result = mix(sum / weight, current, max(1.0 / count, b.w));
                 }
                 outColor = vec4(result, d);
+            }
+            """;
+
+    /**
+     * How many frames the history of each pixel holds: the count of the places it was last frame (the history's depth must
+     * match, as for the temporal pass, and a pixel with no match starts again at 1), weighed as the temporal pass weighs
+     * them, plus one. Written in red.
+     */
+    private static final String GI_COUNT = GI_REPROJECT.replace("//@HISTORY", "layout(set = 0, binding = 3) uniform sampler2D history;\n"
+            + "layout(set = 0, binding = 4) uniform sampler2D counts;") + """
+            void main() {
+                ivec2 p = ivec2(gl_FragCoord.xy);
+                float d = viewDepth(p);
+                float count = 1.0;
+                ivec2 base;
+                vec2 f;
+                float z;
+                if (d >= 0.0 && reproject(p, d, base, f, z)) {
+                    ivec2 size = textureSize(history, 0);
+                    float sum = 0.0;
+                    float weight = 0.0;
+                    for (int j = 0; j < 2; j++) {
+                        for (int i = 0; i < 2; i++) {
+                            ivec2 q = base + ivec2(i, j);
+                            if (q.x < 0 || q.y < 0 || q.x >= size.x || q.y >= size.y) continue;
+                            vec4 h = texelFetch(history, q, 0);
+                            if (abs(h.a - z) > 0.03 * z + 0.01) continue;
+                            float w = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+                            sum += texelFetch(counts, q, 0).r * w;
+                            weight += w;
+                        }
+                    }
+                    if (weight > 0.01) count = min(sum / weight + 1.0, 255.0);
+                }
+                outColor = vec4(count, 0.0, 0.0, 1.0);
             }
             """;
 
@@ -471,7 +527,26 @@ final class PostPass {
                 int stride = int(b.w + 0.5);
                 ivec2 size = textureSize(noisy, 0);
                 float kernel[3] = float[3](1.0, 0.6666667, 0.1666667);
-                vec3 sum = texelFetch(noisy, p, 0).rgb;
+                vec3 centre = texelFetch(noisy, p, 0).rgb;
+                // With last.w set, a tap also counts for how much its brightness differs from this pixel's, in steps of the
+                // noise around the pixel (the spread of the 3 by 3 pixels about it): a bright patch keeps its edge, and
+                // noise, which is what the spread measures, is averaged away.
+                float lc = dot(centre, vec3(0.299, 0.587, 0.114));
+                float sigma = 1.0;
+                if (last.w > 0.5) {
+                    float m1 = 0.0, m2 = 0.0;
+                    for (int j = -1; j <= 1; j++) {
+                        for (int i = -1; i <= 1; i++) {
+                            float l = dot(texelFetch(noisy, clamp(p + ivec2(i, j), ivec2(0), size - 1), 0).rgb, vec3(0.299, 0.587, 0.114));
+                            m1 += l;
+                            m2 += l * l;
+                        }
+                    }
+                    m1 /= 9.0;
+                    m2 /= 9.0;
+                    sigma = 4.0 * sqrt(max(m2 - m1 * m1, 0.0)) + 0.01 + 0.05 * m1;
+                }
+                vec3 sum = centre;
                 float weight = 1.0;
                 for (int j = -2; j <= 2; j++) {
                     for (int i = -2; i <= 2; i++) {
@@ -482,7 +557,9 @@ final class PostPass {
                         if (dq < 0.0) continue;
                         float off = abs(dot(n, viewPos(q, dq) - pos));
                         float w = kernel[abs(i)] * kernel[abs(j)] * exp(-off / reach);
-                        sum += texelFetch(noisy, q, 0).rgb * w;
+                        vec3 tap = texelFetch(noisy, q, 0).rgb;
+                        if (last.w > 0.5) w *= exp(-abs(dot(tap, vec3(0.299, 0.587, 0.114)) - lc) / sigma);
+                        sum += tap * w;
                         weight += w;
                     }
                 }
@@ -492,6 +569,8 @@ final class PostPass {
 
     /** The share of a frame's own light in the picture the next frame starts from: about the last ten frames count. */
     private static final float GI_BLEND = 0.1f;
+    /** The same for path tracing, whose picture is noisier: about the last twenty frames count. */
+    private static final float PATH_BLEND = 0.05f;
     private static final int GI_BLOCK_BYTES = 192;
 
     private static final int UNIFORM_BYTES = 64;
@@ -513,9 +592,11 @@ final class PostPass {
     private RenderTarget giRaw, giFilter;
     private final RenderTarget[] giHistory = new RenderTarget[2];
     private int giWidth, giHeight, giCurrent;
-    private Pipeline giTemporal, giSpatial;
+    /** How many frames each pixel of the history holds, taking turns like the history. */
+    private final RenderTarget[] giCount = new RenderTarget[2];
+    private Pipeline giTemporal, giSpatial, giCounting;
     private boolean giBroken;
-    private final GpuBuffer[] giBlocks = new GpuBuffer[4];
+    private final GpuBuffer[] giBlocks = new GpuBuffer[5];
     /** Last frame's camera (position, right, up, forward) and field of view, for finding where a pixel was; valid once a frame has been filtered. */
     private final float[] giLastCamera = new float[14];
     private boolean giHistoryValid;
@@ -777,10 +858,12 @@ final class PostPass {
                 VertexLayout layout = VertexLayout.of(VertexFormat.FLOAT2);
                 giTemporal = device.createPipeline(new PipelineDesc(VERTEX, GI_TEMPORAL, layout, false, false, false));
                 giSpatial = device.createPipeline(new PipelineDesc(VERTEX, GI_SPATIAL, layout, false, false, false));
+                giCounting = device.createPipeline(new PipelineDesc(VERTEX, GI_COUNT, layout, false, false, false));
             } catch (RuntimeException e) {
                 giBroken = true;
                 if (giTemporal != null) giTemporal.close();
-                giTemporal = giSpatial = null;
+                if (giSpatial != null) giSpatial.close();
+                giTemporal = giSpatial = giCounting = null;
                 log.error("The indirect light filter does not compile on this GPU; global illumination is off.", e);
                 return false;
             }
@@ -800,6 +883,8 @@ final class PostPass {
             giFilter = device.createSampledTarget(width, height, false, false, true, 1);
             giHistory[0] = device.createSampledTarget(width, height, false, false, true, 1);
             giHistory[1] = device.createSampledTarget(width, height, false, false, true, 1);
+            giCount[0] = device.createSampledTarget(width, height, false, false, true, 1);
+            giCount[1] = device.createSampledTarget(width, height, false, false, true, 1);
             giWidth = width;
             giHeight = height;
             giHistoryValid = false;
@@ -813,8 +898,10 @@ final class PostPass {
      * the light in colour and the depth along the view in alpha.
      *
      * @param resets how many times the scene has asked for its history to be dropped; a change starts the average again
+     * @param path   whether the rays are whole paths: the picture is noisier, so the history is longer and the smoothing also
+     *               weighs the pixels it blends by how much their brightness differs
      */
-    GpuTexture denoiseGi(Camera camera, Settings s, float ySign, int resets) {
+    GpuTexture denoiseGi(Camera camera, Settings s, float ySign, int resets, boolean path) {
         if (resets != giSeenResets) {
             giSeenResets = resets;
             giHistoryValid = false;
@@ -824,12 +911,17 @@ final class PostPass {
         Vec3 right = forward.cross(camera.getUp()).normalized();
         Vec3 up = right.cross(forward);
         RenderTarget out = giHistory[giCurrent], before = giHistory[1 - giCurrent];
-        // With no history the shader does not read it, but it still has to be bound to something that has been drawn into.
-        giPass(out, giTemporal, giBlocks[0], GI_BLEND, s, ySign, eye, right, up, forward, depth.texture(), giRaw.texture(),
-                giHistoryValid ? before.texture() : giRaw.texture());
-        giPass(giFilter, giSpatial, giBlocks[1], 1f, s, ySign, eye, right, up, forward, depth.texture(), out.texture(), null);
-        giPass(giRaw, giSpatial, giBlocks[2], 2f, s, ySign, eye, right, up, forward, depth.texture(), giFilter.texture(), null);
-        giPass(giFilter, giSpatial, giBlocks[3], 4f, s, ySign, eye, right, up, forward, depth.texture(), giRaw.texture(), null);
+        RenderTarget counts = giCount[giCurrent], countsBefore = giCount[1 - giCurrent];
+        // With no history the shaders do not read it, but it still has to be bound to something that has been drawn into.
+        GpuTexture past = giHistoryValid ? before.texture() : giRaw.texture();
+        GpuTexture pastCounts = giHistoryValid ? countsBefore.texture() : giRaw.texture();
+        float edges = path ? 1f : 0f;
+        giPass(counts, giCounting, giBlocks[4], 0f, 0f, s, ySign, eye, right, up, forward, depth.texture(), giRaw.texture(), past, pastCounts);
+        giPass(out, giTemporal, giBlocks[0], path ? PATH_BLEND : GI_BLEND, 0f, s, ySign, eye, right, up, forward, depth.texture(), giRaw.texture(),
+                past, counts.texture());
+        giPass(giFilter, giSpatial, giBlocks[1], 1f, edges, s, ySign, eye, right, up, forward, depth.texture(), out.texture(), null, null);
+        giPass(giRaw, giSpatial, giBlocks[2], 2f, edges, s, ySign, eye, right, up, forward, depth.texture(), giFilter.texture(), null, null);
+        giPass(giFilter, giSpatial, giBlocks[3], 4f, edges, s, ySign, eye, right, up, forward, depth.texture(), giRaw.texture(), null, null);
         float[] now = {eye.x(), eye.y(), eye.z(), right.x(), right.y(), right.z(), up.x(), up.y(), up.z(), forward.x(), forward.y(), forward.z(),
                 s.tanHalfFovX(), s.tanHalfFovY()};
         System.arraycopy(now, 0, giLastCamera, 0, now.length);
@@ -838,15 +930,16 @@ final class PostPass {
         return giFilter.texture();
     }
 
-    private void giPass(RenderTarget into, Pipeline pipeline, GpuBuffer block, float step, Settings s, float ySign,
-                        Vec3 eye, Vec3 right, Vec3 up, Vec3 forward, GpuTexture packedDepth, GpuTexture noisy, GpuTexture history) {
+    private void giPass(RenderTarget into, Pipeline pipeline, GpuBuffer block, float step, float edges, Settings s, float ySign,
+                        Vec3 eye, Vec3 right, Vec3 up, Vec3 forward, GpuTexture packedDepth, GpuTexture noisy, GpuTexture history,
+                        GpuTexture counts) {
         ByteBuffer data = MemoryUtil.memAlloc(GI_BLOCK_BYTES).order(ByteOrder.nativeOrder());
         try {
             data.putFloat(1f / into.width()).putFloat(1f / into.height()).putFloat(s.tanHalfFovX()).putFloat(s.tanHalfFovY());
             data.putFloat(s.near()).putFloat(s.far()).putFloat(ySign).putFloat(step);
             for (Vec3 v : new Vec3[]{eye, right, up, forward}) data.putFloat(v.x()).putFloat(v.y()).putFloat(v.z()).putFloat(0f);
             for (int i = 0; i < 4; i++) data.putFloat(giLastCamera[i * 3]).putFloat(giLastCamera[i * 3 + 1]).putFloat(giLastCamera[i * 3 + 2]).putFloat(0f);
-            data.putFloat(giLastCamera[12]).putFloat(giLastCamera[13]).putFloat(giHistoryValid ? 1f : 0f).putFloat(0f);
+            data.putFloat(giLastCamera[12]).putFloat(giLastCamera[13]).putFloat(giHistoryValid ? 1f : 0f).putFloat(edges);
             data.flip();
             block.update(data);
         } finally {
@@ -858,6 +951,7 @@ final class PostPass {
             pass.bindTexture(1, packedDepth);
             pass.bindTexture(2, noisy);
             if (history != null) pass.bindTexture(3, history);
+            if (counts != null) pass.bindTexture(4, counts);
             pass.bindVertexBuffer(0, triangle);
             pass.draw(3);
         }
@@ -869,8 +963,8 @@ final class PostPass {
     }
 
     private void closeGi() {
-        for (RenderTarget t : new RenderTarget[]{giRaw, giFilter, giHistory[0], giHistory[1]}) if (t != null) t.close();
-        giRaw = giFilter = giHistory[0] = giHistory[1] = null;
+        for (RenderTarget t : new RenderTarget[]{giRaw, giFilter, giHistory[0], giHistory[1], giCount[0], giCount[1]}) if (t != null) t.close();
+        giRaw = giFilter = giHistory[0] = giHistory[1] = giCount[0] = giCount[1] = null;
         giWidth = giHeight = 0;
         giHistoryValid = false;
     }
@@ -948,6 +1042,7 @@ final class PostPass {
         if (rayOcclusionBlock != null) rayOcclusionBlock.close();
         if (giTemporal != null) giTemporal.close();
         if (giSpatial != null) giSpatial.close();
+        if (giCounting != null) giCounting.close();
         for (GpuBuffer b : giBlocks) if (b != null) b.close();
         for (GpuBuffer b : uniforms) b.close();
         MemoryUtil.memFree(scratch);

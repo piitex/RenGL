@@ -341,6 +341,8 @@ final class SceneShaders {
     static final int GI_APPLY = 1;
     /** The shader traces the indirect light a surface gets and writes it (with the depth in alpha) in place of the surface's colour. */
     static final int GI_TRACE = 2;
+    /** As {@link #GI_TRACE}, but each ray goes on from what it hit, for as many bounces as the ray block says. */
+    static final int GI_PATH = 3;
 
     /**
      * The same, and with {@code rayTraced} the lights marked as ray traced in the frame block (a filter id of -1 in
@@ -367,7 +369,7 @@ final class SceneShaders {
      * needed for that), and writes it with the depth along the view axis in alpha.
      */
     static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi) {
-        boolean tracingGi = gi == GI_TRACE;
+        boolean tracingGi = gi == GI_TRACE || gi == GI_PATH;
         reflections |= tracingGi;
         StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
         for (int i = 0; i < filters.size(); i++) {
@@ -388,7 +390,7 @@ final class SceneShaders {
                 .replace("//@RAY_DECLS", rays ? RAY_DECLS + (reflections ? RAY_REFLECT_DECLS : "") : "")
                 .replace("//@RAY_FUNCTIONS", rays ? RAY_FUNCTIONS : "")
                 .replace("//@RAY_REFLECT_FUNCTIONS", reflections ? RAY_REFLECT_FUNCTIONS : "")
-                .replace("//@GI_FUNCTIONS", gi == GI_APPLY ? GI_APPLY_FUNCTIONS.replace("%GI%", "" + GI_BINDING) : tracingGi ? GI_TRACE_FUNCTIONS : "")
+                .replace("//@GI_FUNCTIONS", gi == GI_APPLY ? GI_APPLY_FUNCTIONS.replace("%GI%", "" + GI_BINDING) : gi == GI_PATH ? GI_PATH_FUNCTIONS : tracingGi ? GI_TRACE_FUNCTIONS : "")
                 .replace("//@GI_UNLIT", tracingGi ? GI_TRACE_UNLIT : "")
                 .replace("//@GI_OUTPUT", tracingGi ? GI_TRACE_OUTPUT : "")
                 .replace("//@CLASSIC_AMBIENT", gi == GI_APPLY ? "lit = giDiffuse(n) * albedo;\n" : CLASSIC_AMBIENT)
@@ -560,6 +562,93 @@ final class SceneShaders {
             }
             """;
 
+    /**
+     * Tracing paths. Each sample starts as a ray over the hemisphere above the surface, as for one bounce, and goes on from
+     * every surface it lands on: the lights and the glow of that surface are counted there (the lights shadowed by rays like
+     * the surface's own, the sky not at all), the path keeps what the surface's colour leaves of it, and a new ray leaves in a
+     * direction chosen with more of them near its normal. A ray that finds nothing adds the sky, or the flat ambient light, and
+     * ends the path. After rayA.w surfaces the path counts no more of them: its last ray only looks for the sky, so a surface
+     * the path ended on is lit by the sky it sees and not by a made-up share. From the third surface on, a path ends by chance
+     * with the chance of what it still carries, and the ones that go on count for what the others lost.
+     * rayB.y is how many paths, rayB.z how far a ray goes, rayB.w the strength.
+     */
+    private static final String GI_PATH_FUNCTIONS = """
+            uint rngState;
+
+            uint pcg(uint v) {
+                uint s = v * 747796405u + 2891336453u;
+                uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+                return (w >> 22u) ^ w;
+            }
+
+            float rnd() {
+                rngState = pcg(rngState);
+                return float(rngState) * (1.0 / 4294967296.0);
+            }
+
+            vec3 giSky(vec3 dir) {
+            #if ENV_KIND != 0
+                return envSpecular(dir, 0.5);
+            #else
+                return ambient.rgb;
+            #endif
+            }
+
+            vec3 cosineDirection(vec3 n) {
+                vec3 t = normalize(abs(n.y) < 0.9 ? cross(n, vec3(0.0, 1.0, 0.0)) : cross(n, vec3(1.0, 0.0, 0.0)));
+                vec3 bt = cross(n, t);
+                float u = rnd();
+                float r = sqrt(u);
+                float phi = 6.2831853 * rnd();
+                return normalize(t * (r * cos(phi)) + bt * (r * sin(phi)) + n * sqrt(1.0 - u));
+            }
+
+            vec3 giIrradiance(vec3 worldPos, vec3 n) {
+                ivec2 px = ivec2(gl_FragCoord.xy);
+                rngState = pcg(uint(px.x) + pcg(uint(px.y) + pcg(uint(rayA.z + 0.5))));
+                float dist = length(worldPos - cameraPos.xyz);
+                int count = clamp(int(rayB.y + 0.5), 1, 8);
+                int bounces = clamp(int(rayA.w + 0.5), 1, 8);
+                vec3 sum = vec3(0.0);
+                for (int s = 0; s < 8; s++) {
+                    if (s >= count) break;
+                    vec3 origin = worldPos;
+                    vec3 normal = n;
+                    vec3 dir = cosineDirection(n);
+                    vec3 carried = vec3(1.0);
+                    vec3 radiance = vec3(0.0);
+                    float travelled = dist;
+                    for (int k = 0; k <= 8; k++) {
+                        float eps = 0.005 + 0.0005 * travelled;
+                        RayHit hit;
+                        if (!traceScene(origin + normal * eps, dir, eps, rayB.z, hit)) {
+                            radiance += carried * giSky(dir);
+                            break;
+                        }
+                        if (k >= bounces) break;
+                        travelled += hit.t;
+                        hitAmbient = 0.0;
+                        radiance += carried * shadeHit(hit, dir, max(log2(0.25 * travelled + 1.0) + 2.0, 0.0));
+                        hitAmbient = 1.0;
+                        carried *= hitDiffuse;
+                        float keep = max(carried.r, max(carried.g, carried.b));
+                        if (keep < 0.003) break;
+                        if (k >= 2) {
+                            keep = clamp(keep, 0.05, 0.95);
+                            if (rnd() > keep) break;
+                            carried /= keep;
+                        }
+                        origin = hit.pos;
+                        normal = hit.n;
+                        dir = cosineDirection(normal);
+                    }
+                    // A single very bright sample would take many frames to average away.
+                    sum += min(radiance, vec3(32.0));
+                }
+                return sum / float(count);
+            }
+            """;
+
     /** A surface that is not lit has no indirect light to receive; it still leaves its depth. */
     private static final String GI_TRACE_UNLIT = """
             if (mode == 2) {
@@ -642,6 +731,8 @@ final class SceneShaders {
 
             // How much of the sky (or flat ambient light) reaches the next hit shaded: 1 unless the caller found it hidden.
             float hitAmbient = 1.0;
+            // The diffuse colour of the last surface shaded: what a path that goes on from there keeps of its light (none for an unlit one).
+            vec3 hitDiffuse = vec3(0.0);
 
             // The light at a hit: the same models as the surface itself, from the lights every pixel tests.
             vec3 shadeHit(RayHit hit, vec3 dir, float lod) {
@@ -658,6 +749,7 @@ final class SceneShaders {
                     colour *= textureLod(rayTextures[nonuniformEXT(slot)], uv, lod).rgb;
                 }
                 vec3 albedo = pow(colour, vec3(2.2));
+                hitDiffuse = vec3(0.0);
                 if (mode == 2) return albedo;
                 vec3 n = hit.n;
                 vec3 v = -dir;
@@ -666,6 +758,7 @@ final class SceneShaders {
                 float roughness = pbr ? clamp(mp.y, 0.04, 1.0) : 1.0;
                 vec3 f0 = mix(vec3(0.04), albedo, metallic);
                 vec3 diffuseColor = albedo * (1.0 - metallic);
+                hitDiffuse = diffuseColor;
                 float a2 = roughness * roughness * roughness * roughness;
                 float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
                 float nv = max(dot(n, v), 1e-4);

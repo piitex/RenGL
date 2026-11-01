@@ -2,7 +2,7 @@
 
 [Documentation](../README.md) › [3D](README.md)
 
-On a GPU that can trace rays, a scene can have four things **traced** in place of the usual approximations:
+On a GPU that can trace rays, a scene can have five things **traced** in place of the usual approximations:
 
 | Setting | Replaces | What it gives |
 |---|---|---|
@@ -10,18 +10,20 @@ On a GPU that can trace rays, a scene can have four things **traced** in place o
 | [`setRayTracedReflections`](#reflections) | The sky's reflection on smooth surfaces | A polished floor, a metal ball or a window shows the objects around it, lit and textured |
 | [`setRayTracedAmbientOcclusion`](#ambient-occlusion) | Occlusion read from the depth picture | Darkening in corners and under objects from what is really there, off screen or thin included |
 | [`setRayTracedGlobalIllumination`](#global-illumination) | The flat or sky ambient light on lit surfaces | Light that bounces: a red wall tints the floor beside it, a glowing box lights what is around it, a roof shuts the sky out |
+| [`setPathTracing`](#path-tracing) | One bounce of global illumination | The same with the rest of the way: light goes round several corners, so a room is lit through a doorway and shadowed corners are not black |
 
 ```java nocompile
 scene.setRayTracedShadows(true);
 scene.setRayTracedReflections(true);
 scene.setAmbientOcclusion(1.5f).setRayTracedAmbientOcclusion(true);
 scene.setRayTracedGlobalIllumination(true);
+scene.setPathTracing(true);                    // instead of the one above, for several bounces
 ```
 
 All are off by default, and a scene that asks for one where the GPU can not do it keeps what it had (maps, the sky, the depth
 picture, the flat ambient light), so the settings are safe to leave on. `isUsingRayTracedShadows()`,
-`isUsingRayTracedReflections()`, `isUsingRayTracedAmbientOcclusion()` and `isUsingRayTracedGlobalIllumination()` say which one
-the last frame used.
+`isUsingRayTracedReflections()`, `isUsingRayTracedAmbientOcclusion()`, `isUsingRayTracedGlobalIllumination()` and
+`isUsingPathTracing()` say which one the last frame used.
 
 ## What you need
 
@@ -151,8 +153,10 @@ each pixel, and the filter below.
 One ray per pixel is a rough guess at the average, so the picture the rays make is noisy, and a filter makes it smooth again
 before it is used:
 
-1. **Over time.** Each pixel is found where it was last frame, and about a tenth of what it traced is blended into what the
-   last frames had there. A surface that is not what the pixel showed (something moved into or out of view) starts again.
+1. **Over time.** Each pixel is found where it was last frame, and a share of what it traced is blended into what the
+   last frames had there: one over the number of frames it holds, down to a tenth, so a pixel that has just come into view takes
+   its first frames as they come and one that has been there a while settles. A surface that is not what the pixel showed
+   (something moved into or out of view) starts again.
 2. **Over the neighbours.** Three passes of a wavelet filter spread the light up to 14 pixels around each pixel, never across
    an edge: a neighbour counts less the farther its surface is from the plane of the pixel's own.
 
@@ -173,6 +177,49 @@ to what is behind it, takes the light of the neighbour that matches, and keeps t
 The sky reaches the thing a ray landed on only as far as it sees it (one more ray), and the light that would arrive there after more
 bounces is a fixed share (15 percent) where it does not. A room lit by a window is therefore lit by the sun and the sky through it, once
 bounced, and a little more; it is darker than a full simulation would make it.
+
+## Path tracing
+
+```java nocompile
+scene.setPathTracing(true)
+        .setPathTracingBounces(3)                      // surfaces a ray can bounce off, 1 to 8
+        .setRayTracedGlobalIlluminationRays(1)         // paths per pixel, as for global illumination
+        .setRayTracedGlobalIlluminationDistance(100f)
+        .setRayTracedGlobalIlluminationStrength(1f);
+```
+
+Global illumination looks one surface away. Path tracing follows each ray on: from every surface it lands on, a new ray leaves
+in a direction chosen with more of them near its normal, and the light it finds is what that surface gives of the light it
+receives (its colour). At each surface the scene's lights are counted, shadowed by rays, and its glow, so:
+
+- **Light goes round corners.** A room with a lamp in one corner is lit all over: the far wall gets what the near wall got
+  from the lamp, and so on, as many surfaces as the bounces allow. With one bounce the far side of such a room is dark; with
+  three or four most of the light is there. A doorway lights a room beyond it, and shadowed corners are not black.
+- **The sky counts where a path sees it.** A path that finds nothing adds the sky (or the flat ambient light) and ends, so an
+  open floor is lit as ever and a floor under a roof gets what the openings let in. There is no stand-in for light that would
+  come after more bounces: after the last bounce a ray only looks for the sky, so the light is the real light of that many
+  bounces, no more, and a scene looks darker with 1 or 2 than with global illumination, whose 15 percent stands in for the rest.
+- **Light is not made.** A path ends by chance after the third surface with the chance of the light it still carries, and the
+  ones that go on count for the ones that ended, so the average stays right. A white world under a white sky stays nearly as
+  bright under a roof as in the open.
+
+| Method | Description |
+|---|---|
+| `setPathTracing(boolean)` | Trace paths in place of the one bounce of global illumination (it replaces it; both on is path tracing) |
+| `isUsingPathTracing()` | Whether the last frame did: asked for, and the GPU can trace rays |
+| `setPathTracingBounces(int)` | The surfaces a ray can bounce off, 1 to 8 (3 by default); each adds a ray per path and a fainter share of light |
+
+It takes the settings of global illumination for the rest: paths per pixel (`setRayTracedGlobalIlluminationRays`), how far a
+ray looks and the strength. It draws and reads the picture in the same way, so what applies to global illumination (diffuse light
+only, the offscreen drawing, what bounces and what receives) applies here. Its cost is the paths' rays: the bounces plus one, and
+the lights' shadow rays at every surface.
+
+The picture is noisier than global illumination's, so its filter is stricter. Once a pixel has settled it takes a twentieth of
+each frame's own light (global illumination takes a tenth), so a still view is cleaner and a moving light is followed later,
+after about twenty frames. The spatial passes also weigh a neighbour by how much its brightness differs from the pixel's, in
+steps of the noise there, so a bright patch keeps its edge while the grain is averaged away.
+
+It works under a temporal upscaler, with the picture drawn at the render size and the paths traced there.
 
 ## How it works
 
@@ -224,7 +271,7 @@ bool hit = rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIn
 
 ## Not done yet
 
-Soft shadows from a light with a size, reflections of reflections, rough reflections that blur (they need many rays and the
-filter global illumination has), more than one bounce of global illumination, light picked straight from bright surfaces and lights
-so a small one is not noisy, shadows and reflections of skinned and alpha-cut nodes, and a path traced mode with a denoiser made
-for it, are what come next.
+Soft shadows from a light with a size, reflections of reflections, rough reflections that blur (they need many paths and a
+filter for the specular light, which path tracing does not have yet: only the diffuse light is traced), light picked straight
+from bright surfaces and lights so a small one is not noisy, shadows and reflections of skinned and alpha-cut nodes, and a vendor
+denoiser (DLSS Ray Reconstruction, NRD) in place of the engine's own, are what come next.
