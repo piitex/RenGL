@@ -87,6 +87,8 @@ public class Scene3D implements Viewport3D.Content {
     private float rayTracedReflectionRoughness = 0.3f, rayTracedReflectionDistance = 500f;
     private boolean rayTracedAmbientOcclusion, usingRayTracedAmbientOcclusion;
     private boolean rayTracedGlobalIllumination, usingRayTracedGlobalIllumination;
+    private boolean pathTracing, usingPathTracing;
+    private int pathTracingBounces = 3;
     private int rayTracedGlobalIlluminationRays = 1;
     private float rayTracedGlobalIlluminationDistance = 100f, rayTracedGlobalIlluminationStrength = 1f;
     private float shadowBias = 1f;
@@ -427,6 +429,54 @@ public class Scene3D implements Viewport3D.Content {
      */
     public Scene3D setRayTracedGlobalIlluminationStrength(float strength) {
         this.rayTracedGlobalIlluminationStrength = Math.clamp(strength, 0f, 10f);
+        return this;
+    }
+
+    public boolean isPathTracing() {
+        return pathTracing;
+    }
+
+    /**
+     * Traces the light that bounces around the scene as paths, not as one extra bounce (off by default). It is
+     * {@linkplain #setRayTracedGlobalIllumination global illumination} with the rest of the way added: each ray goes on from
+     * what it hit, for as many {@linkplain #setPathTracingBounces bounces} as set, and at every surface it lands on the scene's
+     * lights are counted (shadowed by rays) along with its glow, so light reaches places that no light and no lit surface can
+     * see directly, a room is lit through a doorway, and a surface nothing shines on is lit by what the surfaces around it
+     * got. What ends a path in the open adds the sky; there is no stand-in for the light left over. The same settings as for
+     * global illumination apply: rays per pixel, distance and strength.
+     * <p>
+     * The picture is noisier than with one bounce, so the denoiser is stricter: it counts how many frames each pixel has
+     * averaged and weighs the pixels it blends by how much they differ. A moving object or light still leaves its light a few
+     * frames late. Needs Vulkan on a GPU with ray queries, and turns on the offscreen drawing the effects use;
+     * {@link #isUsingPathTracing()} says whether the last frame did it. Where the GPU can not, the flat or sky ambient light is used.
+     */
+    public Scene3D setPathTracing(boolean pathTraced) {
+        this.pathTracing = pathTraced;
+        return this;
+    }
+
+    /**
+     * Whether the last frame was drawn with path tracing: {@link #isPathTracing()} is on and the GPU can do it.
+     */
+    public boolean isUsingPathTracing() {
+        return usingPathTracing;
+    }
+
+    void setUsingPathTracing(boolean using) {
+        this.usingPathTracing = using;
+    }
+
+    public int getPathTracingBounces() {
+        return pathTracingBounces;
+    }
+
+    /**
+     * How many surfaces a ray can bounce off on its way to the pixel, from 1 to 8 (3 by default). One is what
+     * {@linkplain #setRayTracedGlobalIllumination global illumination} does, minus its stand-in for the sky; every bounce
+     * after that adds a ray per pixel to the cost and a fainter share of light, so most of the picture is there by 3 or 4.
+     */
+    public Scene3D setPathTracingBounces(int bounces) {
+        this.pathTracingBounces = Math.clamp(bounces, 1, 8);
         return this;
     }
 
@@ -776,7 +826,7 @@ public class Scene3D implements Viewport3D.Content {
      * True when the scene needs the offscreen path (bloom, the look, lens effects or occlusion).
      */
     boolean usesPostProcessing() {
-        return bloom > 0f || ambientOcclusion > 0f || rayTracedGlobalIllumination || chromaticAberration > 0f || vignette > 0f
+        return bloom > 0f || ambientOcclusion > 0f || rayTracedGlobalIllumination || pathTracing || chromaticAberration > 0f || vignette > 0f
                 || saturation != 1f || contrast != 1f || !isWhite(shadowTint) || !isWhite(highlightTint)
                 || renderScale < 1f || upscaler != null;
     }

@@ -61,7 +61,7 @@ final class SceneRenderer {
     /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
     private static final int KEY_ENV_MASK = 7;
     /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
-    private static final int KEY_VARIANT_SHIFT = 17;
+    private static final int KEY_VARIANT_SHIFT = 18;
     /** The program also shades the lights listed in the cluster grid for the pixel's cell. */
     private static final int KEY_CLUSTER = 1 << 12;
     /** The program shadows the lights marked as ray traced with a ray query through the scene's acceleration structure. */
@@ -72,6 +72,8 @@ final class SceneRenderer {
     private static final int KEY_GI = 1 << 15;
     /** The program works out the indirect light a surface gets (into the picture {@link #KEY_GI} reads) in place of shading it. */
     private static final int KEY_GI_TRACE = 1 << 16;
+    /** With {@link #KEY_GI_TRACE}: each ray goes on from what it hit, as a path with several bounces. */
+    private static final int KEY_PATH_TRACE = 1 << 17;
 
     /**
      * The custom shadow filters and light falloffs one scene shader is built with; a custom piece's id in the shader is 3
@@ -395,7 +397,7 @@ final class SceneRenderer {
             // something drawn after it.
             desc = new PipelineDesc(vertex(skinned, uv2, morph), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
                     variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0, (key & KEY_REFLECT) != 0,
-                    (key & KEY_GI_TRACE) != 0 ? GI_TRACE : (key & KEY_GI) != 0 ? GI_APPLY : GI_NONE), meshLayout, true, (key & KEY_CULL) != 0, blend,
+                    (key & KEY_GI_TRACE) != 0 ? ((key & KEY_PATH_TRACE) != 0 ? GI_PATH : GI_TRACE) : (key & KEY_GI) != 0 ? GI_APPLY : GI_NONE), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
                     .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
         }
@@ -534,7 +536,8 @@ final class SceneRenderer {
         // The light that bounces: traced and filtered before the scene is drawn, which then reads it as its diffuse ambient light.
         GpuTexture indirect = null;
         if (rays.gi()) {
-            int traceBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (rayShadows ? KEY_RAY : 0) | KEY_GI_TRACE;
+            int traceBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (rayShadows ? KEY_RAY : 0) | KEY_GI_TRACE
+                    | (rays.path() ? KEY_PATH_TRACE : 0);
             indirect = indirectLight(res, scene, camera, opaqueGroups, traceBits, env, sky, aspect, target.isBottomLeftOrigin());
         } else if (postProcessed) {
             res.post.dropGiHistory();
@@ -574,7 +577,8 @@ final class SceneRenderer {
         } else {
             scene.setUsingRayTracedAmbientOcclusion(false);
         }
-        scene.setUsingRayTracedGlobalIllumination(indirect != null);
+        scene.setUsingRayTracedGlobalIllumination(indirect != null && !rays.path());
+        scene.setUsingPathTracing(indirect != null && rays.path());
         if (temporal) res.post.temporal().endFrame(viewProj.toArray());
         writingTemporal = null;
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
@@ -1226,8 +1230,8 @@ final class SceneRenderer {
      * What the rays of one frame do: shadows traced in place of maps, reflections traced from smooth surfaces, and ambient
      * occlusion traced in place of the one read from the depth picture.
      */
-    private record RayFrame(boolean shadows, boolean reflections, boolean occlusion, boolean gi) {
-        static final RayFrame NONE = new RayFrame(false, false, false, false);
+    private record RayFrame(boolean shadows, boolean reflections, boolean occlusion, boolean gi, boolean path) {
+        static final RayFrame NONE = new RayFrame(false, false, false, false, false);
     }
 
     /**
@@ -1238,7 +1242,8 @@ final class SceneRenderer {
     private RayFrame prepareRays(Scene3D scene, Resources res, List<Light> lights, int env, boolean clustered, boolean postProcessed) {
         boolean wantShadows = scene.isRayTracedShadows(), wantReflections = scene.isRayTracedReflections();
         boolean wantOcclusion = scene.isRayTracedAmbientOcclusion() && scene.getAmbientOcclusion() > 0f && postProcessed;
-        boolean wantGi = scene.isRayTracedGlobalIllumination() && postProcessed;
+        boolean wantPath = scene.isPathTracing();
+        boolean wantGi = (scene.isRayTracedGlobalIllumination() || wantPath) && postProcessed;
         if (!wantShadows && !wantReflections && !wantOcclusion && !wantGi) {
             scene.setUsingRayTracedShadows(false);
             scene.setUsingRayTracedReflections(false);
@@ -1279,7 +1284,7 @@ final class SceneRenderer {
         boolean gi = wantGi && capable && !giBroken && res.post.giAvailable();
         if (gi) {
             try {
-                pipeline((env << KEY_ENV_SHIFT) | (shadows ? KEY_RAY : 0) | KEY_GI_TRACE);
+                pipeline((env << KEY_ENV_SHIFT) | (shadows ? KEY_RAY : 0) | KEY_GI_TRACE | (wantPath ? KEY_PATH_TRACE : 0));
                 pipeline((env << KEY_ENV_SHIFT) | (shadows ? KEY_RAY : 0) | (reflections ? KEY_REFLECT : 0) | KEY_GI | clusterBit);
             } catch (RuntimeException e) {
                 giBroken = true;
@@ -1303,7 +1308,7 @@ final class SceneRenderer {
             res.rayScene = device.createRayScene(Math.max(64, nextPowerOfTwo(placed.size())));
         }
         res.rayScene.update(placed);
-        return new RayFrame(tracedShadows, reflections, occlusion, gi);
+        return new RayFrame(tracedShadows, reflections, occlusion, gi, gi && wantPath);
     }
 
     /**
@@ -1327,7 +1332,7 @@ final class SceneRenderer {
                 drawGroup(pass, res, group, state, lastMaterial, false, traceBits, null);
             }
         }
-        return res.post.denoiseGi(camera, PostPass.Settings.of(scene, aspect), bottomLeft ? 1f : -1f, scene.temporalResets());
+        return res.post.denoiseGi(camera, PostPass.Settings.of(scene, aspect), bottomLeft ? 1f : -1f, scene.temporalResets(), (traceBits & KEY_PATH_TRACE) != 0);
     }
 
     /**
@@ -1364,7 +1369,8 @@ final class SceneRenderer {
         scratch.clear();
         scratch.putLong(res.rayScene.dataAddress()).putLong(0L);
         // The bounced light's rays turn every frame, whatever the upscaler: the filter is what averages them.
-        scratch.putFloat(temporal ? (float) (frame & 7) : 0f).putFloat(scene.getRayTracedReflectionDistance()).putFloat((float) (frame & 63)).putFloat(0f);
+        scratch.putFloat(temporal ? (float) (frame & 7) : 0f).putFloat(scene.getRayTracedReflectionDistance()).putFloat((float) (frame & 63))
+                .putFloat(scene.isPathTracing() ? scene.getPathTracingBounces() : 0f);
         scratch.putFloat(scene.getRayTracedReflectionRoughness()).putFloat(scene.getRayTracedGlobalIlluminationRays())
                 .putFloat(scene.getRayTracedGlobalIlluminationDistance()).putFloat(scene.getRayTracedGlobalIlluminationStrength());
         scratch.flip();
