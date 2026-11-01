@@ -41,9 +41,12 @@ final class Sl {
     static final int OK = 0;
 
     /** sl::Feature */
-    static final int FEATURE_DLSS = 0, FEATURE_REFLEX = 3, FEATURE_PCL = 4, FEATURE_DLSS_G = 1000;
+    static final int FEATURE_DLSS = 0, FEATURE_REFLEX = 3, FEATURE_PCL = 4, FEATURE_DLSS_G = 1000, FEATURE_DLSS_RR = 1001;
     /** sl::BufferType */
-    static final int BUFFER_DEPTH = 0, BUFFER_MOTION_VECTORS = 1, BUFFER_SCALING_INPUT_COLOR = 3, BUFFER_SCALING_OUTPUT_COLOR = 4, BUFFER_BACKBUFFER = 53;
+    static final int BUFFER_DEPTH = 0, BUFFER_MOTION_VECTORS = 1, BUFFER_SCALING_INPUT_COLOR = 3, BUFFER_SCALING_OUTPUT_COLOR = 4, BUFFER_BACKBUFFER = 53,
+            BUFFER_ALBEDO = 7, BUFFER_SPECULAR_ALBEDO = 8, BUFFER_NORMAL_ROUGHNESS = 14;
+    /** The libraries Ray Reconstruction needs besides the ones of DLSS. */
+    static final String[] RAY_RECONSTRUCTION_LIBRARIES = {"sl.dlss_d.dll", "nvngx_dlssd.dll"};
     /** sl::ResourceLifecycle */
     static final int VALID_UNTIL_PRESENT = 1, VALID_UNTIL_EVALUATE = 2;
     /** The libraries frame generation needs besides the ones of DLSS (Reflex and the latency markers are required by it). */
@@ -94,8 +97,8 @@ final class Sl {
     private final MethodHandle init, shutdown, getRequirements, setVulkanInfo, newFrameToken, setConstants, setTagForFrame, evaluate,
             freeResources, getFeatureFunction, isFeatureSupported;
     private final SymbolLookup lib;
-    private boolean started, frameGeneration;
-    private String startFailure, frameGenerationFailure;
+    private boolean started, frameGeneration, rayReconstruction;
+    private String startFailure, frameGenerationFailure, rayReconstructionFailure;
     private Requirements requirements = Requirements.NONE;
 
     private Sl(Path interposer, SymbolLookup lib) {
@@ -223,8 +226,11 @@ final class Sl {
             prefs.set(ADDRESS, 56, wide(arena, data.toString()));
             prefs.set(ADDRESS, 80, messageCallback());
             prefs.set(JAVA_LONG, 88, FLAG_DISABLE_CL_STATE_TRACKING | FLAG_USE_MANUAL_HOOKING | FLAG_USE_FRAME_BASED_RESOURCE_TAGGING);
-            int[] wanted = frameGenerationRequested()
-                    ? new int[]{FEATURE_DLSS, FEATURE_REFLEX, FEATURE_PCL, FEATURE_DLSS_G} : new int[]{FEATURE_DLSS};
+            boolean framesWanted = frameGenerationRequested(), reconstructionWanted = rayReconstructionRequested();
+            List<Integer> list = new ArrayList<>(List.of(FEATURE_DLSS));
+            if (reconstructionWanted) list.add(FEATURE_DLSS_RR);
+            if (framesWanted) list.addAll(List.of(FEATURE_REFLEX, FEATURE_PCL, FEATURE_DLSS_G));
+            int[] wanted = list.stream().mapToInt(Integer::intValue).toArray();
             MemorySegment features = arena.allocate(4L * wanted.length);
             for (int i = 0; i < wanted.length; i++) features.setAtIndex(JAVA_INT, i, wanted[i]);
             prefs.set(ADDRESS, 96, features);
@@ -250,8 +256,13 @@ final class Sl {
                         shutdownQuietly();
                         return requirements;
                     }
-                    frameGenerationFailure = reason;
-                    log.warn("DLSS frame generation is not available: {}", reason);
+                    if (feature == FEATURE_DLSS_RR) {
+                        rayReconstructionFailure = reason;
+                        log.warn("DLSS Ray Reconstruction is not available: {}", reason);
+                    } else {
+                        frameGenerationFailure = reason;
+                        log.warn("DLSS frame generation is not available: {}", reason);
+                    }
                     continue;
                 }
                 if (Boolean.getBoolean("rengl.dlss.log")) {
@@ -261,8 +272,9 @@ final class Sl {
                 all = all.and(new Requirements(strings(fr, 128, 136), strings(fr, 112, 120), strings(fr, 144, 152), strings(fr, 160, 168),
                         fr.get(JAVA_INT, 104), fr.get(JAVA_INT, 108)));
                 if (feature == FEATURE_DLSS_G) frameGeneration = true;
+                if (feature == FEATURE_DLSS_RR) rayReconstruction = true;
             }
-            if (wanted.length == 1 && frameGenerationFailure == null) frameGenerationFailure = "frame generation is off (set -Drengl.dlss.framegen=true and put "
+            if (!framesWanted && frameGenerationFailure == null) frameGenerationFailure = "frame generation is off (set -Drengl.dlss.framegen=true and put "
                     + String.join(", ", FRAME_GENERATION_LIBRARIES) + " beside " + INTERPOSER + ")";
             requirements = all;
             started = true;
@@ -289,6 +301,35 @@ final class Sl {
 
     synchronized String frameGenerationFailure() {
         return frameGeneration ? null : frameGenerationFailure != null ? frameGenerationFailure : startFailure;
+    }
+
+    /** Whether Streamline was started with Ray Reconstruction (and the libraries it wants) loaded. */
+    synchronized boolean rayReconstructionLoaded() {
+        return started && rayReconstruction;
+    }
+
+    synchronized String rayReconstructionFailure() {
+        return rayReconstruction ? null : rayReconstructionFailure != null ? rayReconstructionFailure : startFailure;
+    }
+
+    /**
+     * Ray Reconstruction is loaded when its libraries are beside the interposer, unless {@code -Drengl.dlss.rr=false}. It costs
+     * nothing until a path traced scene is upscaled.
+     */
+    private boolean rayReconstructionRequested() {
+        if ("false".equalsIgnoreCase(System.getProperty("rengl.dlss.rr"))) {
+            rayReconstructionFailure = "Ray Reconstruction is turned off (rengl.dlss.rr=false)";
+            return false;
+        }
+        for (String library : RAY_RECONSTRUCTION_LIBRARIES) {
+            if (!Files.isRegularFile(folder.resolve(library))) {
+                rayReconstructionFailure = library + " is not beside " + INTERPOSER + " (Ray Reconstruction needs "
+                        + String.join(", ", RAY_RECONSTRUCTION_LIBRARIES) + ")";
+                log.info("DLSS Ray Reconstruction is not available: {}", rayReconstructionFailure);
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -582,6 +623,7 @@ final class Sl {
         if (!started) return;
         started = false;
         frameGeneration = false;
+        rayReconstruction = false;
         shutdownQuietly();
     }
 }

@@ -36,7 +36,9 @@ final class DlssUpscaler implements Upscaler {
     private final VkGpuDevice device;
     private final Sl sl;
     private final int viewport = viewports.getAndIncrement();
-    private MethodHandle setOptions;
+    private MethodHandle setOptions, setReconstructionOptions;
+    /** The Streamline feature that last evaluated (super resolution or Ray Reconstruction), whose resources are the ones to free. */
+    private int active = Sl.FEATURE_DLSS;
     private int renderWidth, renderHeight, displayWidth, displayHeight;
 
     DlssUpscaler(VkGpuDevice device, Sl sl) {
@@ -53,6 +55,12 @@ final class DlssUpscaler implements Upscaler {
     @Override
     public boolean writesStorageImage() {
         return true;
+    }
+
+    /** True where the libraries of Ray Reconstruction were loaded and the GPU takes it: a path traced scene then hands over its noise. */
+    @Override
+    public boolean denoisesPathTracing() {
+        return DlssProvider.rayReconstructionAvailable(device);
     }
 
     /** The mode DLSS is told it runs in, from the ratio of the sizes: it picks its model and tunes itself by it. */
@@ -77,6 +85,42 @@ final class DlssUpscaler implements Upscaler {
         o.set(JAVA_BYTE, 56, Sl.TRUE); // colorBuffersHDR
         o.set(JAVA_BYTE, 84, Sl.TRUE); // useAutoExposure
         return o;
+    }
+
+    /**
+     * An {@code sl::DLSSDOptions} (version 3, 224 bytes) for Ray Reconstruction: the mode and sizes as for DLSS, linear HDR colour,
+     * the normals in world space with the roughness packed into their alpha, and the camera's view matrix (and its inverse) to turn
+     * the normals into the view's. The presets are left at their defaults.
+     *
+     * @param worldToView the view matrix as {@link UpscaleInputs#worldToView()} gives it
+     */
+    static MemorySegment reconstructionOptions(Arena arena, int mode, int outputWidth, int outputHeight, float[] worldToView) {
+        MemorySegment o = Sl.struct(arena, 224, "0AD87504-774E-4BF3-9633-A44D1F7F9CB8", 3);
+        o.set(JAVA_INT, 32, mode);
+        o.set(JAVA_INT, 36, outputWidth);
+        o.set(JAVA_INT, 40, outputHeight);
+        o.set(JAVA_FLOAT, 44, 0f);     // sharpness: ignored
+        o.set(JAVA_FLOAT, 48, 1f);     // preExposure
+        o.set(JAVA_FLOAT, 52, 1f);     // exposureScale
+        o.set(JAVA_BYTE, 56, Sl.TRUE); // colorBuffersHDR
+        o.set(JAVA_INT, 60, 1);        // normalRoughnessMode: ePacked
+        float[] inverse = invertRigid(worldToView);
+        for (int i = 0; i < 16; i++) {
+            o.set(JAVA_FLOAT, 64 + 4L * i, worldToView[i]);   // worldToCameraView
+            o.set(JAVA_FLOAT, 128 + 4L * i, inverse[i]);      // cameraViewToWorld
+        }
+        return o;
+    }
+
+    /** The inverse of a view matrix (a rotation and a move, no scale), in the same order of numbers. */
+    static float[] invertRigid(float[] m) {
+        float[] inverse = new float[16];
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 3; col++) inverse[col * 4 + row] = m[row * 4 + col];
+            inverse[12 + row] = -(m[row * 4] * m[12] + m[row * 4 + 1] * m[13] + m[row * 4 + 2] * m[14]);
+        }
+        inverse[15] = 1f;
+        return inverse;
     }
 
     /**
@@ -138,32 +182,49 @@ final class DlssUpscaler implements Upscaler {
     @Override
     public void upscale(UpscaleInputs in) {
         if (in.depth() == null || in.motion() == null) throw new IllegalStateException("DLSS needs depth and motion vectors");
+        // A path traced scene brings the guides Ray Reconstruction is given, and it takes the place of DLSS super resolution.
+        boolean reconstruct = in.hasGuides();
+        int feature = reconstruct ? Sl.FEATURE_DLSS_RR : Sl.FEATURE_DLSS;
         boolean resized = renderWidth != in.renderWidth() || renderHeight != in.renderHeight() || displayWidth != in.displayWidth() || displayHeight != in.displayHeight();
-        if (resized && renderWidth != 0) {
+        if (renderWidth != 0 && (resized || active != feature)) {
             vkDeviceWaitIdle(device.vkDevice());
             try (Arena arena = Arena.ofConfined()) {
-                check("slFreeResources", sl.freeResources(Sl.FEATURE_DLSS, Sl.viewport(arena, viewport)));
+                check("slFreeResources", sl.freeResources(active, Sl.viewport(arena, viewport)));
             }
         }
         renderWidth = in.renderWidth();
         renderHeight = in.renderHeight();
         displayWidth = in.displayWidth();
         displayHeight = in.displayHeight();
-        if (setOptions == null) setOptions = sl.featureFunction(Sl.FEATURE_DLSS, "slDLSSSetOptions", 2);
+        boolean changed = active != feature;
+        active = feature;
+        MethodHandle setOptions;
+        if (reconstruct) {
+            if (setReconstructionOptions == null) setReconstructionOptions = sl.featureFunction(Sl.FEATURE_DLSS_RR, "slDLSSDSetOptions", 2);
+            setOptions = setReconstructionOptions;
+        } else {
+            if (this.setOptions == null) this.setOptions = sl.featureFunction(Sl.FEATURE_DLSS, "slDLSSSetOptions", 2);
+            setOptions = this.setOptions;
+        }
 
         VkImageInfo color = device.imageOf(in.color()), depth = device.imageOf(in.depth()), motion = device.imageOf(in.motion()),
                 output = device.imageOf(in.output().texture());
-        boolean reset = in.reset() || resized;
+        VkImageInfo diffuse = reconstruct ? device.imageOf(in.diffuseAlbedo()) : null, specular = reconstruct ? device.imageOf(in.specularAlbedo()) : null,
+                normals = reconstruct ? device.imageOf(in.normalRoughness()) : null;
+        boolean reset = in.reset() || resized || changed;
         device.record(cmd -> {
             UpscaleBarriers.before(cmd, color, depth, motion, output);
+            if (reconstruct) UpscaleBarriers.readable(cmd, diffuse, specular, normals);
             try (Arena arena = Arena.ofConfined()) {
                 MemorySegment frame = FrameClock.current(sl);
                 MemorySegment handle = Sl.viewport(arena, viewport);
                 check("slSetConstants", sl.setConstants(constants(arena, in, reset), frame, handle));
                 try {
-                    int result = (int) setOptions.invokeExact(handle, options(arena, modeFor(in.renderWidth(), in.displayWidth()),
-                            in.displayWidth(), in.displayHeight()));
-                    check("slDLSSSetOptions", result);
+                    int mode = modeFor(in.renderWidth(), in.displayWidth());
+                    MemorySegment options = reconstruct ? reconstructionOptions(arena, mode, in.displayWidth(), in.displayHeight(), in.worldToView())
+                            : options(arena, mode, in.displayWidth(), in.displayHeight());
+                    int result = (int) setOptions.invokeExact(handle, options);
+                    check(reconstruct ? "slDLSSDSetOptions" : "slDLSSSetOptions", result);
                 } catch (RuntimeException | Error e) {
                     throw e;
                 } catch (Throwable t) {
@@ -172,15 +233,21 @@ final class DlssUpscaler implements Upscaler {
                 // Where frame generation is on it wants depth and motion until the present, and Streamline copies anything it is told
                 // is only good until the evaluate; so they are said to stay valid, and tagged again below once they are where they will be.
                 int lifetime = DlssFrameGeneration.wantsInputs() ? Sl.VALID_UNTIL_PRESENT : Sl.VALID_UNTIL_EVALUATE;
-                MemorySegment tags = arena.allocate(64 * 4, 8);
+                int count = reconstruct ? 7 : 4;
+                MemorySegment tags = arena.allocate(64L * count, 8);
                 MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, color, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_SCALING_INPUT_COLOR), 0, tags, 0, 64);
                 MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, output, VK_IMAGE_LAYOUT_GENERAL), Sl.BUFFER_SCALING_OUTPUT_COLOR), 0, tags, 64, 64);
                 MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, depth, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_DEPTH, lifetime), 0, tags, 128, 64);
                 MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, motion, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_MOTION_VECTORS, lifetime), 0, tags, 192, 64);
-                check("slSetTagForFrame", sl.setTagForFrame(frame, handle, tags, 4, cmd.address()));
+                if (reconstruct) {
+                    MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, diffuse, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_ALBEDO), 0, tags, 256, 64);
+                    MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, specular, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_SPECULAR_ALBEDO), 0, tags, 320, 64);
+                    MemorySegment.copy(Sl.tag(arena, Sl.resource(arena, normals, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), Sl.BUFFER_NORMAL_ROUGHNESS), 0, tags, 384, 64);
+                }
+                check("slSetTagForFrame", sl.setTagForFrame(frame, handle, tags, count, cmd.address()));
                 MemorySegment inputs = arena.allocate(8);
                 inputs.set(ADDRESS, 0, handle);
-                check("slEvaluateFeature", sl.evaluate(Sl.FEATURE_DLSS, frame, inputs, 1, cmd.address()));
+                check("slEvaluateFeature", sl.evaluate(feature, frame, inputs, 1, cmd.address()));
                 if (DlssFrameGeneration.wantsInputs()) tagForFrameGeneration(arena, frame, handle, cmd.address(), depth, motion);
             }
             UpscaleBarriers.after(cmd, depth, output);
@@ -207,7 +274,7 @@ final class DlssUpscaler implements Upscaler {
         if (renderWidth == 0) return;
         vkDeviceWaitIdle(device.vkDevice());
         try (Arena arena = Arena.ofConfined()) {
-            sl.freeResources(Sl.FEATURE_DLSS, Sl.viewport(arena, viewport));
+            sl.freeResources(active, Sl.viewport(arena, viewport));
         }
         renderWidth = 0;
     }

@@ -138,7 +138,7 @@ The module carries none of NVIDIA's code. From the Streamline SDK's `bin/x64` fo
 `sl.dlss.dll` and `nvngx_dlss.dll` (and `NvLowLatencyVk.dll`, which Streamline loads and logs an error without) into one folder and
 name it with `-Drengl.dlss.dir=<folder>` (or `RENGL_DLSS_DIR`). Without them `DlssProvider.isAvailable` is false and
 `DlssProvider.unavailableReason()` says why; nothing is started and nothing is slowed.
-Frame generation, below, wants four more libraries.
+Frame generation, below, wants four more libraries, and Ray Reconstruction two.
 
 | System property | Meaning |
 |---|---|
@@ -147,6 +147,7 @@ Frame generation, below, wants four more libraries.
 | `rengl.dlss.log` | Show Streamline's own log (otherwise it is at debug level) |
 | `rengl.dlss.framegen` | `true` starts Streamline with frame generation (see below) |
 | `rengl.dlss.framegen.on` | `false` starts with frame generation loaded but switched off |
+| `rengl.dlss.rr` | `false` does not load Ray Reconstruction even where its libraries are there (see below) |
 
 DLSS has to be known when the window's Vulkan device is made, because it wants extensions and features on it
 (`VK_NVX_binary_import`, `VK_NVX_image_view_handle`, `VK_KHR_push_descriptor`, and the Vulkan 1.2 features
@@ -197,6 +198,35 @@ reported two frames shown for each drawn one with status ok; turned off, one for
 window was resized, two for one. **Not checked by eye:** that the generated frames look right (the test counts them), and only
 the single generated frame of an RTX 40 card was tried. Streamline's own first-use notices from the validation layer (layouts of
 its internal images, a semaphore it reuses, Reflex's sleep against its present thread) are not ours.
+
+## DLSS Ray Reconstruction
+
+**Ray Reconstruction** is NVIDIA's denoiser for [path tracing](ray-tracing.md#path-tracing), trained on the noisy light of a few
+paths per pixel and running in the place of DLSS super resolution: one pass cleans up the noise and enlarges the picture. Copy
+`sl.dlss_d.dll` and `nvngx_dlssd.dll` from the Streamline SDK's `bin/x64` into the folder of the DLSS libraries; they are loaded
+with Streamline whenever they are there (`-Drengl.dlss.rr=false` leaves them out), and cost nothing until a path traced scene is
+drawn through DLSS. Without them, or on a GPU that does not support it, `Upscaler.denoisesPathTracing()` is false and a path traced
+scene uses its own filter, with DLSS only enlarging.
+
+```java nocompile
+scene.setRenderScale(0.5f);
+scene.setUpscaler(new DlssProvider());
+scene.setPathTracing(true).setPathTracingBounces(3);     // setRayReconstruction(true) is the default
+// scene.isUsingRayReconstruction() is true once a frame was cleaned by DLSS
+```
+
+What the scene hands to DLSS is described with [path tracing](ray-tracing.md#dlss-ray-reconstruction): the noisy light, the diffuse
+and specular albedo and the normals with roughness. DLSS is told the camera's view matrix (so it can turn the world-space normals
+into the view's) and uses the same depth, motion and jitter as for super resolution, at the same render sizes and with the same
+mode picked from the ratio of the sizes. When a frame is path traced and cleaned by DLSS, Streamline's resources for super
+resolution are released and Ray Reconstruction's made, and back again when the scene stops; each switch drops the history.
+
+`DlssRayReconstructionGpuTest` runs it on an RTX 4090 with Streamline 2.14.16 at half size: the picture shows the red wall's light
+on the floor beside it, is as bright as the scene's own filter's, follows a panning camera, and the scene reports what it did.
+`RayReconstructionGuidesGpuTest` checks the guide pictures without DLSS (a floor is white, dull and faces up, a wall red, a smooth
+metal ball has almost no diffuse colour and a strong specular one, the sky none). **Not checked:** a long run, a scene full of
+textures and normal maps, and the image quality by eye beyond a simple scene. The specular hit distance and the reflection motion
+vectors that Ray Reconstruction can use for mirrors are not given, so a reflection that moves differently from its surface may smear.
 
 ## The demo
 
@@ -299,6 +329,12 @@ The conventions, which are the ones FidelityFX and DLSS expect, for an image who
 | Motion | `motion().rg` in render pixels: the previous position minus this one, +x right and +y toward higher rows |
 | Jitter | `jitterX`, `jitterY` in render pixels, -0.5 to 0.5, +x right and +y down the picture. A pixel holds the scene at its centre *minus* the jitter |
 | Colour | Linear, unclamped (a sun is far above 1), 16-bit float |
+
+An upscaler that can also denoise [path tracing](ray-tracing.md#dlss-ray-reconstruction) returns true from `denoisesPathTracing()`
+(it may change from frame to frame). A path traced frame then arrives with `hasGuides()` true: `color()` holds one noisy path per
+pixel, nothing filtered, and `diffuseAlbedo()`, `specularAlbedo()` (linear, 0 to 1) and `normalRoughness()` (a world normal in
+red, green and blue, the roughness in alpha) go with it, at the render size, drawn with the same jitter, and `worldToView()` is the
+camera's view matrix. The guides are null otherwise.
 
 `jitterPhases(renderWidth, displayWidth)` says how long the jitter sequence is; the default is the `8 × (display ÷ render)²`
 that AMD recommends. An upscaler is closed when the scene's upscaler is changed or the scene is disposed.

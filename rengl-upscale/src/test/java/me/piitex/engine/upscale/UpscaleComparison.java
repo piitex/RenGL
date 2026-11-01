@@ -141,7 +141,11 @@ public final class UpscaleComparison {
      * not presented to the display, which frame generation needs.
      */
     public static Outcome runWindow(int size, boolean visible, Step step) {
-        Scene3D scene = scene();
+        return runWindow(scene(), size, visible, step);
+    }
+
+    /** The same for a scene of the caller's. */
+    public static Outcome runWindow(Scene3D scene, int size, boolean visible, Step step) {
         Window[] window = new Window[1];
         Run run = drive(scene, size, 0, !visible, w -> window[0] = w,
                 (frame, device, target, delta) -> step.frame(frame, scene, device, target, delta, window[0]));

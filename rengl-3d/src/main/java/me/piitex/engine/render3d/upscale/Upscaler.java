@@ -46,6 +46,18 @@ public interface Upscaler extends AutoCloseable {
     }
 
     /**
+     * True when the upscaler can also clean up the noise of {@linkplain me.piitex.engine.render3d.scene.Scene3D#setPathTracing
+     * path tracing} (a denoiser built into the upscaler, such as DLSS Ray Reconstruction). A scene that is path traced and asks for
+     * it ({@link me.piitex.engine.render3d.scene.Scene3D#setRayReconstruction}) then skips its own filter, gives the upscaler the
+     * noisy light of one path per pixel and the guide pictures that go with it ({@link UpscaleInputs#diffuseAlbedo()},
+     * {@link UpscaleInputs#specularAlbedo()}, {@link UpscaleInputs#normalRoughness()}), and takes the clean, enlarged picture back.
+     * Only a temporal upscaler can, and the answer may change from one frame to the next (the library may fail to start).
+     */
+    default boolean denoisesPathTracing() {
+        return false;
+    }
+
+    /**
      * Records the work of one frame: reads {@link UpscaleInputs#color()} (and the depth and motion for a temporal
      * upscaler) and writes the picture into {@link UpscaleInputs#output()}, which has the display size and 16-bit floating
      * point colour.

@@ -88,6 +88,7 @@ public class Scene3D implements Viewport3D.Content {
     private boolean rayTracedAmbientOcclusion, usingRayTracedAmbientOcclusion;
     private boolean rayTracedGlobalIllumination, usingRayTracedGlobalIllumination;
     private boolean pathTracing, usingPathTracing;
+    private boolean rayReconstruction = true, usingRayReconstruction;
     private int pathTracingBounces = 3;
     private int rayTracedGlobalIlluminationRays = 1;
     private float rayTracedGlobalIlluminationDistance = 100f, rayTracedGlobalIlluminationStrength = 1f;
@@ -478,6 +479,34 @@ public class Scene3D implements Viewport3D.Content {
     public Scene3D setPathTracingBounces(int bounces) {
         this.pathTracingBounces = Math.clamp(bounces, 1, 8);
         return this;
+    }
+
+    public boolean isRayReconstruction() {
+        return rayReconstruction;
+    }
+
+    /**
+     * Lets the {@linkplain #setUpscaler upscaler} clean up the noise of {@linkplain #setPathTracing path tracing} where it can
+     * (on by default): DLSS Ray Reconstruction. The scene then skips its own filter, shows the light of one noisy path per pixel to
+     * the upscaler together with the surfaces' albedo, normals and roughness, and the picture that comes back is the denoised and
+     * enlarged one. It takes an upscaler that {@linkplain me.piitex.engine.render3d.upscale.Upscaler#denoisesPathTracing does it}
+     * and a {@linkplain #setRenderScale render scale} the upscaler is used at; off, or without one, the scene's own filter is used.
+     * {@link #isUsingRayReconstruction()} says what the last frame did.
+     */
+    public Scene3D setRayReconstruction(boolean reconstruct) {
+        this.rayReconstruction = reconstruct;
+        return this;
+    }
+
+    /**
+     * Whether the last frame's path tracing was cleaned up by the upscaler instead of by the scene's own filter.
+     */
+    public boolean isUsingRayReconstruction() {
+        return usingRayReconstruction;
+    }
+
+    void setUsingRayReconstruction(boolean using) {
+        this.usingRayReconstruction = using;
     }
 
     public float getShadowSoftness() {

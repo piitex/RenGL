@@ -97,6 +97,43 @@ public final class DlssProvider implements UpscalerProvider {
         synchronized (probed) {
             probed.clear();
         }
+        synchronized (reconstruction) {
+            reconstruction.clear();
+        }
+    }
+
+    private static final Map<GpuDevice, Boolean> reconstruction = new WeakHashMap<>();
+
+    /**
+     * Whether DLSS Ray Reconstruction can clean up path tracing on this device: its libraries were loaded with Streamline (they are
+     * beside the interposer, see {@link Sl#RAY_RECONSTRUCTION_LIBRARIES}) and the GPU supports it. Asked after DLSS itself was found
+     * to work on the device.
+     */
+    static boolean rayReconstructionAvailable(VkGpuDevice device) {
+        Sl sl = Sl.load();
+        if (sl == null || !sl.rayReconstructionLoaded()) return false;
+        synchronized (reconstruction) {
+            return reconstruction.computeIfAbsent(device, d -> {
+                try (Arena arena = Arena.ofConfined()) {
+                    int result = sl.support(Sl.FEATURE_DLSS_RR, Sl.adapter(arena, device.vkPhysicalDevice().address()));
+                    if (result != Sl.OK) log.info("DLSS Ray Reconstruction is not supported on {}: {}", device.name(), Sl.describe(result));
+                    return result == Sl.OK;
+                } catch (RuntimeException | LinkageError e) {
+                    log.warn("DLSS Ray Reconstruction would not start on {}: {}", device.name(), e.toString());
+                    return false;
+                }
+            });
+        }
+    }
+
+    /** Why Ray Reconstruction can not be used on this device, or null where it can. */
+    public static String rayReconstructionUnavailableReason(GpuDevice device) {
+        String general = unavailableReason(device);
+        if (general != null) return general;
+        VkGpuDevice vk = (VkGpuDevice) device;
+        if (rayReconstructionAvailable(vk)) return null;
+        String why = Sl.load().rayReconstructionFailure();
+        return why != null ? why : "DLSS Ray Reconstruction is not supported on " + vk.name();
     }
 
     /** Tells Streamline about the device, once. */

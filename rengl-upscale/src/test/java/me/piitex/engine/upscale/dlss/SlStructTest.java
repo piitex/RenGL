@@ -142,6 +142,47 @@ class SlStructTest {
         }
     }
 
+    /** A view matrix in the engine's order (column by column): a turn about the up axis and a move. */
+    private static float[] view() {
+        float c = (float) Math.cos(0.5), s = (float) Math.sin(0.5);
+        return new float[]{c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 3f, -2f, -7f, 1};
+    }
+
+    @Test
+    void theRayReconstructionOptionsAreWhereTheHeaderPutsThem() {
+        try (Arena arena = Arena.ofConfined()) {
+            float[] view = view();
+            MemorySegment o = DlssUpscaler.reconstructionOptions(arena, 3, 1920, 1080, view);
+            assertEquals(224, o.byteSize());
+            assertEquals(3L, o.get(JAVA_LONG, 24), "version 3");
+            assertEquals(0x0AD87504, o.get(JAVA_INT, 8), "the GUID of DLSSDOptions");
+            assertEquals(3, o.get(JAVA_INT, 32), "mode");
+            assertEquals(1920, o.get(JAVA_INT, 36), "outputWidth");
+            assertEquals(1080, o.get(JAVA_INT, 40), "outputHeight");
+            assertEquals(1, o.get(JAVA_BYTE, 56), "colorBuffersHDR");
+            assertEquals(1, o.get(JAVA_INT, 60), "normalRoughnessMode is packed");
+            for (int i = 0; i < 16; i++) assertEquals(view[i], o.get(JAVA_FLOAT, 64 + 4L * i), "worldToCameraView " + i);
+            assertEquals(0, o.get(JAVA_BYTE, 192), "alpha is not upscaled");
+            for (int offset = 196; offset <= 216; offset += 4) assertEquals(0, o.get(JAVA_INT, offset), "preset at " + offset + " is the default");
+        }
+    }
+
+    @Test
+    void theViewToWorldMatrixIsTheInverseOfTheView() {
+        float[] view = view(), inverse = DlssUpscaler.invertRigid(view);
+        for (int row = 0; row < 4; row++) {
+            for (int col = 0; col < 4; col++) {
+                float sum = 0;
+                for (int k = 0; k < 4; k++) sum += view[k * 4 + row] * inverse[col * 4 + k];   // column-major: element (row, k) is at k * 4 + row
+                assertEquals(row == col ? 1f : 0f, sum, 1e-5f, "element " + row + "," + col);
+            }
+        }
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment o = DlssUpscaler.reconstructionOptions(arena, 3, 64, 48, view);
+            for (int i = 0; i < 16; i++) assertEquals(inverse[i], o.get(JAVA_FLOAT, 128 + 4L * i), "cameraViewToWorld " + i);
+        }
+    }
+
     @Test
     void theModeFollowsTheRatioOfTheSizes() {
         assertEquals(6, DlssUpscaler.modeFor(1920, 1920), "DLAA");
