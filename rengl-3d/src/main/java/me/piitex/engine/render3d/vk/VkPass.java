@@ -19,6 +19,7 @@ final class VkPass implements RenderPass {
     private final Map<Integer, VkBuf> uniformBuffers = new HashMap<>();
     private final Map<Integer, VkTex> textures = new HashMap<>();
     private final Map<Integer, VkRay.Scene> structures = new HashMap<>();
+    private final Map<Integer, VkTex[]> textureArrays = new HashMap<>();
     private final long renderPass;
     private VkPipe pipeline;
     private boolean descriptorsDirty;
@@ -96,6 +97,14 @@ final class VkPass implements RenderPass {
     }
 
     @Override
+    public void bindTextures(int binding, GpuTexture[] textures) {
+        VkTex[] bound = new VkTex[textures.length];
+        for (int i = 0; i < bound.length; i++) bound[i] = (VkTex) textures[i];
+        VkTex[] before = textureArrays.put(binding, bound);
+        if (before == null || !java.util.Arrays.equals(before, bound)) descriptorsDirty = true;
+    }
+
+    @Override
     public void bindAccelerationStructure(int binding, RayScene scene) {
         if (!(scene instanceof VkRay.Scene vk)) throw new IllegalArgumentException("Not a ray scene of this device: " + scene);
         if (structures.put(binding, vk) != scene) descriptorsDirty = true;
@@ -121,6 +130,16 @@ final class VkPass implements RenderPass {
                     write.descriptorType(KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
                             .pNext(VkWriteDescriptorSetAccelerationStructureKHR.calloc(stack).sType$Default()
                                     .pAccelerationStructures(stack.longs(scene.structure())).address());
+                } else if (binding.sampler() && binding.count() > 1) {
+                    VkTex[] array = textureArrays.get(binding.binding());
+                    if (array == null || array.length != binding.count()) {
+                        throw new IllegalStateException("Bind " + binding.count() + " textures at binding " + binding.binding());
+                    }
+                    VkDescriptorImageInfo.Buffer infos = VkDescriptorImageInfo.calloc(array.length, stack);
+                    for (int k = 0; k < array.length; k++) {
+                        infos.get(k).sampler(array[k].sampler).imageView(array[k].view).imageLayout(array[k].layout);
+                    }
+                    write.descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(array.length).pImageInfo(infos);
                 } else if (binding.sampler()) {
                     VkTex texture = textures.get(binding.binding());
                     if (texture == null) throw new IllegalStateException("No texture bound at binding " + binding.binding());

@@ -17,12 +17,27 @@ import java.util.Map;
  * built the first time it is seen and freed some time after the scene stops using it, and the placement of each node (and
  * of each of its instances) in the world, collected afresh every frame. Render thread only.
  * <p>
- * Only what a ray can hit as a solid is in: nodes that cast shadows, opaque, drawn as triangles. A skinned or blend-shaped
- * node (its shape is not the mesh's), a see-through one and a mesh with an alpha cutoff (a ray cannot tell its holes yet) cast
- * no ray traced shadow; they still receive them.
+ * Only what a ray can hit as a solid is in: opaque nodes drawn as triangles. A skinned or blend-shaped node (its shape is not
+ * the mesh's), a see-through one and a mesh with an alpha cutoff (a ray cannot tell its holes yet) are left out; they still
+ * receive shadows and reflections. Each placement carries a ray mask: {@link #SHADOWS} when the node casts shadows, and
+ * {@link #SEEN} for every node, so a shadow ray and a reflection ray each find what they should.
  */
 final class RayWorld {
     private static final Logger log = LogManager.getLogger("Engine");
+
+    /** The mask bit of a node that casts shadows, the one shadow rays look for. */
+    static final int SHADOWS = 1;
+    /** The mask bit of every node, the one reflection and occlusion rays look for. */
+    static final int SEEN = 2;
+    private static final Material DEFAULT_MATERIAL = new Material();
+
+    /**
+     * Gives a material's base colour texture a place in the array a reflection ray reads, for a frame: the place plus one, or 0
+     * for a material with none (or when the array is full).
+     */
+    interface Textures {
+        int slot(Material material);
+    }
 
     private static final class Entry {
         final RayGeometry geometry;
@@ -43,41 +58,64 @@ final class RayWorld {
     }
 
     /**
-     * Adds the placement of every node of the tree that rays can hit.
+     * Adds the placement of every node of the tree that rays can hit. With {@code everything} that is every solid node, for
+     * reflections and occlusion; without, only the ones that cast shadows. {@code textures} places each one's material in the
+     * data a ray reads where it hits it.
      */
-    void collect(Node3D root, List<RayInstance> into) {
+    void collect(Node3D root, List<RayInstance> into, boolean everything, Textures textures) {
         frame++;
-        collect(root, Mat4.identity(), into);
+        collect(root, Mat4.identity(), into, everything, textures);
     }
 
-    private void collect(Node3D node, Mat4 parentWorld, List<RayInstance> into) {
+    private void collect(Node3D node, Mat4 parentWorld, List<RayInstance> into, boolean everything, Textures textures) {
         if (!node.isVisible()) return;
         Mat4 world = parentWorld.mul(node.localMatrix());
         Mesh mesh = node.getMesh();
-        if (mesh != null && solid(node, mesh)) {
+        if (mesh != null && solid(node, mesh, everything)) {
             RayGeometry geometry = geometry(mesh);
             if (geometry != null) {
                 Instances instances = node.getInstances();
+                Material material = node.getMaterial() == null ? DEFAULT_MATERIAL : node.getMaterial();
+                int mask = SEEN | (node.isCastShadow() ? SHADOWS : 0);
+                int slot = textures.slot(material);
                 float[] w = world.toArray();
                 if (instances == null) {
-                    into.add(new RayInstance(geometry, w));
+                    into.add(new RayInstance(geometry, w, mask, record(material, slot, 1f, 1f, 1f, 1f)));
                 } else {
                     float[] data = instances.matrixData();
+                    float[] tints = instances.hasTints() ? instances.tintData() : null;
                     for (int i = 0; i < instances.size(); i++) {
                         float[] model = new float[16];
                         multiply(w, data, i * 16, model);
-                        into.add(new RayInstance(geometry, model));
+                        into.add(new RayInstance(geometry, model, mask, tints == null ? record(material, slot, 1f, 1f, 1f, 1f)
+                                : record(material, slot, tints[i * 4], tints[i * 4 + 1], tints[i * 4 + 2], tints[i * 4 + 3])));
                     }
                 }
             }
         }
-        for (Node3D child : node.getChildren()) collect(child, world, into);
+        for (Node3D child : node.getChildren()) collect(child, world, into, everything, textures);
     }
 
-    private static boolean solid(Node3D node, Mesh mesh) {
-        if (!node.isCastShadow() || mesh.isLines() || node.getSkin() != null || node.activeMorph() != null) return false;
+    private static boolean solid(Node3D node, Mesh mesh, boolean everything) {
+        if ((!everything && !node.isCastShadow()) || mesh.isLines() || node.getSkin() != null || node.activeMorph() != null) return false;
         Material material = node.getMaterial();
         return material == null || (!material.isBlend() && material.getAlphaCutoff() <= 0f);
+    }
+
+    /**
+     * What a ray that hit this placement reads, the way the scene shader's instance records hold it: the tint, the material's
+     * two parameters with its mode and the place of its texture, the emissive colour, and the texture transform.
+     */
+    private static float[] record(Material m, int slot, float tr, float tg, float tb, float ta) {
+        int mode = m.isUnlit() ? SceneShaders.MODE_UNLIT : m.isPbr() ? SceneShaders.MODE_PBR : SceneShaders.MODE_CLASSIC;
+        float p0 = m.isPbr() ? m.getMetallic() : m.getSpecular();
+        float p1 = m.isPbr() ? m.getRoughness() : Math.max(1f, m.getShininess());
+        return new float[]{
+                m.getRed() * tr, m.getGreen() * tg, m.getBlue() * tb, m.getAlpha() * ta,
+                p0, p1, mode, slot,
+                m.getEmissiveRed(), m.getEmissiveGreen(), m.getEmissiveBlue(), 0f,
+                m.getUvOffsetU(), m.getUvOffsetV(), m.getUvScaleU(), m.getUvScaleV(),
+                (float) Math.cos(m.getUvRotation()), (float) Math.sin(m.getUvRotation()), 0f, 0f};
     }
 
     private RayGeometry geometry(Mesh mesh) {

@@ -83,6 +83,9 @@ public class Scene3D implements Viewport3D.Content {
     private float shadowDistance = 60f;
     private boolean rayTracedShadows;
     private boolean usingRayTracedShadows;
+    private boolean rayTracedReflections, usingRayTracedReflections;
+    private float rayTracedReflectionRoughness = 0.3f, rayTracedReflectionDistance = 500f;
+    private boolean rayTracedAmbientOcclusion, usingRayTracedAmbientOcclusion;
     private float shadowBias = 1f;
     private float shadowSoftness = 1f;
     private float environmentLighting;
@@ -255,6 +258,98 @@ public class Scene3D implements Viewport3D.Content {
 
     void setUsingRayTracedShadows(boolean using) {
         this.usingRayTracedShadows = using;
+    }
+
+    public boolean isRayTracedReflections() {
+        return rayTracedReflections;
+    }
+
+    /**
+     * Makes the smooth parts of physically based surfaces reflect what is really there by tracing a ray from each pixel, in
+     * place of the sky alone (off by default): the other objects of the scene appear in a polished floor, a metal ball or a
+     * window, lit and textured, and the sky shows where nothing is in the way. Surfaces rougher than
+     * {@link #setRayTracedReflectionRoughness(float)} keep reflecting the sky, and the ones between fade from one to the other.
+     * <p>
+     * Needs Vulkan on a GPU with ray queries, like {@link #setRayTracedShadows(boolean)}; anywhere else the sky is reflected,
+     * and {@link #isUsingRayTracedReflections()} says which it is doing. What a reflection shows: opaque nodes drawn as
+     * triangles (not skinned or blend-shaped, see-through or alpha-cut ones), with their colour, base colour texture, emissive
+     * colour and lighting from the scene's lights (shadowed by rays where a light has shadows) and sky; not other reflections,
+     * normal maps or the lights of the light grid.
+     */
+    public Scene3D setRayTracedReflections(boolean rayTraced) {
+        this.rayTracedReflections = rayTraced;
+        return this;
+    }
+
+    /**
+     * Whether the last frame was drawn with ray traced reflections: {@link #isRayTracedReflections()} is on, and the GPU can do it.
+     */
+    public boolean isUsingRayTracedReflections() {
+        return usingRayTracedReflections;
+    }
+
+    void setUsingRayTracedReflections(boolean using) {
+        this.usingRayTracedReflections = using;
+    }
+
+    public float getRayTracedReflectionRoughness() {
+        return rayTracedReflectionRoughness;
+    }
+
+    /**
+     * The roughness (0 mirror to 1 matte, as {@code Material.setRoughness}) up to which a surface reflects by ray; the
+     * default is 0.3. One ray can not blur a reflection the way a rough surface does, so a rougher one is left to the sky;
+     * between half this and this, a surface fades from one to the other. A rougher surface that does trace is a little
+     * grainy: its rays are scattered, a different way at each pixel.
+     */
+    public Scene3D setRayTracedReflectionRoughness(float roughness) {
+        this.rayTracedReflectionRoughness = Math.clamp(roughness, 0.05f, 1f);
+        return this;
+    }
+
+    public float getRayTracedReflectionDistance() {
+        return rayTracedReflectionDistance;
+    }
+
+    /**
+     * How far a reflection ray looks for something to show (500 by default); past it, the sky shows.
+     */
+    public Scene3D setRayTracedReflectionDistance(float distance) {
+        this.rayTracedReflectionDistance = Math.max(0.1f, distance);
+        return this;
+    }
+
+    public boolean isRayTracedAmbientOcclusion() {
+        return rayTracedAmbientOcclusion;
+    }
+
+    /**
+     * Works out {@linkplain #setAmbientOcclusion(float) ambient occlusion} (off by default) by tracing rays instead of reading
+     * the depth picture: each pixel sends several rays over the hemisphere above its surface, as far as
+     * {@link #setAmbientOcclusionRadius(float)}, and is darkened by those that hit something. It sees what the picture
+     * cannot: things off the screen or behind other things, and thin ones, with no halo around objects or darkening of a
+     * surface by something far in front of it. It takes the strength and radius of the screen-space occlusion, and nothing shows
+     * without a strength above 0.
+     * <p>
+     * Needs Vulkan on a GPU with ray queries; anywhere else the screen-space occlusion is used, and
+     * {@link #isUsingRayTracedAmbientOcclusion()} says which. Only opaque nodes drawn as triangles are traced (not skinned or
+     * blend-shaped, see-through or alpha-cut ones), though all of them are darkened.
+     */
+    public Scene3D setRayTracedAmbientOcclusion(boolean rayTraced) {
+        this.rayTracedAmbientOcclusion = rayTraced;
+        return this;
+    }
+
+    /**
+     * Whether the last frame was drawn with ray traced ambient occlusion: {@link #isRayTracedAmbientOcclusion()} is on, the
+     * occlusion strength is above 0, and the GPU can do it.
+     */
+    public boolean isUsingRayTracedAmbientOcclusion() {
+        return usingRayTracedAmbientOcclusion;
+    }
+
+    void setUsingRayTracedAmbientOcclusion(boolean using) {
+        this.usingRayTracedAmbientOcclusion = using;
     }
 
     public float getShadowSoftness() {

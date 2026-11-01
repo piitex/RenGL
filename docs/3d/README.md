@@ -34,7 +34,7 @@ first time something draws 3D, and closed with the window.
 | [Physics](physics.md) | Rigid bodies: gravity, velocity, mass and inertia, forces, collisions with friction and bounce, sleeping, raycasts and trigger zones, mesh and hull colliders, joints, a character controller |
 | [Instancing](instancing.md) | Thousands of copies of one mesh in a single draw |
 | [Upscaling](upscaling.md) | Drawing a scene smaller and enlarging it: render scale, the built-in temporal upscaler, and the `Upscaler` interface for FSR, DLSS and XeSS modules |
-| [Ray tracing](ray-tracing.md) | Shadows traced with rays through the scene instead of drawn into maps, on Vulkan GPUs with ray queries, and the acceleration structures behind them |
+| [Ray tracing](ray-tracing.md) | Shadows, reflections and ambient occlusion traced with rays through the scene, on Vulkan GPUs with ray queries, and the acceleration structures behind them |
 | [Custom rendering](custom-rendering.md) | Drawing your own 3D with `GpuDevice`, pipelines and one GLSL shader that runs on both APIs |
 
 Status, known problems and plans are tracked in the [3D status document](../3d-status.md).

@@ -43,10 +43,15 @@ public final class ShaderCompiler {
      * @param sampler true for a texture sampler, false for a uniform block
      * @param glName  the name OpenGL knows it by: the block's name, or the sampler variable's name
      * @param accel   true for an acceleration structure ({@code accelerationStructureEXT}), which only Vulkan has
+     * @param count   how many descriptors the binding holds: 1, or the length of an array of samplers (Vulkan only)
      */
-    public record Binding(int binding, boolean sampler, String glName, boolean accel) {
+    public record Binding(int binding, boolean sampler, String glName, boolean accel, int count) {
+        public Binding(int binding, boolean sampler, String glName, boolean accel) {
+            this(binding, sampler, glName, accel, 1);
+        }
+
         public Binding(int binding, boolean sampler, String glName) {
-            this(binding, sampler, glName, false);
+            this(binding, sampler, glName, false, 1);
         }
     }
 
@@ -180,11 +185,11 @@ public final class ShaderCompiler {
         });
     }
 
-    private static void collect(MemoryStack stack, long context, long compiler, long resources, int type,
+    private static void collect(MemoryStack stack, long context, long compiler, long resources, int resourceType,
                                 boolean sampler, List<Binding> into) {
         PointerBuffer list = stack.mallocPointer(1);
         PointerBuffer count = stack.mallocPointer(1);
-        checkSpvc(context, spvc_resources_get_resource_list_for_type(resources, type, list, count), "list resources");
+        checkSpvc(context, spvc_resources_get_resource_list_for_type(resources, resourceType, list, count), "list resources");
         int size = (int) count.get(0);
         if (size == 0) return;
         org.lwjgl.util.spvc.SpvcReflectedResource.Buffer buffer =
@@ -195,7 +200,12 @@ public final class ShaderCompiler {
             // OpenGL finds a block by the name of its type, and a sampler by its variable's name.
             String name = sampler ? spvc_compiler_get_name(compiler, resource.id())
                     : spvc_compiler_get_name(compiler, resource.base_type_id());
-            into.add(new Binding(binding, sampler, name, type == SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE));
+            int arrayLength = 1;
+            if (sampler) {
+                long type = spvc_compiler_get_type_handle(compiler, resource.type_id());
+                if (spvc_type_get_num_array_dimensions(type) > 0) arrayLength = Math.max(1, spvc_type_get_array_dimension(type, 0));
+            }
+            into.add(new Binding(binding, sampler, name, resourceType == SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE, arrayLength));
         }
     }
 

@@ -6,6 +6,7 @@ import me.piitex.engine.render3d.GpuDevice;
 import me.piitex.engine.render3d.GpuTexture;
 import me.piitex.engine.render3d.Pipeline;
 import me.piitex.engine.render3d.PipelineDesc;
+import me.piitex.engine.render3d.RayScene;
 import me.piitex.engine.render3d.RenderPass;
 import me.piitex.engine.render3d.RenderTarget;
 import me.piitex.engine.render3d.VertexFormat;
@@ -16,6 +17,9 @@ import me.piitex.engine.render3d.upscale.UpscaleInputs;
 import me.piitex.engine.render3d.upscale.Upscaler;
 import me.piitex.engine.render3d.upscale.UpscalerProvider;
 import org.lwjgl.system.MemoryUtil;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -45,6 +49,8 @@ import java.nio.ByteOrder;
  * two viewports in a frame doesn't have one overwrite what the other is about to read.
  */
 final class PostPass {
+    private static final Logger log = LogManager.getLogger("Engine");
+
     /**
      * What the finishing pass does, as the scene asks for it.
      *
@@ -208,6 +214,79 @@ final class PostPass {
             """;
 
     /**
+     * Ambient occlusion by rays, in place of {@link #OCCLUSION}, at half the size too: src is the packed depth, binding 2 the
+     * scene's acceleration structure. The same depth gives each pixel's place and normal, which are put in the world with the
+     * camera's axes (right, up and forward); eight rays spread over the hemisphere above it, thicker toward the surface's normal,
+     * go as far as the radius, and each that hits something counts for more the nearer the hit is. Where the pattern of rays
+     * starts turns from pixel to pixel (and from frame to frame with a temporal upscaler), and the blur that follows takes the
+     * grain out. c.xyz is the camera's position and c.w the frame; a, b as in {@link #OCCLUSION}.
+     */
+    private static final String OCCLUSION_RAYS = """
+            #version 460
+            #extension GL_EXT_ray_query : require
+            layout(set = 0, binding = 0) uniform PostRays {
+                vec4 a;
+                vec4 b;
+                vec4 c;
+                vec4 right;
+                vec4 up;
+                vec4 forward;
+            };
+            layout(set = 0, binding = 1) uniform sampler2D src;
+            layout(set = 0, binding = 2) uniform accelerationStructureEXT world;
+            layout(location = 0) out vec4 outColor;
+            """ + DEPTH + """
+            vec3 viewPos(ivec2 p, float d) {
+                vec2 uv = (vec2(p) + 0.5) * a.xy;
+                vec2 ndc = vec2(uv.x * 2.0 - 1.0, (uv.y * 2.0 - 1.0) * b.w);
+                return vec3(ndc.x * a.z * d, ndc.y * a.w * d, -d);
+            }
+            const int RAYS = 8;
+            void main() {
+                ivec2 p = ivec2(gl_FragCoord.xy) * 2;
+                float d = viewDepth(p);
+                if (d < 0.0) {
+                    outColor = vec4(1.0);
+                    return;
+                }
+                vec3 pos = viewPos(p, d);
+                float dl = viewDepth(p + ivec2(-1, 0)), dr = viewDepth(p + ivec2(1, 0));
+                float du = viewDepth(p + ivec2(0, -1)), dd = viewDepth(p + ivec2(0, 1));
+                if (dl < 0.0) dl = d;
+                if (dr < 0.0) dr = d;
+                if (du < 0.0) du = d;
+                if (dd < 0.0) dd = d;
+                vec3 px = abs(dr - d) < abs(dl - d) ? viewPos(p + ivec2(1, 0), dr) - pos : pos - viewPos(p + ivec2(-1, 0), dl);
+                vec3 py = abs(dd - d) < abs(du - d) ? viewPos(p + ivec2(0, 1), dd) - pos : pos - viewPos(p + ivec2(0, -1), du);
+                vec3 n = normalize(cross(px, py));
+                if (dot(n, pos) > 0.0) n = -n;
+                // View space looks down -z; the world is reached by the camera's axes.
+                vec3 nw = normalize(right.xyz * n.x + up.xyz * n.y - forward.xyz * n.z);
+                float radius = b.z;
+                // Off the surface by what the depth picture's precision allows, so a ray never starts inside the surface it left.
+                vec3 origin = c.xyz + right.xyz * pos.x + up.xyz * pos.y - forward.xyz * pos.z + nw * (0.004 * d + 0.01 * radius);
+                vec3 t = normalize(abs(nw.y) < 0.9 ? cross(nw, vec3(0.0, 1.0, 0.0)) : cross(nw, vec3(1.0, 0.0, 0.0)));
+                vec3 bt = cross(nw, t);
+                float rot = fract(52.9829189 * fract(dot(gl_FragCoord.xy + c.w * 5.588238, vec2(0.06711056, 0.00583715)))) * 6.2831853;
+                float blocked = 0.0;
+                for (int i = 0; i < RAYS; i++) {
+                    float h = (float(i) + 0.5) / float(RAYS);
+                    float ang = float(i) * 2.399963 + rot;
+                    float r = sqrt(h);
+                    vec3 dir = t * (cos(ang) * r) + bt * (sin(ang) * r) + nw * sqrt(1.0 - h);
+                    rayQueryEXT query;
+                    rayQueryInitializeEXT(query, world, gl_RayFlagsOpaqueEXT, 0x02, origin, 0.0, dir, radius);
+                    while (rayQueryProceedEXT(query)) { }
+                    if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+                        float x = rayQueryGetIntersectionTEXT(query, true) / radius;
+                        blocked += 1.0 - x * x;
+                    }
+                }
+                outColor = vec4(vec3(1.0 - blocked / float(RAYS)), 1.0);
+            }
+            """;
+
+    /**
      * One direction of a blur of the occlusion that doesn't cross an edge: src is the occlusion at half size, the packed
      * depth is the second texture. a.xy is one over the half size and a.zw the near and far plane; b.xy the step between
      * taps in texture coordinates along the direction, b.z the radius (depth differences below half of it blur); c.xy the
@@ -286,6 +365,10 @@ final class PostPass {
     private final GpuDevice device;
     private final GpuBuffer triangle;
     private final Pipeline bright, blur, composite, occlusion, occlusionBlur;
+    /** The occlusion shader that traces rays, made when first wanted; null until then or when it does not compile here. */
+    private Pipeline rayOcclusion;
+    private boolean rayOcclusionBroken;
+    private GpuBuffer rayOcclusionBlock;
     private final GpuBuffer[] uniforms = new GpuBuffer[PASSES];
     private final ByteBuffer scratch = MemoryUtil.memAlloc(UNIFORM_BYTES).order(ByteOrder.nativeOrder());
     private RenderTarget scene, half1, half2, quarter1, quarter2, depth, aoA, aoB;
@@ -434,9 +517,14 @@ final class PostPass {
      * @param hasDepth whether {@link #depthTarget()} was drawn this frame, which occlusion needs
      * @param frame    how the frame was drawn
      * @param motion   whether {@link #velocityTarget()} was drawn this frame, which a temporal upscaler needs
+     * @param rays     the scene placed for rays, to work the occlusion out with them in place of the depth picture, or null
+     * @param rayFrame which frame this is, for the pattern the occlusion rays start from
+     * @return whether the occlusion was traced
      */
-    void apply(RenderTarget output, Settings s, boolean hasDepth, Frame frame, boolean motion, Camera camera, float delta) {
+    boolean apply(RenderTarget output, Settings s, boolean hasDepth, Frame frame, boolean motion, Camera camera, float delta,
+                  RayScene rays, int rayFrame) {
         int pass = 0;
+        boolean traced = false;
         GpuTexture source = scene.texture();
         if (frame.upscaler() != null) source = upscale(frame, motion, camera, delta, output.isBottomLeftOrigin());
         boolean glow = s.glows();
@@ -461,8 +549,11 @@ final class PostPass {
         boolean occluded = hasDepth && s.occludes() && depth != null;
         if (occluded) {
             float ySign = output.isBottomLeftOrigin() ? 1f : -1f;
-            fullScreen(aoA, occlusion, uniforms[pass++], new float[]{1f / depth.width(), 1f / depth.height(), s.tanHalfFovX(), s.tanHalfFovY()},
-                    new float[]{s.near(), s.far(), s.occlusionRadius(), ySign}, null, depth.texture(), null, null, null);
+            traced = rays != null && traceOcclusion(aoA, s, ySign, rays, camera, rayFrame);
+            if (!traced) {
+                fullScreen(aoA, occlusion, uniforms[pass++], new float[]{1f / depth.width(), 1f / depth.height(), s.tanHalfFovX(), s.tanHalfFovY()},
+                        new float[]{s.near(), s.far(), s.occlusionRadius(), ySign}, null, depth.texture(), null, null, null);
+            }
             float halfW = 1f / aoA.width(), halfH = 1f / aoA.height();
             fullScreen(aoB, occlusionBlur, uniforms[pass++], new float[]{halfW, halfH, s.near(), s.far()},
                     new float[]{halfW, 0f, s.occlusionRadius(), 0f}, new float[]{1f, 0f, 0f, 0f}, aoA.texture(), depth.texture(), null, null);
@@ -478,6 +569,51 @@ final class PostPass {
                 new float[]{shadow[0], shadow[1], shadow[2], occluded ? s.occlusion() : 0f},
                 picture, glow ? half1.texture() : picture, glow ? quarter1.texture() : picture, occluded ? aoA.texture() : picture,
                 new float[]{highlight[0], highlight[1], highlight[2], 0f});
+        return traced;
+    }
+
+    /**
+     * Fills {@code into} with the occlusion worked out by rays through {@code rays}. False, with nothing drawn, where the
+     * shader does not compile on this GPU (reported once), and then the occlusion is read from the depth picture.
+     */
+    private boolean traceOcclusion(RenderTarget into, Settings s, float ySign, RayScene rays, Camera camera, int rayFrame) {
+        if (rayOcclusionBroken) return false;
+        if (rayOcclusion == null) {
+            try {
+                rayOcclusion = device.createPipeline(new PipelineDesc(VERTEX, OCCLUSION_RAYS, VertexLayout.of(VertexFormat.FLOAT2), false, false, false));
+            } catch (RuntimeException e) {
+                rayOcclusionBroken = true;
+                log.error("The ray traced occlusion shader does not compile on this GPU; occlusion is read from the depth picture instead.", e);
+                return false;
+            }
+            rayOcclusionBlock = device.createDynamicBuffer(BufferType.UNIFORM, 96);
+        }
+        Vec3 eye = camera.getPosition();
+        Vec3 forward = camera.getTarget().sub(eye).normalized();
+        Vec3 right = forward.cross(camera.getUp()).normalized();
+        Vec3 up = right.cross(forward);
+        ByteBuffer block = MemoryUtil.memAlloc(96).order(ByteOrder.nativeOrder());
+        try {
+            block.putFloat(1f / depth.width()).putFloat(1f / depth.height()).putFloat(s.tanHalfFovX()).putFloat(s.tanHalfFovY());
+            block.putFloat(s.near()).putFloat(s.far()).putFloat(s.occlusionRadius()).putFloat(ySign);
+            block.putFloat(eye.x()).putFloat(eye.y()).putFloat(eye.z()).putFloat(rayFrame);
+            block.putFloat(right.x()).putFloat(right.y()).putFloat(right.z()).putFloat(0f);
+            block.putFloat(up.x()).putFloat(up.y()).putFloat(up.z()).putFloat(0f);
+            block.putFloat(forward.x()).putFloat(forward.y()).putFloat(forward.z()).putFloat(0f);
+            block.flip();
+            rayOcclusionBlock.update(block);
+        } finally {
+            MemoryUtil.memFree(block);
+        }
+        try (RenderPass pass = device.beginPass(into, 0f, 0f, 0f, 1f)) {
+            pass.bindPipeline(rayOcclusion);
+            pass.bindUniformBuffer(0, rayOcclusionBlock);
+            pass.bindTexture(1, depth.texture());
+            pass.bindAccelerationStructure(2, rays);
+            pass.bindVertexBuffer(0, triangle);
+            pass.draw(3);
+        }
+        return true;
     }
 
     /**
@@ -548,6 +684,8 @@ final class PostPass {
         composite.close();
         occlusion.close();
         occlusionBlur.close();
+        if (rayOcclusion != null) rayOcclusion.close();
+        if (rayOcclusionBlock != null) rayOcclusionBlock.close();
         for (GpuBuffer b : uniforms) b.close();
         MemoryUtil.memFree(scratch);
     }

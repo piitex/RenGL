@@ -49,6 +49,15 @@ public interface RenderPass extends AutoCloseable {
         throw new UnsupportedOperationException("This device can not trace rays");
     }
 
+    /**
+     * Binds textures to an array of samplers ({@code uniform sampler2D name[N]}) at a binding. The array must be as long as the
+     * shader's; a shader that picks an entry per pixel (with {@code nonuniformEXT}) needs a GPU that allows it, which the
+     * ray tracing devices do. Only where {@link GpuDevice#supportsRayTracing()}.
+     */
+    default void bindTextures(int binding, GpuTexture[] textures) {
+        throw new UnsupportedOperationException("This device can not index arrays of textures");
+    }
+
     default void draw(int vertexCount) {
         draw(vertexCount, 1, 0);
     }
