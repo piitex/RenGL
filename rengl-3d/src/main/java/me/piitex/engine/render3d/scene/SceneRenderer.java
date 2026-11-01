@@ -61,7 +61,9 @@ final class SceneRenderer {
     /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
     private static final int KEY_ENV_MASK = 7;
     /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
-    private static final int KEY_VARIANT_SHIFT = 18;
+    private static final int KEY_VARIANT_SHIFT = 20;
+    /** The program writes one of the pictures a denoiser is guided by ({@code SceneShaders.GUIDE_*}) in place of shading; two bits. */
+    private static final int KEY_GUIDE_SHIFT = 18, KEY_GUIDE_MASK = 3;
     /** The program also shades the lights listed in the cluster grid for the pixel's cell. */
     private static final int KEY_CLUSTER = 1 << 12;
     /** The program shadows the lights marked as ray traced with a ray query through the scene's acceleration structure. */
@@ -397,7 +399,8 @@ final class SceneRenderer {
             // something drawn after it.
             desc = new PipelineDesc(vertex(skinned, uv2, morph), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
                     variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0, (key & KEY_REFLECT) != 0,
-                    (key & KEY_GI_TRACE) != 0 ? ((key & KEY_PATH_TRACE) != 0 ? GI_PATH : GI_TRACE) : (key & KEY_GI) != 0 ? GI_APPLY : GI_NONE), meshLayout, true, (key & KEY_CULL) != 0, blend,
+                    (key & KEY_GI_TRACE) != 0 ? ((key & KEY_PATH_TRACE) != 0 ? GI_PATH : GI_TRACE) : (key & KEY_GI) != 0 ? GI_APPLY : GI_NONE,
+                    (key >> KEY_GUIDE_SHIFT) & KEY_GUIDE_MASK), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
                     .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
         }
@@ -509,6 +512,8 @@ final class SceneRenderer {
             log.warn("A Scene3D sorts at most {} lights without shadows into the light grid; the ones farthest from the camera are left out of the frame.", LightClusters.MAX_LIGHTS);
         }
         RayFrame rays = prepareRays(scene, res, lights, env, clusters != null, postProcessed);
+        // A path traced frame whose upscaler cleans up the noise itself: no filter of ours, and the pictures it is guided by instead.
+        boolean reconstruct = rays.path() && temporal && scene.isRayReconstruction() && upFrame.upscaler().denoisesPathTracing();
         boolean rayShadows = rays.shadows();
         ShadowFrame shadowFrame = rayShadows ? ShadowFrame.NONE : planShadows(scene, lights, camera, aspect, planes, opaque);
         if (!shadowFrame.plans().isEmpty()) shadowPass(res, opaqueGroups, shadowFrame);
@@ -538,7 +543,7 @@ final class SceneRenderer {
         if (rays.gi()) {
             int traceBits = (env << KEY_ENV_SHIFT) | (variant << KEY_VARIANT_SHIFT) | (rayShadows ? KEY_RAY : 0) | KEY_GI_TRACE
                     | (rays.path() ? KEY_PATH_TRACE : 0);
-            indirect = indirectLight(res, scene, camera, opaqueGroups, traceBits, env, sky, aspect, target.isBottomLeftOrigin());
+            indirect = indirectLight(res, scene, camera, opaqueGroups, traceBits, env, sky, aspect, target.isBottomLeftOrigin(), reconstruct);
         } else if (postProcessed) {
             res.post.dropGiHistory();
         }
@@ -570,15 +575,17 @@ final class SceneRenderer {
             }
         }
         if (temporal) velocityPass(res, opaqueGroups, drawViewProj, viewProj, camera, upFrame);
+        PostPass.Guides guides = reconstruct && indirect != null ? guidePasses(res, opaqueGroups, view) : null;
         if (postProcessed) {
             boolean traced = res.post.apply(target, PostPass.Settings.of(scene, aspect), hasDepth, upFrame, temporal, camera, delta,
-                    rays.occlusion() ? res.rayScene : null, temporal ? (int) (frame & 7) : 0);
+                    rays.occlusion() ? res.rayScene : null, temporal ? (int) (frame & 7) : 0, guides);
             scene.setUsingRayTracedAmbientOcclusion(traced);
         } else {
             scene.setUsingRayTracedAmbientOcclusion(false);
         }
         scene.setUsingRayTracedGlobalIllumination(indirect != null && !rays.path());
         scene.setUsingPathTracing(indirect != null && rays.path());
+        scene.setUsingRayReconstruction(guides != null);
         if (temporal) res.post.temporal().endFrame(viewProj.toArray());
         writingTemporal = null;
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
@@ -1317,7 +1324,7 @@ final class SceneRenderer {
      * then averages it over frames and neighbours. Returns that picture, which the scene reads as its diffuse ambient light.
      */
     private GpuTexture indirectLight(Resources res, Scene3D scene, Camera camera, List<Group> groups, int traceBits, int env, Skybox sky,
-                                     float aspect, boolean bottomLeft) {
+                                     float aspect, boolean bottomLeft, boolean unfiltered) {
         RenderTarget raw = res.post.giTarget();
         try (RenderPass pass = device.beginPass(raw, 0f, 0f, 0f, 0f)) {
             pass.bindTexture(7, whiteTexture);
@@ -1332,7 +1339,35 @@ final class SceneRenderer {
                 drawGroup(pass, res, group, state, lastMaterial, false, traceBits, null);
             }
         }
+        if (unfiltered) {
+            // The upscaler averages the paths over frames itself, so what the scene shows is the rays' own picture.
+            res.post.dropGiHistory();
+            return raw.texture();
+        }
         return res.post.denoiseGi(camera, PostPass.Settings.of(scene, aspect), bottomLeft ? 1f : -1f, scene.temporalResets(), (traceBits & KEY_PATH_TRACE) != 0);
+    }
+
+    /**
+     * Draws the solid objects in view three more times, with the camera of the scene (jitter included), into the pictures a
+     * denoising upscaler is guided by: the colour each surface reflects diffusely, how much of the light it reflects like a mirror,
+     * and its normal with the roughness in alpha. The sky is left empty (zero).
+     */
+    private PostPass.Guides guidePasses(Resources res, List<Group> groups, Mat4 view) {
+        RenderTarget[] targets = res.post.guideTargets();
+        int[] kinds = {GUIDE_DIFFUSE, GUIDE_SPECULAR, GUIDE_NORMAL};
+        for (int i = 0; i < targets.length; i++) {
+            try (RenderPass pass = device.beginPass(targets[i], 0f, 0f, 0f, kinds[i] == GUIDE_NORMAL ? 1f : 0f)) {
+                // Declared by the shader, so something must be bound there, though the guide shaders do not read it.
+                pass.bindTexture(7, whiteTexture);
+                int[] state = {-1, 0};
+                Material[] lastMaterial = {null};
+                for (Group group : groups) {
+                    if (!group.inView || group.viewCount == 0 || (group.key & KEY_LINES) != 0) continue;
+                    drawGroup(pass, res, group, state, lastMaterial, false, kinds[i] << KEY_GUIDE_SHIFT, null);
+                }
+            }
+        }
+        return new PostPass.Guides(targets[0].texture(), targets[1].texture(), targets[2].texture(), view.toArray());
     }
 
     /**

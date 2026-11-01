@@ -46,9 +46,34 @@ import me.piitex.engine.render3d.math.Vec3;
  * @param reset           true when the history must be ignored: the first frame, a resize, a change of upscaler, or a
  *                        camera cut ({@link me.piitex.engine.render3d.scene.Scene3D#resetTemporalHistory()})
  * @param bottomLeftOrigin true on OpenGL, where row 0 of every image is the bottom of the picture
+ * @param diffuseAlbedo   for an upscaler that also cleans up the noise of path tracing ({@link Upscaler#denoisesPathTracing}),
+ *                        and only in a frame that was path traced for it: the colour the surfaces reflect diffusely (a metal
+ *                        has none), linear, at the render size, drawn with the same jitter as {@code color}. The scene's
+ *                        {@code color} then holds the light of one noisy path per pixel, with nothing filtered. Null otherwise
+ * @param specularAlbedo  how much light the surfaces reflect as a mirror would, red, green and blue, at the render size; null
+ *                        when {@code diffuseAlbedo} is
+ * @param normalRoughness the surface normals in world space (red, green and blue, -1 to 1) and the roughness in alpha
+ *                        (0 smooth, 1 rough), at the render size; null when {@code diffuseAlbedo} is
+ * @param worldToView     the camera's view matrix in the order of {@link me.piitex.engine.render3d.math.Mat4#toArray()}, which is
+ *                        a row-major matrix for row vectors as well; null when {@code diffuseAlbedo} is
  */
 public record UpscaleInputs(GpuDevice device, GpuTexture color, GpuTexture depth, GpuTexture motion, RenderTarget output,
                             RenderTarget previousOutput, int renderWidth, int renderHeight, int displayWidth, int displayHeight,
                             float jitterX, float jitterY, float near, float far, float fovYRadians, Vec3 cameraPosition, Vec3 cameraRight,
-                            Vec3 cameraUp, Vec3 cameraForward, float deltaSeconds, long frame, boolean reset, boolean bottomLeftOrigin) {
+                            Vec3 cameraUp, Vec3 cameraForward, float deltaSeconds, long frame, boolean reset, boolean bottomLeftOrigin,
+                            GpuTexture diffuseAlbedo, GpuTexture specularAlbedo, GpuTexture normalRoughness, float[] worldToView) {
+    /** The inputs of an upscaler that is not given the guides of a denoiser. */
+    public UpscaleInputs(GpuDevice device, GpuTexture color, GpuTexture depth, GpuTexture motion, RenderTarget output,
+                         RenderTarget previousOutput, int renderWidth, int renderHeight, int displayWidth, int displayHeight,
+                         float jitterX, float jitterY, float near, float far, float fovYRadians, Vec3 cameraPosition, Vec3 cameraRight,
+                         Vec3 cameraUp, Vec3 cameraForward, float deltaSeconds, long frame, boolean reset, boolean bottomLeftOrigin) {
+        this(device, color, depth, motion, output, previousOutput, renderWidth, renderHeight, displayWidth, displayHeight, jitterX, jitterY,
+                near, far, fovYRadians, cameraPosition, cameraRight, cameraUp, cameraForward, deltaSeconds, frame, reset, bottomLeftOrigin,
+                null, null, null, null);
+    }
+
+    /** Whether this frame carries the guides of a denoiser. */
+    public boolean hasGuides() {
+        return diffuseAlbedo != null;
+    }
 }

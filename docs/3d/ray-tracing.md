@@ -221,6 +221,31 @@ steps of the noise there, so a bright patch keeps its edge while the grain is av
 
 It works under a temporal upscaler, with the picture drawn at the render size and the paths traced there.
 
+### DLSS Ray Reconstruction
+
+Where the upscaler is [DLSS with the Ray Reconstruction libraries](upscaling.md#dlss-ray-reconstruction) the scene does not filter
+the paths itself. NVIDIA's denoiser is built for exactly this picture, and does the enlarging at the same time, so the scene gives
+it the light as the rays found it (one noisy path per pixel, nothing averaged) and what it needs to tell the surfaces apart, and
+takes back the clean, display-size picture:
+
+- the **diffuse albedo**: the colour each surface reflects diffusely (a metal has none), so the denoiser can tell the light from the
+  colour it is seen on;
+- the **specular albedo**: how much of the light each surface reflects like a mirror, from the same fit of the split-sum integral the
+  sky's reflection uses;
+- the **normal** in world space and the **roughness** in its alpha channel.
+
+They are drawn at the render size, with the jitter of the scene, in three more passes over the solid objects in view (the
+material's own shader writes them, so textures, normal maps, metallic-roughness maps and classic materials are all in); the sky is
+zero. The depth and motion are the ones every temporal upscaler gets.
+
+| Method | Description |
+|---|---|
+| `setRayReconstruction(boolean)` | Let an upscaler that can denoise path tracing do it (on by default); off, the scene's own filter runs and DLSS only enlarges |
+| `isUsingRayReconstruction()` | Whether the last frame's paths were cleaned by the upscaler |
+
+It needs a temporal upscaler whose `denoisesPathTracing()` is true, and path tracing on; with any other upscaler, with the setting
+off, or where the GPU can not trace rays, the scene's own filter is used as before. Switching between them restarts the history.
+
 ## How it works
 
 The 3D layer turns each mesh into a **bottom-level acceleration structure** (once, when it first has to be traced, and freed
@@ -273,5 +298,6 @@ bool hit = rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIn
 
 Soft shadows from a light with a size, reflections of reflections, rough reflections that blur (they need many paths and a
 filter for the specular light, which path tracing does not have yet: only the diffuse light is traced), light picked straight
-from bright surfaces and lights so a small one is not noisy, shadows and reflections of skinned and alpha-cut nodes, and a vendor
-denoiser (DLSS Ray Reconstruction, NRD) in place of the engine's own, are what come next.
+from bright surfaces and lights so a small one is not noisy, shadows and reflections of skinned and alpha-cut nodes, a specular
+hit distance for Ray Reconstruction (it is not given one, so it follows a reflection by the surface's own motion), and a denoiser
+for other vendors (NRD) are what come next.

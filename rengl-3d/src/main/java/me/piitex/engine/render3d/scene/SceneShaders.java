@@ -369,6 +369,52 @@ final class SceneShaders {
      * needed for that), and writes it with the depth along the view axis in alpha.
      */
     static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi) {
+        return fragment(env, filters, falloffs, clustered, rayTraced, reflections, gi, GUIDE_NONE);
+    }
+
+    /** No guide: the shader shades the surface. */
+    static final int GUIDE_NONE = 0;
+    /** The shader writes the colour the surface reflects diffusely (none for a metal) in place of its shading. */
+    static final int GUIDE_DIFFUSE = 1;
+    /** The shader writes how much light the surface reflects like a mirror, in place of its shading. */
+    static final int GUIDE_SPECULAR = 2;
+    /** The shader writes the world normal and, in alpha, the roughness, in place of the surface's shading. */
+    static final int GUIDE_NORMAL = 3;
+
+    private static String guideUnlit(int guide) {
+        return switch (guide) {
+            case GUIDE_DIFFUSE -> "if (mode == 2) { outColor = vec4(albedo, 1.0); return; }\n";
+            case GUIDE_SPECULAR -> "if (mode == 2) { outColor = vec4(0.0, 0.0, 0.0, 1.0); return; }\n";
+            case GUIDE_NORMAL -> "if (mode == 2) { outColor = vec4(gl_FrontFacing ? normalize(vNormal) : -normalize(vNormal), 1.0); return; }\n";
+            default -> "";
+        };
+    }
+
+    private static String guidePbr(int guide) {
+        return switch (guide) {
+            case GUIDE_DIFFUSE -> "outColor = vec4(diffuseColor, 1.0); return;\n";
+            case GUIDE_SPECULAR -> "outColor = vec4(envBrdf(f0, roughness, nv), 1.0); return;\n";
+            case GUIDE_NORMAL -> "outColor = vec4(n, roughness); return;\n";
+            default -> "";
+        };
+    }
+
+    /** A classic material has a specular strength and a shininess exponent; its roughness is the one a GGX lobe of that width has. */
+    private static String guideClassic(int guide) {
+        return switch (guide) {
+            case GUIDE_DIFFUSE -> "outColor = vec4(albedo, 1.0); return;\n";
+            case GUIDE_SPECULAR -> "outColor = vec4(vec3(0.04 * clamp(vParams.x, 0.0, 1.0)), 1.0); return;\n";
+            case GUIDE_NORMAL -> "outColor = vec4(n, clamp(pow(2.0 / (vParams.y + 2.0), 0.25), 0.05, 1.0)); return;\n";
+            default -> "";
+        };
+    }
+
+    /**
+     * The same, and with {@code guide} not {@link #GUIDE_NONE} the shader does not shade the surface but writes one of the pictures a
+     * denoiser is guided by (see {@link #GUIDE_DIFFUSE}). Nothing but the material and the camera is read for it.
+     */
+    static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi,
+                           int guide) {
         boolean tracingGi = gi == GI_TRACE || gi == GI_PATH;
         reflections |= tracingGi;
         StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
@@ -393,6 +439,9 @@ final class SceneShaders {
                 .replace("//@GI_FUNCTIONS", gi == GI_APPLY ? GI_APPLY_FUNCTIONS.replace("%GI%", "" + GI_BINDING) : gi == GI_PATH ? GI_PATH_FUNCTIONS : tracingGi ? GI_TRACE_FUNCTIONS : "")
                 .replace("//@GI_UNLIT", tracingGi ? GI_TRACE_UNLIT : "")
                 .replace("//@GI_OUTPUT", tracingGi ? GI_TRACE_OUTPUT : "")
+                .replace("//@GUIDE_UNLIT", guideUnlit(guide))
+                .replace("//@GUIDE_PBR", guidePbr(guide))
+                .replace("//@GUIDE_CLASSIC", guideClassic(guide))
                 .replace("//@CLASSIC_AMBIENT", gi == GI_APPLY ? "lit = giDiffuse(n) * albedo;\n" : CLASSIC_AMBIENT)
                 .replace("//@PBR_AMBIENT", pbrAmbient(reflections, gi == GI_APPLY))
                 .replace("//@RAY_SHADOW", rayTraced ? "if (info.z < -0.5) return rayShadow(i, worldPos, n, l);" : "")
@@ -1075,6 +1124,7 @@ final class SceneShaders {
                 if (alpha < vParams.w) discard;
 
                 //@GI_UNLIT
+                //@GUIDE_UNLIT
                 vec3 lit = albedo;
                 if (mode != 2) {
                     vec3 n = normalize(vNormal);
@@ -1114,6 +1164,7 @@ final class SceneShaders {
                         float a2 = a * a;
                         float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
                         float nv = max(dot(n, v), 1e-4);
+                        //@GUIDE_PBR
                         //@PBR_AMBIENT
                         for (int i = 0; i < """ + Scene3D.MAX_LIGHTS + """
             ; i++) {
@@ -1136,6 +1187,7 @@ final class SceneShaders {
                         //@CLUSTER_PBR
                         lit += vExtra.xyz * pow(texture(emissiveTexture, uvEmissive, cameraFwd.w).rgb, vec3(2.2));
                     } else {
+                        //@GUIDE_CLASSIC
                         //@CLASSIC_AMBIENT
                         for (int i = 0; i < """ + Scene3D.MAX_LIGHTS + """
             ; i++) {

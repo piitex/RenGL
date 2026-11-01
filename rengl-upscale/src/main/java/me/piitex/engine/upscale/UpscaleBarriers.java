@@ -48,6 +48,21 @@ public final class UpscaleBarriers {
     }
 
     /**
+     * More colour images the compute shaders read as ordinary sampled images (the pictures a denoiser is guided by): what the
+     * passes before wrote to them is made visible.
+     */
+    public static void readable(VkCommandBuffer cmd, VkImageInfo... images) {
+        try (MemoryStack stack = stackPush()) {
+            VkImageMemoryBarrier.Buffer barriers = VkImageMemoryBarrier.calloc(images.length, stack);
+            for (int i = 0; i < images.length; i++) {
+                barrier(barriers.get(i), images[i], images[i].layout(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+            }
+            vkCmdPipelineBarrier(cmd, PASS_STAGES, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, null, null, barriers);
+        }
+    }
+
+    /**
      * The output goes back to the layout the rest of the post-processing reads it in, the depth to the one it is left in by
      * the pass that drew it, and nothing later starts writing what the vendor's shaders were still reading.
      */

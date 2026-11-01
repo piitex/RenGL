@@ -610,6 +610,12 @@ final class PostPass {
     /** The size of the picture shown, which the bloom and the upscaler's output follow. */
     private int displayWidth, displayHeight;
 
+    /**
+     * The pictures an upscaler that denoises is guided by (diffuse albedo, specular albedo, normal and roughness), at the render
+     * size, each with a depth buffer of its own to be drawn with. Made when first asked for.
+     */
+    private final RenderTarget[] guideTargets = new RenderTarget[3];
+    private int guideWidth, guideHeight;
     /** The depth and motion of the solid objects at the render size, for a temporal upscaler. */
     private RenderTarget velocity;
     private int velocityWidth, velocityHeight;
@@ -712,6 +718,34 @@ final class PostPass {
     }
 
     /**
+     * What a denoising upscaler is given besides the picture: the pictures drawn for it, and the camera's view matrix.
+     */
+    record Guides(GpuTexture diffuse, GpuTexture specular, GpuTexture normal, float[] worldToView) {
+    }
+
+    /**
+     * The three targets the guides are drawn into, in the order diffuse albedo, specular albedo, normal and roughness: the size of
+     * the scene's, 16-bit floating point colour. Call {@link #sceneTarget} first.
+     */
+    RenderTarget[] guideTargets() {
+        if (guideTargets[0] == null || guideWidth != width || guideHeight != height) {
+            closeGuides();
+            for (int i = 0; i < guideTargets.length; i++) guideTargets[i] = device.createSampledTarget(width, height, true, false, true, 1);
+            guideWidth = width;
+            guideHeight = height;
+        }
+        return guideTargets;
+    }
+
+    private void closeGuides() {
+        for (int i = 0; i < guideTargets.length; i++) {
+            if (guideTargets[i] != null) guideTargets[i].close();
+            guideTargets[i] = null;
+        }
+        guideWidth = guideHeight = 0;
+    }
+
+    /**
      * The target the velocity pass draws into: motion in the colour, depth in the readable depth buffer, at the render size.
      */
     RenderTarget velocityTarget() {
@@ -751,14 +785,15 @@ final class PostPass {
      * @param motion   whether {@link #velocityTarget()} was drawn this frame, which a temporal upscaler needs
      * @param rays     the scene placed for rays, to work the occlusion out with them in place of the depth picture, or null
      * @param rayFrame which frame this is, for the pattern the occlusion rays start from
+     * @param guides   the pictures that go with a path traced scene that the upscaler is to denoise, or null
      * @return whether the occlusion was traced
      */
     boolean apply(RenderTarget output, Settings s, boolean hasDepth, Frame frame, boolean motion, Camera camera, float delta,
-                  RayScene rays, int rayFrame) {
+                  RayScene rays, int rayFrame, Guides guides) {
         int pass = 0;
         boolean traced = false;
         GpuTexture source = scene.texture();
-        if (frame.upscaler() != null) source = upscale(frame, motion, camera, delta, output.isBottomLeftOrigin());
+        if (frame.upscaler() != null) source = upscale(frame, motion, camera, delta, output.isBottomLeftOrigin(), guides);
         boolean glow = s.glows();
         if (glow) {
             float shoulder = 0.5f * Math.max(s.bloomThreshold(), 0.05f);
@@ -972,7 +1007,7 @@ final class PostPass {
     /**
      * Runs the upscaler on the scene's picture and returns the picture it made.
      */
-    private GpuTexture upscale(Frame frame, boolean motion, Camera camera, float delta, boolean bottomLeft) {
+    private GpuTexture upscale(Frame frame, boolean motion, Camera camera, float delta, boolean bottomLeft, Guides guides) {
         boolean storage = upscaler.writesStorageImage();
         if (upscaled[0] == null || upscaledWidth != displayWidth || upscaledHeight != displayHeight || upscaledStorage != storage) {
             for (int i = 0; i < 2; i++) {
@@ -991,7 +1026,9 @@ final class PostPass {
         upscaler.upscale(new UpscaleInputs(device, scene.texture(), motion ? velocity.depthTexture() : null, motion ? velocity.texture() : null,
                 output, fresh ? null : before, width, height, displayWidth, displayHeight, frame.jitterX(), frame.jitterY(),
                 camera.getNear(), camera.getFar(), (float) Math.toRadians(camera.getFovYDegrees()), camera.getPosition(), right,
-                right.cross(forward), forward, delta, temporal.frame, fresh, bottomLeft));
+                right.cross(forward), forward, delta, temporal.frame, fresh, bottomLeft,
+                guides == null ? null : guides.diffuse(), guides == null ? null : guides.specular(), guides == null ? null : guides.normal(),
+                guides == null ? null : guides.worldToView()));
         current = 1 - current;
         return output.texture();
     }
@@ -1026,6 +1063,7 @@ final class PostPass {
         scene = half1 = half2 = quarter1 = quarter2 = depth = aoA = aoB = velocity = null;
         upscaled[0] = upscaled[1] = null;
         closeGi();
+        closeGuides();
         depthWidth = depthHeight = velocityWidth = velocityHeight = upscaledWidth = upscaledHeight = 0;
     }
 
