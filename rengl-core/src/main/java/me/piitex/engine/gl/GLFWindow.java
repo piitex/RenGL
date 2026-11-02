@@ -5,12 +5,14 @@ import me.piitex.engine.WindowOptions;
 import me.piitex.engine.WindowStyle;
 import me.piitex.engine.gl.renderer.SkikoRenderer;
 import me.piitex.engine.gl.renderer.RenderBackend;
+import me.piitex.engine.input.FileDrag;
 import me.piitex.engine.input.InputManager;
 import me.piitex.engine.utils.flags.GeneratedFragments;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFWDropCallback;
 import org.lwjgl.glfw.GLFWErrorCallback;
+import org.lwjgl.glfw.GLFWNativeWin32;
 import org.jetbrains.skia.EncodedImageFormat;
 import org.jetbrains.skia.Image;
 import org.lwjgl.glfw.GLFWImage;
@@ -65,11 +67,14 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 public class GLFWindow {
     private static final Logger log = LogManager.getLogger("Engine");
     private static final boolean MAC = System.getProperty("os.name").toLowerCase().contains("mac");
+    private static final boolean WINDOWS = System.getProperty("os.name").toLowerCase().contains("win");
     private long window = NULL;
     private final InputManager inputManager;
     private volatile Consumer<Boolean> iconifyHandler, maximizeHandler;
     private volatile java.util.function.BooleanSupplier closeRequestHandler;
-    private volatile Consumer<java.util.List<java.nio.file.Path>> dropHandler;
+    private volatile FileDropListener dropListener;
+    private long nativeHandle;                      // main thread only: the Win32 window handle, 0 off Windows
+    private WindowsDragDrop.Target dropTarget;     // main thread only: the OLE drop target, when the window has one
     private boolean fullscreen; // main thread only
     private boolean frameHiddenForFullscreen; // main thread only: fullscreen took the title bar off a STANDARD window
     private int windowedX, windowedY, windowedW, windowedH; // bounds to return to when leaving fullscreen
@@ -183,10 +188,10 @@ public class GLFWindow {
     }
 
     /**
-     * Called on the main thread with the files the user dropped on the window from Finder / Explorer. Set before {@link #createWindow}.
+     * Told on the main thread about files dragged onto the window from Finder / Explorer. Set before {@link #createWindow}.
      */
-    public void setDropHandler(Consumer<java.util.List<java.nio.file.Path>> handler) {
-        this.dropHandler = handler;
+    public void setDropListener(FileDropListener listener) {
+        this.dropListener = listener;
     }
 
     /**
@@ -226,9 +231,11 @@ public class GLFWindow {
             Consumer<Boolean> handler = maximizeHandler;
             if (handler != null) handler.accept(maximized);
         });
+        // On Windows a drop normally arrives through the OLE target below, which also reports the drag before the
+        // drop. This callback is how the other platforms hear drops, and Windows' fallback if OLE can't start.
         glfwSetDropCallback(window, (w, count, names) -> {
-            Consumer<java.util.List<java.nio.file.Path>> handler = dropHandler;
-            if (handler == null || count <= 0) return;
+            FileDropListener listener = dropListener;
+            if (listener == null || count <= 0) return;
             java.util.List<java.nio.file.Path> paths = new java.util.ArrayList<>(count);
             for (int i = 0; i < count; i++) {
                 try {
@@ -237,14 +244,73 @@ public class GLFWindow {
                     // not a path this file system can name; nothing to hand over
                 }
             }
-            if (!paths.isEmpty()) handler.accept(java.util.List.copyOf(paths));
+            if (paths.isEmpty()) return;
+            double[] x = new double[1], y = new double[1];
+            glfwGetCursorPos(w, x, y);
+            listener.drop(java.util.List.copyOf(paths), x[0], y[0]);
         });
         glfwSetWindowCloseCallback(window, w -> {
             java.util.function.BooleanSupplier handler = closeRequestHandler;
             if (handler != null && !handler.getAsBoolean()) glfwSetWindowShouldClose(w, false);
         });
 
+        if (WINDOWS) installDropTarget();
+
         return window;
+    }
+
+    /**
+     * Main thread. Has the window take file drops through OLE, so it hears a drag come and go before the drop. If that
+     * can't be done the window keeps GLFW's plain drop callback.
+     */
+    private void installDropTarget() {
+        try {
+            nativeHandle = GLFWNativeWin32.glfwGetWin32Window(window);
+            dropTarget = WindowsDragDrop.register(nativeHandle, new FileDropListener() {
+                @Override
+                public boolean accepts() {
+                    FileDropListener listener = dropListener;
+                    return listener != null && listener.accepts();
+                }
+
+                @Override
+                public void over(java.util.List<Path> files, double x, double y) {
+                    FileDropListener listener = dropListener;
+                    if (listener != null) listener.over(files, x, y);
+                }
+
+                @Override
+                public void leave() {
+                    FileDropListener listener = dropListener;
+                    if (listener != null) listener.leave();
+                }
+
+                @Override
+                public void drop(java.util.List<Path> files, double x, double y) {
+                    FileDropListener listener = dropListener;
+                    if (listener != null) listener.drop(files, x, y);
+                }
+            });
+        } catch (Throwable t) {
+            log.warn("Could not set up drag and drop through OLE; dropped files will arrive without hover events", t);
+        }
+    }
+
+    /**
+     * MAIN THREAD ONLY. Drags the files {@code source} makes out of the window, for the left button the user is holding,
+     * and returns when the button is released. Blocks the main thread until then: the operating system pumps the
+     * window's messages meanwhile, and the render thread carries on drawing. Does nothing, answering
+     * {@link FileDrag.Outcome#CANCELLED}, when the button is not down any more.
+     */
+    public FileDrag.Outcome applyFileDrag(FileDrag.Source source) {
+        if (!WINDOWS || window == NULL) return FileDrag.Outcome.UNSUPPORTED;
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS) return FileDrag.Outcome.CANCELLED;
+        FileDrag.Outcome outcome = WindowsDragDrop.dragOut(source);
+        // The drag's own message loop took the release of the button, so GLFW still counts it as held.
+        if (window != NULL && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            WindowsDragDrop.postLeftButtonUp(nativeHandle);
+        }
+        return outcome;
     }
 
     /**
@@ -485,6 +551,10 @@ public class GLFWindow {
      */
     public void destroy() {
         if (window == NULL) return;
+        if (dropTarget != null) {
+            WindowsDragDrop.unregister(nativeHandle, dropTarget);
+            dropTarget = null;
+        }
         glfwDestroyWindow(window);
         window = NULL;
         mainThreadTasks.clear();

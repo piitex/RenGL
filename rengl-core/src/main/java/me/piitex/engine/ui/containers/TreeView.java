@@ -3,7 +3,9 @@ package me.piitex.engine.ui.containers;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
+import me.piitex.engine.input.FileDrag;
 import me.piitex.engine.input.MouseTracker;
+import me.piitex.engine.ui.FileDraggable;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.ui.color.Color;
@@ -56,7 +58,7 @@ import java.util.function.Predicate;
  * selection colors for the rows. It selects the row under a
  * right-click before a {@link #setContextMenu context menu} opens, and before any {@link #onMouseClick} handler you set.
  */
-public class TreeView<T> extends ScrollContainer implements Focusable, FontScalable {
+public class TreeView<T> extends ScrollContainer implements Focusable, FontScalable, FileDraggable {
     private static final long DOUBLE_CLICK_NANOS = 400_000_000L;
     private static final double DRAG_THRESHOLD = 5;
     private static final double AUTO_SCROLL_EDGE = 24;
@@ -128,6 +130,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private BiPredicate<T, T> canDrop = (item, parent) -> true;
     private KeyListener keyListener;
     private boolean dragEnabled;
+    private Function<List<T>, FileDrag.Source> fileDragSource;
     private boolean toggleOnDoubleClick = true;
 
     private float rowHeight = 24f;
@@ -783,6 +786,33 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
      */
     public void setCanDrop(BiPredicate<T, T> canDrop) {
         this.canDrop = canDrop == null ? (item, parent) -> true : canDrop;
+    }
+
+    /**
+     * Lets rows be dragged out of the window onto Explorer, the desktop or another program. When the user drags a row
+     * (or the selected rows) past the edge of the window, the tree's own drag is dropped and an operating system drag
+     * of the files {@code source} makes takes over. It is given the items being dragged, top to bottom, and returns
+     * what to hand over, or null to refuse. See {@link FileDrag.Source}: the files are made only when the user lets go,
+     * so extracting a folder from an archive happens once, at the drop, and not for a drag that is cancelled.
+     * <p>
+     * It works without {@link #setDragEnabled}, which is for moving rows inside the tree; with both on, a drag moves rows
+     * until it leaves the window. Windows only; see {@link FileDrag#isSupported()}. Null turns it off.
+     */
+    public void setFileDragSource(Function<List<T>, FileDrag.Source> source) {
+        this.fileDragSource = source;
+    }
+
+    @Override
+    public FileDrag.Source fileDragOut() {
+        if (fileDragSource == null || pressed == null || draggingThumb) return null;
+        return fileDragSource.apply(carried());
+    }
+
+    @Override
+    public void onDragCancel() {
+        draggingThumb = false;
+        pendingCollapse = null;
+        endRowDrag();
     }
 
     /**

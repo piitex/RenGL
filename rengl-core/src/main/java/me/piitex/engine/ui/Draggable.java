@@ -43,4 +43,12 @@ public interface Draggable {
      * The button was released at (x, y), ending the drag started by {@link #onDragStart}.
      */
     void onDragEnd(double x, double y);
+
+    /**
+     * The drag was taken away without the button coming up here: it became a drag out of the window (see
+     * {@link FileDraggable}). Drop whatever the drag was doing, as if it had never started, and do not report a drop;
+     * {@link #onDragEnd} will not be called for it. Nothing by default.
+     */
+    default void onDragCancel() {
+    }
 }

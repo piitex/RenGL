@@ -60,9 +60,14 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 ## Operating system integration
 
-- **No hover feedback while files are dragged over the window.** GLFW reports a [file drop](../core/window.md#files-dropped-on-the-window)
-  only when it happens, so a drop target cannot light up as the drag approaches.
-- **No dragging rows out of the app into Finder or Explorer.** There is no native drag source.
+- **Hover feedback while files are dragged over the window, and dragging files out of it, are Windows only.** On macOS
+  and Linux GLFW reports a [file drop](../core/window.md#files-dropped-on-the-window) only when it happens, so a drop
+  target cannot light up as the drag approaches, and `Window.startFileDrag` answers `UNSUPPORTED`.
+- **A drag out of the window carries the files as paths, not as a stream.** The files must exist when the user lets
+  go, so an archive's folder is extracted at the drop, and the receiver waits while that happens. The drag shows the
+  system's standard cursor with no picture of the files.
+- **Only files on disk can be dragged in.** Files that exist only inside another program (the contents of a zip
+  folder in Explorer) are not taken.
 - **No Dock or taskbar progress, and no system notification** when a long job finishes in the background.
 
 ## Audio

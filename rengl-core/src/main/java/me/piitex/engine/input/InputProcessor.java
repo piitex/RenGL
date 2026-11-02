@@ -3,6 +3,7 @@ package me.piitex.engine.input;
 import me.piitex.engine.Window;
 import me.piitex.engine.ui.containers.Container;
 import me.piitex.engine.ui.Draggable;
+import me.piitex.engine.ui.FileDraggable;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.PopupKeyListener;
@@ -66,6 +67,9 @@ public class InputProcessor {
         while ((event = manager.getEventQueue().poll()) != null) {
             switch (event.type) {
                 case MOUSE_MOVE:
+                    // The window keeps the pointer while a button is held, so a drag that goes past its edge still reports
+                    // positions there, outside it.
+                    if (dragTarget != null && !isInsideWindow(window, event.x, event.y)) handOffDragToSystem(window);
                     window.getInput().mouseMoved(event.x, event.y, isInsideWindow(window, event.x, event.y));
                     // GLFW's enter callback is edge-triggered, and on macOS a live window resize sends a
                     // "left" without a matching "entered" once the drag ends (the tracking area is rebuilt
@@ -78,6 +82,7 @@ public class InputProcessor {
                     break;
                 case MOUSE_ENTER:
                     mouseInWindow = event.action == 1;
+                    if (!mouseInWindow && dragTarget != null) handOffDragToSystem(window);
                     MouseTracker.setInWindow(mouseInWindow);
                     window.getInput().mouseEntered(mouseInWindow);
                     if (!mouseInWindow) clearAllHover(window);
@@ -188,6 +193,24 @@ public class InputProcessor {
         return x >= 0 && y >= 0
                 && x < window.getWindowOptions().getWidth()
                 && y < window.getWindowOptions().getHeight();
+    }
+
+    /**
+     * The pointer left the window while an Element was being dragged. If that Element can carry on as a drag of files
+     * (see {@link FileDraggable}), its own drag is cancelled and the operating system's drag out of the window starts,
+     * so what it carries can be dropped on Explorer or the desktop. Otherwise nothing changes.
+     */
+    private void handOffDragToSystem(Window window) {
+        if (!(dragTarget instanceof FileDraggable out) || !(dragTarget instanceof Draggable draggable) || !FileDrag.isSupported()) return;
+        FileDrag.Source source = out.fileDragOut();
+        if (source == null) return;
+        dragTarget = null;
+        pendingDrag = null;
+        clickTargets.clear();
+        draggable.onDragCancel();
+        clearAllHover(window);
+        // Asks for the OS drag; the button release it ends with is put back into the queue by the window.
+        window.startFileDrag(source, null);
     }
 
     private void clearAllHover(Window window) {
