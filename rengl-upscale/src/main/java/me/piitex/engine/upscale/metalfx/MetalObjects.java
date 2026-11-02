@@ -9,7 +9,10 @@ import org.lwjgl.vulkan.VkExportMetalCommandQueueInfoEXT;
 import org.lwjgl.vulkan.VkExportMetalDeviceInfoEXT;
 import org.lwjgl.vulkan.VkExportMetalObjectsInfoEXT;
 import org.lwjgl.vulkan.VkExportMetalTextureInfoEXT;
+import org.lwjgl.vulkan.VkPhysicalDeviceDriverProperties;
+import org.lwjgl.vulkan.VkPhysicalDeviceProperties2;
 import org.lwjgl.vulkan.VkQueue;
+import org.lwjgl.vulkan.VK11;
 
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.VK10.vkGetDeviceQueue;
@@ -42,15 +45,29 @@ record MetalObjects(long device, long queue) {
             vkGetDeviceQueue(vk.vkDevice(), vk.queueFamily(), 0, pQueue);
             VkQueue queue = new VkQueue(pQueue.get(0), vk.vkDevice());
 
+            // One call for each, so a driver that stops at the first structure of a chain cannot hide the other.
             VkExportMetalDeviceInfoEXT device = VkExportMetalDeviceInfoEXT.calloc(stack).sType$Default();
+            EXTMetalObjects.vkExportMetalObjectsEXT(vk.vkDevice(), VkExportMetalObjectsInfoEXT.calloc(stack).sType$Default().pNext(device));
             VkExportMetalCommandQueueInfoEXT commands = VkExportMetalCommandQueueInfoEXT.calloc(stack).sType$Default().queue(queue);
-            device.pNext(commands.address());
-            VkExportMetalObjectsInfoEXT info = VkExportMetalObjectsInfoEXT.calloc(stack).sType$Default().pNext(device);
-            EXTMetalObjects.vkExportMetalObjectsEXT(vk.vkDevice(), info);
+            EXTMetalObjects.vkExportMetalObjectsEXT(vk.vkDevice(), VkExportMetalObjectsInfoEXT.calloc(stack).sType$Default().pNext(commands));
             if (device.mtlDevice() == 0L || commands.mtlCommandQueue() == 0L) {
-                throw new IllegalStateException("MoltenVK gave no Metal device or command queue for the Vulkan device");
+                throw new IllegalStateException("vkExportMetalObjectsEXT gave MTLDevice 0x" + Long.toHexString(device.mtlDevice())
+                        + " and MTLCommandQueue 0x" + Long.toHexString(commands.mtlCommandQueue()) + " (VkQueue 0x"
+                        + Long.toHexString(queue.address()) + ", " + driver(vk, stack) + ")");
             }
             return new MetalObjects(device.mtlDevice(), commands.mtlCommandQueue());
+        }
+    }
+
+    /** The driver's name and version, for a message about it. */
+    private static String driver(VkGpuDevice vk, MemoryStack stack) {
+        try {
+            VkPhysicalDeviceDriverProperties driver = VkPhysicalDeviceDriverProperties.calloc(stack).sType$Default();
+            VkPhysicalDeviceProperties2 properties = VkPhysicalDeviceProperties2.calloc(stack).sType$Default().pNext(driver);
+            VK11.vkGetPhysicalDeviceProperties2(vk.vkDevice().getPhysicalDevice(), properties);
+            return driver.driverNameString() + " " + driver.driverInfoString();
+        } catch (RuntimeException | LinkageError e) {
+            return "driver unknown";
         }
     }
 
