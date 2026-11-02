@@ -29,9 +29,10 @@ window with no game engine on top.
 </p>
 
 **Optional 3D.** Physically based materials, image-based sky lighting, shadows, fog and thousands of dynamic lights,
-rendered with Vulkan or OpenGL and shown inside the same UI, behind it, or on a screen in the world. On a Vulkan GPU with
-ray queries it can also trace shadows, reflections, global illumination and whole paths of light, upscaled with DLSS or
-FSR. Programs that don't use it never pay for it. [More below](#the-3d-layer).
+rendered with Vulkan or OpenGL and shown inside the same UI, behind it, or on a screen in the world. It can also trace
+shadows, reflections, global illumination and whole paths of light (in hardware on a Vulkan GPU with ray queries, in shader
+code elsewhere, a Mac included), upscaled with DLSS, FSR or MetalFX. Programs that don't use it never pay for it.
+[More below](#the-3d-layer).
 
 <p align="center">
   <img src="docs/images/studio3d.gif" alt="A row of metal spheres and a row of glossy spheres lit by a sunset sky and three orbiting neon lights" width="100%">
@@ -86,7 +87,7 @@ an image. The same GLSL source and the same scene code run on both APIs. Nothing
 | **Scene files** | A scene built in the RenGL Editor is saved as [JSON](docs/3d/scene-files.md), with its bodies, colliders, prefabs and terrain, and loaded by the game into a real running scene. |
 | **[Upscaling](docs/3d/upscaling.md)** | Draw the scene at a fraction of its size and enlarge it. A built-in temporal upscaler works on every GPU. **AMD FSR 3** and **NVIDIA DLSS** super resolution (Windows) and **Apple MetalFX** (Mac) come from the separate `rengl-upscale` module. |
 | **[Frame generation](docs/3d/upscaling.md#dlss-frame-generation)** | **DLSS frame generation** (through NVIDIA Streamline) and **FSR frame generation**, which take over the window's swapchain to present generated frames between the drawn ones. |
-| **[Ray tracing](docs/3d/ray-tracing.md)** | On Vulkan GPUs with ray queries (NVIDIA RTX, AMD RDNA 2 and later, Intel Arc): exact shadows, reflections of the objects around a surface, ambient occlusion, one-bounce global illumination and full path tracing, each a single call. **DLSS Ray Reconstruction** denoises the paths where there is an RTX GPU, and the engine's own filter does elsewhere. A GPU without ray queries keeps the usual shadow maps and sky. |
+| **[Ray tracing](docs/3d/ray-tracing.md)** | On Vulkan GPUs with ray queries (NVIDIA RTX, AMD RDNA 2 and later, Intel Arc): exact shadows, reflections of the objects around a surface, ambient occlusion, one-bounce global illumination and full path tracing, each a single call. **DLSS Ray Reconstruction** denoises the paths where there is an RTX GPU, and the engine's own filter does elsewhere. A GPU without ray queries (a Mac, say) traces the same rays in shader code, slower. |
 
 ```java
 scene.setRenderScale(0.5f);                    // draw a quarter of the pixels...
@@ -127,8 +128,8 @@ all-in-one jar for licensing reasons. `me.piitex.engine:RenGL` pulls in all the 
 - **JDK 25**
 - **Maven** (a wrapper is included: `./mvnw`)
 - A GPU that supports **Metal** (macOS) or **OpenGL 3.3** (Windows, Linux). Vulkan 1.1 is an optional alternative.
-- For the 3D layer on macOS, Vulkan (through MoltenVK), since Metal can't share its GPU with it. Ray tracing needs Vulkan
-  on a GPU with ray queries; DLSS needs a GeForce RTX card.
+- For the 3D layer on macOS, Vulkan (through MoltenVK), since Metal can't share its GPU with it. Ray tracing is hardware
+  on a Vulkan GPU with ray queries and shader code on any Vulkan 1.2 GPU; DLSS needs a GeForce RTX card.
 
 Native libraries (LWJGL and Skiko) are selected automatically for Windows, Linux and macOS on x86-64 and arm64, and each module brings only its own. A project of your own picks them with one Maven profile per platform: see [Setting up a Maven project](docs/getting-started.md#setting-up-a-maven-project).
 

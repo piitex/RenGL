@@ -9,6 +9,7 @@ import me.piitex.engine.render3d.PipelineDesc;
 import me.piitex.engine.render3d.RayScene;
 import me.piitex.engine.render3d.RenderPass;
 import me.piitex.engine.render3d.RenderTarget;
+import me.piitex.engine.render3d.SoftRayShaders;
 import me.piitex.engine.render3d.VertexFormat;
 import me.piitex.engine.render3d.VertexLayout;
 import me.piitex.engine.render3d.math.Vec3;
@@ -221,9 +222,8 @@ final class PostPass {
      * starts turns from pixel to pixel (and from frame to frame with a temporal upscaler), and the blur that follows takes the
      * grain out. c.xyz is the camera's position and c.w the frame; a, b as in {@link #OCCLUSION}.
      */
-    private static final String OCCLUSION_RAYS = """
-            #version 460
-            #extension GL_EXT_ray_query : require
+    private static String occlusionRays(boolean soft) {
+        return (soft ? "#version 450\n" : "#version 460\n#extension GL_EXT_ray_query : require\n") + """
             layout(set = 0, binding = 0) uniform PostRays {
                 vec4 a;
                 vec4 b;
@@ -233,7 +233,8 @@ final class PostPass {
                 vec4 forward;
             };
             layout(set = 0, binding = 1) uniform sampler2D src;
-            layout(set = 0, binding = 2) uniform accelerationStructureEXT world;
+            """ + (soft ? SoftRayShaders.declarations(OCCLUSION_SCENE_BINDING, OCCLUSION_GEOMETRY_BINDING)
+                : "layout(set = 0, binding = " + OCCLUSION_SCENE_BINDING + ") uniform accelerationStructureEXT world;\n") + """
             layout(location = 0) out vec4 outColor;
             """ + DEPTH + """
             vec3 viewPos(ivec2 p, float d) {
@@ -274,6 +275,13 @@ final class PostPass {
                     float ang = float(i) * 2.399963 + rot;
                     float r = sqrt(h);
                     vec3 dir = t * (cos(ang) * r) + bt * (sin(ang) * r) + nw * sqrt(1.0 - h);
+                    """ + (soft ? """
+                    SoftHit hit;
+                    if (softTrace(origin, dir, 0.0, radius, 2u, false, hit)) {
+                        float x = hit.t / radius;
+                        blocked += 1.0 - x * x;
+                    }
+                    """ : """
                     rayQueryEXT query;
                     rayQueryInitializeEXT(query, world, gl_RayFlagsOpaqueEXT, 0x02, origin, 0.0, dir, radius);
                     while (rayQueryProceedEXT(query)) { }
@@ -281,10 +289,16 @@ final class PostPass {
                         float x = rayQueryGetIntersectionTEXT(query, true) / radius;
                         blocked += 1.0 - x * x;
                     }
+                    """) + """
                 }
                 outColor = vec4(vec3(1.0 - blocked / float(RAYS)), 1.0);
             }
             """;
+    }
+
+    /** The bindings of the scene, and with software rays the buffer of the triangles next to it, in the occlusion shader. */
+    private static final int OCCLUSION_SCENE_BINDING = 2;
+    private static final int OCCLUSION_GEOMETRY_BINDING = 3;
 
     /**
      * One direction of a blur of the occlusion that doesn't cross an edge: src is the occlusion at half size, the packed
@@ -847,7 +861,7 @@ final class PostPass {
         if (rayOcclusionBroken) return false;
         if (rayOcclusion == null) {
             try {
-                rayOcclusion = device.createPipeline(new PipelineDesc(VERTEX, OCCLUSION_RAYS, VertexLayout.of(VertexFormat.FLOAT2), false, false, false));
+                rayOcclusion = device.createPipeline(new PipelineDesc(VERTEX, occlusionRays(device.softwareRayTracing()), VertexLayout.of(VertexFormat.FLOAT2), false, false, false));
             } catch (RuntimeException e) {
                 rayOcclusionBroken = true;
                 log.error("The ray traced occlusion shader does not compile on this GPU; occlusion is read from the depth picture instead.", e);
@@ -876,7 +890,8 @@ final class PostPass {
             pass.bindPipeline(rayOcclusion);
             pass.bindUniformBuffer(0, rayOcclusionBlock);
             pass.bindTexture(1, depth.texture());
-            pass.bindAccelerationStructure(2, rays);
+            pass.bindAccelerationStructure(OCCLUSION_SCENE_BINDING, rays);
+            if (device.softwareRayTracing()) pass.bindRayGeometry(OCCLUSION_GEOMETRY_BINDING, rays);
             pass.bindVertexBuffer(0, triangle);
             pass.draw(3);
         }

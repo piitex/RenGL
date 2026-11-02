@@ -32,6 +32,8 @@ picture, the flat ambient light), so the settings are safe to leave on. `isUsing
   nothing like it.
 - Nothing to install and no vendor code: the 3D layer asks for the extensions when the window's device is made, and a GPU
   that lacks them is made exactly as before. `-Drengl.3d.raytracing=false` leaves them off on a GPU that has them.
+- **Any other Vulkan 1.2 GPU** (a Mac through MoltenVK, older AMD and Intel GPUs, an integrated GPU) traces the same rays in
+  shader code instead: [without ray queries](#without-ray-queries). It looks the same and is slower.
 
 ## Shadows
 
@@ -274,7 +276,7 @@ as for the upscaling demo, and the extra options choose where it starts:
 -Drengl.demo.reconstruction=false         (start without Ray Reconstruction)
 ```
 
-It draws with Vulkan, without vsync. On a GPU without ray queries it says so and draws the room without the rays.
+It draws with Vulkan, without vsync. On a GPU without ray queries the rays are traced in shader code, which is slower.
 
 ## How it works
 
@@ -297,6 +299,32 @@ address of the mesh's vertices and indices (the shader reads them through a buff
 coordinates are interpolated from its triangle), the material's colour and parameters, and the place of its texture in an
 array of up to 32 that is bound with the frame (picked per pixel, which the ray tracing devices allow). That is the
 "bindless" part of hit shading: nothing is bound per draw for it.
+
+## Without ray queries
+
+A GPU with no ray queries (and a Mac, where MoltenVK has none) traces the rays in the fragment shaders themselves, so shadows,
+reflections, occlusion, global illumination and path tracing are all there, drawn the same way. Nothing is asked for: it is used
+wherever `supportsRayTracing()` would otherwise be false and the device is Vulkan 1.2 or newer; `softwareRayTracing()` says it
+is the one in use, and the log says so when the device starts.
+
+What the hardware keeps, the CPU builds. Each mesh gets a **bounding volume hierarchy** over its triangles (cut by the surface area
+heuristic, once, when it is first traced) and each frame a second hierarchy over the placed instances, rebuilt from their
+transforms like the top level is. They are kept in storage buffers: one holds every mesh's hierarchy, triangles and vertices
+and grows as meshes come, the other the frame's instances, one copy for each frame in flight. The shader walks the instances,
+takes the ray into the mesh's own space with the instance's inverse matrix, walks the triangles, and tests them (Möller-Trumbore).
+It is the same two levels as an acceleration structure, so everything built on a hit (the table of materials, the masks, the
+nearest-hit and any-hit rules) is shared.
+
+It costs more: the walk runs on the shader cores instead of the RT cores, so several effects at once on a big scene want a fast
+GPU. Use fewer rays (`setRayTracedGlobalIlluminationRays`), shorter ones, or only the effects you need. Its speed has been
+measured only on an RTX 4090 (where it is not what you would choose); on a Mac it has not been run yet. The triangles of all the
+meshes share one storage buffer, so a scene with more than fits the GPU's (`maxStorageBufferRange`) leaves the meshes that do not
+fit out, with an error in the log.
+
+| Property | |
+|---|---|
+| `-Drengl.3d.softrays=false` | Never trace in shader code: a GPU without ray queries keeps its shadow maps and sky as before |
+| `-Drengl.3d.softrays=true` | Always, also where ray queries exist (to compare them) |
 
 ## Using it yourself
 
@@ -323,6 +351,18 @@ rayQueryInitializeEXT(query, world, gl_RayFlagsOpaqueEXT, 0xFF, origin, 0.001, d
 while (rayQueryProceedEXT(query)) { }
 bool hit = rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT;
 ```
+
+Where `softwareRayTracing()` is true the scene is bound twice, with `bindAccelerationStructure(binding, scene)` and
+`bindRayGeometry(otherBinding, scene)`, and the shader takes its declarations and `softTrace` from
+`SoftRayShaders.declarations(binding, otherBinding)` (`#version 450`, no extension) in place of the structure and the query:
+
+```glsl nocompile
+SoftHit hit;
+bool found = softTrace(origin, direction, 0.001, 1000.0, 0xFFu, false, hit); // hit.t, hit.instance, hit.triangle, hit.bary
+```
+
+`dataAddress()`, `vertexAddress()` and `indexAddress()` are 0 there: the shader reads a hit's instance data and vertices through
+`SoftRayShaders` too.
 
 ## Not done yet
 

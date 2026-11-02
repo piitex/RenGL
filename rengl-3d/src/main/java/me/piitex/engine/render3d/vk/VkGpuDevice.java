@@ -86,7 +86,9 @@ public final class VkGpuDevice implements GpuDevice {
 
     private final VulkanContext context;
     private final boolean rayTracing;
+    private final boolean softRays;
     private VkRay ray;
+    private VkSoftRay softRay;
     private final String name;
     private final LongSupplier frames;
     private final long uploadPool;
@@ -118,6 +120,11 @@ public final class VkGpuDevice implements GpuDevice {
                     + VK_API_VERSION_MAJOR(context.apiVersion()) + "." + VK_API_VERSION_MINOR(context.apiVersion()));
         }
         rayTracing = context.rayTracing();
+        softRays = wantsSoftRays(rayTracing, context.apiVersion());
+        if (softRays) {
+            org.apache.logging.log4j.LogManager.getLogger("Engine").info("Rays are traced in shader code{}",
+                    rayTracing ? " (the GPU has ray queries, but -Drengl.3d.softrays asked for this)" : " (the GPU has no ray queries)");
+        }
         device = context.vkDevice();
         physical = context.vkPhysicalDevice();
         queue = context.vkQueue();
@@ -196,10 +203,12 @@ public final class VkGpuDevice implements GpuDevice {
     }
 
     private long createDescriptorPool(MemoryStack stack) {
-        VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.calloc(rayTracing ? 3 : 2, stack)
+        VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.calloc(rayTracing ? 4 : 3, stack)
                 .apply(0, s -> s.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(SETS_PER_POOL * BUFFERS_PER_SET))
-                .apply(1, s -> s.type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(SETS_PER_POOL * SAMPLERS_PER_SET));
-        if (rayTracing) sizes.apply(2, s -> s.type(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR).descriptorCount(SETS_PER_POOL));
+                .apply(1, s -> s.type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(SETS_PER_POOL * SAMPLERS_PER_SET))
+                // The software ray tracer reads the scene and its triangles from two storage buffers.
+                .apply(2, s -> s.type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).descriptorCount(SETS_PER_POOL * 2));
+        if (rayTracing) sizes.apply(3, s -> s.type(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR).descriptorCount(SETS_PER_POOL));
         VkDescriptorPoolCreateInfo pool = VkDescriptorPoolCreateInfo.calloc(stack).sType$Default()
                 .maxSets(SETS_PER_POOL)
                 .pPoolSizes(sizes);
@@ -359,9 +368,27 @@ public final class VkGpuDevice implements GpuDevice {
         return new VkTarget(this, width, height, false, 1, true, true, true, false, true);
     }
 
+    /**
+     * Whether rays are traced by shader code (see {@link #softwareRayTracing()}): not where {@code -Drengl.3d.softrays=false}, always
+     * where it is {@code true}, otherwise where the GPU has no ray queries and ray tracing has not been turned off. It needs the
+     * SPIR-V of Vulkan 1.2, which the shaders that pick a texture per pixel are compiled to.
+     */
+    private static boolean wantsSoftRays(boolean rayQueries, int apiVersion) {
+        String setting = System.getProperty("rengl.3d.softrays");
+        if ("false".equalsIgnoreCase(setting)) return false;
+        if (VK_API_VERSION_MAJOR(apiVersion) == 1 && VK_API_VERSION_MINOR(apiVersion) < 2) return false;
+        if ("true".equalsIgnoreCase(setting)) return true;
+        return !rayQueries && !"false".equalsIgnoreCase(System.getProperty("rengl.3d.raytracing"));
+    }
+
     @Override
     public boolean supportsRayTracing() {
-        return rayTracing;
+        return rayTracing || softRays;
+    }
+
+    @Override
+    public boolean softwareRayTracing() {
+        return softRays;
     }
 
     private VkRay ray() {
@@ -370,13 +397,20 @@ public final class VkGpuDevice implements GpuDevice {
         return ray;
     }
 
+    private VkSoftRay softRay() {
+        if (softRay == null) softRay = new VkSoftRay(this);
+        return softRay;
+    }
+
     @Override
     public RayGeometry createRayGeometry(float[] vertices, int vertexCount, int floatsPerVertex, int[] indices) {
+        if (softRays) return softRay().geometry(vertices, vertexCount, floatsPerVertex, indices);
         return ray().geometry(vertices, vertexCount, floatsPerVertex, indices);
     }
 
     @Override
     public RayScene createRayScene(int capacity) {
+        if (softRays) return softRay().scene(capacity);
         return ray().scene(capacity);
     }
 
@@ -474,6 +508,7 @@ public final class VkGpuDevice implements GpuDevice {
         closed = true;
         vkDeviceWaitIdle(device);
         while (!deferred.isEmpty()) deferred.pollFirst().action.run();
+        if (softRay != null) softRay.close();
         for (long renderPass : renderPasses.values()) vkDestroyRenderPass(device, renderPass, null);
         renderPasses.clear();
         vkDestroySampler(device, sampler, null);
