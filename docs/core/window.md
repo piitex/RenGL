@@ -158,7 +158,9 @@ window.onRestore(() -> resumeMusic()); // back to normal size from either state
 
 They fire whether the user clicked the title bar button or your code called `minimize()` / `maximize()`, and run on the render thread like other callbacks. `isMinimized()` and `isMaximized()` give the current state. Un-minimizing a window that was maximized before returns it to maximized, and fires `onRestore` only, not `onMaximize`. Each listener is a single slot: setting one replaces the previous. Pass `null` to remove one.
 
-## Files dropped on the window
+## Dragging files to and from the window
+
+### Files dropped on the window
 
 ```java
 window.onFileDrop(paths -> {
@@ -168,12 +170,74 @@ window.onFileDrop(paths -> {
 
 Fires when the user drops files or folders on the window from Finder / Explorer, with their paths in the order the OS
 gave them. It runs on the render thread, is a single slot, and `null` removes it; with no listener a drop does nothing.
-The paths are only names: nothing is read, and a folder is not expanded into its files. Use
-`window.getInputManager()`'s mouse position, or the elements' own bounds, to tell what the files landed on.
-
-**There is no hover feedback.** GLFW reports a drop only when it happens. It says nothing while a drag is still over
-the window, so a drop target cannot light up as the drag approaches. Show a standing "Drop files here" hint instead.
+The paths are only names: nothing is read, and a folder is not expanded into its files.
 `me.piitex.examples.demo.TableDemo` lists the folder that is dropped on it.
+
+To know **what** the files landed on, use `onFileDropAt`, which also carries the pointer in window coordinates:
+
+```java
+window.onFileDropAt(drop -> {
+    Folder target = folderAt(drop.x(), drop.y());      // the row, panel or folder under the pointer
+    archive.add(drop.files(), target);
+});
+```
+
+Both listeners run for a drop if both are set.
+
+### Hover feedback (Windows)
+
+```java
+window.onFileDragOver(hover -> highlight(folderAt(hover.x(), hover.y())));
+window.onFileDragLeave(() -> highlight(null));
+window.onFileDropAt(drop -> { highlight(null); archive.add(drop.files(), folderAt(drop.x(), drop.y())); });
+```
+
+`onFileDragOver` runs while files are being dragged over the window, with where they are and which files they are, so
+the folder or panel a drop would land on can light up. A fast pointer reaches it as the newest position, not every step.
+`onFileDragLeave` runs when the files leave or the drag is cancelled. **A drop does not call it**, so clear the
+highlight in the drop listener as well. The pointer shows the "not allowed" sign over a window with no drop listener.
+
+On Windows these are delivered by an OLE drop target the window registers for itself. **Elsewhere GLFW reports a drop
+only when it happens**: `onFileDragOver` and `onFileDragLeave` never run, and `onFileDropAt` still gives the position
+of the drop. Show a standing "Drop files here" hint if the application must work there.
+
+Only files that exist on disk arrive. A drag of something that is not a list of files (text, a picture), or of files
+that only exist inside another program such as the contents of a zip folder opened in Explorer, is not taken.
+
+### Dragging files out of the window (Windows)
+
+```java
+window.startFileDrag(() -> {
+    Path folder = Files.createTempDirectory("zip-drag");
+    archive.extractTo(entry, folder);
+    return List.of(folder.resolve(entry.name()));
+}, outcome -> log.info("drag ended: {}", outcome));
+```
+
+Call it from the press or move that begins the drag, while the left button is held: the user then carries the files
+with the pointer and lets go over an Explorer window or the desktop, which copy them. Called with the button already
+up, it does nothing and reports `CANCELLED`. A list of existing paths works too: `window.startFileDrag(paths, done)`.
+
+The first argument is a `FileDrag.Source`, asked for the files **only when the user lets go** over something that
+takes them. It is the right place for extracting from an archive: a drag that is cancelled or dropped nowhere
+extracts nothing. It runs on the engine's main thread, in the middle of Explorer's request, so it must not touch the
+UI, and Explorer waits for it. It is asked once; if it throws, the drop fails and `done` gets `FAILED`. The paths it
+returns must go on existing after the drop, because the receiver may still be copying them: put them in a temporary
+folder and delete it when the application exits.
+
+The second argument, which may be null, is told how it ended, on the render thread: `DROPPED`, `CANCELLED` (Escape, or
+let go over something that refused), `UNSUPPORTED` (this platform cannot do it) or `FAILED`. The files are copied,
+never moved. While the drag lasts the window keeps drawing and updating; only the engine's main thread, which handles
+the operating system's window events, is held by it. Dropping the files back onto the window that started the drag is
+ignored, so an application does not add its own extraction to itself.
+
+`FileDrag.isSupported()` says whether the platform can do this.
+[`TreeView.setFileDragSource`](../containers/tree-view.md#dragging-rows-out-of-the-window) starts one for you when a
+row is dragged past the edge of the window. Another element can do the same by implementing `FileDraggable` next to
+`Draggable`: when the pointer leaves the window in the middle of its drag, `fileDragOut()` is asked for a source, and
+its own drag is cancelled with `onDragCancel()` if it gives one.
+
+The drag shows the system's standard cursor, with no picture of the files under it.
 
 ## Resize event
 

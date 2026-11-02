@@ -189,6 +189,35 @@ The tree never drops an item into itself or its own children, nor into any row t
 is asked about each carried row, and one refusal refuses the drop. A single row dropped where it is already reports
 nothing. The tree never changes the model either: the listener makes the move and calls `refresh()`.
 
+## Dragging rows out of the window
+
+```java nocompile
+tree.setFileDragSource(items -> () -> {
+    Path folder = Files.createTempDirectory("zip-drag");
+    tempFolders.add(folder);                       // delete these when the application exits
+    for (Entry entry : items) archive.extractTo(entry, folder);
+    return items.stream().map(entry -> folder.resolve(entry.name())).toList();
+});
+```
+
+With a source set, a row (or the selected rows) that is dragged past the edge of the window turns into the operating
+system's own drag. It can be dropped on an Explorer window or the desktop, which copy the files. Until the pointer
+leaves the window the drag is whatever it was: rows moving inside the tree if `setDragEnabled(true)`, nothing
+otherwise. When it leaves, the tree's own drag ends without a drop, and `onDrop` is not called.
+
+The function you pass is called when the pointer leaves, with the items being dragged, top to bottom. It returns a
+`FileDrag.Source`, or null to refuse. The source is the part that does the work, and it runs **only when the user lets
+go** over something that takes files. A drag that is cancelled with Escape or dropped on nothing never extracts
+anything. That matters for an archive: a large folder is extracted once, at the drop, not on every drag.
+
+The source runs on the engine's main thread, inside Explorer's request, so it must not touch the UI, and Explorer
+waits while it works. Extracting a very large folder can make Explorer look stuck for a moment. The paths it returns
+must exist and **stay**: Explorer may still be copying after the drag has ended, so delete the temporary folder when
+the application exits, not when the source returns. The files are copied, never moved.
+
+Windows only for now. See [dragging files](../core/window.md#dragging-files-to-and-from-the-window), which also
+covers dropping files *onto* the tree.
+
 ## Keyboard
 
 Clicking the tree gives it the keyboard, and so does Tab.

@@ -1,10 +1,12 @@
 package me.piitex.engine;
 
 import me.piitex.engine.game.SceneManager;
+import me.piitex.engine.gl.FileDropListener;
 import me.piitex.engine.gl.GLFWindow;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.gl.renderer.Snapshot;
 import me.piitex.engine.scheduler.Scheduler;
+import me.piitex.engine.input.FileDrag;
 import me.piitex.engine.input.Input;
 import me.piitex.engine.input.InputManager;
 import me.piitex.engine.ui.background.Background;
@@ -75,6 +77,10 @@ public class Window implements Themeable, PopupHost {
     private volatile java.util.function.BiConsumer<Integer, Integer> resizeListener;
     private volatile Runnable closeRequestListener;
     private volatile java.util.function.Consumer<List<java.nio.file.Path>> fileDropListener;
+    private volatile java.util.function.Consumer<FileDrag.Drop> fileDropAtListener;
+    private volatile java.util.function.Consumer<FileDrag.Hover> fileDragOverListener;
+    private volatile Runnable fileDragLeaveListener;
+    private final java.util.concurrent.atomic.AtomicReference<FileDrag.Hover> hoverPending = new java.util.concurrent.atomic.AtomicReference<>();
     private static final long FPS_SAMPLE_NANOS = 500_000_000L;
     private volatile double fps;
     private volatile double frameTime;
@@ -94,7 +100,27 @@ public class Window implements Themeable, PopupHost {
         glfWindow.setIconifyHandler(this::notifyMinimized);
         glfWindow.setMaximizeHandler(this::notifyMaximized);
         glfWindow.setCloseRequestHandler(this::notifyCloseRequested);
-        glfWindow.setDropHandler(this::notifyFilesDropped);
+        glfWindow.setDropListener(new FileDropListener() {
+            @Override
+            public boolean accepts() {
+                return fileDropListener != null || fileDropAtListener != null;
+            }
+
+            @Override
+            public void over(List<java.nio.file.Path> files, double x, double y) {
+                notifyFilesOver(files, x, y);
+            }
+
+            @Override
+            public void leave() {
+                notifyFilesLeft();
+            }
+
+            @Override
+            public void drop(List<java.nio.file.Path> files, double x, double y) {
+                notifyFilesDropped(files, x, y);
+            }
+        });
     }
 
     public WindowOptions getWindowOptions() {
@@ -549,9 +575,8 @@ public class Window implements Themeable, PopupHost {
      * Runs when the user drops files or folders on the window from Finder / Explorer, with their paths in the order
      * the OS gave them. Runs on the render thread. Pass null to remove; with no listener a drop does nothing.
      * <p>
-     * Use {@link #getInputManager()}'s mouse position to tell which element the files were dropped on. The OS tells
-     * the window nothing while a drag is still over it (GLFW has no drag-enter or drag-hover event), so a drop
-     * target can't light up as the drag approaches: show a standing "drop files here" hint instead.
+     * Use {@link #onFileDropAt} to also learn where the pointer was, to tell which element the files were dropped on,
+     * and {@link #onFileDragOver} (Windows) to light that element up as the drag approaches.
      * <p>
      * The paths are only names. Nothing is read, and a folder is not expanded into its files.
      */
@@ -560,11 +585,108 @@ public class Window implements Themeable, PopupHost {
     }
 
     /**
-     * Main thread, from the GLFW drop callback. See {@link #onFileDrop}.
+     * Like {@link #onFileDrop}, and also says where the pointer was when the files were dropped, in window coordinates,
+     * so a drop can land on the folder, row or panel under it. Both listeners run for a drop if both are set.
      */
-    private void notifyFilesDropped(List<java.nio.file.Path> paths) {
+    public void onFileDropAt(java.util.function.Consumer<FileDrag.Drop> listener) {
+        this.fileDropAtListener = listener;
+    }
+
+    /**
+     * Runs while files are being dragged over the window, from Explorer or the desktop, with where they are, as they
+     * move. Use it to light up the folder or panel a drop would land on. It runs on the render thread, and a burst of
+     * movement reaches it as the latest position rather than every step. A drop ends the drag without calling
+     * {@link #onFileDragLeave}, so clear the highlight in the drop listener too. Pass null to remove.
+     * <p>
+     * <b>Windows only.</b> Other platforms say nothing about a drag until the files are dropped, so this never runs there.
+     * The pointer shows the "no" sign over a window that has no drop listener ({@link #onFileDrop} or {@link #onFileDropAt}).
+     */
+    public void onFileDragOver(java.util.function.Consumer<FileDrag.Hover> listener) {
+        this.fileDragOverListener = listener;
+    }
+
+    /**
+     * Runs when files that were being dragged over the window leave it, or the user cancels the drag. Not called for a
+     * drop. Windows only; see {@link #onFileDragOver}. Pass null to remove.
+     */
+    public void onFileDragLeave(Runnable listener) {
+        this.fileDragLeaveListener = listener;
+    }
+
+    /**
+     * Starts dragging files out of the window, to Explorer, the desktop or any program that takes files, for the left
+     * button the user is holding down right now. Call it from the press or move that begins the drag: when the button
+     * is already up it does nothing and {@code done} gets {@link FileDrag.Outcome#CANCELLED}.
+     * <p>
+     * {@code source} is asked for the files only when the user lets go over something that wants them, so a folder
+     * inside an archive is not extracted for a drag that goes nowhere. See {@link FileDrag.Source} for what it may
+     * and may not do. The files are copied: the receiver never moves or deletes them. Dropping them back on this
+     * window is ignored.
+     * <p>
+     * While the drag lasts the engine's main thread is held by the operating system, and this window keeps drawing and
+     * updating as usual. {@code done}, which may be null, runs afterwards on the render thread with how it ended; it
+     * says {@link FileDrag.Outcome#UNSUPPORTED} at once on a platform that can't do this. Safe from any thread.
+     * {@link me.piitex.engine.ui.containers.TreeView#setFileDragSource} calls this for a row dragged out of the window.
+     */
+    public void startFileDrag(FileDrag.Source source, java.util.function.Consumer<FileDrag.Outcome> done) {
+        java.util.Objects.requireNonNull(source, "source");
+        GLFWindow g = glfWindow;
+        if (g == null || !FileDrag.isSupported()) {
+            if (done != null) fire(() -> done.accept(FileDrag.Outcome.UNSUPPORTED));
+            return;
+        }
+        g.runOnMainThread(() -> {
+            FileDrag.Outcome outcome = FileDrag.Outcome.FAILED;
+            try {
+                outcome = g.applyFileDrag(source);
+            } catch (Throwable t) {
+                LogManager.getLogger("Engine").error("Dragging files out of the window failed", t);
+            }
+            FileDrag.Outcome result = outcome;
+            if (done != null) fire(() -> done.accept(result));
+        });
+        org.lwjgl.glfw.GLFW.glfwPostEmptyEvent(); // wake the main thread out of glfwWaitEventsTimeout
+    }
+
+    /**
+     * Drags the files out of the window, which must already exist. See {@link #startFileDrag(FileDrag.Source, java.util.function.Consumer)}.
+     */
+    public void startFileDrag(List<java.nio.file.Path> files, java.util.function.Consumer<FileDrag.Outcome> done) {
+        List<java.nio.file.Path> copy = List.copyOf(files);
+        startFileDrag(() -> copy, done);
+    }
+
+    /**
+     * Main thread, from the GLFW drop callback or the OLE drop target. See {@link #onFileDrop}.
+     */
+    private void notifyFilesDropped(List<java.nio.file.Path> paths, double x, double y) {
+        hoverPending.set(null); // a hover still queued must not run after the drop
         java.util.function.Consumer<List<java.nio.file.Path>> listener = fileDropListener;
         if (listener != null) fire(() -> listener.accept(paths));
+        java.util.function.Consumer<FileDrag.Drop> at = fileDropAtListener;
+        if (at != null) fire(() -> at.accept(new FileDrag.Drop(paths, x, y)));
+    }
+
+    /**
+     * Main thread, from the OLE drop target. See {@link #onFileDragOver}. Movement is coalesced: only the newest
+     * position waits for the render thread.
+     */
+    private void notifyFilesOver(List<java.nio.file.Path> paths, double x, double y) {
+        if (fileDragOverListener == null) return;
+        if (hoverPending.getAndSet(new FileDrag.Hover(paths, x, y)) != null) return; // one is already queued; it will read this
+        Scheduler.runLater(() -> {
+            FileDrag.Hover hover = hoverPending.getAndSet(null);
+            java.util.function.Consumer<FileDrag.Hover> listener = fileDragOverListener;
+            if (hover != null && listener != null) listener.accept(hover);
+        });
+    }
+
+    /**
+     * Main thread, from the OLE drop target. See {@link #onFileDragLeave}.
+     */
+    private void notifyFilesLeft() {
+        hoverPending.set(null);
+        fire(fileDragLeaveListener);
     }
 
     /**
