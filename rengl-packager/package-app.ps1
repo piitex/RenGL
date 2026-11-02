@@ -79,6 +79,18 @@
 .PARAMETER Content
     A folder of files to ship beside the jars (assets, default data). Repeat or comma separate. File setting: content.
 
+.PARAMETER FileAssociation
+    A file type the app opens, as ext[,mime[,description]]. Repeat for several. macOS lists it in Info.plist; the Windows
+    setup adds the app to the type's Open with list. File setting: fileAssociation (one line per type).
+
+.PARAMETER ShellVerb
+    An Explorer right-click entry the Windows setup adds, as target|id|label|args, e.g.
+    '.zip|OpenZip.Open|Open with OpenZip|"%1"'. Repeat for several. File setting: shellVerb (one line per entry).
+
+.PARAMETER DocumentTypes
+    A file of Info.plist entries (the <array> of document types) that replaces the types made from FileAssociation on
+    macOS, relative to the project. File setting: documentTypes.
+
 .PARAMETER Output
     Where to write, relative to the project. Default: dist\app-images. Keep it short; Windows paths over about 260
     characters fail. File setting: output.
@@ -99,6 +111,9 @@ param(
     [string]$Identifier = '',
     [string]$AddModules = '',
     [string[]]$Content = @(),
+    [string[]]$FileAssociation = @(),
+    [string[]]$ShellVerb = @(),
+    [string]$DocumentTypes = '',
     [string]$Output = 'dist\app-images'
 )
 
@@ -121,7 +136,10 @@ $Settings = [ordered]@{
     'installer' = 'Installer'; 'noarchive' = 'NoArchive'; 'icon' = 'Icon'; 'version' = 'Version'
     'vendor' = 'Vendor'; 'description' = 'Description'; 'identifier' = 'Identifier'; 'addmodules' = 'AddModules'
     'content' = 'Content'; 'output' = 'Output'
+    'fileassociation' = 'FileAssociation'; 'shellverb' = 'ShellVerb'; 'documenttypes' = 'DocumentTypes'
 }
+# Settings that may be given on several lines, one value each (their values hold commas and bars, so they are not split).
+$Repeating = @('FileAssociation', 'ShellVerb')
 
 function Fail($message) {
     Write-Error $message
@@ -242,7 +260,7 @@ if (Test-Path $configPath) {
             Fail "${ConfigName}, line ${number}: installerUi is gone. installer=true now gives the setup with the RenGL window; installer=plain gives the small plain Windows window. Delete this line."
         }
         if (-not $Settings.Contains($key)) {
-            Fail "${ConfigName}, line ${number}: '$($text.Substring(0, $eq).Trim())' is not a setting. The settings are: name, mainClass, mainJar, platform, installer, noArchive, icon, version, vendor, description, identifier, addModules, content, output."
+            Fail "${ConfigName}, line ${number}: '$($text.Substring(0, $eq).Trim())' is not a setting. The settings are: name, mainClass, mainJar, platform, installer, noArchive, icon, version, vendor, description, identifier, addModules, content, fileAssociation, shellVerb, documentTypes, output."
         }
         if (-not $value) { continue }
         $parameter = $Settings[$key]
@@ -253,6 +271,9 @@ if (Test-Path $configPath) {
         } elseif ($parameter -eq 'NoArchive') {
             if ($value -notmatch '^(true|false)$') { Fail "${ConfigName}, line ${number}: noArchive must be true or false, not '$value'." }
             $NoArchive = [switch]($value -eq 'true')
+        } elseif ($Repeating -contains $parameter) {
+            $current = (Get-Variable -Name $parameter).Value
+            Set-Variable -Name $parameter -Value (@($current) + $value)
         } else {
             Set-Variable -Name $parameter -Value $value
         }
@@ -323,6 +344,10 @@ if ($Identifier) { $packagerArgs += '--identifier', $Identifier }
 if ($AddModules) { $packagerArgs += '--add-modules', $AddModules }
 foreach ($i in $Icon) { $packagerArgs += '--icon', $i }
 foreach ($c in $Content) { $packagerArgs += '--content', $c }
+foreach ($a in $FileAssociation) { $packagerArgs += '--file-association', $a }
+# Windows PowerShell passes a quote inside an argument to a program without escaping it, and "%1" would lose its quotes.
+foreach ($v in $ShellVerb) { $packagerArgs += '--shell-verb', ($v -replace '"', '\"') }
+if ($DocumentTypes) { $packagerArgs += '--document-types', (Join-Path $Project $DocumentTypes) }
 # -XstartOnFirstThread is added for macOS by the packager, where it belongs.
 $packagerArgs += '--java-option', '--enable-native-access=ALL-UNNAMED'
 if ($Installer -eq 'true') {

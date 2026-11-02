@@ -149,7 +149,7 @@ final class ImageBuilder {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("`", "\\`") + "\"";
     }
 
-    private String infoPlist(String iconFile) {
+    String infoPlist(String iconFile) {
         StringBuilder p = new StringBuilder("""
                 <?xml version="1.0" encoding="UTF-8"?>
                 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -168,7 +168,10 @@ final class ImageBuilder {
         if (!app.vendor().isEmpty()) entry(p, "NSHumanReadableCopyright", "Copyright " + app.vendor());
         p.append("  <key>NSHighResolutionCapable</key><true/>\n");
         p.append("  <key>LSMinimumSystemVersion</key><string>11.0</string>\n");
-        if (!app.fileAssociations().isEmpty()) {
+        if (!app.documentTypes().isEmpty()) {
+            // The app's own entries, checked when the option was read, replace the generated types.
+            p.append(app.documentTypes().indent(2));
+        } else if (!app.fileAssociations().isEmpty()) {
             p.append("  <key>CFBundleDocumentTypes</key>\n  <array>\n");
             for (AppSpec.FileAssociation a : app.fileAssociations()) {
                 p.append("    <dict>\n");

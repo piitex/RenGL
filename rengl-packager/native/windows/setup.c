@@ -22,6 +22,9 @@
  * an Apps & features entry. uninstall.exe removes exactly the files that list holds, so a folder chosen by mistake
  * (Documents, say) only ever loses what the installer put there.
  *
+ * setup.ini may also hold repeated verb= and assoc= lines: Explorer right-click entries and Open with registrations, written
+ * into the same hive as the Apps & features entry and listed in uninstall.dat so that they are removed again (registerShell).
+ *
  * Build with build-setup.cmd. The output is checked in under src/main/resources, so using the packager needs no compiler.
  */
 #define WIN32_LEAN_AND_MEAN
@@ -54,6 +57,9 @@ static int uiShare;              /* ui-share=1: that program runs on the app's o
 static int reportProgress;       /* /PROGRESS: say how the install is going on stdout, for the setup program that started us */
 static wchar_t progressFile[PATHLEN]; /* /PROGRESSFILE=: say it in this file instead, for the elevated copy of this program */
 static int noElevate;            /* /NOELEVATE: start the elevated copy as the current user. Only for testing the hand-over without a prompt */
+
+static const char *settingsText; /* setup.ini, kept for the lines that repeat (verb=, assoc=) */
+static size_t settingsLen;
 
 static wchar_t selfPath[PATHLEN];
 static const uint8_t *image;   /* this exe, mapped */
@@ -118,6 +124,25 @@ static void iniValue(const char *text, size_t len, const char *key, wchar_t *out
         }
         i = e + 1;
     }
+}
+
+/* The next "key=" line at or after *pos, for keys that may repeat. Returns 0 when there are no more. */
+static int nextIniValue(const char *text, size_t len, const char *key, size_t *pos, wchar_t *out, int cap) {
+    size_t kl = strlen(key);
+    while (*pos < len) {
+        size_t i = *pos, e = i;
+        while (e < len && text[e] != '\n') e++;
+        size_t le = e;
+        if (le > i && text[le - 1] == '\r') le--;
+        *pos = e + 1;
+        if (le - i > kl && memcmp(text + i, key, kl) == 0 && text[i + kl] == '=') {
+            wchar_t *w = widen(text + i + kl + 1, (int) (le - i - kl - 1));
+            wcsncpy_s(out, cap, w, _TRUNCATE);
+            free(w);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static void joinPath(wchar_t *out, const wchar_t *dir, const wchar_t *rel) {
@@ -419,6 +444,8 @@ static int loadSettings(void) {
     wchar_t share[8];
     iniValue((const char *) d, ini->usize, "ui-share", share, 8);
     uiShare = wcscmp(share, L"1") == 0;
+    settingsText = (const char *) d;
+    settingsLen = ini->usize;
     return 1;
 }
 
@@ -516,6 +543,121 @@ static void defaultDir(wchar_t *out, int allUsers) {
         knownFolder(&FOLDERID_LocalAppData, base);
         swprintf(out, PATHLEN, L"%ls\\Programs\\%ls", base, appName);
     }
+}
+
+/* ---- Explorer's right-click menu and Open with --------------------------------------------------------------------- */
+
+#define CLASSES L"Software\\Classes\\"
+
+/* Splits "a|b|c" in place into at most n parts (the last keeps any further bars). Returns how many there are. */
+static int splitBars(wchar_t *s, wchar_t **part, int n) {
+    int count = 1;
+    part[0] = s;
+    for (wchar_t *p = s; *p && count < n; p++) {
+        if (*p == L'|') { *p = 0; part[count++] = p + 1; }
+    }
+    return count;
+}
+
+/* Creates subkey under root and gives it a value (the key's default when name is NULL). */
+static int regKeyValue(HKEY root, const wchar_t *subkey, const wchar_t *name, const wchar_t *value) {
+    HKEY k;
+    if (RegCreateKeyExW(root, subkey, 0, NULL, 0, KEY_WRITE, NULL, &k, NULL) != ERROR_SUCCESS) return 0;
+    LSTATUS r = ERROR_SUCCESS;
+    if (value) r = RegSetValueExW(k, name, 0, REG_SZ, (const BYTE *) value, (DWORD) ((wcslen(value) + 1) * sizeof(wchar_t)));
+    RegCloseKey(k);
+    return r == ERROR_SUCCESS;
+}
+
+/*
+ * Adds what setup.ini asks for to the registry of root (the current user's, or the computer's for an all-users install):
+ *
+ *   verb=<target>|<id>|<label>|<args>   a right-click entry. <target> is an extension (.zip, written under
+ *       SystemFileAssociations so the file type's own owner is left alone) or a class such as Directory. The entry is the
+ *       label, an Icon of the app, and a command line of the app's exe followed by <args>.
+ *   assoc=<.ext>|<description>          the app is offered in the type's Open with list, without taking the type over: a
+ *       ProgID of the app, listed under the extension's OpenWithProgids.
+ *
+ * Each key and value written is noted in dat (regkey= and regvalue= lines) so that the uninstaller removes exactly them.
+ * Returns whether anything was written.
+ */
+static int registerShell(HKEY root, const wchar_t *exe, Sb *dat) {
+    wchar_t spec[PATHLEN], key[PATHLEN], text[PATHLEN];
+    wchar_t *part[4];
+    size_t pos = 0;
+    int any = 0;
+
+    while (nextIniValue(settingsText, settingsLen, "verb", &pos, spec, PATHLEN)) {
+        if (splitBars(spec, part, 4) < 4) continue;
+        const wchar_t *target = part[0], *id = part[1], *label = part[2], *args = part[3];
+        if (!target[0] || !id[0]) continue;
+        swprintf(key, PATHLEN, CLASSES L"%ls%ls\\shell\\%ls", target[0] == L'.' ? L"SystemFileAssociations\\" : L"", target, id);
+        if (!regKeyValue(root, key, NULL, label)) continue;
+        swprintf(text, PATHLEN, L"\"%ls\"", exe);
+        regKeyValue(root, key, L"Icon", text);
+        wcscat_s(key, PATHLEN, L"\\command");
+        swprintf(text, PATHLEN, L"\"%ls\" %ls", exe, args);
+        regKeyValue(root, key, NULL, text);
+
+        key[wcslen(key) - wcslen(L"\\command")] = 0;
+        sbAdd(dat, "regkey="); sbAddW(dat, key); sbAdd(dat, "\n");
+        any = 1;
+    }
+
+    pos = 0;
+    while (nextIniValue(settingsText, settingsLen, "assoc", &pos, spec, PATHLEN)) {
+        int count = splitBars(spec, part, 2);
+        if (part[0][0] != L'.' || !part[0][1]) continue;
+        const wchar_t *ext = part[0], *description = count > 1 ? part[1] : L"";
+        wchar_t progId[256];
+        swprintf(progId, 256, L"%ls%ls", appId, ext);
+
+        swprintf(key, PATHLEN, CLASSES L"%ls", progId);
+        if (!regKeyValue(root, key, NULL, description[0] ? description : progId)) continue;
+        sbAdd(dat, "regkey="); sbAddW(dat, key); sbAdd(dat, "\n");
+        swprintf(text, PATHLEN, L"\"%ls\",0", exe);
+        swprintf(key, PATHLEN, CLASSES L"%ls\\DefaultIcon", progId);
+        regKeyValue(root, key, NULL, text);
+        swprintf(key, PATHLEN, CLASSES L"%ls\\shell\\open", progId);
+        regKeyValue(root, key, L"FriendlyAppName", appName);
+        swprintf(key, PATHLEN, CLASSES L"%ls\\shell\\open\\command", progId);
+        swprintf(text, PATHLEN, L"\"%ls\" \"%%1\"", exe);
+        regKeyValue(root, key, NULL, text);
+
+        swprintf(key, PATHLEN, CLASSES L"%ls\\OpenWithProgids", ext);
+        HKEY k;
+        if (RegCreateKeyExW(root, key, 0, NULL, 0, KEY_WRITE, NULL, &k, NULL) == ERROR_SUCCESS) {
+            if (RegSetValueExW(k, progId, 0, REG_NONE, NULL, 0) == ERROR_SUCCESS) {
+                sbAdd(dat, "regvalue="); sbAddW(dat, key); sbAdd(dat, "|"); sbAddW(dat, progId); sbAdd(dat, "\n");
+            }
+            RegCloseKey(k);
+        }
+        any = 1;
+    }
+    return any;
+}
+
+/* Removes the keys and values that registerShell noted in uninstall.dat. Only keys under Software\Classes are touched. */
+static int removeShell(const char *text, size_t size, HKEY root) {
+    wchar_t item[PATHLEN];
+    size_t pos = 0;
+    int any = 0;
+    while (nextIniValue(text, size, "regkey", &pos, item, PATHLEN)) {
+        if (wcsncmp(item, CLASSES, wcslen(CLASSES)) != 0) continue;
+        if (RegDeleteTreeW(root, item) == ERROR_SUCCESS) any = 1;
+    }
+    pos = 0;
+    while (nextIniValue(text, size, "regvalue", &pos, item, PATHLEN)) {
+        wchar_t *bar = wcschr(item, L'|');
+        HKEY k;
+        if (!bar || wcsncmp(item, CLASSES, wcslen(CLASSES)) != 0) continue;
+        *bar = 0;
+        if (RegOpenKeyExW(root, item, 0, KEY_SET_VALUE, &k) == ERROR_SUCCESS) {
+            if (RegDeleteValueW(k, bar + 1) == ERROR_SUCCESS) any = 1;
+            RegCloseKey(k);
+        }
+    }
+    return any;
 }
 
 /* ---- installing ---------------------------------------------------------------------------------------------------- */
@@ -725,6 +867,7 @@ static int install(Job *j) {
     CoUninitialize();
     sbAdd(&dat, "desktop="); sbAddW(&dat, desktopLink); sbAdd(&dat, "\n");
     sbAdd(&dat, "startmenu="); sbAddW(&dat, menuLink); sbAdd(&dat, "\n");
+    int registered = registerShell(hive(j->allUsers), exe, &dat);
 
     joinPath(path, j->dir, L"uninstall.dat");
     HANDLE d = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -759,6 +902,7 @@ static int install(Job *j) {
         regString(k, L"InstallDate", text);
         RegCloseKey(k);
     }
+    if (registered) SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
     if (buf) VirtualFree(buf, 0, MEM_RELEASE);
     return 1;
 }
@@ -814,15 +958,17 @@ static int removeInstall(const wchar_t *dir, int silent, wchar_t *nameOut) {
         }
         i = e + 1;
     }
-    free(text);
 
     if (failures) {
         wchar_t msg[512];
+        free(text);
         swprintf(msg, 512, L"%d file(s) could not be removed. If %ls is running, close it and run the uninstaller again.", failures, nameOut);
         if (!silent) message(NULL, msg, MB_ICONWARNING);
         return 0;
     }
 
+    if (removeShell(text, size, hive(wcscmp(scope, L"allusers") == 0))) SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
+    free(text);
     if (desktop[0]) DeleteFileW(desktop);
     if (menu[0]) DeleteFileW(menu);
     joinPath(path, dir, L"uninstall.dat");

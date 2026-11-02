@@ -48,7 +48,15 @@ public final class Packager {
               --modules <list>         Exactly these Java modules (skips jdeps), e.g. java.se,jdk.unsupported
               --content <dir>          Folder of files to ship beside the jars (assets, default data); its contents are
                                        copied into every platform's app folder. Repeat for several
-              --file-association <e>   Extension to register on macOS, as ext[,mime[,description]]; repeat
+              --file-association <e>   Extension the app opens, as ext[,mime[,description]]; repeat. macOS lists it in
+                                       Info.plist; the Windows setup adds the app to the type's Open with list
+              --document-types <file>  macOS: Info.plist entries to use instead of the CFBundleDocumentTypes made from
+                                       --file-association: the <array> of types, or <key>..</key> entries. Lets the app
+                                       claim system types (Alternate rank) without replacing the system's app
+              --shell-verb <v>         Windows setup: an Explorer right-click entry, as <target>|<id>|<label>|<args>; repeat.
+                                       <target> is an extension (.zip) or Directory, Directory\\Background, Drive,
+                                       AllFilesystemObjects or *. <args> follow the app's exe, e.g. "%%1". Explorer sorts
+                                       the entries of a target by <id>
               --jdk <platform>=<path>  Use this JDK for a platform instead of downloading Corretto's jmods; repeat
               --installer              Write an installer instead of the .zip / .tar.gz where there is one: a setup.exe
                                        for Windows (folder, desktop and Start menu shortcuts, uninstaller; run it with
@@ -108,7 +116,9 @@ public final class Packager {
                 options.getOrDefault("java-option", List.of()),
                 icons(options.getOrDefault("icon", List.of())),
                 options.getOrDefault("file-association", List.of()).stream().map(Packager::association).toList(),
-                contentDirs(options.getOrDefault("content", List.of())));
+                contentDirs(options.getOrDefault("content", List.of())),
+                options.getOrDefault("shell-verb", List.of()).stream().map(AppSpec.ShellVerb::parse).toList(),
+                options.containsKey("document-types") ? PlistFragment.documentTypes(Path.of(required(options, "document-types")).toAbsolutePath()) : "");
 
         List<Platform> platforms = platforms(single(options, "platform", ""));
         Path output = Path.of(single(options, "output", "app-images")).toAbsolutePath();
@@ -332,6 +342,7 @@ public final class Packager {
         String[] parts = spec.split(",", 3);
         String extension = parts[0].strip().replaceFirst("^\\.", "");
         if (extension.isEmpty()) throw new IllegalArgumentException("--file-association needs an extension");
+        if (!extension.matches("[A-Za-z0-9_+-]+")) throw new IllegalArgumentException("--file-association extension '" + extension + "' may only use letters, digits, '_', '+' and '-'");
         return new AppSpec.FileAssociation(extension, parts.length > 1 ? parts[1].strip() : "", parts.length > 2 ? parts[2].strip() : extension.toUpperCase(Locale.ROOT) + " file");
     }
 

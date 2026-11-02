@@ -76,7 +76,8 @@ final class WindowsSetup {
                 + "id=" + app.identifier() + "\n"
                 + "exe=" + app.name() + ".exe\n"
                 + (ui != null ? "ui=" + UI_NAME + ".exe\n" : "")
-                + (ui != null && ui.image() == null ? "ui-share=1\n" : "")).getBytes(StandardCharsets.UTF_8);
+                + (ui != null && ui.image() == null ? "ui-share=1\n" : "")
+                + registrations(app)).getBytes(StandardCharsets.UTF_8);
 
         try (OutputStream file = Files.newOutputStream(setup, StandardOpenOption.APPEND);
              ZipOutputStream zip = new ZipOutputStream(new java.io.BufferedOutputStream(file, 1 << 16))) {
@@ -96,6 +97,21 @@ final class WindowsSetup {
             if (ui != null && ui.image() == null) addSharedWindow(zip, app, ui);
         }
         return setup;
+    }
+
+    /**
+     * The {@code setup.ini} lines that tell the setup program what to add to the registry: {@code verb=<target>|<id>|<label>|<args>}
+     * for each right-click entry and {@code assoc=<.ext>|<description>} for each file type the app opens.
+     */
+    static String registrations(AppSpec app) {
+        StringBuilder lines = new StringBuilder();
+        for (AppSpec.ShellVerb verb : app.shellVerbs()) {
+            lines.append("verb=").append(verb.target()).append('|').append(verb.id()).append('|').append(verb.label()).append('|').append(verb.args()).append('\n');
+        }
+        for (AppSpec.FileAssociation type : app.fileAssociations()) {
+            lines.append("assoc=.").append(type.extension().toLowerCase(java.util.Locale.ROOT)).append('|').append(type.description().replace('\n', ' ').replace('|', '/')).append('\n');
+        }
+        return lines.toString();
     }
 
     /** The launcher, its configuration and the jar: the rest of the window comes from the app's own files. */
