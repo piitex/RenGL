@@ -78,16 +78,13 @@ record MetalObjects(long device, long queue) {
      */
     static long[] textures(VkGpuDevice vk, VkImageInfo... images) {
         try (MemoryStack stack = stackPush()) {
-            VkExportMetalTextureInfoEXT.Buffer textures = VkExportMetalTextureInfoEXT.calloc(images.length, stack);
-            for (int i = 0; i < images.length; i++) {
-                textures.get(i).sType$Default().image(images[i].image()).plane(images[i].aspect());
-                if (i > 0) textures.get(i - 1).pNext(textures.get(i).address());
-            }
-            VkExportMetalObjectsInfoEXT info = VkExportMetalObjectsInfoEXT.calloc(stack).sType$Default().pNext(textures.get(0));
-            EXTMetalObjects.vkExportMetalObjectsEXT(vk.vkDevice(), info);
+            // One call for each: MoltenVK fills in only the first structure of a chain (the device and queue did the same).
             long[] out = new long[images.length];
             for (int i = 0; i < images.length; i++) {
-                out[i] = textures.get(i).mtlTexture();
+                VkExportMetalTextureInfoEXT texture = VkExportMetalTextureInfoEXT.calloc(stack).sType$Default()
+                        .image(images[i].image()).plane(images[i].aspect());
+                EXTMetalObjects.vkExportMetalObjectsEXT(vk.vkDevice(), VkExportMetalObjectsInfoEXT.calloc(stack).sType$Default().pNext(texture));
+                out[i] = texture.mtlTexture();
                 if (out[i] == 0L) throw new IllegalStateException("MoltenVK gave no Metal texture for image " + i + " of " + images.length);
             }
             return out;
