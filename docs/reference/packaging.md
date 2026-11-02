@@ -78,6 +78,9 @@ installer=false
 | `identifier` | `me.rengl.<name>` | The macOS bundle id, which also names the Windows uninstall entry |
 | `addModules` | none | Java modules the app loads by reflection, e.g. `java.logging,java.prefs` |
 | `content` | none | A folder of files to ship beside the jars, e.g. `assets` |
+| `fileAssociation` | none | A type the app opens, `ext,mime,description`. Give the line once per type |
+| `shellVerb` | none | An Explorer right-click entry, `target\|id\|label\|args`. Give the line once per entry |
+| `documentTypes` | none | A file, relative to the project, of macOS `Info.plist` document types |
 | `output` | `dist\app-images` | Where the results go. Keep it short |
 | `mainJar` | the jar Maven builds | Only for a project that builds more than one jar |
 
@@ -205,7 +208,9 @@ no `--platform` it builds this computer's. Keep `--output` short: Windows paths 
 | `--java-option` | A JVM option for every platform. `-XstartOnFirstThread` (macOS) and `--enable-native-access=ALL-UNNAMED` are added for you |
 | `--modules`, `--add-modules` | Replace or extend the Java modules in the runtime, when the app uses one `jdeps` cannot see (loaded by reflection or `ServiceLoader`). The `java.logging,java.prefs` pair is a common one |
 | `--content <dir>` | A folder of files to ship beside the jars (assets, default data). Its contents are copied into every platform's app folder |
-| `--file-association ext,mime,description` | Registers the type in the macOS `Info.plist`. Windows and Linux images cannot register types without `jpackage`, but a file passed on the command line arrives like any launch |
+| `--file-association ext,mime,description` | A type the app opens; repeat for several. macOS lists it in the `Info.plist`. The Windows setup adds the app to the type's Open with list ([details](#right-click-entries-and-open-with)). A Windows `.zip` and a Linux image register nothing, but a file passed on the command line arrives like any launch |
+| `--shell-verb target\|id\|label\|args` | An Explorer right-click entry, added by the Windows setup; repeat for several. See [Right-click entries and Open with](#right-click-entries-and-open-with) |
+| `--document-types <file>` | macOS: the `Info.plist` entries to use instead of the types made from `--file-association`, for an app that claims the system's own types without replacing the system's app. See [below](#macos-document-types) |
 | `--identifier` | The macOS bundle id; defaults to `me.rengl.<name>`. On Windows it also names the Apps & features entry |
 | `--installer` | A `setup.exe` for Windows and a `.deb` and an `.rpm` for Linux instead of the `.zip` and `.tar.gz`. See [Installers](#installers) |
 | `--installer-ui <dir>` | Like `--installer`, and the Windows setup shows a RenGL window instead of the plain Windows one. `<dir>` is `rengl-packager/target/ui-input`. See [A RenGL window for the setup](#a-rengl-window-for-the-setup) |
@@ -255,6 +260,77 @@ C:\Tools\MyApp\uninstall.exe /S
 | `/LAUNCH` | Start the app when done |
 | `/PROGRESS` | Print `progress=<percent>` lines on stdout, and `error=<text>` if it fails. The [RenGL window](#a-rengl-window-for-the-setup) reads these |
 | `/NOUI` | Show the plain Windows wizard even when the setup carries a RenGL window |
+
+### Right-click entries and Open with
+
+A zip tool, an image viewer or an editor usually wants to be in Explorer's menus. The Windows setup writes them when the
+app asks:
+
+```powershell
+java -jar rengl-packager.jar ... --installer `
+  --shell-verb '.zip|OpenZip.Open|Open with OpenZip|\"%1\"' `
+  --shell-verb 'Directory|OpenZip.Compress1Zip|Compress to ZIP|--compress=zip \"%1\"' `
+  --shell-verb 'Directory|OpenZip.Compress2Options|Compress with OpenZip...|\"%1\"' `
+  --file-association zip,application/zip,ZIP archive
+```
+
+(The `\"` is for Windows PowerShell, which hands a quote inside an argument to a program unescaped. In a project's
+`rengl-package.properties` write the line as it is, one `shellVerb=` line per entry, and `package-app.ps1` does that
+for you: `shellVerb=.zip|OpenZip.Open|Open with OpenZip|"%1"`.)
+
+**`--shell-verb "<target>|<id>|<label>|<args>"`** adds one entry. `<target>` is an extension with its dot, or one of
+`Directory`, `Directory\Background` (the empty space inside a folder), `Drive`, `AllFilesystemObjects` and `*`. The setup
+writes, under `Software\Classes`:
+
+| Key | Holds |
+|---|---|
+| `SystemFileAssociations\.zip\shell\<id>` for an extension, `Directory\shell\<id>` for a class | The label as the default value, and `Icon`, the app's exe in quotes |
+| the same, `\command` | `"<install folder>\MyApp.exe" <args>` |
+
+An extension goes under `SystemFileAssociations`, so the entry joins the menu of every `.zip` without touching whatever
+program owns the type. It is written to `HKEY_CURRENT_USER` for a per-user install and `HKEY_LOCAL_MACHINE` for an
+all-users one, like the Apps & features entry. **Explorer sorts the entries of a target by their key name, so choose
+ids in the order you want the menu to show** (`OpenZip.Compress1Zip` before `OpenZip.Compress2Options`). `<args>` is the
+command line after the exe; `%1` is the file or folder that was clicked, and it needs its own quotes in the argument
+because a path may hold spaces. Windows 11 puts entries registered this way under *Show more options* in its short menu;
+a place in the short menu needs a shell extension, which the setup does not write.
+
+**`--file-association`** now also adds the app to the type's **Open with** list on Windows, as jpackage did. The setup
+writes a ProgID of the app (`<identifier>.<ext>`, opening the file with `"<exe>" "%1"`) and lists it under the
+extension's `OpenWithProgids`. That offers the app without making it the default, and it does not touch what the person
+already chose.
+
+Both are listed in `uninstall.dat` (`regkey=` and `regvalue=` lines), and the uninstaller removes exactly those keys and
+values, then tells Explorer that associations changed (`SHChangeNotify`); the setup does the same after installing.
+Nothing outside `Software\Classes` is ever deleted, and the class (`Directory`, `.zip`) keeps its other entries. If the
+setup cannot write a key it carries on, as it does for a shortcut.
+
+### macOS document types
+
+`--file-association` writes a plain `CFBundleDocumentTypes` entry for the extension. An app that should be offered for
+the system's own types, at **Alternate** rank so that Finder's Open With lists it without replacing Archive Utility,
+needs entries by UTI, which the option cannot say. Give them yourself:
+
+```powershell
+--document-types types.plist
+```
+
+The file holds the `<array>` of types (the packager adds the `CFBundleDocumentTypes` key), or `<key>` entries when you
+need more beside it, such as `UTImportedTypeDeclarations`:
+
+```xml
+<array>
+  <dict>
+    <key>CFBundleTypeName</key><string>ZIP archive</string>
+    <key>CFBundleTypeRole</key><string>Viewer</string>
+    <key>LSHandlerRank</key><string>Alternate</string>
+    <key>LSItemContentTypes</key><array><string>public.zip-archive</string></array>
+  </dict>
+</array>
+```
+
+It replaces the types made from `--file-association` in the macOS `Info.plist`; the Windows setup still uses
+`--file-association`. The text is checked for well-formed XML when the packager starts, not by macOS.
 
 Installing over an older version replaces its files. Close the app first: files in use cannot be written or removed,
 and the setup and uninstaller say so. The uninstaller keeps its file list when that happens, so running it again after
