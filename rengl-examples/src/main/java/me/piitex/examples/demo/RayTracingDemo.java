@@ -29,6 +29,7 @@ import me.piitex.engine.ui.theme.DarkTheme;
 import me.piitex.engine.ui.theme.ThemeManager;
 import me.piitex.engine.upscale.dlss.DlssProvider;
 import me.piitex.engine.upscale.fsr.FsrProvider;
+import me.piitex.engine.upscale.metalfx.MetalFxProvider;
 
 import java.io.File;
 import java.util.Locale;
@@ -66,7 +67,9 @@ public class RayTracingDemo {
 
     private static final String[] PRESETS = {"Rasterized (no rays)", "Ray traced shadows", "Shadows, reflections, occlusion",
             "Global illumination (one bounce)", "Path tracing"};
-    private static final String[] UPSCALERS = {"Smooth enlargement", "Built-in temporal", "FSR", "DLSS"};
+    private static final boolean MAC = System.getProperty("os.name", "").toLowerCase().contains("mac");
+    private static final String[] UPSCALERS = MAC ? new String[]{"Smooth enlargement", "Built-in temporal", "MetalFX"}
+            : new String[]{"Smooth enlargement", "Built-in temporal", "FSR", "DLSS"};
     private static final String[] QUALITY = {"Native (100%)", "Quality (67%)", "Balanced (58%)", "Performance (50%)", "Ultra performance (33%)"};
     private static final float[] QUALITY_SCALES = {1f, 0.67f, 0.58f, 0.5f, 0.33f};
 
@@ -240,20 +243,24 @@ public class RayTracingDemo {
             String dlss = DlssProvider.unavailableReason(device);
             String fsr = new FsrProvider().isAvailable(device) ? null : FsrProvider.unavailableReason();
             String rr = dlss != null ? dlss : DlssProvider.rayReconstructionUnavailableReason(device);
-            dlssLine = "DLSS: " + brief(dlss, "dlss");
-            fsrLine = "FSR: " + brief(fsr, "fsr");
-            rrLine = "Ray Reconstruction: " + brief(rr, "dlss");
+            String metal = MAC ? MetalFxProvider.unavailableReason(device) : "not a Mac";
+            // The panel has lines for DLSS, FSR and Ray Reconstruction, which are Windows libraries; on a Mac MetalFX takes the first.
+            dlssLine = MAC ? "MetalFX: " + brief(metal, "metalfx") : "DLSS: " + brief(dlss, "dlss");
+            fsrLine = MAC ? "" : "FSR: " + brief(fsr, "fsr");
+            rrLine = MAC ? "" : "Ray Reconstruction: " + brief(rr, "dlss");
             gpuLine = device.supportsRayTracing() ? "Ray queries: yes (" + device.name() + ")" : "No ray queries on this GPU: drawn without rays";
-            if (dlss != null) System.out.println("DLSS is not available: " + dlss);
-            if (fsr != null) System.out.println("FSR is not available: " + fsr);
-            if (rr != null) System.out.println("DLSS Ray Reconstruction is not available: " + rr);
+            if (MAC && metal != null) System.out.println("MetalFX is not available: " + metal);
+            if (!MAC && dlss != null) System.out.println("DLSS is not available: " + dlss);
+            if (!MAC && fsr != null) System.out.println("FSR is not available: " + fsr);
+            if (!MAC && rr != null) System.out.println("DLSS Ray Reconstruction is not available: " + rr);
 
             String first = switch (System.getProperty("rengl.demo.upscaler", "").toLowerCase(Locale.ROOT)) {
                 case "smooth" -> UPSCALERS[0];
                 case "builtin" -> UPSCALERS[1];
-                case "fsr" -> UPSCALERS[2];
-                case "dlss" -> UPSCALERS[3];
-                default -> dlss == null ? "DLSS" : UPSCALERS[1];
+                case "fsr" -> MAC ? UPSCALERS[1] : UPSCALERS[2];
+                case "dlss" -> MAC ? UPSCALERS[1] : UPSCALERS[3];
+                case "metalfx" -> MAC ? UPSCALERS[2] : UPSCALERS[1];
+                default -> MAC ? (metal == null ? "MetalFX" : UPSCALERS[1]) : dlss == null ? "DLSS" : UPSCALERS[1];
             };
             if (!choose(first)) {
                 first = UPSCALERS[1];
@@ -291,6 +298,7 @@ public class RayTracingDemo {
             switch (name) {
                 case "DLSS" -> next = new DlssProvider();
                 case "FSR" -> next = new FsrProvider();
+                case "MetalFX" -> next = new MetalFxProvider();
                 case "Built-in temporal" -> next = Upscalers.builtIn();
                 default -> next = null;
             }

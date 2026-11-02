@@ -32,6 +32,7 @@ import me.piitex.engine.upscale.dlss.DlssFrameGeneration;
 import me.piitex.engine.upscale.dlss.DlssProvider;
 import me.piitex.engine.upscale.fsr.FsrFrameGeneration;
 import me.piitex.engine.upscale.fsr.FsrProvider;
+import me.piitex.engine.upscale.metalfx.MetalFxProvider;
 
 import java.io.File;
 import java.util.Locale;
@@ -67,7 +68,9 @@ public class UpscalingDemo {
     // The vendors' own names for the render scales.
     private static final String[] PRESETS = {"Native (100%)", "Quality (67%)", "Balanced (58%)", "Performance (50%)", "Ultra performance (33%)"};
     private static final float[] PRESET_SCALES = {1f, 0.67f, 0.58f, 0.5f, 0.33f};
-    private static final String[] UPSCALERS = {"Smooth enlargement", "Built-in temporal", "FSR", "DLSS"};
+    private static final boolean MAC = System.getProperty("os.name", "").toLowerCase().contains("mac");
+    private static final String[] UPSCALERS = MAC ? new String[]{"Smooth enlargement", "Built-in temporal", "MetalFX"}
+            : new String[]{"Smooth enlargement", "Built-in temporal", "FSR", "DLSS"};
 
     static void main() {
         // The window starts frame generation, so it has to be asked for before the window's device is made.
@@ -361,13 +364,17 @@ public class UpscalingDemo {
             ready = true;
             String dlss = DlssProvider.unavailableReason(device);
             String fsr = fsrReason(device);
-            dlssLine = "DLSS: " + brief(dlss, "dlss");
-            fsrLine = "FSR: " + brief(fsr, "fsr");
-            if (dlss != null) System.out.println("DLSS is not available: " + dlss);
-            if (fsr != null) System.out.println("FSR is not available: " + fsr);
+            String metal = MAC ? MetalFxProvider.unavailableReason(device) : "not a Mac";
+            // The panel has two lines for vendors: DLSS and FSR, which are Windows libraries, and on a Mac MetalFX in their place.
+            dlssLine = MAC ? "MetalFX: " + brief(metal, "metalfx") : "DLSS: " + brief(dlss, "dlss");
+            fsrLine = MAC ? "" : "FSR: " + brief(fsr, "fsr");
+            if (MAC && metal != null) System.out.println("MetalFX is not available: " + metal);
+            if (!MAC && dlss != null) System.out.println("DLSS is not available: " + dlss);
+            if (!MAC && fsr != null) System.out.println("FSR is not available: " + fsr);
 
             String first = UPSCALERS[1];
-            if (generation.equals("dlss") && dlss == null) first = "DLSS";
+            if (metal == null) first = "MetalFX";
+            else if (generation.equals("dlss") && dlss == null) first = "DLSS";
             else if (generation.equals("fsr") && fsr == null) first = "FSR";
             else if (dlss == null) first = "DLSS";
             else if (fsr == null) first = "FSR";
@@ -399,6 +406,7 @@ public class UpscalingDemo {
             switch (name) {
                 case "DLSS" -> next = new DlssProvider();
                 case "FSR" -> next = new FsrProvider();
+                case "MetalFX" -> next = new MetalFxProvider();
                 case "Built-in temporal" -> next = Upscalers.builtIn();
                 default -> next = null;
             }

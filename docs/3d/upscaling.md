@@ -41,8 +41,42 @@ pixel every frame), blends in the last picture along the motion vectors, and cla
 the pixel so that what changed does not leave a ghost. It is clearly sharper than a smooth enlargement of the same scene,
 but it is a simple one: vendor upscalers do better on thin lines and fast motion.
 
-Vendor upscalers (AMD FidelityFX, NVIDIA DLSS, Intel XeSS) come from a module of their own, so that nothing in the
-3D layer depends on their libraries or licences. Today those are [FSR](#fsr) and [DLSS](#dlss).
+Vendor upscalers (AMD FidelityFX, NVIDIA DLSS, Apple MetalFX, Intel XeSS) come from a module of their own, so that nothing in
+the 3D layer depends on their libraries or licences. Today those are [FSR](#fsr) and [DLSS](#dlss) on Windows and
+[MetalFX](#metalfx) on a Mac.
+
+## MetalFX
+
+On a Mac the `rengl-upscale` module offers Apple's **MetalFX temporal upscaler**. It is part of macOS (13 or newer), so there is
+nothing to download and no library to point at: add the module and `Upscalers.available(device)` lists it, or use it directly:
+
+```java nocompile
+scene.setRenderScale(0.5f);
+scene.setUpscaler(new MetalFxProvider());     // me.piitex.engine.upscale.metalfx
+```
+
+The 3D layer draws with Vulkan there, through MoltenVK, and MetalFX works on Metal textures. The two meet through
+`VK_EXT_metal_objects`: the module asks for the extension when the window's device is made, and each frame asks MoltenVK for the
+Metal texture behind the scene's colour, depth and motion images and behind the output. The Vulkan work before the upscale is
+submitted, a Metal command buffer made from MoltenVK's own command queue encodes the scaler and is committed, and the Vulkan work
+after it goes on; a queue runs its command buffers in the order they were committed. The Objective-C calls go through the
+Objective-C runtime with the same foreign function API the other vendors use, so there is no native code to build. Run with
+`--enable-native-access=ALL-UNNAMED`.
+
+`MetalFxProvider.unavailableReason(device)` says why it is not available: not a Mac, a MoltenVK without `VK_EXT_metal_objects`,
+a macOS without MetalFX, or a GPU that does not take it. It needs a 32-bit float depth buffer and takes render scales down to a
+third. The scaler estimates the exposure itself, since the scene is linear light that has none applied. MetalFX keeps its own history,
+so `previousOutput` is not used. Frame generation (macOS 26) and the denoising scaler are not used, so path tracing is
+denoised by the engine's own filter.
+
+Apple does not state two conventions plainly, and they are the first thing to try if the picture trails behind moving things or
+shimmers: `-Drengl.metalfx.flip=motion,jitterx,jittery` (any of the three) reverses the sign of the motion vectors and of the
+camera's jitter on that axis.
+
+**Not run.** This was written on a Windows machine with no Mac to try it on: it compiles, the provider's availability logic is
+tested, and the rest has never touched MoltenVK or MetalFX. The parts most likely to need a fix are the export of the textures
+(MoltenVK is asked for them without the creation-time flags the extension's specification describes) and the signs above.
+`Upscalers.available` does not offer MetalFX when its first check fails, and the log says what failed.
 
 ## FSR
 
@@ -232,9 +266,10 @@ vectors that Ray Reconstruction can use for mirrors are not given, so a reflecti
 
 `me.piitex.examples.demo.UpscalingDemo` (in `rengl-examples`) flies a camera through a yard that is hard on a smaller picture
 (thin fences, a ground of hard-edged tiles, spinning rotors, glowing orbs) with a panel to choose the upscaler (smooth
-enlargement, built-in, FSR, DLSS), the render scale (the vendors' presets or any size), the number of shadow-casting crates, the camera
-(fly-through or orbit), and to freeze the motion. The numbers show the size drawn and shown, the frames drawn and the frames shown.
-The vendors' libraries are not in the repository: it lists the ones it cannot find, and which of them to name.
+enlargement, built-in, FSR, DLSS; on a Mac, MetalFX in place of the last two), the render scale (the vendors' presets or any size),
+the number of shadow-casting crates, the camera (fly-through or orbit), and to freeze the motion. The numbers show the size drawn
+and shown, the frames drawn and the frames shown. The vendors' libraries are not in the repository: it lists the ones it cannot
+find, and which of them to name.
 
 Run it from the repository folder with the folders of the libraries, and for frame generation say which one to start (it is
 started with the window, so it is chosen at launch; each wants its own upscaler, which the demo begins with):

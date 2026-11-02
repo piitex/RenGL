@@ -84,7 +84,7 @@ an image. The same GLSL source and the same scene code run on both APIs. Nothing
 | **Physics** | A [pure-Java engine](docs/3d/physics.md): rigid bodies, box, sphere, capsule, convex hull and triangle-mesh colliders, friction and bounce, stacking, sleeping, continuous collision for fast bodies, joints (hinge, slider, rope, spring, ball with cone limits), raycasts, triggers and a character controller. |
 | **Interfaces in the world** | A [`UiScreen`](docs/3d/scenes.md#an-interface-on-a-screen) puts a regular RenGL container on a surface in the scene, and the mouse and keyboard work on it through the picking ray: sliders, dropdowns, text fields, popups. |
 | **Scene files** | A scene built in the RenGL Editor is saved as [JSON](docs/3d/scene-files.md), with its bodies, colliders, prefabs and terrain, and loaded by the game into a real running scene. |
-| **[Upscaling](docs/3d/upscaling.md)** | Draw the scene at a fraction of its size and enlarge it. A built-in temporal upscaler works on every GPU. **AMD FSR 3** and **NVIDIA DLSS** super resolution come from the separate `rengl-upscale` module. |
+| **[Upscaling](docs/3d/upscaling.md)** | Draw the scene at a fraction of its size and enlarge it. A built-in temporal upscaler works on every GPU. **AMD FSR 3** and **NVIDIA DLSS** super resolution (Windows) and **Apple MetalFX** (Mac) come from the separate `rengl-upscale` module. |
 | **[Frame generation](docs/3d/upscaling.md#dlss-frame-generation)** | **DLSS frame generation** (through NVIDIA Streamline) and **FSR frame generation**, which take over the window's swapchain to present generated frames between the drawn ones. |
 | **[Ray tracing](docs/3d/ray-tracing.md)** | On Vulkan GPUs with ray queries (NVIDIA RTX, AMD RDNA 2 and later, Intel Arc): exact shadows, reflections of the objects around a surface, ambient occlusion, one-bounce global illumination and full path tracing, each a single call. **DLSS Ray Reconstruction** denoises the paths where there is an RTX GPU, and the engine's own filter does elsewhere. A GPU without ray queries keeps the usual shadow maps and sky. |
 
@@ -99,11 +99,12 @@ scene.setRayReconstruction(true);              // DLSS cleans up the noise (on b
 FSR and DLSS are bindings, not copies. `rengl-upscale` carries none of AMD's or NVIDIA's code, is left out of the
 `RenGL` jar, and finds their libraries at run time, which you download from the vendors yourself (they are Windows-only).
 See [Upscaling](docs/3d/upscaling.md) for where to get them and how to point at them. Without them the provider says it is
-unavailable, nothing starts, and the built-in upscaler is still there.
+unavailable, nothing starts, and the built-in upscaler is still there. On a Mac, `MetalFxProvider` needs nothing: MetalFX is part
+of macOS.
 
 What has and hasn't been run: FSR 3, DLSS, both frame generations and Ray Reconstruction have run on a Windows machine
-with an NVIDIA RTX 4090. FSR 4 is requested on the AMD GPUs that offer it but has never run on one, Intel XeSS is not
-supported, and ray tracing has only been checked on NVIDIA.
+with an NVIDIA RTX 4090. FSR 4 is requested on the AMD GPUs that offer it but has never run on one, MetalFX was written without
+a Mac to try it on, Intel XeSS is not supported, and ray tracing has only been checked on NVIDIA.
 
 ## Modules
 
