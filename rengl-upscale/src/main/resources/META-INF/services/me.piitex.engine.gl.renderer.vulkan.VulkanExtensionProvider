@@ -1,2 +1,3 @@
 me.piitex.engine.upscale.dlss.DlssExtensions
 me.piitex.engine.upscale.fsr.FsrExtensions
+me.piitex.engine.upscale.metalfx.MetalFxExtensions

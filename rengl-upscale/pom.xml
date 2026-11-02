@@ -12,7 +12,7 @@
 
     <artifactId>rengl-upscale</artifactId>
     <name>RenGL upscalers</name>
-    <description>Vendor upscalers for the 3D layer, apart from it so that nothing else depends on their libraries or licences: AMD FidelityFX Super Resolution (FSR 3 and FSR 4) on Vulkan. It carries no vendor binaries; the libraries are found at run time.</description>
+    <description>Vendor upscalers for the 3D layer, apart from it so that nothing else depends on their libraries or licences: AMD FidelityFX Super Resolution (FSR 3 and FSR 4) and NVIDIA DLSS on Vulkan, and Apple MetalFX on a Mac. It carries no vendor binaries; the libraries are found at run time.</description>
 
     <dependencies>
         <dependency>
