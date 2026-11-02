@@ -205,7 +205,7 @@ no `--platform` it builds this computer's. Keep `--output` short: Windows paths 
 | `--name`, `--input`, `--main-jar`, `--main-class` | Required: the app's name (also the launcher's file name), the jar folder, your jar in it, and the class with `main` |
 | `--app-version`, `--vendor`, `--description` | The app's identity. The version defaults to `1.0.0` |
 | `--icon` | Repeat for each platform: `.ico` is set on `MyApp.exe` (only when building on Windows), `.icns` goes in the app bundle, `.png` is the Linux icon. `--icon icns=MyApp-1024.png` makes the macOS icon from a square 128, 256, 512 or 1024 px PNG, so you do not need a Mac to draw one |
-| `--java-option` | A JVM option for every platform. `-XstartOnFirstThread` (macOS) and `--enable-native-access=ALL-UNNAMED` are added for you |
+| `--java-option` | A JVM option for every platform. `-XstartOnFirstThread` and `-Djava.awt.headless=true` (macOS) and `--enable-native-access=ALL-UNNAMED` are added for you. Headless keeps `BufferedImage`, `Graphics2D` and fonts working but stops AWT starting its own event loop on the first thread, which would freeze the app; pass your own `-Djava.awt.headless=...` to override it |
 | `--modules`, `--add-modules` | Replace or extend the Java modules in the runtime, when the app uses one `jdeps` cannot see (loaded by reflection or `ServiceLoader`). The `java.logging,java.prefs` pair is a common one |
 | `--content <dir>` | A folder of files to ship beside the jars (assets, default data). Its contents are copied into every platform's app folder |
 | `--file-association ext,mime,description` | A type the app opens; repeat for several. macOS lists it in the `Info.plist`. The Windows setup adds the app to the type's Open with list ([details](#right-click-entries-and-open-with)). A Windows `.zip` and a Linux image register nothing, but a file passed on the command line arrives like any launch |
@@ -486,6 +486,7 @@ The flags that matter, then the commands:
 | `--icon` | `.icns` on macOS, `.ico` on Windows, `.png` on Linux |
 | `--main-jar`, `--main-class` | What to start |
 | `--java-options "-XstartOnFirstThread"` | **macOS only.** GLFW has to run on the first thread. Do not pass it on Windows or Linux, where the JVM does not know the option |
+| `--java-options "-Djava.awt.headless=true"` | **macOS only**, with `-XstartOnFirstThread`. Without it the first `Graphics2D` or font use starts AWT's event loop on the first thread and the app freezes |
 | `--java-options "--enable-native-access=ALL-UNNAMED"` | All platforms: LWJGL and Skiko load native code |
 | `--file-associations types.properties` | Registers file types; see [below](#opening-files-from-the-os) |
 | `--runtime-image <JDK>` | Optional: use a whole JDK as the runtime. Without it, `jpackage` builds a smaller one from the modules it finds your jar needs, which may leave out a module a library loads by reflection, so run the installed app before shipping it |

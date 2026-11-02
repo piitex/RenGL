@@ -117,10 +117,15 @@ final class ImageBuilder {
         return root;
     }
 
-    private List<String> javaOptions() {
+    List<String> javaOptions() {
         List<String> options = new ArrayList<>(app.javaOptions());
-        // GLFW has to run on the first thread on macOS, and so does Vulkan through MoltenVK.
-        if (platform.os() == Platform.Os.MACOS) options.add("-XstartOnFirstThread");
+        if (platform.os() == Platform.Os.MACOS) {
+            // GLFW has to run on the first thread on macOS, and so does Vulkan through MoltenVK.
+            options.add("-XstartOnFirstThread");
+            // AWT starts its own NSApplication loop on the first thread the first time anything draws with it (createGraphics,
+            // fonts), and that loop never returns: the app freezes. Headless AWT keeps images and fonts and skips the loop.
+            if (options.stream().noneMatch(option -> option.startsWith("-Djava.awt.headless"))) options.add("-Djava.awt.headless=true");
+        }
         options.add("--enable-native-access=ALL-UNNAMED");
         return options;
     }
