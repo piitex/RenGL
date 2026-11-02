@@ -50,6 +50,15 @@ public interface RenderPass extends AutoCloseable {
     }
 
     /**
+     * Where {@link GpuDevice#softwareRayTracing()}, binds the triangles of every {@link RayGeometry} (the storage buffer the
+     * software tracer walks them in) at a second binding, next to the scene bound with {@link #bindAccelerationStructure}. A
+     * scene's storage buffers are what its shaders read in place of an acceleration structure.
+     */
+    default void bindRayGeometry(int binding, RayScene scene) {
+        throw new UnsupportedOperationException("This device does not trace rays in shader code");
+    }
+
+    /**
      * Binds textures to an array of samplers ({@code uniform sampler2D name[N]}) at a binding. The array must be as long as the
      * shader's; a shader that picks an entry per pixel (with {@code nonuniformEXT}) needs a GPU that allows it, which the
      * ray tracing devices do. Only where {@link GpuDevice#supportsRayTracing()}.

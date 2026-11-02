@@ -400,7 +400,7 @@ final class SceneRenderer {
             desc = new PipelineDesc(vertex(skinned, uv2, morph), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
                     variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0, (key & KEY_REFLECT) != 0,
                     (key & KEY_GI_TRACE) != 0 ? ((key & KEY_PATH_TRACE) != 0 ? GI_PATH : GI_TRACE) : (key & KEY_GI) != 0 ? GI_APPLY : GI_NONE,
-                    (key >> KEY_GUIDE_SHIFT) & KEY_GUIDE_MASK), meshLayout, true, (key & KEY_CULL) != 0, blend,
+                    (key >> KEY_GUIDE_SHIFT) & KEY_GUIDE_MASK, device.softwareRayTracing()), meshLayout, true, (key & KEY_CULL) != 0, blend,
                     (key & KEY_MIRRORED) != 0, extra, (key & KEY_ADDITIVE) != 0, !blend)
                     .withTopology((key & KEY_LINES) != 0 ? PipelineDesc.Topology.LINES : PipelineDesc.Topology.TRIANGLES);
         }
@@ -550,7 +550,7 @@ final class SceneRenderer {
         try (RenderPass pass = device.beginPass(drawTarget, bg.getR(), bg.getG(), bg.getB(), 1f)) {
             if (sky != null) drawSky(pass, res, sky);
             pass.bindTexture(7, shadowFrame.plans().isEmpty() ? whiteTexture : atlas.texture());
-            if (rayShadows || rays.reflections()) pass.bindAccelerationStructure(RAY_BINDING, res.rayScene);
+            if (rayShadows || rays.reflections()) bindRayScene(pass, res.rayScene);
             if (rays.reflections()) {
                 pass.bindUniformBuffer(RAY_BLOCK_BINDING, res.rayBlock);
                 pass.bindTextures(RAY_TEXTURES_BINDING, rayTextureArray());
@@ -1259,7 +1259,7 @@ final class SceneRenderer {
         boolean capable = device.supportsRayTracing();
         if (!capable && !warnedRay && !rayBroken) {
             warnedRay = true;
-            log.warn("Ray tracing was asked for, but this device can not trace rays (Vulkan on a GPU with ray queries is needed); shadows are drawn as maps, reflections show the sky and occlusion is read from the depth picture instead.");
+            log.warn("Ray tracing was asked for, but this device can not trace rays (Vulkan 1.2, or a GPU with ray queries, is needed); shadows are drawn as maps, reflections show the sky and occlusion is read from the depth picture instead.");
         }
         int clusterBit = clustered ? KEY_CLUSTER : 0;
         boolean shadows = wantShadows && capable && !rayBroken;
@@ -1328,7 +1328,7 @@ final class SceneRenderer {
         RenderTarget raw = res.post.giTarget();
         try (RenderPass pass = device.beginPass(raw, 0f, 0f, 0f, 0f)) {
             pass.bindTexture(7, whiteTexture);
-            pass.bindAccelerationStructure(RAY_BINDING, res.rayScene);
+            bindRayScene(pass, res.rayScene);
             pass.bindUniformBuffer(RAY_BLOCK_BINDING, res.rayBlock);
             pass.bindTextures(RAY_TEXTURES_BINDING, rayTextureArray());
             if (env >= ENV_CUBE) pass.bindTexture(8, gpuSky(sky));
@@ -1368,6 +1368,15 @@ final class SceneRenderer {
             }
         }
         return new PostPass.Guides(targets[0].texture(), targets[1].texture(), targets[2].texture(), view.toArray());
+    }
+
+    /**
+     * Binds what the shaders trace rays through: the scene's acceleration structure, or where the rays are traced in shader code
+     * its two storage buffers.
+     */
+    private void bindRayScene(RenderPass pass, RayScene scene) {
+        pass.bindAccelerationStructure(RAY_BINDING, scene);
+        if (device.softwareRayTracing()) pass.bindRayGeometry(RAY_GEOMETRY_BINDING, scene);
     }
 
     /**

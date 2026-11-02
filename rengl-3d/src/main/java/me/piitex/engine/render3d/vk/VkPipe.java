@@ -47,6 +47,7 @@ final class VkPipe implements Pipeline {
                         .binding(binding.binding())
                         .descriptorType(binding.accel() ? KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
                                 : binding.sampler() ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                                : binding.storage() ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
                                 : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
                         .descriptorCount(binding.count())
                         .stageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);

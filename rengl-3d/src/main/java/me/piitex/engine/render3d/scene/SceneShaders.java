@@ -1,5 +1,7 @@
 package me.piitex.engine.render3d.scene;
 
+import me.piitex.engine.render3d.SoftRayShaders;
+
 import java.util.List;
 
 /**
@@ -415,6 +417,18 @@ final class SceneShaders {
      */
     static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi,
                            int guide) {
+        return fragment(env, filters, falloffs, clustered, rayTraced, reflections, gi, guide, false);
+    }
+
+    /** The binding of the buffer of every triangle a ray can hit, for the rays that are traced in shader code. */
+    static final int RAY_GEOMETRY_BINDING = 18;
+
+    /**
+     * The same, and with {@code soft} the rays are walked in the shader through storage buffers ({@link SoftRayShaders}) in place
+     * of ray queries: the scene at {@link #RAY_BINDING} and the triangles at {@link #RAY_GEOMETRY_BINDING}.
+     */
+    static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi,
+                           int guide, boolean soft) {
         boolean tracingGi = gi == GI_TRACE || gi == GI_PATH;
         reflections |= tracingGi;
         StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
@@ -430,12 +444,19 @@ final class SceneShaders {
             falloffCases.append("if (id == ").append(3 + i).append(") return customFalloff").append(i).append("(dist, range);\n");
         }
         boolean rays = rayTraced || reflections;
-        String header = !rays ? "#version 450\n" : "#version 460\n#extension GL_EXT_ray_query : require\n"
+        String header = !rays ? "#version 450\n" : soft
+                ? "#version 450\n" + (reflections ? "#extension GL_EXT_nonuniform_qualifier : require\n" : "")
+                : "#version 460\n#extension GL_EXT_ray_query : require\n"
                 + (reflections ? "#extension GL_EXT_buffer_reference : require\n#extension GL_EXT_nonuniform_qualifier : require\n" : "");
+        String rayDecls = !rays ? "" : soft
+                ? SoftRayShaders.declarations(RAY_BINDING, RAY_GEOMETRY_BINDING)
+                + (reflections ? SoftRayShaders.reflectionDeclarations(RAY_BLOCK_BINDING, RAY_TEXTURES_BINDING, RAY_TEXTURES) : "")
+                : RAY_DECLS + (reflections ? RAY_REFLECT_DECLS : "");
         return header + "#define ENV_KIND " + env + "\n" + FRAGMENT_BODY
-                .replace("//@RAY_DECLS", rays ? RAY_DECLS + (reflections ? RAY_REFLECT_DECLS : "") : "")
-                .replace("//@RAY_FUNCTIONS", rays ? RAY_FUNCTIONS : "")
-                .replace("//@RAY_REFLECT_FUNCTIONS", reflections ? RAY_REFLECT_FUNCTIONS : "")
+                .replace("//@RAY_DECLS", rayDecls)
+                .replace("//@RAY_FUNCTIONS", !rays ? "" : soft ? SoftRayShaders.SHADOW : RAY_FUNCTIONS)
+                .replace("//@RAY_REFLECT_FUNCTIONS", reflections
+                        ? RAY_REFLECT_FUNCTIONS.replace("//@TRACE_SCENE", soft ? SoftRayShaders.TRACE_SCENE : TRACE_SCENE) : "")
                 .replace("//@GI_FUNCTIONS", gi == GI_APPLY ? GI_APPLY_FUNCTIONS.replace("%GI%", "" + GI_BINDING) : gi == GI_PATH ? GI_PATH_FUNCTIONS : tracingGi ? GI_TRACE_FUNCTIONS : "")
                 .replace("//@GI_UNLIT", tracingGi ? GI_TRACE_UNLIT : "")
                 .replace("//@GI_OUTPUT", tracingGi ? GI_TRACE_OUTPUT : "")
@@ -732,6 +753,11 @@ final class SceneShaders {
                 vec4 rayB; // x: the roughness up to which a surface reflects by ray
             };
             layout(set = 0, binding = %TEXTURES%) uniform sampler2D rayTextures[%COUNT%];
+            vec4 rayTint(int id) { return table.rec[id].tint; }
+            vec4 rayParams(int id) { return table.rec[id].params; }
+            vec4 rayEmissive(int id) { return table.rec[id].emissive; }
+            vec4 rayUvA(int id) { return table.rec[id].uvA; }
+            vec4 rayUvB(int id) { return table.rec[id].uvB; }
             """.replace("%BLOCK%", "" + RAY_BLOCK_BINDING).replace("%TEXTURES%", "" + RAY_TEXTURES_BINDING).replace("%COUNT%", "" + RAY_TEXTURES);
 
     /**
@@ -749,34 +775,7 @@ final class SceneShaders {
                 float t;
             };
 
-            bool traceScene(vec3 origin, vec3 dir, float tmin, float tmax, out RayHit hit) {
-                rayQueryEXT query;
-                rayQueryInitializeEXT(query, sceneWorld, gl_RayFlagsOpaqueEXT, 0x02, origin, tmin, dir, tmax);
-                while (rayQueryProceedEXT(query)) { }
-                if (rayQueryGetIntersectionTypeEXT(query, true) == gl_RayQueryCommittedIntersectionNoneEXT) return false;
-                hit.id = rayQueryGetIntersectionInstanceCustomIndexEXT(query, true);
-                hit.t = rayQueryGetIntersectionTEXT(query, true);
-                hit.pos = origin + dir * hit.t;
-                int prim = rayQueryGetIntersectionPrimitiveIndexEXT(query, true);
-                vec2 bc = rayQueryGetIntersectionBarycentricsEXT(query, true);
-                vec3 w = vec3(1.0 - bc.x - bc.y, bc.x, bc.y);
-                RayVertices verts = table.rec[hit.id].vertices;
-                RayIndices ids = table.rec[hit.id].indices;
-                uint o0 = ids.i[prim * 3] * 8u, o1 = ids.i[prim * 3 + 1] * 8u, o2 = ids.i[prim * 3 + 2] * 8u;
-                vec3 n0 = vec3(verts.v[o0 + 3u], verts.v[o0 + 4u], verts.v[o0 + 5u]);
-                vec3 n1 = vec3(verts.v[o1 + 3u], verts.v[o1 + 4u], verts.v[o1 + 5u]);
-                vec3 n2 = vec3(verts.v[o2 + 3u], verts.v[o2 + 4u], verts.v[o2 + 5u]);
-                hit.uv = vec2(verts.v[o0 + 6u], verts.v[o0 + 7u]) * w.x + vec2(verts.v[o1 + 6u], verts.v[o1 + 7u]) * w.y
-                       + vec2(verts.v[o2 + 6u], verts.v[o2 + 7u]) * w.z;
-                mat3 m3 = mat3(rayQueryGetIntersectionObjectToWorldEXT(query, true));
-                vec3 local = n0 * w.x + n1 * w.y + n2 * w.z;
-                // The inverse transpose keeps the normal square to the surface under stretching, like the vertex shader.
-                vec3 world = (abs(determinant(m3)) < 1e-20 ? m3 : transpose(inverse(m3))) * local;
-                hit.n = dot(world, world) > 1e-20 ? normalize(world) : -dir;
-                // Both sides of a surface are shaded as the side the ray came from.
-                if (dot(hit.n, dir) > 0.0) hit.n = -hit.n;
-                return true;
-            }
+            //@TRACE_SCENE
 
             // How much of the sky (or flat ambient light) reaches the next hit shaded: 1 unless the caller found it hidden.
             float hitAmbient = 1.0;
@@ -785,14 +784,13 @@ final class SceneShaders {
 
             // The light at a hit: the same models as the surface itself, from the lights every pixel tests.
             vec3 shadeHit(RayHit hit, vec3 dir, float lod) {
-                RayTable rows = table;
-                vec4 tint = rows.rec[hit.id].tint;
-                vec4 mp = rows.rec[hit.id].params;
+                vec4 tint = rayTint(hit.id);
+                vec4 mp = rayParams(hit.id);
                 int mode = int(mp.z + 0.5);
                 int slot = int(mp.w + 0.5) - 1;
                 vec3 colour = tint.rgb;
                 if (slot >= 0) {
-                    vec4 ta = rows.rec[hit.id].uvA, tb = rows.rec[hit.id].uvB;
+                    vec4 ta = rayUvA(hit.id), tb = rayUvB(hit.id);
                     vec2 s = hit.uv * ta.zw;
                     vec2 uv = vec2(tb.x * s.x + tb.y * s.y, -tb.y * s.x + tb.x * s.y) + ta.xy;
                     colour *= textureLod(rayTextures[nonuniformEXT(slot)], uv, lod).rgb;
@@ -840,7 +838,7 @@ final class SceneShaders {
                         lit += albedo * radiance * nl + radiance * mp.x * pow(nh, mp.y) * nl;
                     }
                 }
-                return lit + rows.rec[hit.id].emissive.rgb;
+                return lit + rayEmissive(hit.id).rgb;
             }
 
             float scatter(vec2 p) {
@@ -867,6 +865,38 @@ final class SceneShaders {
                 // A farther thing is seen smaller, so from a smaller level of its texture.
                 float lod = max(log2(0.25 * (dist + hit.t) + 1.0) + roughness * 4.0, 0.0);
                 return shadeHit(hit, r, lod);
+            }
+            """;
+
+    /** {@code traceScene} by a ray query: the nearest thing a ray hits, read from the table the ray scene keeps. */
+    private static final String TRACE_SCENE = """
+            bool traceScene(vec3 origin, vec3 dir, float tmin, float tmax, out RayHit hit) {
+                rayQueryEXT query;
+                rayQueryInitializeEXT(query, sceneWorld, gl_RayFlagsOpaqueEXT, 0x02, origin, tmin, dir, tmax);
+                while (rayQueryProceedEXT(query)) { }
+                if (rayQueryGetIntersectionTypeEXT(query, true) == gl_RayQueryCommittedIntersectionNoneEXT) return false;
+                hit.id = rayQueryGetIntersectionInstanceCustomIndexEXT(query, true);
+                hit.t = rayQueryGetIntersectionTEXT(query, true);
+                hit.pos = origin + dir * hit.t;
+                int prim = rayQueryGetIntersectionPrimitiveIndexEXT(query, true);
+                vec2 bc = rayQueryGetIntersectionBarycentricsEXT(query, true);
+                vec3 w = vec3(1.0 - bc.x - bc.y, bc.x, bc.y);
+                RayVertices verts = table.rec[hit.id].vertices;
+                RayIndices ids = table.rec[hit.id].indices;
+                uint o0 = ids.i[prim * 3] * 8u, o1 = ids.i[prim * 3 + 1] * 8u, o2 = ids.i[prim * 3 + 2] * 8u;
+                vec3 n0 = vec3(verts.v[o0 + 3u], verts.v[o0 + 4u], verts.v[o0 + 5u]);
+                vec3 n1 = vec3(verts.v[o1 + 3u], verts.v[o1 + 4u], verts.v[o1 + 5u]);
+                vec3 n2 = vec3(verts.v[o2 + 3u], verts.v[o2 + 4u], verts.v[o2 + 5u]);
+                hit.uv = vec2(verts.v[o0 + 6u], verts.v[o0 + 7u]) * w.x + vec2(verts.v[o1 + 6u], verts.v[o1 + 7u]) * w.y
+                       + vec2(verts.v[o2 + 6u], verts.v[o2 + 7u]) * w.z;
+                mat3 m3 = mat3(rayQueryGetIntersectionObjectToWorldEXT(query, true));
+                vec3 local = n0 * w.x + n1 * w.y + n2 * w.z;
+                // The inverse transpose keeps the normal square to the surface under stretching, like the vertex shader.
+                vec3 world = (abs(determinant(m3)) < 1e-20 ? m3 : transpose(inverse(m3))) * local;
+                hit.n = dot(world, world) > 1e-20 ? normalize(world) : -dir;
+                // Both sides of a surface are shaded as the side the ray came from.
+                if (dot(hit.n, dir) > 0.0) hit.n = -hit.n;
+                return true;
             }
             """;
 

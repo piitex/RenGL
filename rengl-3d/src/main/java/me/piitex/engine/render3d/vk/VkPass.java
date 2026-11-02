@@ -19,6 +19,8 @@ final class VkPass implements RenderPass {
     private final Map<Integer, VkBuf> uniformBuffers = new HashMap<>();
     private final Map<Integer, VkTex> textures = new HashMap<>();
     private final Map<Integer, VkRay.Scene> structures = new HashMap<>();
+    private final Map<Integer, VkSoftRay.Scene> softScenes = new HashMap<>();
+    private final Map<Integer, VkSoftRay.Scene> softGeometry = new HashMap<>();
     private final Map<Integer, VkTex[]> textureArrays = new HashMap<>();
     private final long renderPass;
     private VkPipe pipeline;
@@ -106,8 +108,19 @@ final class VkPass implements RenderPass {
 
     @Override
     public void bindAccelerationStructure(int binding, RayScene scene) {
+        if (scene instanceof VkSoftRay.Scene soft) {
+            // The scene's own storage buffer (its instances and the hierarchy over them) stands in for the structure.
+            if (softScenes.put(binding, soft) != scene) descriptorsDirty = true;
+            return;
+        }
         if (!(scene instanceof VkRay.Scene vk)) throw new IllegalArgumentException("Not a ray scene of this device: " + scene);
         if (structures.put(binding, vk) != scene) descriptorsDirty = true;
+    }
+
+    @Override
+    public void bindRayGeometry(int binding, RayScene scene) {
+        if (!(scene instanceof VkSoftRay.Scene soft)) throw new IllegalArgumentException("Not a software ray scene of this device: " + scene);
+        if (softGeometry.put(binding, soft) != scene) descriptorsDirty = true;
     }
 
     /**
@@ -124,7 +137,21 @@ final class VkPass implements RenderPass {
                 ShaderCompiler.Binding binding = pipeline.bindings.get(i);
                 VkWriteDescriptorSet write = writes.get(i).sType$Default()
                         .dstSet(set.get(0)).dstBinding(binding.binding()).descriptorCount(1);
-                if (binding.accel()) {
+                if (binding.storage()) {
+                    VkSoftRay.Scene scene = softScenes.get(binding.binding());
+                    long handle, size;
+                    if (scene != null) {
+                        handle = scene.buffer();
+                        size = scene.bufferSize();
+                    } else if ((scene = softGeometry.get(binding.binding())) != null) {
+                        handle = scene.geometryBuffer();
+                        size = scene.geometryBufferSize();
+                    } else {
+                        throw new IllegalStateException("No ray storage bound at binding " + binding.binding());
+                    }
+                    write.descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                            .pBufferInfo(VkDescriptorBufferInfo.calloc(1, stack).buffer(handle).offset(0).range(size));
+                } else if (binding.accel()) {
                     VkRay.Scene scene = structures.get(binding.binding());
                     if (scene == null) throw new IllegalStateException("No acceleration structure bound at binding " + binding.binding());
                     write.descriptorType(KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)

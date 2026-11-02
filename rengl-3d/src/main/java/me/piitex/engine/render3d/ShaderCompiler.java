@@ -44,14 +44,19 @@ public final class ShaderCompiler {
      * @param glName  the name OpenGL knows it by: the block's name, or the sampler variable's name
      * @param accel   true for an acceleration structure ({@code accelerationStructureEXT}), which only Vulkan has
      * @param count   how many descriptors the binding holds: 1, or the length of an array of samplers (Vulkan only)
+     * @param storage true for a storage buffer ({@code buffer Name { ... }}), which only Vulkan has
      */
-    public record Binding(int binding, boolean sampler, String glName, boolean accel, int count) {
+    public record Binding(int binding, boolean sampler, String glName, boolean accel, int count, boolean storage) {
+        public Binding(int binding, boolean sampler, String glName, boolean accel, int count) {
+            this(binding, sampler, glName, accel, count, false);
+        }
+
         public Binding(int binding, boolean sampler, String glName, boolean accel) {
-            this(binding, sampler, glName, accel, 1);
+            this(binding, sampler, glName, accel, 1, false);
         }
 
         public Binding(int binding, boolean sampler, String glName) {
-            this(binding, sampler, glName, false, 1);
+            this(binding, sampler, glName, false, 1, false);
         }
     }
 
@@ -106,8 +111,9 @@ public final class ShaderCompiler {
         long options = shaderc_compile_options_initialize();
         long result = NULL;
         try {
-            if (source.contains("GL_EXT_ray_query")) {
+            if (source.contains("GL_EXT_ray_query") || source.contains("GL_EXT_nonuniform_qualifier")) {
                 // Ray queries are Vulkan 1.2 and the SPIR-V that goes with it (1.5); a shader that uses one never goes to OpenGL.
+                // Neither does one that picks a texture of an array per pixel (the software ray tracer's).
                 shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
             } else {
                 shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_0);
@@ -181,6 +187,7 @@ public final class ShaderCompiler {
             collect(stack, context, compiler, resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, false, found);
             collect(stack, context, compiler, resources, SPVC_RESOURCE_TYPE_SAMPLED_IMAGE, true, found);
             collect(stack, context, compiler, resources, SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE, false, found);
+            collect(stack, context, compiler, resources, SPVC_RESOURCE_TYPE_STORAGE_BUFFER, false, found);
             return found;
         });
     }
@@ -205,7 +212,8 @@ public final class ShaderCompiler {
                 long type = spvc_compiler_get_type_handle(compiler, resource.type_id());
                 if (spvc_type_get_num_array_dimensions(type) > 0) arrayLength = Math.max(1, spvc_type_get_array_dimension(type, 0));
             }
-            into.add(new Binding(binding, sampler, name, resourceType == SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE, arrayLength));
+            into.add(new Binding(binding, sampler, name, resourceType == SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE, arrayLength,
+                    resourceType == SPVC_RESOURCE_TYPE_STORAGE_BUFFER));
         }
     }
 

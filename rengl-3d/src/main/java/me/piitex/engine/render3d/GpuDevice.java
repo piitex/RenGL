@@ -135,9 +135,22 @@ public interface GpuDevice extends AutoCloseable {
 
     /**
      * Whether shaders can trace rays on this device: Vulkan on a GPU with ray queries, which the window's device was made with
-     * (see {@code -Drengl.3d.raytracing}). Everywhere else false, and the ray calls below throw.
+     * (see {@code -Drengl.3d.raytracing}), or on any Vulkan 1.2 GPU by {@link #softwareRayTracing() software}. Everywhere else
+     * false, and the ray calls below throw.
      */
     default boolean supportsRayTracing() {
+        return false;
+    }
+
+    /**
+     * Whether the rays are traced by shader code through a hierarchy kept in storage buffers, which any Vulkan 1.2 GPU can do (a
+     * Mac through MoltenVK, and a GPU without ray queries), in place of ray queries. Then {@link #supportsRayTracing()} is true
+     * too, shaders use {@code SoftRayShaders} where they would use {@code rayQueryEXT}, and a scene is bound with
+     * {@link RenderPass#bindAccelerationStructure} as well as {@link RenderPass#bindRayGeometry}. It is slower than ray queries.
+     * {@code -Drengl.3d.softrays} sets it: {@code false} for never, {@code true} for always (also where ray queries exist, to try
+     * it), otherwise it is used where ray queries are not.
+     */
+    default boolean softwareRayTracing() {
         return false;
     }
 
