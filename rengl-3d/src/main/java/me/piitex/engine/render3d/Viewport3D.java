@@ -348,6 +348,10 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
         }
 
         float scale = interop.pixelScale() * resolutionScale;
+        // A minimized window (or a layout with no room) leaves nothing to draw into. Drawing a 1 by 1 picture instead would
+        // reach upscalers that refuse a size that small, and a failure switches the viewport off for good.
+        float pixelScale = interop.pixelScale();
+        if (Math.round((float) getWidth() * pixelScale) < 1 || Math.round((float) getHeight() * pixelScale) < 1) return;
         int width = Math.max(1, Math.round((float) getWidth() * scale));
         int height = Math.max(1, Math.round((float) getHeight() * scale));
         try {
