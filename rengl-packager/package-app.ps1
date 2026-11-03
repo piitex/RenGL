@@ -307,11 +307,16 @@ if (-not $MainJar) {
 if (-not (Test-Path "target\$MainJar")) { Fail "target\$MainJar does not exist." }
 Copy-Item "target\$MainJar" target\input\ -Force
 
-# The engine's version: from the RenGL jar the build brought, else the newest one in the local Maven repository.
-$engine = Get-ChildItem target\input -Filter 'RenGL-*.jar' | Where-Object { $_.Name -match '^RenGL-(.+?)(-natives-.+)?\.jar$' } | Select-Object -First 1
+# The engine's artifact and version: from the jar the build brought (the whole RenGL engine, or just rengl-core), else the
+# newest RenGL in the local Maven repository. The match ignores case on purpose: file names on Windows don't care either.
+$engineJar = '^(?<id>RenGL|rengl-core)-(?<version>\d.*?)(-natives-.+)?\.jar$'
+$engine = Get-ChildItem target\input -Filter '*.jar' | Where-Object { $_.Name -match $engineJar } | Select-Object -First 1
 if ($engine) {
-    $RenglVersion = [regex]::Match($engine.Name, '^RenGL-(.+?)(-natives-.+)?\.jar$').Groups[1].Value
+    $found = [regex]::Match($engine.Name, $engineJar, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    $EngineId = $found.Groups['id'].Value
+    $RenglVersion = $found.Groups['version'].Value
 } else {
+    $EngineId = 'RenGL'
     $newest = Get-ChildItem "$Repository\RenGL" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '\$' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $newest) { Fail "The RenGL engine is not in your Maven repository. In the RenGL folder run: .\mvnw.cmd install -DskipTests" }
     $RenglVersion = $newest.Name
@@ -322,8 +327,8 @@ if ($engine) {
 # only its own platform's, so the other platforms' jars just have to be in the folder.
 foreach ($p in $platforms) {
     $classifier = $Natives[$p]
-    if (Get-ChildItem target\input -Filter "RenGL-*-$classifier.jar") { continue }
-    $source = "$Repository\RenGL\$RenglVersion\RenGL-$RenglVersion-$classifier.jar"
+    if (Get-ChildItem target\input -Filter "$EngineId-*-$classifier.jar") { continue }
+    $source = "$Repository\$EngineId\$RenglVersion\$EngineId-$RenglVersion-$classifier.jar"
     if (-not (Test-Path $source)) { Fail "The $p natives are missing ($source). In the RenGL folder run: powershell -ExecutionPolicy Bypass -File rengl-packager\install-natives.ps1" }
     Copy-Item $source target\input\
 }
