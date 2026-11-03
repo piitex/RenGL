@@ -17,6 +17,8 @@
     <file url="file://$PROJECT_DIR$/rengl-entity/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-examples/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-examples/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-installer/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-installer/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-packager/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-packager/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-spellcheck/src/main/java" charset="UTF-8" />
@@ -25,6 +27,8 @@
     <file url="file://$PROJECT_DIR$/rengl-tilemap/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-ui-file/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-ui-file/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-upscale/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/rengl-upscale/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-video/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-video/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rengl-vulkan/src/main/java" charset="UTF-8" />
