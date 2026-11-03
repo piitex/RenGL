@@ -29,7 +29,7 @@ final class LightClusters {
     static final int MAX_PER_CELL = 255;
     /** The most entries over all the cells. */
     static final int MAX_ENTRIES = 1 << 19;
-    static final int LIGHT_TEXELS = 12;
+    static final int LIGHT_TEXELS = 18;
     static final int HEADER_WIDTH = 128;
     static final int HEADER_ROWS = (CELLS + HEADER_WIDTH - 1) / HEADER_WIDTH;
     static final int INDEX_WIDTH = 1024;
@@ -231,7 +231,12 @@ final class LightClusters {
             out.putFloat(d.x()).putFloat(d.y()).putFloat(d.z());
             out.putFloat(spot ? (float) Math.cos(Math.toRadians(light.getOuterAngle())) : -1f);
             out.putFloat(spot ? (float) Math.cos(Math.toRadians(light.getInnerAngle())) : 1f);
-            out.putInt(0);
+            // Whether the cone has a curve or a shape to read, then the curve, the aspect, the squareness and the way across.
+            boolean shaped = spot && (light.isConeShaped() || light.getEdgeCurve() != 1f);
+            Vec3 right = shaped ? light.coneRight() : Vec3.ZERO;
+            out.putFloat(shaped ? 1f : 0f).putFloat(shaped ? light.getEdgeCurve() : 1f);
+            out.putFloat(shaped ? light.getConeAspect() : 1f).putFloat(shaped ? light.getConeSquareness() : 0f);
+            out.putFloat(right.x()).putFloat(right.y()).putFloat(right.z());
         }
         out.flip();
     }

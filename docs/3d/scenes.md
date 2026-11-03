@@ -519,6 +519,8 @@ scene.lights().add(lamp);
 | `getType()` | `Light.Type.DIRECTIONAL`, `POINT` or `SPOT` |
 | `setVector(Vec3)` / `getVector()` | The direction of a directional light, or the position of a point or spot light. Move a light every frame from the update handler |
 | `setDirection(Vec3)`, `setCone(inner, outer)` | Where a spot light points and how wide it is |
+| `setEdgeCurve(float)` | How a spot light fades between the two angles: 1 is a straight ramp, more a tight bright middle, less a harder edge. See [shaping the cone](lighting.md#shaping-the-cone) |
+| `setConeShape(aspect, squareness, rollDegrees)` | Makes the cone an oval or a rectangle, tall or wide, and turns it |
 | `setColor(Color)`, `setIntensity(float)`, `setRange(float)` | Change it later |
 | `setShadows(Shadows)` / `setShadows(ShadowQuality)` | Any light can cast [shadows](lighting.md#shadows): pick a preset (`LOW` to `ULTRA`) and override the size, bias, softness, distance, cascades or filter |
 | `setCastShadow(boolean)` | `true` is the same as `setShadows(Shadows.SCENE)`: shadows with the scene's settings (`false` turns them off) |

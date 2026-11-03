@@ -219,7 +219,8 @@ final class ShadowPlanner {
         Vec3 ref = Math.abs(dir.y()) > 0.99f ? Vec3.X : Vec3.UP;
         float far = light.getRange();
         float near = Math.max(0.05f, far * 0.005f);
-        float half = (float) Math.toRadians(light.getOuterAngle());
+        // The view is square, so a tall cone sets how wide it must be (a wide one is held by its width, the outer angle).
+        float half = (float) Math.atan(Math.tan(Math.toRadians(light.getOuterAngle())) * Math.max(1f, light.getConeAspect()));
         Mat4 view = Mat4.lookAt(position, position.add(dir), ref);
         Mat4 proj = Mat4.perspective(Math.min(half * 2f + 0.05f, 3.0f), 1f, near, far);
         // The width of one texel at distance 1 along the axis.

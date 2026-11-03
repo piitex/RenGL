@@ -150,6 +150,8 @@ final class SceneShaders {
             ];
                 vec4 lightCone[""" + Scene3D.MAX_LIGHTS + """
             ];
+                vec4 lightShape[""" + Scene3D.MAX_LIGHTS + """
+            ];
                 vec4 lightShadow[""" + Scene3D.MAX_LIGHTS + """
             ];
                 vec4 lightSplits[""" + Scene3D.MAX_LIGHTS + """
@@ -254,7 +256,19 @@ final class SceneShaders {
                     vec3 dir = vec3(clusterFloat(row, 6), clusterFloat(row, 7), clusterFloat(row, 8));
                     float outerCos = clusterFloat(row, 9);
                     float innerCos = clusterFloat(row, 10);
-                    atten *= clamp((dot(-l, dir) - outerCos) / max(innerCos - outerCos, 1e-4), 0.0, 1.0);
+                    float cs = dot(-l, dir);
+                    float curve = 1.0;
+                    // Only a spot light with a curve or a shape has more to read.
+                    if (clusterFloat(row, 11) > 0.5) {
+                        curve = clusterFloat(row, 12);
+                        float aspect = clusterFloat(row, 13);
+                        float square = clusterFloat(row, 14);
+                        if (aspect != 1.0 || square > 0.0) {
+                            vec3 right = vec3(clusterFloat(row, 15), clusterFloat(row, 16), clusterFloat(row, 17));
+                            cs = shapedCos(-l, cs, dir, right, aspect, square);
+                        }
+                    }
+                    atten *= coneRamp(cs, outerCos, innerCos, curve);
                 }
                 return atten;
             }
@@ -789,12 +803,18 @@ final class SceneShaders {
                 int mode = int(mp.z + 0.5);
                 int slot = int(mp.w + 0.5) - 1;
                 vec3 colour = tint.rgb;
-                if (slot >= 0) {
+                vec4 glow = rayEmissive(hit.id);
+                int glowSlot = int(glow.w + 0.5) - 1;
+                vec2 uv = hit.uv;
+                if (slot >= 0 || glowSlot >= 0) {
                     vec4 ta = rayUvA(hit.id), tb = rayUvB(hit.id);
                     vec2 s = hit.uv * ta.zw;
-                    vec2 uv = vec2(tb.x * s.x + tb.y * s.y, -tb.y * s.x + tb.x * s.y) + ta.xy;
-                    colour *= textureLod(rayTextures[nonuniformEXT(slot)], uv, lod).rgb;
+                    uv = vec2(tb.x * s.x + tb.y * s.y, -tb.y * s.x + tb.x * s.y) + ta.xy;
                 }
+                if (slot >= 0) colour *= textureLod(rayTextures[nonuniformEXT(slot)], uv, lod).rgb;
+                // The glow picture says where the surface shines and in what colour, as the surface's own shader reads it
+                vec3 emitted = glow.rgb;
+                if (glowSlot >= 0) emitted *= pow(textureLod(rayTextures[nonuniformEXT(glowSlot)], uv, lod).rgb, vec3(2.2));
                 vec3 albedo = pow(colour, vec3(2.2));
                 hitDiffuse = vec3(0.0);
                 if (mode == 2) return albedo;
@@ -838,7 +858,7 @@ final class SceneShaders {
                         lit += albedo * radiance * nl + radiance * mp.x * pow(nh, mp.y) * nl;
                     }
                 }
-                return lit + rayEmissive(hit.id).rgb;
+                return lit + emitted;
             }
 
             float scatter(vec2 p) {
@@ -1111,6 +1131,24 @@ final class SceneShaders {
                 return x * x;
             }
 
+            // The cosine, to the axis, of the round cone that would just reach a point seen along v (a unit vector from the
+            // light) from a cone of another shape: aspect is its height over its width, square 0 for oval to 1 for a
+            // rectangle, and right the way across its width. c is the cosine of v to the axis. Used for a round cone as is.
+            float shapedCos(vec3 v, float c, vec3 axis, vec3 right, float aspect, float square) {
+                if (c <= 0.0) return -1.0;
+                float x = dot(v, right) / c;
+                float y = dot(v, cross(right, axis)) / c / aspect;
+                float t = mix(sqrt(x * x + y * y), max(abs(x), abs(y)), square);
+                return inversesqrt(1.0 + t * t);
+            }
+
+            // How much of a spot light's strength a point at cosine c to the axis gets: a ramp from the outer cosine to the
+            // inner one, bent by curve (1 is straight).
+            float coneRamp(float c, float outerCos, float innerCos, float curve) {
+                float s = clamp((c - outerCos) / max(innerCos - outerCos, 1e-4), 0.0, 1.0);
+                return curve == 1.0 ? s : pow(s, curve);
+            }
+
             // The direction to light i from a point, and how much of it arrives before the surface's angle and shadow.
             float lightAt(int i, vec3 worldPos, out vec3 l) {
                 if (lightVec[i].w < 0.5) {
@@ -1123,7 +1161,10 @@ final class SceneShaders {
                 float atten = falloff(int(lightCone[i].y + 0.5), dist, lightColor[i].a);
                 if (lightVec[i].w > 1.5) {
                     float c = dot(-l, lightDir[i].xyz);
-                    atten *= clamp((c - lightDir[i].w) / max(lightCone[i].x - lightDir[i].w, 1e-4), 0.0, 1.0);
+                    if (lightCone[i].z != 1.0 || lightShape[i].w > 0.0) {
+                        c = shapedCos(-l, c, lightDir[i].xyz, lightShape[i].xyz, lightCone[i].z, lightShape[i].w);
+                    }
+                    atten *= coneRamp(c, lightDir[i].w, lightCone[i].x, lightCone[i].w);
                 }
                 return atten;
             }

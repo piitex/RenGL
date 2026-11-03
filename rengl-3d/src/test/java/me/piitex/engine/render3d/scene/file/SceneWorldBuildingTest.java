@@ -259,4 +259,26 @@ class SceneWorldBuildingTest {
         int steadyAt = saved.indexOf("\"Steady\"");
         assertFalse(saved.substring(steadyAt).contains("period"), saved);
     }
+
+    @Test
+    void aGlowBlinksByItselfWhenTheGameRunsWithNoLightToDriveIt() {
+        String json = """
+                { "format": 1,
+                  "nodes": [ { "name": "Neon", "shape": "CYLINDER",
+                    "material": { "emissiveColor": [0, 1, 1, 1], "emissiveStrength": 3, "glowRange": 8,
+                                  "glowPattern": "FAULTY", "glowPeriod": 0.5, "glowMinimum": 0.1, "glowStart": 2 } },
+                    { "name": "Steady", "shape": "CUBE", "material": { "emissiveColor": [1, 0, 0, 1], "emissiveStrength": 2, "glowRange": 4 } } ] }""";
+        assertFalse(parse(json, temp, false).needsFrames(), "the editor shows the glow as it is");
+        assertTrue(parse(json, temp, true).needsFrames(), "a blinking glow asks for frames");
+        assertFalse(parse("""
+                { "format": 1, "nodes": [ { "name": "Steady", "shape": "CUBE", "material": { "emissiveColor": [1, 0, 0, 1], "emissiveStrength": 2, "glowRange": 4 } } ] }""",
+                temp, true).needsFrames(), "a glow with no pattern stays steady");
+        Scene3D editing = parse(json, temp, false);
+        String saved = Scene3DFile.toJson(editing);
+        assertTrue(saved.contains("\"glowPattern\": \"FAULTY\""), saved);
+        assertTrue(saved.contains("\"glowPeriod\": 0.5"), saved);
+        assertEquals(saved, Scene3DFile.toJson(parse(saved, temp, false)));
+        // The settings of a glow that doesn't blink don't clutter its entry.
+        assertFalse(saved.substring(saved.indexOf("\"Steady\"")).contains("glowPeriod"), saved);
+    }
 }

@@ -19,6 +19,8 @@ public final class Light {
     private LightFalloff falloff = LightFalloff.WINDOWED_INVERSE_SQUARE;
     private Vec3 direction = new Vec3(0, -1, 0);
     private float innerAngle = 25f, outerAngle = 35f;
+    private float edgeCurve = 1f;
+    private float coneAspect = 1f, coneSquareness = 0f, coneRoll = 0f;
 
     private Light(Type type, Vec3 vector) {
         this.type = type;
@@ -99,6 +101,101 @@ public final class Light {
         this.outerAngle = Math.max(1f, Math.min(85f, outerDegrees));
         this.innerAngle = Math.max(0f, Math.min(this.outerAngle - 0.5f, innerDegrees));
         return this;
+    }
+
+    public float getEdgeCurve() {
+        return edgeCurve;
+    }
+
+    /**
+     * How a spot light's strength changes between the inner and the outer angle. 1, the default, is a straight ramp (in
+     * the cosine of the angle). Above 1 the light drops away fast, leaving a tight bright middle and a long dim skirt;
+     * below 1 it holds its strength until close to the outer angle and then falls, which makes the edge hard without
+     * making the cone narrower. Between 0.1 and 8.
+     */
+    public Light setEdgeCurve(float curve) {
+        this.edgeCurve = Math.max(0.1f, Math.min(8f, curve));
+        return this;
+    }
+
+    /**
+     * The height of a spot light's cone as a share of its width: 1, the default, is a round cone, below 1 it is a wide
+     * slit and above 1 a tall one. The inner and outer angles are the half-angles across the width (along {@link #coneRight()}).
+     */
+    public float getConeAspect() {
+        return coneAspect;
+    }
+
+    /**
+     * 0, the default, for a round (or oval) cone up to 1 for a rectangular one, the cone of a window or a projector. Between
+     * the two it is a rounded rectangle.
+     */
+    public float getConeSquareness() {
+        return coneSquareness;
+    }
+
+    /**
+     * How far a shaped cone is turned around its axis, in degrees, anticlockwise as seen from behind the light. 0 puts the
+     * width across the horizon. It does nothing to a round cone.
+     */
+    public float getConeRoll() {
+        return coneRoll;
+    }
+
+    /**
+     * Shapes the cone of a spot light, see {@link #getConeAspect()}, {@link #getConeSquareness()} and {@link #getConeRoll()}.
+     *
+     * @param aspect      height over width, between 0.05 and 20
+     * @param squareness  0 for round to 1 for rectangular
+     * @param rollDegrees the turn around the axis, kept between -180 and 180
+     */
+    public Light setConeShape(float aspect, float squareness, float rollDegrees) {
+        this.coneAspect = Math.max(0.05f, Math.min(20f, aspect));
+        this.coneSquareness = Math.max(0f, Math.min(1f, squareness));
+        this.coneRoll = (((rollDegrees % 360f) + 540f) % 360f) - 180f;
+        return this;
+    }
+
+    /**
+     * Whether the cone is anything but round: its aspect is not 1 or it is squared off.
+     */
+    public boolean isConeShaped() {
+        return coneAspect != 1f || coneSquareness != 0f;
+    }
+
+    /**
+     * The way across the width of a spot light's cone, a unit vector at right angles to {@link #getDirection()}. With no
+     * roll it lies across the horizon, and for a light that points straight up or down along +X. The height runs along
+     * {@code coneRight().cross(getDirection())}.
+     */
+    public Vec3 coneRight() {
+        Vec3 d = direction;
+        Vec3 ref = Math.abs(d.y()) > 0.99f ? Vec3.X : Vec3.UP;
+        Vec3 right = d.cross(ref).normalized();
+        if (coneRoll == 0f) return right;
+        Vec3 up = right.cross(d);
+        double a = Math.toRadians(coneRoll);
+        return right.mul((float) Math.cos(a)).add(up.mul((float) Math.sin(a))).normalized();
+    }
+
+    /**
+     * How much of a spot light's cone strength reaches a point that lies in the direction {@code toPoint} from the light
+     * (a unit vector), from 0 outside the cone to 1 inside the inner angle. This is what the renderer's shaders work out
+     * for every pixel, here so the editor and the tests can ask for the same number.
+     */
+    public float coneFactor(Vec3 toPoint) {
+        float c = toPoint.dot(direction);
+        if (c <= 0f) return 0f;
+        float outerCos = (float) Math.cos(Math.toRadians(outerAngle)), innerCos = (float) Math.cos(Math.toRadians(innerAngle));
+        if (isConeShaped()) {
+            Vec3 right = coneRight();
+            float x = toPoint.dot(right) / c, y = toPoint.dot(right.cross(direction)) / c / coneAspect;
+            float round = (float) Math.sqrt(x * x + y * y), box = Math.max(Math.abs(x), Math.abs(y));
+            float t = round + (box - round) * coneSquareness;
+            c = (float) (1.0 / Math.sqrt(1.0 + t * t));
+        }
+        float s = Math.max(0f, Math.min(1f, (c - outerCos) / Math.max(innerCos - outerCos, 1e-4f)));
+        return edgeCurve == 1f ? s : (float) Math.pow(s, edgeCurve);
     }
 
     public Color getColor() {

@@ -38,6 +38,29 @@ Inside the **inner** angle the light is at full strength; it fades smoothly to n
 85 degrees) and fades with distance to nothing at `range`, like a point light. `setDirection`, `setCone(inner, outer)`,
 `setVector` (the position), `setRange` and the rest can be changed every frame.
 
+### Shaping the cone
+
+A cone is round, and the light fades in a straight ramp between the two angles, until you change either:
+
+```java nocompile
+torch.setEdgeCurve(2.5f);                  // a tight bright middle with a long dim skirt
+sign.setConeShape(0.3f, 1f, 20f);          // 0.3 as tall as wide, a rectangle, turned 20 degrees
+```
+
+- **Edge curve** (`setEdgeCurve`, 0.1 to 8, default 1) bends the ramp. Above 1 the light drops away quickly from the
+  inner angle, leaving a bright core and a dim skirt out to the outer angle. Below 1 it holds its strength until close
+  to the outer angle and then falls, which gives a hard edge without making the cone narrower.
+- **Cone shape** (`setConeShape(aspect, squareness, rollDegrees)`) keeps the angles as the width of the cone and sets
+  the rest. `aspect` is the height over the width (0.05 to 20): 1 is round, 0.2 a wide slit, 3 a tall beam.
+  `squareness` goes from 0 for an oval to 1 for a rectangle, like a window or a projector, with a rounded rectangle
+  between. `rollDegrees` turns a shaped cone around the way it points, anticlockwise as seen from behind the light; with
+  no roll the width lies across the horizon (along +X for a light pointing along -Z, and along +Z for one pointing
+  straight down). A round cone looks the same turned.
+
+`light.coneFactor(directionFromLight)` gives the strength the shaders work out for a direction, from 0 outside the cone to 1
+inside the inner angle, for tests and tools. A cone that casts shadows uses a square view, so a tall cone spreads the
+shadow map over its height and its shadows are a little coarser; the light outside the shape is gone either way.
+
 ## Blinking lights
 
 A `LightAnimation` makes lights and glowing surfaces blink, pulse or flicker. A `LightPattern` says how bright they
