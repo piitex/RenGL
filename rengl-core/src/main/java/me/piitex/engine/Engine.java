@@ -12,6 +12,7 @@ import me.piitex.engine.input.Clipboard;
 import me.piitex.engine.input.CursorManager;
 import me.piitex.engine.input.FileDialog;
 import me.piitex.engine.input.Gamepads;
+import me.piitex.engine.input.ImeManager;
 import me.piitex.engine.input.InputProcessor;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.input.OpenFiles;
@@ -268,6 +269,7 @@ public class Engine {
             }
             Clipboard.pump();
             CursorManager.pump();
+            ImeManager.pump();
             NativeMenuBar.pump();
             FileDialog.pump();
         }
@@ -297,6 +299,7 @@ public class Engine {
         for (Host host : hosts) {
             if (!host.released) continue;
             CursorManager.detach(host.handle);
+            ImeManager.detach(host.handle);
             if (host.backendContext != null) host.backendContext.close(); // its surface belongs to the GLFW window
             host.glfWindow.destroy();
             if (host.metalContext != null) host.metalContext.close();
@@ -458,6 +461,7 @@ public class Engine {
         glfWindow.applyOptions(options);
         Host host = new Host(window, glfWindow, windowHandle);
         CursorManager.attach(windowHandle);
+        ImeManager.attach(windowHandle);
 
         // Main thread only: AppKit, and GLFW's size queries.
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -543,6 +547,7 @@ public class Engine {
             host.window.notifyClosing();
         }
         CursorManager.detach(host.handle);
+        ImeManager.detach(host.handle);
         if (host.backendContext != null) host.backendContext.close(); // its surface belongs to the GLFW window
         host.glfWindow.destroy();
         if (host.metalContext != null) host.metalContext.close();
@@ -750,6 +755,7 @@ public class Engine {
     private void select(Host host) {
         MouseTracker.select(host.window);
         CursorManager.select(host.handle);
+        ImeManager.select(host.handle);
     }
 
     /**

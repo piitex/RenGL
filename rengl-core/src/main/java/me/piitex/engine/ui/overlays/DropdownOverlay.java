@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.ui.text.FontScalable;
 import me.piitex.engine.ui.PopupHost;
@@ -310,7 +311,7 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
         renderer.pushClip(x, y, w - h * 0.6f, h);
         if (selected != null) {
             String label = labelProvider.apply(selected);
-            float shift = Math.max(0f, maxTextW - f.measureTextWidth(label)) * textAlignH(0f);
+            float shift = Math.max(0f, maxTextW - TextShaping.width(f, label)) * textAlignH(0f);
             drawLabel(renderer, label, x + pad + shift, y, h, resolveTextColor(textColor.get()));
         } else {
             drawLabel(renderer, placeholder, x + pad, y, h, placeholderColor.get());

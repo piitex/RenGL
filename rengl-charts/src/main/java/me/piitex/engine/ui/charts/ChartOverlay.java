@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.charts;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.color.Color;
@@ -428,7 +429,7 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
     }
 
     protected float textWidth(String text) {
-        return text.isEmpty() ? 0f : labelFont.measureTextWidth(text);
+        return text.isEmpty() ? 0f : TextShaping.width(labelFont, text);
     }
 
     protected Color text() {

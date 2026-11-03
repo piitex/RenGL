@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Draggable;
@@ -500,7 +501,7 @@ public class RangeSliderOverlay extends Overlay implements Themeable, Draggable,
         if (label == null || label.isEmpty()) return;
         org.jetbrains.skia.Font font = getLabelFont();
         FontMetricsCompat metrics = FontMetricsCompat.of(font);
-        float textWidth = font.measureTextWidth(label);
+        float textWidth = TextShaping.width(font, label);
         float textHeight = -metrics.getAscent() + metrics.getDescent();
         renderer.drawText(label, thumbX - textWidth / 2f, trackY - thumbRadius - 4f - textHeight, font, resolveTextColor(labelColor.get()));
     }

@@ -281,7 +281,7 @@ public interface Renderer {
      */
     default void drawText(String text, float x, float y, Font font, Paint color, TextAlign align) {
         if (text == null || text.isEmpty() || font == null) return;
-        float left = align == null || align == TextAlign.LEFT ? x : x - align.fraction() * font.measureTextWidth(text);
+        float left = align == null || align == TextAlign.LEFT ? x : x - align.fraction() * me.piitex.engine.ui.text.TextShaping.width(font, text);
         drawText(text, left, y, font, color);
     }
 

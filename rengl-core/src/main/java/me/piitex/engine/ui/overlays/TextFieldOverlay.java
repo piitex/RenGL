@@ -1,8 +1,10 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontScalable;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.Clipboard;
+import me.piitex.engine.input.ImePreedit;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Draggable;
 import me.piitex.engine.ui.Focusable;
@@ -86,6 +88,14 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     private boolean cursorVisible = false;
     private float blinkTimer = 0f;
     private float scrollOffset = 0f;
+    /**
+     * What the input method is composing at the caret, shown there but not yet part of the text.
+     */
+    private ImePreedit preedit = ImePreedit.NONE;
+    /**
+     * Where the caret was last drawn, {x, y, width, height} in window coordinates, for the input method's candidate list.
+     */
+    private final float[] caretRect = new float[4];
 
     /**
      * Consecutive presses landing within the double-click time and distance of each other: 1 for a fresh click, 2 for a double, 3 or more for a triple.
@@ -524,8 +534,25 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     }
 
     @Override
+    public boolean acceptsTextInput() {
+        return !options.isReadOnly() && !password;
+    }
+
+    @Override
+    public void onPreedit(ImePreedit preedit) {
+        this.preedit = preedit == null ? ImePreedit.NONE : preedit;
+        resetBlink();
+    }
+
+    @Override
+    public float[] imeCaretRect() {
+        return caretRect.clone();
+    }
+
+    @Override
     public void onFocusLost() {
         focused = false;
+        preedit = ImePreedit.NONE;
         history.seal();
         clearSelection(); // otherwise this field's highlight stays visible after focus (and a fresh selection) moves elsewhere
         if (onFocusChangedConsumer != null) {
@@ -618,7 +645,7 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
                     fireTextChanged();
                 } else if (cursorIndex < text.length()) {
                     recordEdit(EditKind.DELETE);
-                    int next = Character.offsetByCodePoints(text, cursorIndex, 1);
+                    int next = TextShaping.step(text.toString(), cursorIndex, 1);
                     text.delete(cursorIndex, next);
                     clearSelection(); // cursorIndex doesn't move here, but keep the invariant airtight regardless
                     fireTextChanged();
@@ -642,7 +669,7 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     }
 
     /**
-     * Moves the cursor one codepoint left ({@code direction < 0}) or right. With
+     * Moves the cursor one character (a letter with its combining marks counts as one) left ({@code direction < 0}) or right. With
      * {@code extendSelection} (shift held), grows/shrinks the selection instead of
      * just moving; without it, an existing selection first collapses to whichever
      * edge lies in the direction of travel (the standard arrow-key-with-selection
@@ -658,10 +685,12 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         if (extendSelection && selectionAnchor < 0) {
             selectionAnchor = cursorIndex;
         }
+        // In right-to-left text the arrow pointing left is the one that goes on through the text.
+        if (TextShaping.isRightToLeft(text)) direction = -direction;
         if (direction < 0 && cursorIndex > 0) {
-            cursorIndex = Character.offsetByCodePoints(text, cursorIndex, -1);
+            cursorIndex = TextShaping.step(text.toString(), cursorIndex, -1);
         } else if (direction > 0 && cursorIndex < text.length()) {
-            cursorIndex = Character.offsetByCodePoints(text, cursorIndex, 1);
+            cursorIndex = TextShaping.step(text.toString(), cursorIndex, 1);
         }
         if (!extendSelection) {
             clearSelection();
@@ -847,11 +876,11 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         float fraction = textAlignH(rightAligned ? 1f : 0f);
         if (fraction == 0f || text.length() == 0) return 0f;
         float innerWidth = (float) getWidth() - 2 * paddingX - prefixWidth();
-        return Math.max(0f, innerWidth - getOrBuildFont().measureTextWidth(displayText())) * fraction;
+        return Math.max(0f, innerWidth - TextShaping.width(getOrBuildFont(), displayText())) * fraction;
     }
 
     private float prefixWidth() {
-        return prefix.isEmpty() ? 0f : getOrBuildFont().measureTextWidth(prefix);
+        return prefix.isEmpty() ? 0f : TextShaping.width(getOrBuildFont(), prefix);
     }
 
     /**
@@ -898,29 +927,10 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
     }
 
     /**
-     * Steps through the text one codepoint at a time to find the closest cursor gap to {@code x} (relative to the start of the text, pre-scroll).
+     * Finds the closest cursor gap to {@code x} (relative to the start of the text, pre-scroll).
      */
     private int indexForX(float x) {
-        String content = displayText();
-        if (content.isEmpty() || x <= 0) return 0;
-
-        org.jetbrains.skia.Font font = getOrBuildFont();
-        int length = content.length();
-        float previousWidth = 0f;
-        int previousIndex = 0;
-        int i = 0;
-        while (i < length) {
-            int codepoint = content.codePointAt(i);
-            int next = i + Character.charCount(codepoint);
-            float width = font.measureTextWidth(content.substring(0, next));
-            if (x < (previousWidth + width) / 2f) {
-                return previousIndex;
-            }
-            previousWidth = width;
-            previousIndex = next;
-            i = next;
-        }
-        return length;
+        return TextShaping.offsetAt(getOrBuildFont(), displayText(), x);
     }
 
     private org.jetbrains.skia.Font getOrBuildFont() {
@@ -953,7 +963,19 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
 
         String content = displayText();
         int clampedCursor = Math.max(0, Math.min(cursorIndex, content.length()));
-        float cursorX = font.measureTextWidth(content.substring(0, clampedCursor));
+        // The composition sits at the caret and pushes the text after it along, so everything below is laid out on this.
+        ImePreedit composing = acceptsTextInput() ? preedit : ImePreedit.NONE;
+        String shown = content;
+        int caretIndex = clampedCursor;
+        if (!composing.isEmpty()) {
+            shown = content.substring(0, clampedCursor) + composing.text() + content.substring(clampedCursor);
+            caretIndex = clampedCursor + composing.caret();
+        }
+        float cursorX = TextShaping.xAt(font, shown, caretIndex);
+        caretRect[0] = innerX + cursorX - scrollOffset;
+        caretRect[1] = innerY;
+        caretRect[2] = Math.max(1f, options.getCaretWidth());
+        caretRect[3] = textHeight;
 
         // Keep the cursor within the visible inner width by adjusting the scroll offset.
         if (cursorX - scrollOffset > innerWidth) {
@@ -965,14 +987,15 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
 
         renderer.pushClip((float) getX(), (float) getY(), (float) getWidth(), (float) getHeight());
 
-        boolean selected = hasSelection();
+        boolean selected = hasSelection() && composing.isEmpty();
         if (selected && options.getSelectionColor() != null) {
             int selStart = Math.max(0, Math.min(selectionStart(), content.length()));
             int selEnd = Math.max(0, Math.min(selectionEnd(), content.length()));
-            float selStartX = font.measureTextWidth(content.substring(0, selStart));
-            float selEndX = font.measureTextWidth(content.substring(0, selEnd));
-            float highlightX = innerX + selStartX - scrollOffset;
-            renderer.drawQuad(highlightX, innerY, selEndX - selStartX, textHeight, options.getSelectionColor(), 0f);
+            float selStartX = TextShaping.xAt(font, content, selStart);
+            float selEndX = TextShaping.xAt(font, content, selEnd);
+            // In right-to-left text the selection's start sits to the right of its end.
+            float selLeft = Math.min(selStartX, selEndX);
+            renderer.drawQuad(innerX + selLeft - scrollOffset, innerY, Math.abs(selEndX - selStartX), textHeight, options.getSelectionColor(), 0f);
         }
 
         float textDrawX = innerX - scrollOffset;
@@ -981,21 +1004,39 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
             renderer.drawText(prefix, (float) getX() + paddingX, innerY, font, options.getPlaceholderColor());
             renderer.popClip();
         }
-        if (content.isEmpty()) {
+        if (shown.isEmpty()) {
             String placeholder = options.getPlaceholder();
             if (!placeholder.isEmpty() && options.getPlaceholderColor() != null) {
                 renderer.drawText(placeholder, textDrawX, innerY, font, options.getPlaceholderColor());
             }
         } else if (options.getTextColor() != null) {
-            renderer.drawText(content, textDrawX, innerY, font, resolveTextColor(options.getTextColor()));
+            Paint textPaint = resolveTextColor(options.getTextColor());
+            renderer.drawText(shown, textDrawX, innerY, font, textPaint);
+            if (!composing.isEmpty()) drawComposition(renderer, font, shown, clampedCursor, composing, textDrawX, innerY, textHeight, textPaint);
         }
 
         // Selection has its own highlight above, so no blinking caret is drawn here.
         if (focused && cursorVisible && !selected) {
-            drawCaret(renderer, font, content, clampedCursor, innerX, innerY, textHeight, cursorX);
+            drawCaret(renderer, font, shown, caretIndex, innerX, innerY, textHeight, cursorX);
         }
 
         renderer.popClip();
+    }
+
+    /**
+     * Underlines the text the input method is composing, thicker under the clause being converted, as input methods do.
+     */
+    private void drawComposition(Renderer renderer, org.jetbrains.skia.Font font, String shown, int start, ImePreedit composing, float textDrawX, float innerY, float textHeight, Paint color) {
+        float baseline = innerY + textHeight - 1f;
+        int end = start + composing.text().length();
+        float from = TextShaping.xAt(font, shown, start);
+        float to = TextShaping.xAt(font, shown, end);
+        renderer.drawQuad(textDrawX + Math.min(from, to), baseline, Math.abs(to - from), 1f, color, 0f);
+        if (composing.focusEnd() > composing.focusStart()) {
+            float focusFrom = TextShaping.xAt(font, shown, start + composing.focusStart());
+            float focusTo = TextShaping.xAt(font, shown, start + composing.focusEnd());
+            renderer.drawQuad(textDrawX + Math.min(focusFrom, focusTo), baseline - 1f, Math.abs(focusTo - focusFrom), 2f, color, 0f);
+        }
     }
 
     /**
@@ -1032,9 +1073,9 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         if (index < content.length()) {
             int cp = content.codePointAt(index);
             int next = index + Character.charCount(cp);
-            return font.measureTextWidth(content.substring(index, next));
+            return TextShaping.width(font, content.substring(index, next));
         }
-        float space = font.measureTextWidth(" ");
+        float space = TextShaping.width(font, " ");
         return space > 0 ? space : Math.max(2f, options.getCaretWidth());
     }
 

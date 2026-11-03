@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.menu;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
@@ -398,7 +399,7 @@ public class RadialMenu extends Container implements PopupKeyListener, Themeable
             String name = items.get(lit).label;
             String shown = TextFit.ellipsize(name, f, (innerRadius - 8f) * 2f);
             FontMetricsCompat m = FontMetricsCompat.of(f);
-            float w = f.measureTextWidth(shown), h = -m.getAscent() + m.getDescent();
+            float w = TextShaping.width(f, shown), h = -m.getAscent() + m.getDescent();
             renderer.drawText(shown, cx - w / 2f, cy - h / 2f, f, textColor.get());
         }
     }
@@ -433,7 +434,7 @@ public class RadialMenu extends Container implements PopupKeyListener, Themeable
         }
         if (!item.label.isEmpty()) {
             String shown = TextFit.ellipsize(item.label, f, maxWidth);
-            float w = f.measureTextWidth(shown);
+            float w = TextShaping.width(f, shown);
             float ty = icon ? y + iconSize / 2f - textH / 2f + 2f : y - textH / 2f;
             renderer.drawText(shown, x - w / 2f, ty, f, textColor.get());
         }

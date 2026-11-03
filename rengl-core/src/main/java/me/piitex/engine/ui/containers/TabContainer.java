@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
@@ -565,7 +566,7 @@ public class TabContainer extends Layout {
 
         private float naturalWidth(Tab tab) {
             if (tab.naturalWidth < 0) {
-                float wanted = style.getHorizontalPadding() + font().measureTextWidth(tab.title) + rightInset(tab);
+                float wanted = style.getHorizontalPadding() + TextShaping.width(font(), tab.title) + rightInset(tab);
                 tab.naturalWidth = Math.max(style.getMinTabWidth(), Math.min(style.getMaxTabWidth(), wanted));
             }
             return tab.naturalWidth;
@@ -743,7 +744,7 @@ public class TabContainer extends Layout {
             if (index < 0) return null;
             Tab tab = tabs.get(index);
             if (tab.tooltip != null) return tab.tooltip;
-            return font().measureTextWidth(tab.title) > titleWidth(tab) ? tab.title : null;
+            return TextShaping.width(font(), tab.title) > titleWidth(tab) ? tab.title : null;
         }
 
         // ----- font scaling (see ResizableContainer) ---------------------------------------------

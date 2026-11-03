@@ -222,6 +222,7 @@ public class GLFWindow {
         glfwSetMouseButtonCallback(window, inputManager::onMouseButton);
         glfwSetKeyCallback(window, inputManager::onKey);
         glfwSetCharCallback(window, inputManager::onChar);
+        glfwSetPreeditCallback(window, inputManager::onPreedit);
         glfwSetScrollCallback(window, inputManager::onScroll);
         glfwSetWindowIconifyCallback(window, (w, iconified) -> {
             Consumer<Boolean> handler = iconifyHandler;

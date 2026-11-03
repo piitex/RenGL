@@ -43,9 +43,10 @@ public final class TextLayout {
         }
 
         StringBuilder line = new StringBuilder();
-        for (String word : paragraph.split(" ", -1)) {
-            String candidate = line.isEmpty() ? word : line + " " + word;
-            if (font.measureTextWidth(candidate) <= maxWidth) {
+        for (Piece piece : pieces(paragraph)) {
+            String word = piece.text();
+            String candidate = line.isEmpty() ? word : line + (piece.spaceBefore() ? " " : "") + word;
+            if (TextShaping.width(font, candidate) <= maxWidth) {
                 line.setLength(0);
                 line.append(candidate);
                 continue;
@@ -56,15 +57,47 @@ public final class TextLayout {
             }
             // The word alone may still be too wide: break it by character.
             String rest = word;
-            while (font.measureTextWidth(rest) > maxWidth && rest.length() > 1) {
-                int cut = 1;
-                while (cut < rest.length() && font.measureTextWidth(rest.substring(0, cut + 1)) <= maxWidth) cut++;
+            while (TextShaping.width(font, rest) > maxWidth && rest.length() > 1) {
+                int cut = TextShaping.step(rest, 0, 1);
+                while (cut < rest.length()) {
+                    int next = TextShaping.step(rest, cut, 1);
+                    if (TextShaping.width(font, rest.substring(0, next)) > maxWidth) break;
+                    cut = next;
+                }
                 lines.add(rest.substring(0, cut));
                 rest = rest.substring(cut);
             }
             line.append(rest);
         }
         lines.add(line.toString());
+    }
+
+    /** A stretch of text that may sit at the end of a line, and whether a space separates it from the piece before. */
+    private record Piece(String text, boolean spaceBefore) {
+    }
+
+    /**
+     * Splits at spaces, and, in text that is not Latin, wherever the script allows a line to break: between Chinese and
+     * Japanese characters, which are written without spaces, and between Thai words.
+     */
+    private static List<Piece> pieces(String paragraph) {
+        List<Piece> pieces = new ArrayList<>();
+        boolean first = true;
+        for (String word : paragraph.split(" ", -1)) {
+            if (!TextShaping.needsShaping(word) || word.isEmpty()) {
+                pieces.add(new Piece(word, !first));
+            } else {
+                java.text.BreakIterator breaks = java.text.BreakIterator.getLineInstance();
+                breaks.setText(word);
+                int start = 0;
+                for (int end = breaks.next(); end != java.text.BreakIterator.DONE; end = breaks.next()) {
+                    pieces.add(new Piece(word.substring(start, end), !first && start == 0));
+                    start = end;
+                }
+            }
+            first = false;
+        }
+        return pieces;
     }
 
     /**

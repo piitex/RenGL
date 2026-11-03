@@ -105,8 +105,12 @@ public class InputProcessor {
                     if (window.swallowInput(false)) break;
                     handleScroll(window, event);
                     break;
+                case PREEDIT:
+                    if (usableFocus(window) instanceof Focusable focusable && focusable.acceptsTextInput()) focusable.onPreedit(event.preedit);
+                    break;
             }
         }
+        updateIme(window);
         handleGamepads(window, window.isFocused(), System.nanoTime());
     }
 
@@ -569,6 +573,20 @@ public class InputProcessor {
             return null;
         }
         return focused;
+    }
+
+    /**
+     * Turns the system's input method on while a text field has focus, and tells it where the caret is.
+     */
+    private void updateIme(Window window) {
+        Element focused = usableFocus(window);
+        if (focused instanceof Focusable focusable && focusable.acceptsTextInput() && window.isFocused()) {
+            float[] rect = focusable.imeCaretRect();
+            if (rect == null) rect = new float[]{(float) focused.getAbsoluteX(), (float) (focused.getAbsoluteY() + focused.getHeight()), 1f, 1f};
+            ImeManager.request(true, rect[0], rect[1], rect[2], rect[3]);
+        } else {
+            ImeManager.request(false, 0f, 0f, 1f, 1f);
+        }
     }
 
     private void handleChar(Window window, InputEvent event) {

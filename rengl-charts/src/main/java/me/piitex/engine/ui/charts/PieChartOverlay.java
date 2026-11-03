@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.charts;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.animation.Easing;
 import me.piitex.engine.ui.color.Color;
@@ -481,7 +482,7 @@ public class PieChartOverlay extends ChartOverlay {
             centerFont = Font.sized(size);
             centerFontSize = size;
         }
-        while (size > 10f && centerFont.measureTextWidth(primary) > available) {
+        while (size > 10f && TextShaping.width(centerFont, primary) > available) {
             size -= 2f;
             centerFont.close();
             centerFont = Font.sized(size);

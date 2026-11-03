@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
@@ -786,7 +787,7 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
 
         if (items.isEmpty()) {
             if (!emptyText.isEmpty()) {
-                float tw = f.measureTextWidth(emptyText);
+                float tw = TextShaping.width(f, emptyText);
                 renderer.drawText(emptyText, x + Math.max(TEXT_PADDING, (w - tw) / 2f), y + (rowHeight - textH) / 2f + rowHeight * 0.5f, f, dimTextColor.get());
             }
             return;

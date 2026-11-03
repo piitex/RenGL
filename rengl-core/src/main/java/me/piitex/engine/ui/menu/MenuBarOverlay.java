@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.menu;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.NativeMenuBar;
@@ -279,7 +280,7 @@ public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandle
         titleW = new float[titles.size()];
         float x = 4f;
         for (int i = 0; i < titles.size(); i++) {
-            titleW[i] = f.measureTextWidth(titles.get(i)) + 2 * TITLE_PAD;
+            titleW[i] = TextShaping.width(f, titles.get(i)) + 2 * TITLE_PAD;
             titleX[i] = x;
             x += titleW[i];
         }
@@ -413,8 +414,8 @@ public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandle
             int mnemonic = mnemonicIndex(i);
             if (mnemonic >= 0) {
                 String title = titles.get(i);
-                float ux = titleLeft + f.measureTextWidth(title.substring(0, mnemonic));
-                float uw = f.measureTextWidth(title.substring(mnemonic, mnemonic + 1));
+                float ux = titleLeft + TextShaping.width(f, title.substring(0, mnemonic));
+                float uw = TextShaping.width(f, title.substring(mnemonic, mnemonic + 1));
                 renderer.drawLine(ux, titleTop + textH + 1f, ux + uw, titleTop + textH + 1f, textColor.get(), 1f);
             }
         }

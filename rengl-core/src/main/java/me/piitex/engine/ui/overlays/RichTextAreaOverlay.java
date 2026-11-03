@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
@@ -333,8 +334,8 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
 
         float preferredWidth() {
             float widest = 0f;
-            for (String row : rows) widest = Math.max(widest, font().measureTextWidth(row));
-            if (header != null) widest = Math.max(widest, font().measureTextWidth(header));
+            for (String row : rows) widest = Math.max(widest, TextShaping.width(font(), row));
+            if (header != null) widest = Math.max(widest, TextShaping.width(font(), header));
             return Math.max(120f, widest + PADDING_X * 2);
         }
 
@@ -410,8 +411,8 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
 
             int start = Math.max(issue.start(), lineStart);
             int end = Math.min(issue.end(), lineEnd);
-            float x0 = x + font.measureTextWidth(lineText.substring(0, start - lineStart));
-            float x1 = x + font.measureTextWidth(lineText.substring(0, end - lineStart));
+            float x0 = x + TextShaping.width(font, lineText.substring(0, start - lineStart));
+            float x1 = x + TextShaping.width(font, lineText.substring(0, end - lineStart));
             drawSquiggle(renderer, x0, x1, underlineY, issue.kind() == TextIssue.Kind.GRAMMAR ? grammarColor : spellingColor);
         }
     }
@@ -485,6 +486,6 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
     private float drawRun(Renderer renderer, String run, float x, float y, org.jetbrains.skia.Font font, Paint color) {
         if (run.isEmpty() || color == null) return x;
         renderer.drawText(run, x, y, font, color);
-        return x + font.measureTextWidth(run);
+        return x + TextShaping.width(font, run);
     }
 }
