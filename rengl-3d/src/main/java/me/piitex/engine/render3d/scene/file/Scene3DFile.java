@@ -14,6 +14,7 @@ import me.piitex.engine.render3d.scene.LightPattern;
 import me.piitex.engine.render3d.scene.Material;
 import me.piitex.engine.render3d.scene.Node3D;
 import me.piitex.engine.render3d.scene.Scene3D;
+import me.piitex.engine.render3d.scene.UiScreen;
 import me.piitex.engine.render3d.scene.file.SceneMeta.NodeInfo;
 import me.piitex.engine.utils.flags.GeneratedClass;
 
@@ -24,9 +25,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Saves and loads a {@link Scene3D} as a JSON file: its nodes with their shapes, models and materials, its lights, its
@@ -158,6 +162,7 @@ public final class Scene3DFile {
             }
         }
         if (animate) {
+            startScreens(scene);
             startAnimations(scene);
             startBlinking(scene);
             PhysicsWorld world = buildPhysics(scene);
@@ -426,6 +431,54 @@ public final class Scene3DFile {
         return info == null || info.shape != Shape.TERRAIN ? null : info.heightmapProblem;
     }
 
+    // --- Loading models ahead of time ------------------------------------------------------------------------------
+
+    /**
+     * Reads the model file at {@code path} (in {@code base}, the project's folder) ahead of time, so that the next node
+     * given that file shows it at once instead of waiting for it. A big model can take seconds to read, so call this on a
+     * worker thread, and give the node its model on the render thread when it is done. It never touches the GPU or a
+     * scene. Only the last model read this way is kept, and the first node to be given the file takes it.
+     *
+     * @throws IOException when the file can't be read as a model
+     */
+    public static void preloadModel(String path, Path base) throws IOException {
+        SceneMeta.preloadModel(path, base);
+    }
+
+    // --- Screens ---------------------------------------------------------------------------------------------------
+
+    /**
+     * The screen a node's material shows, or null if it has none. A loaded scene draws it again by itself; to use it, point
+     * it with {@link UiScreen#pointAt(me.piitex.engine.render3d.scene.Hit, Node3D)} after a pick and send it presses, the
+     * wheel and keys, as in {@link UiScreen}. Its elements are found with {@code UiScreen.root()}.
+     * <pre>
+     * UiScreen monitor = Scene3DFile.screen(Scene3DFile.find(scene, "Monitor"));
+     * </pre>
+     */
+    public static UiScreen screen(Node3D node) {
+        Material material = node.getMaterial();
+        SceneMeta.MaterialInfo info = material == null ? null : SceneMeta.peekMaterial(material);
+        return info == null ? null : info.uiScreen;
+    }
+
+    /**
+     * Why a node's screen isn't shown although its material names a layout, such as a file that isn't there, or null if it
+     * is, or there is none.
+     */
+    public static String screenProblem(Node3D node) {
+        Material material = node.getMaterial();
+        SceneMeta.MaterialInfo info = material == null ? null : SceneMeta.peekMaterial(material);
+        return info == null ? null : info.screenProblem;
+    }
+
+    // Screens loaded for a game are drawn again by the scene as it runs; an editor's are drawn once, when they are set.
+    private static void startScreens(Scene3D scene) {
+        scene.root().traverse(node -> {
+            UiScreen screen = screen(node);
+            if (screen != null) scene.addScreen(screen);
+        });
+    }
+
     // --- Physics ---------------------------------------------------------------------------------------------------
 
     /**
@@ -475,23 +528,39 @@ public final class Scene3DFile {
     // --- Running ---------------------------------------------------------------------------------------------------
 
     // Lights that blink get an animation of their own, with the glow of the node they name, so a lamp and its bulb stay in step.
+    // A glowing material with a pattern of its own blinks by itself, unless a light already blinks it.
     private static void startBlinking(Scene3D scene) {
         int seed = 0;
+        Set<Material> blinking = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Light light : scene.lights()) {
             seed++;
             SceneMeta.Motion motion = SceneMeta.peekMotion(light);
             if (motion == null || motion.pattern == LightPatternKind.NONE) continue;
-            LightAnimation animation = LightAnimation.of(switch (motion.pattern) {
-                case BLINK -> LightPattern.blink(motion.period);
-                case PULSE -> LightPattern.pulse(motion.period);
-                case FLICKER -> LightPattern.flicker(1f / motion.period, 0.6f, seed);
-                case FAULTY -> LightPattern.faulty(motion.period, seed);
-                case NONE -> LightPattern.steady();
-            }).light(light).setMinimum(motion.minimum).setTime(motion.start);
+            LightAnimation animation = animation(motion, seed).light(light);
             Node3D bulb = motion.glow.isEmpty() ? null : find(scene, motion.glow);
-            if (bulb != null && bulb.getMaterial() != null) animation.glow(bulb.getMaterial());
+            if (bulb != null && bulb.getMaterial() != null) {
+                animation.glow(bulb.getMaterial());
+                blinking.add(bulb.getMaterial());
+            }
             scene.animate(animation);
         }
+        int[] next = {seed};
+        scene.root().traverse(node -> {
+            Material material = node.getMaterial();
+            SceneMeta.MaterialInfo info = material == null ? null : SceneMeta.peekMaterial(material);
+            if (info == null || info.blink.pattern == LightPatternKind.NONE || !blinking.add(material)) return;
+            scene.animate(animation(info.blink, ++next[0]).glow(material));
+        });
+    }
+
+    private static LightAnimation animation(SceneMeta.Motion motion, int seed) {
+        return LightAnimation.of(switch (motion.pattern) {
+            case BLINK -> LightPattern.blink(motion.period);
+            case PULSE -> LightPattern.pulse(motion.period);
+            case FLICKER -> LightPattern.flicker(1f / motion.period, 0.6f, seed);
+            case FAULTY -> LightPattern.faulty(motion.period, seed);
+            case NONE -> LightPattern.steady();
+        }).setMinimum(motion.minimum).setTime(motion.start);
     }
 
     private static void startAnimations(Scene3D scene) {

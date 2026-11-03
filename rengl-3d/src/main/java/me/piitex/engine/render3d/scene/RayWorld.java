@@ -32,11 +32,26 @@ final class RayWorld {
     private static final Material DEFAULT_MATERIAL = new Material();
 
     /**
-     * Gives a material's base colour texture a place in the array a reflection ray reads, for a frame: the place plus one, or 0
-     * for a material with none (or when the array is full).
+     * Gives a material's base colour texture and its glow texture a place in the array a reflection ray reads, for a frame: the
+     * place plus one, or 0 for a material with none (or when the array is full).
      */
     interface Textures {
         int slot(Material material);
+
+        int glowSlot(Material material);
+
+        /** For a frame whose rays read no textures. */
+        Textures NONE = new Textures() {
+            @Override
+            public int slot(Material material) {
+                return 0;
+            }
+
+            @Override
+            public int glowSlot(Material material) {
+                return 0;
+            }
+        };
     }
 
     private static final class Entry {
@@ -77,18 +92,18 @@ final class RayWorld {
                 Instances instances = node.getInstances();
                 Material material = node.getMaterial() == null ? DEFAULT_MATERIAL : node.getMaterial();
                 int mask = SEEN | (node.isCastShadow() ? SHADOWS : 0);
-                int slot = textures.slot(material);
+                int slot = textures.slot(material), glowSlot = textures.glowSlot(material);
                 float[] w = world.toArray();
                 if (instances == null) {
-                    into.add(new RayInstance(geometry, w, mask, record(material, slot, 1f, 1f, 1f, 1f)));
+                    into.add(new RayInstance(geometry, w, mask, record(material, slot, glowSlot, 1f, 1f, 1f, 1f)));
                 } else {
                     float[] data = instances.matrixData();
                     float[] tints = instances.hasTints() ? instances.tintData() : null;
                     for (int i = 0; i < instances.size(); i++) {
                         float[] model = new float[16];
                         multiply(w, data, i * 16, model);
-                        into.add(new RayInstance(geometry, model, mask, tints == null ? record(material, slot, 1f, 1f, 1f, 1f)
-                                : record(material, slot, tints[i * 4], tints[i * 4 + 1], tints[i * 4 + 2], tints[i * 4 + 3])));
+                        into.add(new RayInstance(geometry, model, mask, tints == null ? record(material, slot, glowSlot, 1f, 1f, 1f, 1f)
+                                : record(material, slot, glowSlot, tints[i * 4], tints[i * 4 + 1], tints[i * 4 + 2], tints[i * 4 + 3])));
                     }
                 }
             }
@@ -104,16 +119,17 @@ final class RayWorld {
 
     /**
      * What a ray that hit this placement reads, the way the scene shader's instance records hold it: the tint, the material's
-     * two parameters with its mode and the place of its texture, the emissive colour, and the texture transform.
+     * two parameters with its mode and the place of its texture, the emissive colour with the place of its glow texture, and the
+     * texture transform.
      */
-    private static float[] record(Material m, int slot, float tr, float tg, float tb, float ta) {
+    private static float[] record(Material m, int slot, int glowSlot, float tr, float tg, float tb, float ta) {
         int mode = m.isUnlit() ? SceneShaders.MODE_UNLIT : m.isPbr() ? SceneShaders.MODE_PBR : SceneShaders.MODE_CLASSIC;
         float p0 = m.isPbr() ? m.getMetallic() : m.getSpecular();
         float p1 = m.isPbr() ? m.getRoughness() : Math.max(1f, m.getShininess());
         return new float[]{
                 m.getRed() * tr, m.getGreen() * tg, m.getBlue() * tb, m.getAlpha() * ta,
                 p0, p1, mode, slot,
-                m.getEmissiveRed(), m.getEmissiveGreen(), m.getEmissiveBlue(), 0f,
+                m.getEmissiveRed(), m.getEmissiveGreen(), m.getEmissiveBlue(), glowSlot,
                 m.getUvOffsetU(), m.getUvOffsetV(), m.getUvScaleU(), m.getUvScaleV(),
                 (float) Math.cos(m.getUvRotation()), (float) Math.sin(m.getUvRotation()), 0f, 0f};
     }

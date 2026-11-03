@@ -323,6 +323,26 @@ public final class SceneKinds {
         prop(MATERIAL, "glowStrength", "Light Strength", Float.class, glow, Material::getGlowStrength,
                 (m, x, b) -> m.setGlow(m.getGlowRange(), f(x))).omitWhen(1f).range(0, 20).step(0.1).when(m -> m.getGlowRange() > 0f)
                 .tip("How strong that light is, as a multiple of how bright the surface looks");
+        prop(MATERIAL, "glowPattern", "Pattern", LightPatternKind.class, glow, m -> SceneMeta.material(m).blink.pattern,
+                (m, x, b) -> SceneMeta.material(m).blink.pattern = (LightPatternKind) x).omitWhen(LightPatternKind.NONE)
+                .tip("Makes the glow, and the light it gives off, blink, pulse or flicker while the game runs. The editor shows it steady");
+        prop(MATERIAL, "glowPeriod", "Period", Float.class, glow, m -> SceneMeta.material(m).blink.period,
+                (m, x, b) -> SceneMeta.material(m).blink.period = Math.max(0.01f, f(x))).omitWhen(1f).range(0.05, 60).step(0.05)
+                .when(SceneKinds::glowBlinks).tip("Seconds for one blink, breath or flicker");
+        prop(MATERIAL, "glowMinimum", "Dimmest", Float.class, glow, m -> SceneMeta.material(m).blink.minimum,
+                (m, x, b) -> SceneMeta.material(m).blink.minimum = Math.clamp(f(x), 0f, 1f)).omitWhen(0f).range(0, 1).step(0.05)
+                .when(SceneKinds::glowBlinks).tip("How bright the glow is at its lowest, as a share of full: 0 goes dark");
+        prop(MATERIAL, "glowStart", "Start", Float.class, glow, m -> SceneMeta.material(m).blink.start,
+                (m, x, b) -> SceneMeta.material(m).blink.start = f(x)).omitWhen(0f).range(0, 60).step(0.1)
+                .when(SceneKinds::glowBlinks).tip("Seconds into the pattern when the game starts, to put glows out of step");
+
+        String screen = "Screen";
+        prop(MATERIAL, "screen", "Layout", String.class, screen, m -> SceneMeta.material(m).screen,
+                (m, x, b) -> SceneMeta.setScreen(m, s(x), b)).omitWhen("").hint(Hint.LAYOUT)
+                .tip("A layout from the UI editor, shown on the surface like a monitor. It glows, so it takes the place of the Glow Map");
+        prop(MATERIAL, "screenScale", "Sharpness", Float.class, screen, m -> SceneMeta.material(m).screenScale,
+                (m, x, b) -> SceneMeta.setScreenScale(m, f(x), b)).omitWhen(1f).range(0.25, 4).step(0.25).when(m -> !SceneMeta.material(m).screen.isEmpty())
+                .tip("Texture pixels for each point of the layout: more is sharper up close, and costs more to draw");
     }
 
     // --- Lights ----------------------------------------------------------------------------------------------------
@@ -344,6 +364,11 @@ public final class SceneKinds {
             case SCENE -> light.setShadows(Shadows.SCENE);
             default -> light.setShadows(ShadowQuality.valueOf(shadow.name()));
         }
+    }
+
+    private static boolean glowBlinks(Material material) {
+        SceneMeta.MaterialInfo info = SceneMeta.peekMaterial(material);
+        return info != null && info.blink.pattern != LightPatternKind.NONE;
     }
 
     private static boolean blinks(Light light) {
@@ -392,6 +417,19 @@ public final class SceneKinds {
                         (l, x, b) -> l.setCone(f(x), l.getOuterAngle())).range(0, 84).step(1).tip("Degrees from the middle where it is at full strength");
                 prop(list, "outerAngle", "Outer Angle", Float.class, group, Light::getOuterAngle,
                         (l, x, b) -> l.setCone(l.getInnerAngle(), f(x))).range(1, 85).step(1).tip("Degrees from the middle where it is gone");
+                String cone = "Cone";
+                prop(list, "edgeCurve", "Edge Curve", Float.class, cone, Light::getEdgeCurve, (l, x, b) -> l.setEdgeCurve(f(x)))
+                        .omitWhen(1f).range(0.1, 8).step(0.05).tip("How it fades between the two angles. 1 is a straight ramp; more keeps a tight bright middle "
+                                + "with a long dim skirt, less holds its strength until close to the edge, which makes the edge hard");
+                prop(list, "coneAspect", "Height", Float.class, cone, Light::getConeAspect,
+                        (l, x, b) -> l.setConeShape(f(x), l.getConeSquareness(), l.getConeRoll())).omitWhen(1f).range(0.05, 20).step(0.05)
+                        .tip("How tall the cone is next to its width, which the angles give. 1 is round, 0.2 a wide slit, 3 a tall beam");
+                prop(list, "coneSquareness", "Squareness", Float.class, cone, Light::getConeSquareness,
+                        (l, x, b) -> l.setConeShape(l.getConeAspect(), f(x), l.getConeRoll())).omitWhen(0f).range(0, 1).step(0.05)
+                        .tip("0 for a round or oval cone, 1 for a rectangle, like a window or a projector");
+                prop(list, "coneRoll", "Roll", Float.class, cone, Light::getConeRoll,
+                        (l, x, b) -> l.setConeShape(l.getConeAspect(), l.getConeSquareness(), f(x))).omitWhen(0f).range(-180, 180).step(1)
+                        .when(l -> l.isConeShaped()).tip("Turns a shaped cone around the way it points, in degrees. A round cone looks the same turned");
             }
             prop(list, "shadows", "Shadows", LightShadow.class, shadow, SceneKinds::shadowOf, (l, x, b) -> setShadow(l, (LightShadow) x))
                     .omitWhen(LightShadow.OFF).tip("At most four lights cast shadows at a time");

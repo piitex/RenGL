@@ -20,6 +20,12 @@
             <artifactId>rengl-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Reads the layout a material shows as a screen. -->
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-ui-file</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>me.piitex.engine</groupId>
             <artifactId>rengl-vulkan</artifactId>

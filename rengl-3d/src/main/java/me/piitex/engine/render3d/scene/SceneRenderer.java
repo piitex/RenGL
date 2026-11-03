@@ -37,7 +37,7 @@ import static me.piitex.engine.render3d.scene.SceneShaders.*;
 final class SceneRenderer {
     private static final Logger log = LogManager.getLogger("Engine");
 
-    private static final int FRAME_BLOCK_SIZE = 64 + 16 * 4 + 16 + 16 * Scene3D.MAX_LIGHTS * 6 + SHADOW_VIEW_BYTES * MAX_SHADOW_VIEWS + 32 + 16 * 13;
+    private static final int FRAME_BLOCK_SIZE = 64 + 16 * 4 + 16 + 16 * Scene3D.MAX_LIGHTS * 7 + SHADOW_VIEW_BYTES * MAX_SHADOW_VIEWS + 32 + 16 * 13;
     private static final int SHADOW_BLOCK_SIZE = 64 + 16;
     private static final int INSTANCE_BYTES = INSTANCE_FLOATS * 4;
     /** A model matrix, which is what the previous-frame stream holds for each record. */
@@ -177,6 +177,16 @@ final class SceneRenderer {
 
     /** Texels in a row of a morph texture, and the most rows one may have (with 2048 wide, 4 million texels: 64 MB). */
     private static final int MORPH_ROW = 2048, MORPH_MAX_ROWS = 2048;
+
+    /** The light a sky gives the scene, as spherical harmonics, and when it was last read. */
+    private static final class SkyLight {
+        final float[] coefficients;
+        long lastUsed;
+
+        SkyLight(float[] coefficients) {
+            this.coefficients = coefficients;
+        }
+    }
 
     private static final class GpuImage {
         final GpuTexture texture;
@@ -319,7 +329,9 @@ final class SceneRenderer {
     private final Map<Mesh, GpuMesh> meshes = new HashMap<>();
     private final Map<TextureData, GpuImage> images = new IdentityHashMap<>();
     private final Map<Skybox, GpuImage> skies = new IdentityHashMap<>();
-    private final Map<Skybox, float[]> skyLight = new IdentityHashMap<>();
+    // Keyed by the skybox, which holds its pictures: it has to be swept like the sky's image, or a sky that is set anew
+    // every second (a day going round) keeps every one it ever had
+    private final Map<Skybox, SkyLight> skyLight = new IdentityHashMap<>();
     private final Map<Node3D, MorphedVertices> morphed = new IdentityHashMap<>();
     private final Map<Mesh, GpuMorph> morphTextures = new IdentityHashMap<>();
     private final Map<Resources, Integer> morphCounter = new IdentityHashMap<>();
@@ -1309,7 +1321,23 @@ final class SceneRenderer {
         rayTextureList.clear();
         List<RayInstance> placed = new ArrayList<>();
         // Reflections, occlusion and bounced light see every solid node; shadows only the ones that cast.
-        rayWorld.collect(scene.root(), placed, reflections || occlusion || gi, reflections || gi ? this::rayTextureSlot : material -> 0);
+        RayWorld.Textures rayTextures = RayWorld.Textures.NONE;
+        if (reflections || gi) {
+            rayTextures = new RayWorld.Textures() {
+                @Override
+                public int slot(Material material) {
+                    return rayTextureSlot(material.getTexture());
+                }
+
+                @Override
+                public int glowSlot(Material material) {
+                    // A material that does not glow has no use for its glow texture
+                    boolean glows = material.getEmissiveRed() > 0f || material.getEmissiveGreen() > 0f || material.getEmissiveBlue() > 0f;
+                    return glows ? rayTextureSlot(material.getEmissiveTexture()) : 0;
+                }
+            };
+        }
+        rayWorld.collect(scene.root(), placed, reflections || occlusion || gi, rayTextures);
         if (res.rayScene == null || res.rayScene.capacity() < placed.size()) {
             if (res.rayScene != null) res.rayScene.close();
             res.rayScene = device.createRayScene(Math.max(64, nextPowerOfTwo(placed.size())));
@@ -1380,12 +1408,12 @@ final class SceneRenderer {
     }
 
     /**
-     * The place, plus one, of a material's base colour texture in the array the reflection shader reads; 0 for a material
+     * The place, plus one, of a material's base colour or glow texture in the array the reflection shader reads; 0 for a material
      * without one, or when the frame already shows as many textures as the array holds.
      */
-    private int rayTextureSlot(Material material) {
-        if (material.getTexture() == null) return 0;
-        GpuTexture texture = gpuImage(material.getTexture());
+    private int rayTextureSlot(TextureData image) {
+        if (image == null) return 0;
+        GpuTexture texture = gpuImage(image);
         Integer slot = raySlots.get(texture);
         if (slot != null) return slot + 1;
         if (rayTextureList.size() >= RAY_TEXTURES) return 0;
@@ -1778,10 +1806,19 @@ final class SceneRenderer {
                 scratch.putFloat(0f).putFloat(-1f).putFloat(0f).putFloat(-1f);
             }
         }
-        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) { // the cosine of the inner angle, and the falloff
-            float inner = i < count && lights.get(i).getType() == Light.Type.SPOT
-                    ? (float) Math.cos(Math.toRadians(lights.get(i).getInnerAngle())) : 1f;
-            scratch.putFloat(inner).putFloat(i < count ? falloffId(lights.get(i).getFalloff(), variant) : 0f).putFloat(0f).putFloat(0f);
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) { // the cosine of the inner angle, the falloff, the cone's aspect and edge curve
+            boolean spot = i < count && lights.get(i).getType() == Light.Type.SPOT;
+            float inner = spot ? (float) Math.cos(Math.toRadians(lights.get(i).getInnerAngle())) : 1f;
+            scratch.putFloat(inner).putFloat(i < count ? falloffId(lights.get(i).getFalloff(), variant) : 0f)
+                    .putFloat(spot ? lights.get(i).getConeAspect() : 1f).putFloat(spot ? lights.get(i).getEdgeCurve() : 1f);
+        }
+        for (int i = 0; i < Scene3D.MAX_LIGHTS; i++) { // the way across a shaped cone, and how square it is
+            if (i < count && lights.get(i).getType() == Light.Type.SPOT) {
+                Vec3 right = lights.get(i).coneRight();
+                scratch.putFloat(right.x()).putFloat(right.y()).putFloat(right.z()).putFloat(lights.get(i).getConeSquareness());
+            } else {
+                scratch.putFloat(1f).putFloat(0f).putFloat(0f).putFloat(0f);
+            }
         }
         // Per light: the first of its shadow views, how many it has (0 for none), its filter and its softness; then the cascade splits.
         int[] first = new int[Scene3D.MAX_LIGHTS];
@@ -2041,7 +2078,9 @@ final class SceneRenderer {
     }
 
     private float[] skyIrradiance(Skybox sky) {
-        return skyLight.computeIfAbsent(sky, Environment::irradiance);
+        SkyLight light = skyLight.computeIfAbsent(sky, key -> new SkyLight(Environment.irradiance(key)));
+        light.lastUsed = frame;
+        return light.coefficients;
     }
 
     private GpuTexture gpuSky(Skybox sky) {
@@ -2113,6 +2152,7 @@ final class SceneRenderer {
                 }
             }
         }
+        skyLight.values().removeIf(light -> frame - light.lastUsed > KEEP_FRAMES);
     }
 
     void close() {

@@ -11,7 +11,9 @@ import me.piitex.engine.render3d.scene.Node3D;
 import me.piitex.engine.render3d.scene.Scene3D;
 import me.piitex.engine.render3d.scene.Skybox;
 import me.piitex.engine.render3d.scene.TextureData;
+import me.piitex.engine.render3d.scene.UiScreen;
 import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.file.UiFile;
 import me.piitex.engine.utils.flags.GeneratedClass;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -60,6 +62,13 @@ final class SceneMeta {
         final String[] textures = {"", "", "", "", ""};
         Color emissiveColor = Color.WHITE;
         float emissiveStrength;
+        /** How the glow blinks while the game runs, with no light needed. Its glow node is not used. */
+        final Motion blink = new Motion();
+        /** The layout the material shows as a screen, as the file named it, and its texture pixels per point. */
+        String screen = "";
+        float screenScale = 1f;
+        UiScreen uiScreen;
+        String screenProblem;
     }
 
     /** The sky the scene was told to have, which a {@link Skybox} can't be asked about. */
@@ -123,6 +132,10 @@ final class SceneMeta {
 
     static MaterialInfo material(Material material) {
         return MATERIALS.computeIfAbsent(material, m -> new MaterialInfo());
+    }
+
+    static MaterialInfo peekMaterial(Material material) {
+        return MATERIALS.get(material);
     }
 
     static SkyInfo sky(Scene3D scene) {
@@ -301,6 +314,37 @@ final class SceneMeta {
         info.problem = null;
     }
 
+    /** A model read ahead of time, on another thread, for the next node that asks for its file. Only the last is kept. */
+    private static String preloadedKey;
+    private static Model preloaded;
+
+    /**
+     * Reads the model at {@code path} now, so that the node that is given it next doesn't have to wait for the file. Safe
+     * from any thread: it never touches the GPU or a scene.
+     */
+    static void preloadModel(String path, Path base) throws IOException {
+        Path file = base.resolve(path).toAbsolutePath().normalize();
+        String key = modelKey(file);
+        Model model = Model.load(file);
+        model.prepareForPicking();
+        synchronized (SceneMeta.class) {
+            preloadedKey = key;
+            preloaded = model;
+        }
+    }
+
+    private static synchronized Model takePreloaded(String key) {
+        if (!key.equals(preloadedKey)) return null;
+        Model model = preloaded;
+        preloadedKey = null;
+        preloaded = null;
+        return model;
+    }
+
+    private static String modelKey(Path file) throws IOException {
+        return file + "@" + Files.getLastModifiedTime(file).toMillis();
+    }
+
     private static void loadModel(Node3D node, NodeInfo info, Path base) {
         removeModel(node, info);
         if (info.model.isEmpty()) {
@@ -309,10 +353,11 @@ final class SceneMeta {
         }
         Path file = base.resolve(info.model).toAbsolutePath().normalize();
         try {
-            String key = file + "@" + Files.getLastModifiedTime(file).toMillis();
+            String key = modelKey(file);
             Model model = info.models.get(key);
             if (model == null) {
-                model = Model.load(file);
+                model = takePreloaded(key);
+                if (model == null) model = Model.load(file);
                 info.models.clear(); // only the last is worth keeping: a model can be big
                 info.models.put(key, model);
             }
@@ -343,6 +388,52 @@ final class SceneMeta {
                 material.setEmissiveTexture(data);
                 applyEmissive(material, info);
             }
+        }
+        material.setPbr(pbr);
+    }
+
+    // --- Screens ---------------------------------------------------------------------------------------------------
+
+    static void setScreen(Material material, String path, Path base) {
+        MaterialInfo info = material(material);
+        info.screen = path;
+        buildScreen(material, info, base);
+    }
+
+    static void setScreenScale(Material material, float scale, Path base) {
+        MaterialInfo info = material(material);
+        info.screenScale = scale;
+        if (!info.screen.isEmpty()) buildScreen(material, info, base);
+    }
+
+    /**
+     * Draws the layout into a texture and puts it on the material's glow, which a screen takes over: the glow map the
+     * file names is kept as it was, so clearing the screen gives it back. A layout that can't be read leaves the
+     * material as it was, with the path kept so that saving doesn't lose it.
+     */
+    private static void buildScreen(Material material, MaterialInfo info, Path base) {
+        if (info.uiScreen != null) {
+            info.uiScreen.close();
+            info.uiScreen = null;
+        }
+        info.screenProblem = null;
+        boolean pbr = material.isPbr();
+        if (info.screen.isEmpty()) {
+            material.setEmissiveTexture(Textures.load(info.textures[MaterialInfo.EMISSIVE], base));
+            material.setPbr(pbr);
+            return;
+        }
+        Path file = base.resolve(info.screen).toAbsolutePath().normalize();
+        try {
+            UiScreen screen = new UiScreen(UiFile.load(file, base), info.screenScale);
+            screen.refresh();
+            info.uiScreen = screen;
+            if (info.emissiveStrength == 0f) info.emissiveStrength = 1f;
+            material.setEmissiveTexture(screen.texture());
+            applyEmissive(material, info);
+        } catch (RuntimeException e) {
+            info.screenProblem = e.getMessage() == null ? e.toString() : e.getMessage();
+            log.warn("Could not load the screen {}: {}", file, info.screenProblem);
         }
         material.setPbr(pbr);
     }

@@ -111,6 +111,8 @@ public class Scene3D implements Viewport3D.Content {
     private volatile int temporalResets;
     private final List<AnimationPlayer> animators = new ArrayList<>();
     private final List<LightAnimation> lightAnimations = new CopyOnWriteArrayList<>();
+    private final List<UiScreen> screens = new CopyOnWriteArrayList<>();
+    private float screenClock;
 
     private final Map<GpuDevice, Shared> renderers = new IdentityHashMap<>();
     private final List<Preload> preloads = new CopyOnWriteArrayList<>();
@@ -957,6 +959,34 @@ public class Scene3D implements Viewport3D.Content {
     }
 
     /**
+     * The most times a second a registered screen is drawn again.
+     */
+    public static final float SCREEN_REFRESH_RATE = 30f;
+
+    /**
+     * Registers a screen, which the scene then draws again up to {@link #SCREEN_REFRESH_RATE} times a second, before the
+     * update handler, so a clock or a hover on it shows without the game calling {@link UiScreen#refresh}. A scene loaded
+     * from a file by {@code Scene3DFile.load} registers the screens its materials have. Pointing, pressing and typing
+     * are still the game's to send to the screen. The scene does not close a screen.
+     */
+    public Scene3D addScreen(UiScreen screen) {
+        if (!screens.contains(screen)) screens.add(screen);
+        return this;
+    }
+
+    public Scene3D removeScreen(UiScreen screen) {
+        screens.remove(screen);
+        return this;
+    }
+
+    /**
+     * The screens the scene draws again by itself, in the order they were added.
+     */
+    public List<UiScreen> screens() {
+        return java.util.Collections.unmodifiableList(screens);
+    }
+
+    /**
      * The nearest thing the ray hits, or null. Only visible nodes with a mesh are tested, and a triangle that faces away
      * from the ray is skipped unless its material is double-sided, so a click goes through what you can't see. A node
      * is skipped when {@link Node3D#setPickable} is off.
@@ -1111,6 +1141,13 @@ public class Scene3D implements Viewport3D.Content {
             for (AnimationPlayer player : new ArrayList<>(animators)) player.update(delta);
             for (LightAnimation animation : lightAnimations) animation.update(delta);
             if (physics != null) physics.update(delta);
+            if (!screens.isEmpty()) {
+                screenClock += delta;
+                if (screenClock >= 1f / SCREEN_REFRESH_RATE) {
+                    for (UiScreen screen : screens) screen.refresh(screenClock);
+                    screenClock = 0f;
+                }
+            }
             if (updateHandler != null) updateHandler.update(this, delta);
         }
         shared.updatedFrame = frame;

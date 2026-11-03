@@ -78,6 +78,17 @@ public final class Model {
     }
 
     /**
+     * Builds the search structure that picking uses for each mesh, which is otherwise built the first time the mesh is
+     * picked: for a big model that is a pause under the mouse. It touches nothing but the model, so it can run on a
+     * background thread, before the model is in a scene. A skinned mesh has none, because it is searched as posed.
+     */
+    public void prepareForPicking() {
+        for (Mesh mesh : meshes) {
+            if (!mesh.isSkinned()) mesh.bvh();
+        }
+    }
+
+    /**
      * The distinct meshes in the file; a mesh used by several nodes is listed once.
      */
     public List<Mesh> meshes() {
