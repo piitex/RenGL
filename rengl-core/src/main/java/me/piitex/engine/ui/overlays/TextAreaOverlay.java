@@ -1,8 +1,10 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontScalable;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.Clipboard;
+import me.piitex.engine.input.ImePreedit;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Draggable;
 import me.piitex.engine.ui.Focusable;
@@ -96,6 +98,16 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     private boolean cursorVisible = false;
     private float blinkTimer = 0f;
     private float scrollOffsetY = 0f;
+    /**
+     * What the input method is composing at the caret. Unlike in a text field it is drawn over the text after the caret
+     * instead of pushing it along, since reflowing every line below on each keystroke of a composition would make the
+     * whole box jump.
+     */
+    private ImePreedit preedit = ImePreedit.NONE;
+    /**
+     * Where the caret was last drawn, {x, y, width, height} in window coordinates, for the input method's candidate list.
+     */
+    private final float[] caretRect = new float[4];
     /** How far the text is scrolled to the left, which only happens with word wrap off. */
     private float scrollOffsetX = 0f;
     /** The width of the widest line, measured when the layout is rebuilt with word wrap off. */
@@ -784,8 +796,25 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     }
 
     @Override
+    public boolean acceptsTextInput() {
+        return !options.isReadOnly();
+    }
+
+    @Override
+    public void onPreedit(ImePreedit preedit) {
+        this.preedit = preedit == null ? ImePreedit.NONE : preedit;
+        resetBlink();
+    }
+
+    @Override
+    public float[] imeCaretRect() {
+        return caretRect.clone();
+    }
+
+    @Override
     public void onFocusLost() {
         focused = false;
+        preedit = ImePreedit.NONE;
         history.seal();
         clearSelection();
         if (onFocusChangedConsumer != null) {
@@ -903,7 +932,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
                     fireTextChanged();
                 } else if (cursorIndex < text.length()) {
                     recordEdit(EditKind.DELETE);
-                    int next = Character.offsetByCodePoints(text, cursorIndex, 1);
+                    int next = TextShaping.step(text.toString(), cursorIndex, 1);
                     text.delete(cursorIndex, next);
                     clearSelection();
                     preferredX = -1f;
@@ -1123,10 +1152,14 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         if (extendSelection && selectionAnchor < 0) {
             selectionAnchor = cursorIndex;
         }
+        // In right-to-left text the arrow pointing left is the one that goes on through the text.
+        int lineStart = lineStartAt(cursorIndex);
+        int newline = text.indexOf("\n", cursorIndex);
+        if (TextShaping.isRightToLeft(text.subSequence(lineStart, newline < 0 ? text.length() : newline))) direction = -direction;
         if (direction < 0 && cursorIndex > 0) {
-            cursorIndex = Character.offsetByCodePoints(text, cursorIndex, -1);
+            cursorIndex = TextShaping.step(text.toString(), cursorIndex, -1);
         } else if (direction > 0 && cursorIndex < text.length()) {
-            cursorIndex = Character.offsetByCodePoints(text, cursorIndex, 1);
+            cursorIndex = TextShaping.step(text.toString(), cursorIndex, 1);
         }
         if (!extendSelection) {
             clearSelection();
@@ -1163,7 +1196,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         org.jetbrains.skia.Font font = getOrBuildFont();
         if (preferredX < 0) {
             int clamped = Math.max(current.start, Math.min(cursorIndex, current.end));
-            preferredX = font.measureTextWidth(text.substring(current.start, clamped));
+            preferredX = TextShaping.width(font, text.substring(current.start, clamped));
         }
 
         if (extendSelection && selectionAnchor < 0) {
@@ -1538,8 +1571,8 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         for (int i = low; i < highlightStarts.length && highlightStarts[i] < line.end; i++) {
             int from = Math.max(highlightStarts[i], line.start), to = Math.min(highlightEnds[i], Math.min(line.end, content.length()));
             if (to <= from) continue;
-            float x = font.measureTextWidth(content.substring(line.start, from));
-            float width = font.measureTextWidth(content.substring(line.start, to)) - x;
+            float x = TextShaping.width(font, content.substring(line.start, from));
+            float width = TextShaping.width(font, content.substring(line.start, to)) - x;
             renderer.drawQuad(innerX + x, drawY, width, lineHeight, highlightColor, 0f);
         }
     }
@@ -1671,7 +1704,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         Line caretLine = lineForIndex(clamped);
         float pitch = linePitch();
         org.jetbrains.skia.Font font = getOrBuildFont();
-        double x = getAbsoluteX() + paddingX + gutter - scrollOffsetX + font.measureTextWidth(text.substring(caretLine.start, clamped));
+        double x = getAbsoluteX() + paddingX + gutter - scrollOffsetX + TextShaping.width(font, text.substring(caretLine.start, clamped));
         double y = getAbsoluteY() + paddingY + lines.indexOf(caretLine) * pitch - scrollOffsetY;
         return new double[]{x, y, pitch - lineSpacing};
     }
@@ -1686,7 +1719,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         int count = 1;
         for (int i = 0; i < content.length(); i++) if (content.charAt(i) == '\n') count++;
         int digits = Math.max(2, String.valueOf(count).length());
-        gutterNumbers = font.measureTextWidth("0") * digits;
+        gutterNumbers = TextShaping.width(font, "0") * digits;
         gutter = gutterNumbers + GUTTER_GAP;
     }
 
@@ -1712,7 +1745,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             if (drawY + lineHeight < getY() || drawY > getY() + getHeight()) continue;
             String label = Integer.toString(line.number);
             Paint color = line.number == currentLine && focused ? resolveTextColor(options.getTextColor()) : lineNumberColor;
-            renderer.drawText(label, left + gutterNumbers - font.measureTextWidth(label), drawY, font, color);
+            renderer.drawText(label, left + gutterNumbers - TextShaping.width(font, label), drawY, font, color);
         }
         float rule = left + gutterNumbers + GUTTER_GAP / 2f - 0.5f;
         renderer.drawQuad(rule, (float) getY(), 1f, (float) getHeight(), new Color(lineNumberColor.getR(), lineNumberColor.getG(), lineNumberColor.getB(), 0.35f), 0f);
@@ -1810,7 +1843,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         int i = line.start;
         while (i < line.end) {
             int next = i + Character.charCount(content.codePointAt(i));
-            if (x < font.measureTextWidth(content.substring(line.start, next))) return i;
+            if (x < TextShaping.width(font, content.substring(line.start, next))) return i;
             i = next;
         }
         return -1;
@@ -1911,7 +1944,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             scrollOffsetX = 0f;
         } else {
             float room = textRoom();
-            float caretX = getOrBuildFont().measureTextWidth(content.substring(cursorLine.start, clampedCursor));
+            float caretX = TextShaping.width(getOrBuildFont(), content.substring(cursorLine.start, clampedCursor));
             if (caretX < scrollOffsetX) scrollOffsetX = caretX;
             if (caretX + CARET_ROOM > scrollOffsetX + room) scrollOffsetX = caretX + CARET_ROOM - room;
             scrollOffsetX = (float) Math.max(0, Math.min(scrollOffsetX, getMaxScrollX()));
@@ -1967,7 +2000,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         widestLine = 0f;
         if (!wordWrap) {
             for (Line line : lines) {
-                if (line.end > line.start) widestLine = Math.max(widestLine, font.measureTextWidth(content.substring(line.start, line.end)));
+                if (line.end > line.start) widestLine = Math.max(widestLine, TextShaping.width(font, content.substring(line.start, line.end)));
             }
         }
         int number = 0;
@@ -1999,7 +2032,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         int i = start;
         while (i < end) {
             char c = content.charAt(i);
-            float width = font.measureTextWidth(content.substring(lineStart, i + 1));
+            float width = TextShaping.width(font, content.substring(lineStart, i + 1));
             if (width > innerWidth && i > lineStart) {
                 int breakAt = lastSpace > lineStart ? lastSpace + 1 : i;
                 lines.add(new Line(lineStart, breakAt, false));
@@ -2044,7 +2077,7 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         while (i < line.end) {
             int codepoint = content.codePointAt(i);
             int next = i + Character.charCount(codepoint);
-            float width = font.measureTextWidth(content.substring(line.start, next));
+            float width = TextShaping.width(font, content.substring(line.start, next));
             if (x < (previousWidth + width) / 2f) {
                 return previousIndex;
             }
@@ -2170,8 +2203,8 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
                 if (selected && selStart < line.end && selEnd > line.start) {
                     int segStart = Math.max(selStart, line.start);
                     int segEnd = Math.min(selEnd, line.end);
-                    float segX = font.measureTextWidth(content.substring(line.start, segStart));
-                    float segWidth = font.measureTextWidth(content.substring(line.start, segEnd)) - segX;
+                    float segX = TextShaping.width(font, content.substring(line.start, segStart));
+                    float segWidth = TextShaping.width(font, content.substring(line.start, segEnd)) - segX;
                     Paint highlightColor = options.getSelectionColor();
                     if (highlightColor != null) {
                         renderer.drawQuad(innerX + segX, drawY, segWidth, lineHeight, highlightColor, 0f);
@@ -2194,10 +2227,20 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         // empty, focused box still needs to show where typing will land, the same as a
         // fresh TextFieldOverlay does. hasSelection() is always false on empty text, so
         // the guard below behaves identically either way.
-        if (focused && cursorVisible && !hasSelection()) {
-            float cursorX = font.measureTextWidth(content.substring(cursorLine.start, clampedCursor));
-            float cursorDrawY = innerTop + cursorLineIndex * pitch - scrollOffsetY;
-            drawCaret(renderer, font, content, clampedCursor, innerX, cursorDrawY, lineHeight, cursorX);
+        float cursorX = TextShaping.xAt(font, content.substring(cursorLine.start, cursorLine.end), clampedCursor - cursorLine.start);
+        float cursorDrawY = innerTop + cursorLineIndex * pitch - scrollOffsetY;
+        ImePreedit composing = acceptsTextInput() ? preedit : ImePreedit.NONE;
+        float composingCaretX = cursorX;
+        if (!composing.isEmpty()) {
+            composingCaretX = cursorX + TextShaping.xAt(font, composing.text(), composing.caret());
+            drawComposition(renderer, font, composing, innerX + cursorX, cursorDrawY, lineHeight);
+        }
+        caretRect[0] = innerX + composingCaretX;
+        caretRect[1] = cursorDrawY;
+        caretRect[2] = Math.max(1f, options.getCaretWidth());
+        caretRect[3] = lineHeight;
+        if (focused && cursorVisible && (!hasSelection() || !composing.isEmpty())) {
+            drawCaret(renderer, font, content, clampedCursor, innerX, cursorDrawY, lineHeight, composingCaretX);
         }
         if (scrolledSideways) renderer.popClip();
 
@@ -2252,6 +2295,25 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
     }
 
     /**
+     * Draws the text the input method is composing at {@code (x, y)}, over a patch of the background so the text it covers
+     * does not show through, underlined and with a thicker underline under the clause being converted.
+     */
+    private void drawComposition(Renderer renderer, org.jetbrains.skia.Font font, ImePreedit composing, float x, float y, float lineHeight) {
+        float width = TextShaping.width(font, composing.text());
+        Paint background = AnimatedPaint.resolve(getStyling().getBackgroundColor());
+        if (background != null) renderer.drawQuad(x, y, width, lineHeight, background, 0f);
+        Paint textColor = resolveTextColor(options.getTextColor());
+        renderer.drawText(composing.text(), x, y, font, textColor);
+        float baseline = y + lineHeight - 1f;
+        renderer.drawQuad(x, baseline, width, 1f, textColor, 0f);
+        if (composing.focusEnd() > composing.focusStart()) {
+            float from = TextShaping.xAt(font, composing.text(), composing.focusStart());
+            float to = TextShaping.xAt(font, composing.text(), composing.focusEnd());
+            renderer.drawQuad(x + Math.min(from, to), baseline - 1f, Math.abs(to - from), 2f, textColor, 0f);
+        }
+    }
+
+    /**
      * Draws the caret per {@link TextEditingOptions#getCaretShape()} at the cursor's current line and position, using the same shape logic as {@link TextFieldOverlay#drawCaret}.
      */
     private void drawCaret(Renderer renderer, org.jetbrains.skia.Font font, String content, int clampedCursor, float innerX, float lineY, float lineHeight, float cursorX) {
@@ -2282,9 +2344,9 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         if (index < content.length() && content.charAt(index) != '\n') {
             int cp = content.codePointAt(index);
             int next = index + Character.charCount(cp);
-            return font.measureTextWidth(content.substring(index, next));
+            return TextShaping.width(font, content.substring(index, next));
         }
-        float space = font.measureTextWidth(" ");
+        float space = TextShaping.width(font, " ");
         return space > 0 ? space : Math.max(2f, options.getCaretWidth());
     }
 

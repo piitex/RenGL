@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.gl.renderer.Renderer;
@@ -437,12 +438,12 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
 
         renderer.pushClip(x, y, w - icon - 2 * pad, h);
         String shown = text != null ? text : placeholder;
-        float shift = Math.max(0f, w - icon - 2 * pad - f.measureTextWidth(shown)) * textAlignH(0f);
+        float shift = Math.max(0f, w - icon - 2 * pad - TextShaping.width(f, shown)) * textAlignH(0f);
         Paint shownColor = typed != null && !typedParses ? Color.RED
                 : text != null ? resolveTextColor(textColor.get()) : placeholderColor.get();
         renderer.drawText(shown, x + pad + shift, y + (h - textH) / 2f, f, shownColor);
         if (typed != null) { // a caret after what is typed
-            float cx = x + pad + shift + f.measureTextWidth(shown) + 1f;
+            float cx = x + pad + shift + TextShaping.width(f, shown) + 1f;
             renderer.drawLine(cx, y + (h - textH) / 2f, cx, y + (h + textH) / 2f, shownColor, 1.5f);
         }
         renderer.popClip();
@@ -864,12 +865,12 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                             i < 2 ? -1 : 1, text);
                 }
                 String title = view.getMonth().getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + view.getYear();
-                float tw = f.measureTextWidth(title);
+                float tw = TextShaping.width(f, title);
                 renderer.drawText(title, ax + (W - tw) / 2f, ay + navY + (NAV_H - textH) / 2f, f, text);
 
                 for (int c = 0; c < 7; c++) {
                     String name = firstDay.plus(c).getDisplayName(TextStyle.SHORT, Locale.getDefault());
-                    float nw = f.measureTextWidth(name);
+                    float nw = TextShaping.width(f, name);
                     renderer.pushClip(ax + PAD + c * CELL_W, ay + weekdayY, CELL_W, WEEKDAY_H);
                     renderer.drawText(name, ax + PAD + c * CELL_W + (CELL_W - nw) / 2f, ay + weekdayY + (WEEKDAY_H - textH) / 2f, f, dim);
                     renderer.popClip();
@@ -894,7 +895,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                             renderer.drawBorder(cx + 1f, cy + 1f, CELL_W - 2f, CELL_H - 2f, text, 2f, radius + 1f);
                         }
                         String label = Integer.toString(d.getDayOfMonth());
-                        float lw = f.measureTextWidth(label);
+                        float lw = TextShaping.width(f, label);
                         boolean inMonth = YearMonth.from(d).equals(view);
                         renderer.drawText(label, cx + (CELL_W - lw) / 2f, cy + (CELL_H - textH) / 2f, f,
                                 ok && inMonth ? text : dim);
@@ -926,7 +927,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                         case SECOND -> String.format("%02d", t.getSecond());
                         default -> t.getHour() < 12 ? "AM" : "PM";
                     };
-                    float vw = bigFont.measureTextWidth(value);
+                    float vw = TextShaping.width(bigFont, value);
                     renderer.drawText(value, cx + (colW() - vw) / 2f, cy + ARROW_H + (VALUE_H - bigH) / 2f, bigFont, unset ? dim : text);
                     drawChevronVertical(renderer, cx + colW() / 2f, cy + ARROW_H / 2f, -1, text);
                     drawChevronVertical(renderer, cx + colW() / 2f, cy + ARROW_H + VALUE_H + ARROW_H / 2f, 1, text);
@@ -953,7 +954,7 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         private void drawFooterButton(Renderer renderer, org.jetbrains.skia.Font f, float x, float y, float w, String label, boolean hover,
                                       Paint text, float radius, float textH) {
             if (hover) drawHover(renderer, x, y, w, FOOT_H, radius);
-            float lw = f.measureTextWidth(label);
+            float lw = TextShaping.width(f, label);
             renderer.drawText(label, x + (w - lw) / 2f, y + (FOOT_H - textH) / 2f, f, text);
         }
 

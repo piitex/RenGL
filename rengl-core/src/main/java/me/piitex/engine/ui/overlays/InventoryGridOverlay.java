@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.Draggable;
@@ -921,7 +922,7 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
         org.jetbrains.skia.Font f = getLabelFont(size);
         String text = TextFit.ellipsize(String.valueOf(labelProvider.apply(item)), f, size - 8f);
         FontMetricsCompat m = FontMetricsCompat.of(f);
-        float w = f.measureTextWidth(text), h = -m.getAscent() + m.getDescent();
+        float w = TextShaping.width(f, text), h = -m.getAscent() + m.getDescent();
         renderer.drawText(text, x + (size - w) / 2f, y + (size - h) / 2f, f, textColor.get());
     }
 
@@ -929,7 +930,7 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
         org.jetbrains.skia.Font f = getCountFont(size);
         String text = String.valueOf(count);
         FontMetricsCompat m = FontMetricsCompat.of(f);
-        float w = f.measureTextWidth(text), h = -m.getAscent() + m.getDescent();
+        float w = TextShaping.width(f, text), h = -m.getAscent() + m.getDescent();
         float tx = x + size - w - 4f, ty = y + size - h - 2f;
         renderer.drawText(text, tx + 1f, ty + 1f, f, Color.BLACK);
         renderer.drawText(text, tx, ty, f, textColor.get());

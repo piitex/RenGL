@@ -1,5 +1,6 @@
 package me.piitex.engine.tilemap;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.graphics.Sprite;
 import me.piitex.engine.graphics.TextureRegion;
 import me.piitex.engine.ui.color.Color;
@@ -227,7 +228,7 @@ public final class MapObject {
             if (line.isEmpty()) continue;
             renderer.drawText(line, anchor, y, font, color, align);
             if (text.underline() || text.strikeout()) {
-                float lineWidth = font.measureTextWidth(line);
+                float lineWidth = TextShaping.width(font, line);
                 float left = anchor - align.fraction() * lineWidth;
                 float thickness = Math.max(1f, font.getSize() / 14f);
                 float baseline = y - metrics.getAscent();

@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
@@ -1407,9 +1408,9 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         String label = labelProvider.apply(item);
         label = label == null ? "" : TextFit.ellipsize(label, f, PREVIEW_MAX_WIDTH);
         String more = dragged.size() > 1 ? "+" + (dragged.size() - 1) : null;
-        float width = PADDING * 2 + f.measureTextWidth(label);
+        float width = PADDING * 2 + TextShaping.width(f, label);
         if (icon != null) width += iconSize + ICON_GAP;
-        if (more != null) width += ICON_GAP + f.measureTextWidth(more);
+        if (more != null) width += ICON_GAP + TextShaping.width(f, more);
         float x = (float) toLocalX(lastX) + PREVIEW_OFFSET_X, y = (float) toLocalY(lastY) + rowHeight / 2f;
         renderer.pushAlpha(PREVIEW_ALPHA);
         renderer.drawQuad(x, y, width, rowHeight, chip, rowCornerRadius);
@@ -1424,7 +1425,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         }
         renderer.drawText(label, at, y + (rowHeight - textH) / 2f, f, text);
         if (more != null) {
-            at += f.measureTextWidth(label) + ICON_GAP;
+            at += TextShaping.width(f, label) + ICON_GAP;
             renderer.drawText(more, at, y + (rowHeight - textH) / 2f, f, dimTextColor.get());
         }
     }

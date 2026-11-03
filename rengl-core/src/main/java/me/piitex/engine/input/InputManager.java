@@ -2,6 +2,9 @@ package me.piitex.engine.input;
 
 import me.piitex.engine.utils.flags.GeneratedFragments;
 
+import org.lwjgl.system.MemoryUtil;
+
+import java.nio.IntBuffer;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -36,6 +39,36 @@ public class InputManager {
     public void onChar(long window, int codepoint) {
         long time = System.nanoTime();
         eventQueue.offer(new InputEvent(InputEvent.Type.CHAR, time, 0, 0, codepoint, 0));
+    }
+
+    /**
+     * GLFW's preedit callback: the input method's composition changed. {@code count} codepoints at {@code string} are the
+     * composition text, split into {@code blockCount} clauses of {@code blockSizes} codepoints each, the
+     * {@code focusedBlock}th being the one the user is converting now; {@code caret} is the input method's caret in
+     * codepoints. A count of 0 means the composition ended, committed or cancelled. GLFW owns the memory only for the
+     * duration of the call, so it is copied out here.
+     */
+    public void onPreedit(long window, int count, long string, int blockCount, long blockSizes, int focusedBlock, int caret) {
+        long time = System.nanoTime();
+        if (count <= 0 || string == 0L) {
+            eventQueue.offer(new InputEvent(time, ImePreedit.NONE));
+            return;
+        }
+        int[] codepoints = new int[count];
+        MemoryUtil.memIntBuffer(string, count).get(codepoints);
+        String text = new String(codepoints, 0, count);
+
+        int focusStart = 0;
+        int focusEnd = 0;
+        if (blockSizes != 0L && focusedBlock >= 0 && focusedBlock < blockCount) {
+            IntBuffer sizes = MemoryUtil.memIntBuffer(blockSizes, blockCount);
+            int startCodepoint = 0;
+            for (int i = 0; i < focusedBlock; i++) startCodepoint += sizes.get(i);
+            focusStart = text.offsetByCodePoints(0, Math.min(startCodepoint, count));
+            focusEnd = text.offsetByCodePoints(0, Math.min(startCodepoint + sizes.get(focusedBlock), count));
+        }
+        int caretIndex = text.offsetByCodePoints(0, Math.max(0, Math.min(caret, count)));
+        eventQueue.offer(new InputEvent(time, new ImePreedit(text, caretIndex, focusStart, focusEnd)));
     }
 
     public void onCursorEnter(long window, boolean entered) {

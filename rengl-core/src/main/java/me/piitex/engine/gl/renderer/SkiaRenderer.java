@@ -1,5 +1,6 @@
 package me.piitex.engine.gl.renderer;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.graphics.ShaderEffect;
@@ -206,7 +207,7 @@ public abstract class SkiaRenderer implements Renderer {
                 paint.setColor(alphas.argb(c));
             } else if (color instanceof LinearGradient grad) {
                 // Approximate text bounding box for the gradient shader coordinates
-                float textWidth = font.measureTextWidth(text);
+                float textWidth = TextShaping.width(font, text);
                 float textHeight = -metrics.getAscent() + metrics.getDescent();
 
                 try (Shader shader = GradientUtil.buildShader(grad, x, y, x + textWidth, y + textHeight)) {
@@ -215,7 +216,7 @@ public abstract class SkiaRenderer implements Renderer {
                 }
             }
 
-            canvas.drawString(text, x, baselineY, font, paint);
+            me.piitex.engine.ui.text.TextShaping.draw(canvas, text, x, baselineY, font, paint);
         }
     }
 

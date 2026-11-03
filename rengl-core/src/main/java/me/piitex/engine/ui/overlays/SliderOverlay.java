@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontScalable;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
@@ -630,7 +631,7 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
             String text = tickLabelFormatter.apply(v);
             if (text == null || text.isEmpty()) return;
             float x = (float) valueToX(v);
-            float textWidth = font.measureTextWidth(text);
+            float textWidth = TextShaping.width(font, text);
             renderer.drawText(text, x - textWidth / 2f, drawY, font, color);
         });
     }
@@ -641,7 +642,7 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
 
         org.jetbrains.skia.Font font = getOrBuildLabelFont();
         FontMetricsCompat metrics = FontMetricsCompat.of(font);
-        float textWidth = font.measureTextWidth(label);
+        float textWidth = TextShaping.width(font, label);
         float textHeight = -metrics.getAscent() + metrics.getDescent();
 
         float drawX = thumbX - textWidth / 2f;

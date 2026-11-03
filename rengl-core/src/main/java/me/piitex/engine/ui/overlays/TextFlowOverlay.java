@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.Draggable;
 import me.piitex.engine.ui.scroll.Scrollable;
@@ -379,7 +380,7 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         if (maxLines > 0 && lines.size() > maxLines) {
             while (lines.size() > maxLines) lines.remove(lines.size() - 1);
             String last = lines.get(maxLines - 1);
-            while (!last.isEmpty() && font.measureTextWidth(last + ELLIPSIS) > innerWidth) {
+            while (!last.isEmpty() && TextShaping.width(font, last + ELLIPSIS) > innerWidth) {
                 last = last.substring(0, last.length() - 1);
             }
             lines.set(maxLines - 1, last.stripTrailing() + ELLIPSIS);
@@ -450,7 +451,7 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
             int flag = flags[i];
             int j = i + 1;
             while (j < end && flags[j] == flag) j++;
-            width += fontFor(flag).measureTextWidth(text.substring(i, j));
+            width += TextShaping.width(fontFor(flag), text.substring(i, j));
             i = j;
         }
         return width;
@@ -510,7 +511,7 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
             int j = i + 1;
             while (j < text.length() && (j < source ? flags[start + j] : 0) == flag && (j < source ? linkOf[start + j] : 0) == link) j++;
             String piece = text.substring(i, j);
-            float width = fontFor(flag).measureTextWidth(piece);
+            float width = TextShaping.width(fontFor(flag), piece);
             out.add(new Segment(total, piece, flag, link, width));
             total += width;
             i = j;
@@ -554,7 +555,7 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
                 continue;
             }
             float x = (float) getX() + padding;
-            float slack = innerWidth - font.measureTextWidth(line);
+            float slack = innerWidth - TextShaping.width(font, line);
             float natural = textAlign.fraction();
             x += slack * textAlignH(natural);
             renderer.drawText(line, x, y, font, resolveTextColor(getTextColor()));

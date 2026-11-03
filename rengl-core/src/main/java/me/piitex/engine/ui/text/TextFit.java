@@ -28,9 +28,9 @@ public final class TextFit {
     public static String ellipsize(String text, Font font, float maxWidth, boolean middle) {
         if (text == null || text.isEmpty()) return "";
         if (maxWidth <= 0) return "";
-        if (font.measureTextWidth(text) <= maxWidth) return text;
+        if (TextShaping.width(font, text) <= maxWidth) return text;
 
-        float budget = maxWidth - font.measureTextWidth(ELLIPSIS);
+        float budget = maxWidth - TextShaping.width(font, ELLIPSIS);
         if (budget <= 0) return "";
         return middle ? middle(text, font, budget) : end(text, font, budget);
     }
@@ -44,7 +44,7 @@ public final class TextFit {
     private static String middle(String text, Font font, float budget) {
         float tailBudget = budget * 0.4f;
         int tail = longestSuffix(text, font, tailBudget);
-        int head = longestPrefix(text, font, budget - font.measureTextWidth(text.substring(text.length() - tail)));
+        int head = longestPrefix(text, font, budget - TextShaping.width(font, text.substring(text.length() - tail)));
         if (head + tail >= text.length()) head = Math.max(0, text.length() - tail - 1);
         return text.substring(0, head).stripTrailing() + ELLIPSIS + text.substring(text.length() - tail).stripLeading();
     }
@@ -54,7 +54,7 @@ public final class TextFit {
         int low = 0, high = text.length();
         while (low < high) {
             int mid = (low + high + 1) >>> 1;
-            if (font.measureTextWidth(text.substring(0, prefixEnd(text, mid))) <= budget) low = mid;
+            if (TextShaping.width(font, text.substring(0, prefixEnd(text, mid))) <= budget) low = mid;
             else high = mid - 1;
         }
         return prefixEnd(text, low);
@@ -65,7 +65,7 @@ public final class TextFit {
         int low = 0, high = text.length();
         while (low < high) {
             int mid = (low + high + 1) >>> 1;
-            if (font.measureTextWidth(text.substring(suffixStart(text, mid))) <= budget) low = mid;
+            if (TextShaping.width(font, text.substring(suffixStart(text, mid))) <= budget) low = mid;
             else high = mid - 1;
         }
         return text.length() - suffixStart(text, low);

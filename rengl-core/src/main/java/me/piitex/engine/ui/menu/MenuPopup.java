@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.menu;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.gl.renderer.Renderer;
@@ -147,13 +148,13 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
             panel.rowH[i] = item.isSeparator() ? SEPARATOR_H : menu.getItemHeight();
             top += panel.rowH[i];
             if (item.isSeparator()) continue;
-            panel.labelW = Math.max(panel.labelW, font.measureTextWidth(item.getLabel()));
+            panel.labelW = Math.max(panel.labelW, TextShaping.width(font, item.getLabel()));
             if (item.isCheckable()) panel.checkCol = true;
             if (item.getIcon() != null) panel.iconCol = true;
             if (item.hasSubmenu()) panel.arrowCol = true;
             if (item.getShortcut() != null && !item.getShortcut().isEmpty()) {
                 panel.shortcutCol = true;
-                panel.shortcutW = Math.max(panel.shortcutW, font.measureTextWidth(item.getShortcut()));
+                panel.shortcutW = Math.max(panel.shortcutW, TextShaping.width(font, item.getShortcut()));
             }
         }
         panel.contentH = top + PAD_Y;
@@ -502,15 +503,15 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
                 renderer.drawText(item.getLabel(), textX, textY, font, color);
                 int mnemonic = item.mnemonicIndex();
                 if (mnemonic >= 0) {
-                    float ux = textX + font.measureTextWidth(item.getLabel().substring(0, mnemonic));
-                    float uw = font.measureTextWidth(item.getLabel().substring(mnemonic, mnemonic + 1));
+                    float ux = textX + TextShaping.width(font, item.getLabel().substring(0, mnemonic));
+                    float uw = TextShaping.width(font, item.getLabel().substring(mnemonic, mnemonic + 1));
                     renderer.drawLine(ux, textY + textH + 1f, ux + uw, textY + textH + 1f, color, 1f);
                 }
 
                 String shortcut = item.getShortcut();
                 if (shortcut != null && !shortcut.isEmpty()) {
                     float sx = panel.x + panel.w - PAD_X - TEXT_PAD - (panel.arrowCol ? ARROW_COL : 0f)
-                            - font.measureTextWidth(shortcut);
+                            - TextShaping.width(font, shortcut);
                     renderer.drawText(shortcut, sx, rowY + (rowH - textH) / 2f, font, menu.disabledText());
                 }
                 if (item.hasSubmenu()) {

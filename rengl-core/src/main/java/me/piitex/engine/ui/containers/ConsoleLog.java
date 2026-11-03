@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.ui.color.AnimatedPaint;
@@ -582,7 +583,7 @@ public class ConsoleLog extends Container implements Scrollable, FontScalable {
         org.jetbrains.skia.Font f = getFont();
         line.stamp = showTimestamps ? stampOf(line) + " " : "";
         String sender = line.sender.isEmpty() ? "" : line.sender + ": ";
-        line.indent = f.measureTextWidth(line.stamp) + f.measureTextWidth(sender);
+        line.indent = TextShaping.width(f, line.stamp) + TextShaping.width(f, sender);
         line.rows = wrap(line.text, f, Math.max(20f, contentWidth - line.indent));
         line.layoutWidth = contentWidth;
         line.layoutVersion = layoutVersion;
@@ -614,7 +615,7 @@ public class ConsoleLog extends Container implements Scrollable, FontScalable {
             StringBuilder row = new StringBuilder();
             for (String word : paragraph.split(" ", -1)) {
                 String candidate = row.isEmpty() ? word : row + " " + word;
-                if (f.measureTextWidth(candidate) <= maxWidth) {
+                if (TextShaping.width(f, candidate) <= maxWidth) {
                     row.setLength(0);
                     row.append(candidate);
                     continue;
@@ -625,9 +626,9 @@ public class ConsoleLog extends Container implements Scrollable, FontScalable {
                 }
                 // A word wider than the row is cut where it no longer fits.
                 String rest = word;
-                while (f.measureTextWidth(rest) > maxWidth && rest.length() > 1) {
+                while (TextShaping.width(f, rest) > maxWidth && rest.length() > 1) {
                     int cut = rest.length() - 1;
-                    while (cut > 1 && f.measureTextWidth(rest.substring(0, cut)) > maxWidth) cut--;
+                    while (cut > 1 && TextShaping.width(f, rest.substring(0, cut)) > maxWidth) cut--;
                     rows.add(rest.substring(0, cut));
                     rest = rest.substring(cut);
                 }
@@ -703,7 +704,7 @@ public class ConsoleLog extends Container implements Scrollable, FontScalable {
             renderer.pushAlpha(0.5f);
             renderer.drawText(line.stamp, cursor, textY, f, base);
             renderer.popAlpha();
-            cursor += f.measureTextWidth(line.stamp);
+            cursor += TextShaping.width(f, line.stamp);
         }
         if (!line.sender.isEmpty()) {
             renderer.drawText(line.sender + ": ", cursor, textY, f, line.senderPaint != null ? line.senderPaint : accentColor.get());

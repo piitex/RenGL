@@ -89,10 +89,10 @@ public final class TooltipManager {
         float lineHeight = FontMetricsCompat.of(f).getHeight();
         float winW = window.getWindowOptions().getWidth();
         float winH = window.getWindowOptions().getHeight();
-        List<String> lines = wrap(text, Math.max(80f, Math.min(MAX_WIDTH, winW - 2 * PADDING - 8f)), f::measureTextWidth);
+        List<String> lines = wrap(text, Math.max(80f, Math.min(MAX_WIDTH, winW - 2 * PADDING - 8f)), s -> TextShaping.width(f, s));
         float textWidth = 0f;
         for (String line : lines) {
-            textWidth = Math.max(textWidth, f.measureTextWidth(line));
+            textWidth = Math.max(textWidth, TextShaping.width(f, line));
         }
         float w = textWidth + PADDING * 2;
         float h = lineHeight * lines.size() + PADDING * 2;

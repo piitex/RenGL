@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
@@ -1455,7 +1456,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         String text = column.textOf(item);
         if (text.isEmpty() || right <= left) return;
         if (column.ellipsize) text = TextFit.ellipsize(text, f, right - left, column.ellipsisInMiddle);
-        float textW = f.measureTextWidth(text);
+        float textW = TextShaping.width(f, text);
         boolean clip = textW > right - left;
         float textX = switch (column.alignment) {
             case RIGHT -> Math.max(left, right - textW);
@@ -1495,7 +1496,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             if (sorted) right -= SORT_ARROW + 4f;
             if (right > left) {
                 String title = column.ellipsize ? TextFit.ellipsize(column.title, f, right - left) : column.title;
-                float textW = f.measureTextWidth(title);
+                float textW = TextShaping.width(f, title);
                 boolean clip = textW > right - left;
                 float textX = switch (column.alignment) {
                     case RIGHT -> Math.max(left, right - textW);

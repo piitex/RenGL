@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Draggable;
@@ -422,7 +423,7 @@ public class KnobOverlay extends Overlay implements Themeable, Draggable, Focusa
             if (label != null && !label.isEmpty()) {
                 org.jetbrains.skia.Font font = getLabelFont();
                 FontMetricsCompat metrics = FontMetricsCompat.of(font);
-                float w = font.measureTextWidth(label);
+                float w = TextShaping.width(font, label);
                 float h = -metrics.getAscent() + metrics.getDescent();
                 renderer.drawText(label, cx - w / 2f, cy + faceR * 0.25f - h / 2f, font, resolveTextColor(labelColor.get()));
             }

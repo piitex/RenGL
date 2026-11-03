@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
@@ -427,13 +428,13 @@ public class GaugeOverlay extends Overlay implements Themeable, FontScalable {
             String text = labelFormatter.apply(shown);
             if (text != null && !text.isEmpty()) {
                 FontMetricsCompat m = FontMetricsCompat.of(valueFont);
-                float w = valueFont.measureTextWidth(text), h = -m.getAscent() + m.getDescent();
+                float w = TextShaping.width(valueFont, text), h = -m.getAscent() + m.getDescent();
                 renderer.drawText(text, cx - w / 2f, valueY - h / 2f - (title.isEmpty() ? 0f : 6f), valueFont, color);
             }
         }
         if (!title.isEmpty()) {
             FontMetricsCompat m = FontMetricsCompat.of(titleFont);
-            float w = titleFont.measureTextWidth(title), h = -m.getAscent() + m.getDescent();
+            float w = TextShaping.width(titleFont, title), h = -m.getAscent() + m.getDescent();
             renderer.pushAlpha(0.7f);
             renderer.drawText(title, cx - w / 2f, valueY + h / 2f + (showValueText ? 4f : -h / 2f), titleFont, color);
             renderer.popAlpha();

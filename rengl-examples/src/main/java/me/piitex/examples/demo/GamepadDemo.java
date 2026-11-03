@@ -1,5 +1,6 @@
 package me.piitex.examples.demo;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.Engine;
 import me.piitex.engine.Window;
 import me.piitex.engine.WindowOptions;
@@ -283,7 +284,7 @@ public class GamepadDemo {
             renderer.drawBorder(cx - 15, cy - 15, 30, 30, OUTLINE, 1.5f, 15);
             String name = button.getDisplayName(layout);
             org.jetbrains.skia.Font f = font();
-            float w = f.measureTextWidth(name);
+            float w = TextShaping.width(f, name);
             FontMetricsCompat m = FontMetricsCompat.of(f);
             renderer.drawText(name, cx - w / 2f, cy - (-m.getAscent() + m.getDescent()) / 2f, f, lit ? Color.BLACK : Color.WHITE);
         }

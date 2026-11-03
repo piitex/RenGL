@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.color.Color;
@@ -64,7 +65,7 @@ public class LinkOverlay extends TextOverlay {
 
         org.jetbrains.skia.Font font = getOrBuildFont();
         FontMetricsCompat m = FontMetricsCompat.of(font);
-        float textWidth = font.measureTextWidth(text);
+        float textWidth = TextShaping.width(font, text);
         float x = (float) getX() + Math.max(0f, (float) getWidth() - textWidth) * textAlignH(0f);
         float y = (float) getY();
         if (getTextAlignment() != null) {

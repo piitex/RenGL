@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.color.Color;
@@ -210,7 +211,7 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
         if (hasLabel) {
             float limit = isEllipsize() ? Math.max(0f, (float) getWidth() - 2 * EDGE_PADDING - iconWidth - gap) : Float.MAX_VALUE;
             shown = fit(label, font, limit);
-            textWidth = font.measureTextWidth(shown);
+            textWidth = TextShaping.width(font, shown);
         }
 
         float contentWidth = iconWidth + gap + textWidth;

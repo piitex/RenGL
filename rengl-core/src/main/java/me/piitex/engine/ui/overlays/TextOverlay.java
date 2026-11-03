@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.text.FontScalable;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.color.AnimatedPaint;
@@ -268,7 +269,7 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
             org.jetbrains.skia.Font font = getOrBuildFont();
             FontMetricsCompat metrics = FontMetricsCompat.of(font);
             if (!fixedWidth) {
-                float measured = font.measureTextWidth(text);
+                float measured = TextShaping.width(font, text);
                 setWidth(maxWidth > 0 ? Math.min(measured, maxWidth) : measured);
             }
             setHeight(-metrics.getAscent() + metrics.getDescent());
@@ -406,7 +407,7 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
         if (text != null && !text.isEmpty()) {
             org.jetbrains.skia.Font font = getOrBuildFont();
             String shown = fit(text, font, textLimit());
-            float x = (float) getX() + Math.max(0f, (float) getWidth() - font.measureTextWidth(shown)) * textAlignH(0f);
+            float x = (float) getX() + Math.max(0f, (float) getWidth() - TextShaping.width(font, shown)) * textAlignH(0f);
             float y = (float) getY();
             if (getTextAlignment() != null) {
                 FontMetricsCompat m = FontMetricsCompat.of(font);
@@ -417,7 +418,7 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
             if (underlineOnHover && isHovered()) {
                 FontMetricsCompat m = FontMetricsCompat.of(font);
                 float lineY = y - m.getAscent() + Math.max(1f, m.getDescent() / 2f) + 1f;
-                renderer.drawLine(x, lineY, x + font.measureTextWidth(shown), lineY, color, Math.max(1f, font.getSize() / 14f));
+                renderer.drawLine(x, lineY, x + TextShaping.width(font, shown), lineY, color, Math.max(1f, font.getSize() / 14f));
             }
         }
     }

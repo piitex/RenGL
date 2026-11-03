@@ -42,6 +42,31 @@ public interface Focusable {
     void onKeyPressed(int key, int action, int mods);
 
     /**
+     * Whether this Element takes typed text, so the operating system's input method (IME) should be on while it has
+     * focus: what lets a keyboard type Chinese, Japanese, Korean and other languages with more characters than keys.
+     * False by default, and for a field that cannot be edited or hides what is typed.
+     */
+    default boolean acceptsTextInput() {
+        return false;
+    }
+
+    /**
+     * The input method's composition changed: text the user is still composing, such as kana not yet converted to kanji.
+     * It is shown at the caret but is not part of the text; when the user commits it, it arrives through
+     * {@link #onCharTyped} and the composition is cleared. Called only if {@link #acceptsTextInput()} is true.
+     */
+    default void onPreedit(me.piitex.engine.input.ImePreedit preedit) {
+    }
+
+    /**
+     * Where the caret is, as {x, y, width, height} in window coordinates, for the input method to open its candidate list
+     * beside. Null when unknown, which leaves the list wherever the system puts it.
+     */
+    default float[] imeCaretRect() {
+        return null;
+    }
+
+    /**
      * Whether the Tab key is this Element's to use, as a code editor uses it to indent, instead of moving focus to the
      * next Element. False by default, which is what every other Focusable wants.
      */

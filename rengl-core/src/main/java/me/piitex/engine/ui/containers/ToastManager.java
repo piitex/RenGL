@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
@@ -584,7 +585,7 @@ public class ToastManager extends Container {
             ty += toast.lines.size() * lineH;
             if (toast.actionLabel != null) {
                 String label = toast.actionLabel.toUpperCase();
-                renderer.drawText(label, x + w - PAD - f.measureTextWidth(label), ty + 4f + (lineH - textH) / 2f, titleFont, stripeFor(toast.level));
+                renderer.drawText(label, x + w - PAD - TextShaping.width(f, label), ty + 4f + (lineH - textH) / 2f, titleFont, stripeFor(toast.level));
             }
 
             // A close mark in the corner.

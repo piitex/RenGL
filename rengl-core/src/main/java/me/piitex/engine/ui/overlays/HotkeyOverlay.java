@@ -1,5 +1,6 @@
 package me.piitex.engine.ui.overlays;
 
+import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.Binding;
 import me.piitex.engine.input.Gamepad;
@@ -547,7 +548,7 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
         boolean refused = messageTime > 0 && !message.isEmpty();
         Paint color = refused ? REFUSED : (binding == null || listening) && !text.contains("+") ? hintColor.get() : textColor.get();
         org.jetbrains.skia.Font f = getFont();
-        float textW = f.measureTextWidth(text);
+        float textW = TextShaping.width(f, text);
         FontMetricsCompat m = FontMetricsCompat.of(f);
         float textH = -m.getAscent() + m.getDescent();
         renderer.pushClip(x + 4f, y, w - 8f, h);
