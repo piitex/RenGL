@@ -54,6 +54,7 @@ drives one `Window`: passing the same instance to a second window throws.
 | `setSplash(Splash)` | `null` | Your own `Splash` instead of the RenGL one (see [your own splash](engine.md#your-own-splash)). `null` is the RenGL splash. Plays only while the splash is enabled. **Not live** |
 | `addWarmUp(WarmUp)` | none | Work to finish under the splash, such as preparing a 3D viewport, so the application's first frame does not stall (see [warm-ups](engine.md#loading-under-the-splash)). Runs only while there is a splash. **Not live** |
 | `setWarmUpTimeLimit(float)` | `30` | Seconds all the warm-ups may take together before the rest are abandoned and the application starts |
+| `setWarmUpDelay(float)` | `2` | Seconds the splash plays before the warm-ups' render-thread steps begin, so a stall lands on a settled picture. Their background `prepare` work is not held back. `0` starts the steps at once |
 
 The getters (`getTitle`, `getWidth`, `getHeight`, `isFullscreen`, ...) return the current state. The
 engine uses `getWidth()`/`getHeight()` for the window background, for clamping the mouse position, and for

@@ -97,6 +97,21 @@ public class Engine {
      * The frame rate while every window is minimized.
      */
     private static final int MINIMIZED_FPS = 10;
+    /**
+     * The seconds of time that pass in a frame the application spends hidden behind the splash (the pre-roll). Not zero, so
+     * code that divides by the frame time does not meet a zero.
+     */
+    private static final float HANDOFF_DELTA = 0.001f;
+    /**
+     * The fewest frames the application runs behind the splash before it is let go, and the number of quiet ones in a row
+     * (not longer than {@link #PREROLL_QUIET_NANOS}) that end it early.
+     */
+    private static final int PREROLL_MIN_FRAMES = 3;
+    private static final long PREROLL_QUIET_NANOS = 40_000_000L;
+    /**
+     * The longest the pre-roll goes on for, so an application that is slow on every frame still gets to appear.
+     */
+    private static final long PREROLL_MAX_NANOS = 3_000_000_000L;
 
     /**
      * One open OS window: the {@link Window} and everything native the engine keeps for it.
@@ -113,6 +128,11 @@ public class Engine {
         Renderer renderer;         // render thread
         SplashPlayer splash;       // render thread; the splash over the first window, null when there is none or it has finished
         volatile int logicalW, logicalH, fbW, fbH;
+        boolean held;              // render thread; this frame the application is held back by the splash or the warm-ups
+        boolean prerolling;        // render thread; the application is running its first frames hidden behind the splash
+        boolean appStarted;        // render thread; the application has been let go of for good
+        int quietPrerollFrames;    // render thread; consecutive pre-roll frames that were not long
+        long prerollStartNanos;    // render thread; when the pre-roll began
         volatile boolean sizeDirty;
         volatile boolean focusLost;
         volatile boolean firstFrameRendered;
@@ -217,12 +237,14 @@ public class Engine {
         log.info("Starting engine...");
         started = true;
         OpenFiles.install(); // before GLFW starts, so macOS can hand over the file the app was launched to open
+        if (window.getWindowOptions().isSplashEnabled()) {
+            // The work to finish under the splash, queued before the splash starts so it can read the progress. Begun before the
+            // window opens, so the warm-ups' background work uses the time the graphics API takes to start.
+            WindowOptions options = window.getWindowOptions();
+            window.getLoading().begin(options.getWarmUps(), options.getWarmUpTimeLimit(), options.getWarmUpDelay());
+        }
         Host main = createHost(window);
         primary = main;
-        if (window.getWindowOptions().isSplashEnabled()) {
-            // The work to finish under the splash, queued before the splash starts so it can read the progress.
-            window.getLoading().begin(window.getWindowOptions().getWarmUps(), window.getWindowOptions().getWarmUpTimeLimit());
-        }
         main.splash = SplashPlayer.start(window); // plays over the first window before the application appears, unless switched off
         Clipboard.attach(main.handle); // GLFW's clipboard is system-wide; any window's handle will do
 
@@ -588,6 +610,7 @@ public class Engine {
             // very first frame. Without this, onUpdate consumers doing physics or
             // animation math can see a multi-second jump and misbehave.
             delta = Math.min(delta, 0.25f);
+            if (FrameTrace.isEnabled()) FrameTrace.nextFrame(frameNanos, traceState());
 
             live.clear();
             for (Host host : hosts) {
@@ -630,22 +653,31 @@ public class Engine {
 
                 SplashPlayer splash = host.splash;
                 if (splash != null) {
-                    splash.update(delta);
+                    // While the application is pre-rolling the splash stands still, so its fade starts from the top once the
+                    // application is ready, and a long frame in between cannot eat into it.
+                    splash.update(host.prerolling ? HANDOFF_DELTA : delta);
                     if (!splash.isActive()) host.splash = null;
                 }
-                if (holdsApp(host)) {
+                settleHold(host, frameNanos);
+                if (host.held) {
                     // The application hasn't appeared yet: what the user types or clicks meant for it is dropped.
                     window.getInputManager().getEventQueue().clear();
                     continue;
                 }
-                host.inputProcessor.processEvents(window);
+                // The first frames run behind the splash with almost no time passing, so nothing in the application moves yet.
+                float appDelta = host.prerolling ? HANDOFF_DELTA : delta;
+                if (host.prerolling) {
+                    window.getInputManager().getEventQueue().clear();
+                } else {
+                    host.inputProcessor.processEvents(window);
+                }
 
                 if (window.getBackgroundColor() instanceof AnimatedPaint animated) {
-                    animated.advance(delta);
+                    animated.advance(appDelta);
                 }
                 Background windowBackground = window.getBackground();
                 if (windowBackground != null) {
-                    windowBackground.update(delta, 0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight());
+                    windowBackground.update(appDelta, 0f, 0f, window.getWindowOptions().getWidth(), window.getWindowOptions().getHeight());
                 }
             }
 
@@ -659,20 +691,20 @@ public class Engine {
             // per-frame update
             GameTime.advance(delta, () -> {
                 for (Host host : live) {
-                    if (holdsApp(host)) continue;
+                    if (host.held || host.prerolling) continue;
                     select(host);
                     host.window.getSceneManager().fixedUpdate();
                 }
             });
             for (Host host : live) {
-                if (holdsApp(host)) continue;
+                if (host.held) continue;
                 select(host);
-                host.window.getSceneManager().update(GameTime.getDelta());
+                host.window.getSceneManager().update(host.prerolling ? HANDOFF_DELTA : GameTime.getDelta());
             }
 
             for (Host host : live) {
                 select(host);
-                updateAndDraw(host, delta);
+                updateAndDraw(host, host.prerolling ? HANDOFF_DELTA : delta);
             }
 
             // Vsync off: this loop is the only thing pacing frames, so hold it to maxFPS.
@@ -703,15 +735,26 @@ public class Engine {
     }
 
     /**
+     * What the first window is doing, for {@link FrameTrace}.
+     */
+    private String traceState() {
+        if (hosts.isEmpty()) return "no window";
+        Host host = hosts.get(0);
+        return (host.splash != null ? "splash" : "no splash") + (host.window.getLoading().isDone() ? "" : ", warming up")
+                + (host.prerolling ? ", pre-rolling" : "") + (host.firstFrameRendered ? "" : ", first frame");
+    }
+
+    /**
      * Render thread. Runs one window's containers and draws it.
      */
     private void updateAndDraw(Host host, float delta) {
         Window window = host.window;
         Renderer renderer = host.renderer;
 
-        boolean held = holdsApp(host); // the splash is up: the application isn't updated or drawn yet
+        boolean held = host.held; // the splash is up: the application isn't updated or drawn yet
 
         // Update pass: fires onUpdate for every enabled container and element
+        FrameTrace.begin();
         if (!held) {
             for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
                 Container container = entry.getValue();
@@ -726,6 +769,7 @@ public class Engine {
 
             TooltipManager.update(window, delta);
         }
+        FrameTrace.end("application update");
 
         if (host.backend == RenderAPI.OPENGL) makeContextCurrent(host);
 
@@ -759,6 +803,7 @@ public class Engine {
             renderer.drawGradient(0f, 0f, width, height, gradient, 0f);
         }
 
+        FrameTrace.begin();
         if (!held) {
             Background windowBackground = window.getBackground();
             if (windowBackground != null) {
@@ -773,12 +818,54 @@ public class Engine {
             }
             TooltipManager.render(renderer, window); // above every container
         }
+        FrameTrace.end("application draw");
+        FrameTrace.begin();
         if (host.splash != null) host.splash.render(renderer, width, height); // over the application while it fades out
+        FrameTrace.end("splash draw");
+        FrameTrace.begin();
         renderer.end();
 
         if (host.backend == RenderAPI.OPENGL) glfwSwapBuffers(host.handle);
+        FrameTrace.end("present");
 
         if (!host.firstFrameRendered) host.firstFrameRendered = true;
+    }
+
+    /**
+     * Render thread. Decides, once a frame, whether this window's application is held back, running its first frames
+     * hidden behind the splash (the pre-roll), or running.
+     * <p>
+     * The application's first frames are its longest: it lays itself out, compiles the shaders its widgets draw with and
+     * uploads its images. If they came when the splash let go, they would land in the middle of its fade and freeze it.
+     * So when the splash stops holding the application, the application first runs a few frames with the splash still
+     * drawn over it, standing still (see {@link #HANDOFF_DELTA}), until frames are quick again, and only then does the
+     * splash start to fade. {@code previousFrameNanos} is how long the frame before this one took.
+     */
+    private void settleHold(Host host, long previousFrameNanos) {
+        if (holdsApp(host)) {
+            host.held = true;
+            host.prerolling = false;
+            return;
+        }
+        host.held = false;
+        if (host.appStarted) return;
+        long now = System.nanoTime();
+        if (host.splash != null) {
+            if (!host.prerolling) {
+                host.prerolling = true;
+                host.quietPrerollFrames = 0;
+                host.prerollStartNanos = now;
+                FrameTrace.note("the splash let go of the application; it runs its first frames behind the splash");
+                return;
+            }
+            // The frame before this one was a pre-roll frame, so its length says whether the application has settled.
+            host.quietPrerollFrames = previousFrameNanos <= PREROLL_QUIET_NANOS ? host.quietPrerollFrames + 1 : 0;
+            if (host.quietPrerollFrames < PREROLL_MIN_FRAMES && now - host.prerollStartNanos < PREROLL_MAX_NANOS) return;
+        }
+        if (host.prerolling) FrameTrace.note("the application is ready after " + (now - host.prerollStartNanos) / 1_000_000L + " ms behind the splash");
+        host.prerolling = false;
+        host.appStarted = true;
+        host.window.getLoading().applicationStarted(host.window);
     }
 
     /**

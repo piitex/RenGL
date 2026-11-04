@@ -198,4 +198,58 @@ class SplashSequenceTest {
         WindowOptions options = new WindowOptions("test").setSplash(sequence);
         assertSame(sequence, SplashPlayer.choose(options));
     }
+
+    @Test
+    void aSplashThatIsFadingIsDissolvedIntoTheNextOne() {
+        List<String> events = new ArrayList<>();
+        // The first lets go of the application at 1 s and fades until 1.5 s; the second holds for 0.2 s and ends at 1 s.
+        Splash sequence = Splash.sequence(new RecordingSplash("fading", 1f, 1.5f, Color.BLACK, events),
+                new RecordingSplash("next", 0.2f, 1f, Color.RED, events));
+        sequence.onStart(null);
+        sequence.update(0.9f);
+        assertEquals(List.of("start fading"), events, "still holding: nothing else yet");
+
+        sequence.update(0.2f);
+        assertEquals(List.of("start fading", "start next"), events, "the next one starts as soon as the first begins to fade");
+        assertSame(Color.RED, sequence.getClearColor(), "the window is cleared to the colour of the one arriving");
+        sequence.render(null, 100, 100);
+        assertEquals(List.of("start fading", "start next", "render next", "render fading"), events,
+                "the fading one is drawn last, over the one arriving");
+        assertFalse(sequence.isFinished());
+
+        sequence.update(0.45f); // the first is past 1.5 s and is over; the second is at 0.45 s, past its hold
+        assertTrue(events.contains("dispose fading"), events.toString());
+        assertFalse(events.contains("dispose next"));
+        sequence.render(null, 100, 100);
+        assertEquals("render next", events.get(events.size() - 1), "only the arriving one is drawn now");
+        sequence.update(1f);
+        assertTrue(sequence.isFinished());
+        assertEquals(1, events.stream().filter("dispose next"::equals).count());
+    }
+
+    @Test
+    void theApplicationStaysHeldWhileAnEarlierSplashIsStillFadingOverTheLastOne() {
+        List<String> events = new ArrayList<>();
+        Splash sequence = Splash.sequence(new RecordingSplash("fading", 1f, 3f, Color.BLACK, events),
+                new RecordingSplash("last", 0.2f, 5f, Color.BLACK, events));
+        sequence.onStart(null);
+        sequence.update(1.1f); // the first fades from here; the last starts
+        sequence.update(0.5f); // the last has stopped holding, but the first is still over it
+        assertTrue(sequence.isHoldingApp(), "the application does not show through a splash that is still fading");
+        sequence.update(2f); // the first is over
+        assertFalse(sequence.isHoldingApp());
+    }
+
+    @Test
+    void closingMidFadeDisposesBothTheFadingAndTheArrivingSplash() {
+        List<String> events = new ArrayList<>();
+        Splash sequence = Splash.sequence(new RecordingSplash("fading", 1f, 3f, Color.BLACK, events),
+                new RecordingSplash("next", 1f, 3f, Color.BLACK, events), new RecordingSplash("third", 1f, 3f, Color.BLACK, events));
+        sequence.onStart(null);
+        sequence.update(1.1f);
+        sequence.dispose();
+        assertEquals(1, events.stream().filter("dispose fading"::equals).count());
+        assertEquals(1, events.stream().filter("dispose next"::equals).count());
+        assertEquals(1, events.stream().filter("dispose third"::equals).count());
+    }
 }
