@@ -383,15 +383,22 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     }
 
     /**
-     * Gets everything a frame needs ready: the window's device (made the first time), the content (initialised when it
-     * is new) and a target of {@code width} x {@code height}, resizing the content when either changed.
+     * The window's 3D device, made the first time and shared by every viewport of the window.
      */
-    private GpuDevice prepare(GpuInterop interop, int width, int height) {
+    private GpuDevice ensureDevice(GpuInterop interop) {
         if (gpu == null) {
             gpu = Gpu3D.of(interop);
             gpu.attach(this);
         }
-        GpuDevice device = gpu.device;
+        return gpu.device;
+    }
+
+    /**
+     * Gets everything a frame needs ready: the window's device (made the first time), the content (initialised when it
+     * is new) and a target of {@code width} x {@code height}, resizing the content when either changed.
+     */
+    private GpuDevice prepare(GpuInterop interop, int width, int height) {
+        GpuDevice device = ensureDevice(interop);
 
         boolean resized = false;
         if (activeContent != content) {
@@ -435,7 +442,8 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
      */
     public me.piitex.engine.WarmUp warmUp() {
         return new me.piitex.engine.WarmUp() {
-            private boolean prepared;
+            /** 0 before anything, 1 once the device is made, 2 once the content and target are ready. */
+            private int stage;
             private int frames;
 
             @Override
@@ -453,10 +461,15 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
                     float scale = interop.pixelScale() * resolutionScale;
                     int width = Math.max(1, Math.round((float) layoutWidth * scale));
                     int height = Math.max(1, Math.round((float) layoutHeight * scale));
-                    GpuDevice device = prepare(interop, width, height);
-                    if (!prepared) {
-                        // The device and the content are made; the frames follow on later calls, so the splash is drawn between.
-                        prepared = true;
+                    // Each stage is a call of its own, so the splash is drawn between them and none of them is long.
+                    if (stage == 0) {
+                        ensureDevice(interop);
+                        stage = 1;
+                        return false;
+                    }
+                    GpuDevice device = Viewport3D.this.prepare(interop, width, height);
+                    if (stage == 1) {
+                        stage = 2;
                         return false;
                     }
                     device.beginFrame();

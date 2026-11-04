@@ -24,6 +24,13 @@ import me.piitex.engine.ui.color.Color;
  * the splash says; {@link Window#getLoading()} tells how far they have got, so a splash can wait for them and show them,
  * as the RenGL splash does.
  * <p>
+ * When the splash stops holding the application, the application does not appear at once. Its first frames are its
+ * longest (it lays itself out, compiles shaders, uploads images), so the engine first runs them with the splash still
+ * drawn over them, and stood still: the splash's {@link #update} gets a delta of a millisecond and the application's
+ * updates get the same, so nothing moves in either, until a few frames in a row are quick. Only then does the time run
+ * again and the splash fade, so a stall cannot land in the middle of the fade. A splash does not need to do anything
+ * for this, but it should draw itself opaque (or nearly) until it stops holding the application.
+ * <p>
  * A splash that throws from any of these is logged and dropped, and the application carries on. One that never
  * finishes while it holds the application keeps the application held, which is what a splash that waits for a long
  * load wants; nothing else ends it.
@@ -64,9 +71,11 @@ public interface Splash {
      * <pre>{@code
      * options.setSplash(Splash.sequence(new PublisherSplash(), new FrameworkSplash(), new RenGLSplash()));
      * }</pre>
-     * Each splash gets its own {@link #onStart}, runs until {@link #isFinished()}, and is disposed before the next
-     * begins. The application is held through every splash but the last, so it never shows between two; the last one
-     * decides for itself, so it can fade out over the application. The window is cleared to the colour of the splash
+     * Each splash gets its own {@link #onStart}, runs until {@link #isFinished()}, and is disposed after. When a splash
+     * stops holding the application it is fading out (see the class description), and the next one starts then and plays
+     * under that fade, so one dissolves into the next; a splash that holds the application until it is finished is
+     * followed by the next one when it ends. The application is held through every splash but the last, so it never
+     * shows between two; the last one decides for itself, so it can fade out over the application. The window is cleared to the colour of the splash
      * playing. A splash that throws is logged and skipped, and the others still play. Splashes that never got to play
      * because the window closed first are disposed too. A splash plays once, so list each instance only once.
      * <p>

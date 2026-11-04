@@ -103,9 +103,10 @@ class RenGLSplashTest {
     }
 
     @Test
-    void staysUpWhileWarmUpsRunAndFadesOnceTheyAreDone() {
+    void staysUpWhileWarmUpsRunAndFadesOnceTheyAreDone() throws Exception {
         Loading loading = new Loading();
         loading.begin(java.util.List.of(WarmUp.of("3D scene", window -> { })), 30f);
+        assertTrue(loading.awaitPrepared(5_000));
         RenGLSplash splash = new RenGLSplash();
         splash.watch(loading);
 
@@ -126,9 +127,10 @@ class RenGLSplashTest {
     }
 
     @Test
-    void warmUpsThatFinishInTimeLeaveTheTimelineAlone() {
+    void warmUpsThatFinishInTimeLeaveTheTimelineAlone() throws Exception {
         Loading loading = new Loading();
         loading.begin(java.util.List.of(WarmUp.of("quick", window -> { })), 30f);
+        assertTrue(loading.awaitPrepared(5_000));
         RenGLSplash splash = new RenGLSplash();
         splash.watch(loading);
         for (int frame = 0; frame < 60; frame++) splash.update(1f / 60f); // one second in
@@ -143,6 +145,7 @@ class RenGLSplashTest {
     void drawsWhileWaitingWithTheWorkNamedAndTheBarShortOfFull() throws Exception {
         Loading loading = new Loading();
         loading.begin(java.util.List.of(WarmUp.of("3D scene", window -> { })), 30f);
+        assertTrue(loading.awaitPrepared(5_000));
         RenGLSplash splash = new RenGLSplash();
         splash.showApi("vulkan");
         splash.watch(loading);

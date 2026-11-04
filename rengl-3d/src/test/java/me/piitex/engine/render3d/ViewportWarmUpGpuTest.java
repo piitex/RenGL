@@ -104,7 +104,7 @@ class ViewportWarmUpGpuTest {
         Viewport3D viewport = new Viewport3D(200, 200);
         viewport.setContent(content);
         Window window = new Window(new WindowOptions("RenGL viewport warm-up test").setDimensions(240, 240).setRenderer(api)
-                .setVsync(false).setSplash(new WaitingSplash()).addWarmUp(viewport.warmUp()));
+                .setVsync(false).setSplash(new WaitingSplash()).setWarmUpDelay(0f).addWarmUp(viewport.warmUp()));
         window.hide();
         Container root = new Container(240, 240);
         root.onUpdate(_ -> {
@@ -203,7 +203,7 @@ class ViewportWarmUpGpuTest {
             }
         });
         Window window = new Window(new WindowOptions("RenGL scene warm-up test").setDimensions(240, 240).setRenderer(api)
-                .setVsync(false).setSplash(new WaitingSplash()).addWarmUp(viewport.warmUp()));
+                .setVsync(false).setSplash(new WaitingSplash()).setWarmUpDelay(0f).addWarmUp(viewport.warmUp()));
         window.hide();
         Container root = new Container(240, 240);
         root.onUpdate(_ -> {

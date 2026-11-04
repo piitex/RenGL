@@ -72,23 +72,46 @@ WindowOptions options = new WindowOptions("My App")
         .addWarmUp(WarmUp.of("Save games", window -> index.rebuild())); // or any work of your own
 ```
 
-The engine draws the splash first, then runs the warm-ups one after another on the render thread, one `step` per frame.
-The application stays held until the last is done, so the splash lasts as long as the loading does (and never less than
-its usual two and a half seconds). The RenGL splash shows it: its backdrop keeps moving, the bar stops short of full, and
-the footer says `LOADING 3D SCENE`.
+The engine draws the splash first, then runs the warm-ups one after another on the render thread, one `step` per
+frame. The application stays held until the last is done, so the splash lasts as long as the loading does (and never less
+than its usual two and a half seconds). The RenGL splash shows it: its backdrop keeps moving, the bar stops short of full,
+and the footer says `LOADING 3D SCENE`.
 
 ```java nocompile
 public interface WarmUp {
     String getName();                                     // shown by the splash
-    boolean step(Window window, Renderer renderer);       // one slice of the work; true when finished
+    default void prepare();                               // work that needs no graphics, on a worker thread, from the start
+    boolean step(Window window, Renderer renderer);       // one slice of the work on the render thread; true when finished
+    default void onApplicationStarted(Window window);     // let go of what only the warm-up kept alive
     static WarmUp of(String name, Consumer<Window> work); // all of the work in one call
+    static WarmUp inBackground(String name, Runnable work); // all of the work on the worker thread
 }
 ```
 
-- **One thread.** A step runs on the render thread with the graphics context current, so the splash cannot move while one
-  runs. A long job should be split into slices (return `false` until it is done) so the splash gets frames between them.
-  Work that needs no graphics context, such as reading a file, is better done on another thread, with a step that only
-  checks whether it has finished.
+#### Keeping the splash moving
+The splash is drawn by the same thread that does the render-thread work, so a slow step stops it. Everything below
+shortens, moves or places that stop:
+
+- **Background work first.** `prepare()` (and `WarmUp.inBackground`) runs on a worker thread as soon as `start` is called,
+  before the window even opens, so it overlaps with the time the graphics API takes to start. Anything that needs no
+  graphics context belongs there; the Audio device is the usual one: `WarmUp.inBackground("Audio", Audio::isAvailable)`
+  opens it before the first sound, instead of in a frame. A warm-up's steps wait for its `prepare`, and the splash goes on
+  meanwhile.
+- **The steps wait for the introduction.** They start only after the splash has been on screen for `setWarmUpDelay`
+  (2 seconds by default), so a stall lands on a settled picture and not in the middle of the animation. `0` starts them at
+  once, which is faster and makes the introduction stutter.
+- **Small slices.** Slices that are quick share a frame (up to 8 ms of steps), so many small warm-ups do not take a frame
+  each; one that is slow ends the frame's work. `Viewport3D.warmUp()` makes the device, the content and the first frame in
+  separate steps.
+- **The application's first frames happen behind the splash.** See [the hand-over](#the-hand-over).
+- **The part that cannot be split.** A call into a driver or a vendor's library that takes seconds, such as DLSS creating
+  its feature the first time it runs (about 3 seconds for Ray Reconstruction on an RTX 4090), stops the splash for as long
+  as it takes. It runs once, after the introduction, and the application then finds it done.
+
+Start the program with `-Drengl.trace.frames=true` to see where the long frames of the start-up go: it logs every frame
+over 40 ms (`-Drengl.trace.frames.ms=N` changes that) with the time of each part, such as `warm-up 'Main menu scene'=3233ms`,
+and notes when the hand-over starts and ends.
+
 - **Failure.** A warm-up that throws is logged and dropped, and the rest still run; the application starts as it would have
   without it. `setWarmUpTimeLimit` (30 seconds by default) abandons the warm-up that is running and those after it, with a
   warning, so one that never finishes cannot hold the application back for good.
@@ -98,11 +121,24 @@ public interface WarmUp {
   into the viewport's own target (the picture is not shown). That builds the content's pipelines and acceleration
   structures and makes its upscaler. It keeps drawing while the content `needsFrames()`, so a `Scene3D.preload` finishes
   under the splash too. Set the content before the engine starts.
+- **A hidden viewport that keeps a scene alive.** If the application shows the scene in a different view than the one that
+  was warmed (a `Background3D`, say), the warm-up's viewport is the scene's only user until that view has drawn. Closing
+  it earlier (a timer, say) frees the scene's pipelines and its upscaler, and the application builds them again in its
+  first frame. Close it in `onApplicationStarted`, which is called when the application has drawn its first frames.
 - **What it cannot cover.** The Vulkan device itself, and with it starting Streamline for DLSS, is made before any
   renderer exists, while the window is still hidden, so no splash can be drawn over it.
 - **Your own splash** reads `window.getLoading()` (`isDone()`, `getProgress()` and `getCurrent()`, the name of the work
   running) to wait for the warm-ups and to show them. A splash that finishes while they are still running leaves the
   window cleared to its colour (black without a splash) until they are done.
+
+#### The hand-over
+The application's first frames are its longest: it lays itself out, compiles the shaders its widgets use and uploads its
+images. If they came when the splash let go, they would land in the middle of its fade and freeze it. So the engine runs
+them first, with the splash still drawn over the application, standing still: until three frames in a row are quick (or
+three seconds have passed), the splash's `update` and the application's `onUpdate` hooks and scenes get a delta of one
+millisecond, and input is still dropped. Then time runs again, the splash fades and the warm-ups are told
+`onApplicationStarted`. The splash needs to do nothing for this; it should only stay (nearly) opaque until it stops
+holding the application.
 
 ### Your own splash
 Implement `me.piitex.engine.Splash` and pass an instance to `setSplash`. The engine calls it on the render thread, every
@@ -158,7 +194,10 @@ new WindowOptions("My App").setSplash(Splash.sequence(
         new RenGLSplash()));     // RenGL's is part of the sequence only if it is listed
 ```
 
-- Each splash gets its own `onStart`, runs until its `isFinished`, and is disposed before the next begins.
+- Each splash gets its own `onStart`, runs until its `isFinished`, and is disposed after.
+- **One dissolves into the next.** A splash that stops holding the application is fading out, so the next one starts at that
+  moment and plays under the fade, with the fading one drawn on top. The window never goes blank between them. A splash
+  that holds the application until it is finished is followed by the next one when it ends. Only one fades at a time.
 - The application is held through every splash but the last, so it never shows between two. The last one decides for
   itself, so it can fade out over the application.
 - The window is cleared to the `getClearColor()` of the splash that is playing.

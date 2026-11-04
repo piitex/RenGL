@@ -37,6 +37,7 @@ public class WindowOptions {
     private volatile Splash splash = null;
     private final java.util.concurrent.CopyOnWriteArrayList<WarmUp> warmUps = new java.util.concurrent.CopyOnWriteArrayList<>();
     private volatile float warmUpTimeLimit = 30f;
+    private volatile float warmUpDelay = 2f;
 
     public WindowOptions(String title) {
         this.title = title;
@@ -323,6 +324,22 @@ public class WindowOptions {
 
     public float getWarmUpTimeLimit() {
         return warmUpTimeLimit;
+    }
+
+    /**
+     * How long the splash plays before the warm-ups' render-thread steps begin, 2 seconds by default. A step that cannot be
+     * cut up stops the splash while it runs; waiting for the splash's introduction to finish means the stop lands on a
+     * settled picture and not in the middle of the animation. The warm-ups' {@linkplain WarmUp#prepare background work}
+     * is not held back and uses this time. 0 starts the steps as soon as the splash has been drawn once, which finishes
+     * sooner and makes the introduction stutter.
+     */
+    public WindowOptions setWarmUpDelay(float seconds) {
+        this.warmUpDelay = Math.max(0f, seconds);
+        return this;
+    }
+
+    public float getWarmUpDelay() {
+        return warmUpDelay;
     }
 
     /**
