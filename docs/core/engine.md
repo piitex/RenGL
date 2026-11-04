@@ -37,18 +37,72 @@ new Engine().start(window);
 ```
 
 ## The splash screen
-Every application opens with the RenGL splash: an animated mark (two hexagons that draw themselves around an R), the
-RenGL wordmark with a light sweeping across it, and the tagline, over a slowly drifting star field. It plays for about
-two and a half seconds on the first window, then fades out over your application. It is part of the engine; it can't be
-turned off, and it is drawn with the engine's own renderer, so it looks the same on OpenGL, Vulkan and Metal.
+Unless you choose otherwise, an application opens with the RenGL splash: an animated mark (two hexagons that draw
+themselves around an R), the RenGL wordmark with a light sweeping across it, and the tagline, over a slowly drifting
+star field. It plays for about two and a half seconds on the first window, then fades out over your application. It is
+drawn with the engine's own renderer, so it looks the same on OpenGL, Vulkan and Metal.
 
-While it plays your application is held back: its containers and scenes are not updated or drawn, `onUpdate` hooks
+While a splash holds the application, its containers and scenes are not updated or drawn, `onUpdate` hooks
 do not fire, and clicks and keys are dropped. Your first frame is the first one after the splash lets go, so scenes
 start from their beginning and nothing plays out unseen. Time-based work that does not belong to a window, such as
 the [scheduler](scheduler.md), keeps running meanwhile. Other windows opened with `open` get no splash.
 
-Every `Engine.start` plays it, so a test that starts a real window waits the extra two and a half seconds for the
+The splash is on by default. Two [`WindowOptions`](window.md#windowoptions) settings change it, and the engine reads them
+once, when `start` opens the window:
+
+```java nocompile
+new WindowOptions("My App").setSplashEnabled(false);       // no splash: your first frame is the window's first frame
+new WindowOptions("My App").setSplash(new MySplash());     // your own splash instead of RenGL's
+new WindowOptions("My App").setSplash(null);               // back to the RenGL splash
+```
+
+A test that starts a real window should switch the splash off, or it waits the extra two and a half seconds for the
 application to appear.
+
+### Your own splash
+Implement `me.piitex.engine.Splash` and pass an instance to `setSplash`. The engine calls it on the render thread, every
+frame while it is active:
+
+| Method | What it does |
+|---|---|
+| `onStart(Window)` | Optional. Called once before the first frame; `window.getRenderer()` says which graphics API draws it |
+| `update(float delta)` | Advances the splash by the seconds since the last frame |
+| `isFinished()` | Checked after `update`. When true the splash is disposed and never called again |
+| `isHoldingApp()` | While true the application is held (see above) and the window is cleared to `getClearColor()` |
+| `render(Renderer, int width, int height)` | Draws the splash on top of everything, in logical pixels with the origin at the top left. Match every `pushAlpha`, `pushScale` and `pushClip` with its pop |
+| `getClearColor()` | Optional. What the window is cleared to while the application is held; black by default |
+| `dispose()` | Optional. Frees images and fonts. Also called if the window closes before the splash finishes |
+
+A splash that stops holding the application but is not finished yet is drawn over the running application, which is how
+a fade-out works. One that holds until a background load finishes just returns `!loaded` from `isHoldingApp`. An
+instance plays once, so give each window its own. A splash that throws is logged and dropped, and the application
+carries on.
+
+```java nocompile
+class LoadingSplash implements Splash {
+    private final AtomicBoolean loaded = new AtomicBoolean();
+    private float fade; // seconds since loading finished
+
+    LoadingSplash() {
+        Scheduler.async(() -> { loadEverything(); loaded.set(true); });
+    }
+
+    public void update(float delta)   { if (loaded.get()) fade += delta; }
+    public boolean isHoldingApp()     { return !loaded.get(); }
+    public boolean isFinished()       { return fade >= 0.3f; }
+
+    public void render(Renderer renderer, int width, int height) {
+        renderer.pushAlpha(1f - Math.min(fade / 0.3f, 1f));
+        renderer.drawQuad(0, 0, width, height, Color.BLACK, 0);
+        renderer.drawText("Loading...", width / 2f, height / 2f, Font.sized(24f), Color.WHITE, TextAlign.CENTER);
+        renderer.popAlpha();
+    }
+}
+```
+
+`new RenGLSplash()` is public too, so a splash of yours can draw it as part of its own, for example a studio logo that
+plays before it. `Splash` has no setting for how long it lasts; the splash decides, by when `isHoldingApp` and
+`isFinished` turn true.
 
 ## Files the OS asks the app to open
 Double-clicking a `.zip` that is associated with your app, "Open With", or dropping a file on its Dock icon asks the

@@ -99,7 +99,7 @@ class PostedInputTest {
     void aClickAToggleAndTypingPostedToTheWindowReachTheElements() throws Exception {
         assumeTrue(System.getProperty("os.name", "").toLowerCase().contains("win"), "posts Windows messages");
 
-        Window window = new Window(new WindowOptions(TITLE).setDimensions(400, 220).setVsync(false));
+        Window window = new Window(new WindowOptions(TITLE).setDimensions(400, 220).setVsync(false).setSplashEnabled(false));
         window.hide();
         Container root = new Container(400, 220);
         root.onUpdate(_ -> frames.incrementAndGet());

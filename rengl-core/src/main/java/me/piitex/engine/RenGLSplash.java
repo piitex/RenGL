@@ -17,23 +17,31 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * The RenGL splash screen the engine plays over the first window before the application's own UI appears.
+ * The RenGL splash screen, which the engine plays over the first window before the application's own UI appears unless
+ * the application sets its own {@link Splash} or switches the splash off (see {@link WindowOptions#setSplash}).
  * <p>
- * While it plays ({@link #holdsApp()}) the application is held: its containers and scenes are neither updated nor drawn
- * and the input meant for them is dropped, so the application starts from its first frame once the splash lets go. The
- * splash then fades out over the running application.
+ * While it plays ({@link #isHoldingApp()}) the application is held: its containers and scenes are neither updated nor
+ * drawn and the input meant for them is dropped, so the application starts from its first frame once the splash lets
+ * go. The splash then fades out over the running application.
  * <p>
- * The animation is a pure function of {@link #time}, drawn with the plain {@link Renderer} API, so it looks the same on
- * every graphics backend and can be drawn at any moment into an offscreen renderer.
+ * The animation is a pure function of the time since it began, drawn with the plain {@link Renderer} API, so it looks
+ * the same on every graphics backend and can be drawn at any moment into an offscreen renderer. It plays once; make
+ * another for another window.
  */
 @GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
-final class SplashScreen {
-    /** Seconds the splash is fully shown before it starts to fade. */
+public final class RenGLSplash implements Splash {
+    /**
+     * Seconds the splash is fully shown before it starts to fade.
+     */
     static final float HOLD_END = 2.5f;
-    /** Seconds the fade over the application takes. */
+    /**
+     * Seconds the fade over the application takes.
+     */
     static final float FADE = 0.45f;
 
-    /** The colour at the top of the backdrop. The engine also clears the window to it while the splash holds the application. */
+    /**
+     * The colour at the top of the backdrop. The engine also clears the window to it while the splash holds the application.
+     */
     static final Color INK_TOP = new Color(0.027f, 0.035f, 0.075f, 1f);
 
     private static final Color CYAN = new Color(0.31f, 0.82f, 1f, 1f);
@@ -47,20 +55,28 @@ final class SplashScreen {
     private static final Color FOOTER_COLOR = new Color(0.7f, 0.74f, 0.95f, 1f);
     private static final Color STAR_COLOR = new Color(0.78f, 0.85f, 1f, 1f);
 
-    private static final String TAGLINE = "Creativity and design for everyday applications";
+    private static final String TAGLINE = "Java GUI Engine";
     private static final String WORD = "RenGL";
 
-    /** A full turn in radians, for the random twinkle phase of each star. */
+    /**
+     * A full turn in radians, for the random twinkle phase of each star.
+     */
     private static final float TAU = (float) (2 * Math.PI);
 
-    /** The window size the layout was designed for; the splash scales with the tighter of the two dimensions. */
+    /**
+     * The window size the layout was designed for; the splash scales with the tighter of the two dimensions.
+     */
     private static final float DESIGN_WIDTH = 900f;
     private static final float DESIGN_HEIGHT = 560f;
 
     private static final int STARS = 72;
-    /** Start position as a fraction of the window (0..1). */
+    /**
+     * Start position as a fraction of the window (0..1).
+     */
     private static final float[] starX = new float[STARS], starY = new float[STARS];
-    /** Drift in window fractions per second. */
+    /**
+     * Drift in window fractions per second.
+     */
     private static final float[] starVelocityX = new float[STARS], starVelocityY = new float[STARS];
     private static final float[] starPhase = new float[STARS], starSize = new float[STARS];
 
@@ -82,7 +98,13 @@ final class SplashScreen {
     }
 
     private float time;
-    /** Scratch space for the points of a hexagon outline: x and y pairs, up to the 7 points a full outline needs. */
+    /**
+     * The graphics API's name, shown in the footer; null shows no footer.
+     */
+    private String api;
+    /**
+     * Scratch space for the points of a hexagon outline: x and y pairs, up to the 7 points a full outline needs.
+     */
     private final float[] trace = new float[16];
     private Image glowImage;
 
@@ -90,12 +112,32 @@ final class SplashScreen {
     private int fontKey = -1;
     private org.jetbrains.skia.Font wordFont, markFont, tagFont, smallFont;
 
-    /** Advances the animation. A long frame (the first one compiles shaders) moves it by at most 50 ms, so it is not skipped. */
-    void advance(float delta) {
+    /**
+     * Reads which graphics API draws the splash, for the footer.
+     */
+    @Override
+    public void onStart(Window window) {
+        showApi(window.getRenderer().name());
+    }
+
+    /**
+     * Sets the graphics API's name shown in the footer.
+     */
+    void showApi(String api) {
+        this.api = api;
+    }
+
+    /**
+     * Advances the animation. A long frame (the first one compiles shaders) moves it by at most 50 ms, so it is not skipped.
+     */
+    @Override
+    public void update(float delta) {
         time += Math.min(Math.max(delta, 0f), 0.05f);
     }
 
-    /** Jumps to {@code seconds} into the animation. */
+    /**
+     * Jumps to {@code seconds} into the animation.
+     */
     void seek(float seconds) {
         time = seconds;
     }
@@ -104,16 +146,29 @@ final class SplashScreen {
         return time;
     }
 
-    /** True while the application is held back: nothing of it is updated, drawn or given input. */
-    boolean holdsApp() {
+    /**
+     * True while the application is held back: nothing of it is updated, drawn or given input.
+     */
+    @Override
+    public boolean isHoldingApp() {
         return time < HOLD_END;
     }
 
-    boolean finished() {
+    @Override
+    public boolean isFinished() {
         return time >= HOLD_END + FADE;
     }
 
-    void dispose() {
+    /**
+     * The deep ink of the backdrop, so the window is that colour from its very first frame.
+     */
+    @Override
+    public Color getClearColor() {
+        return INK_TOP;
+    }
+
+    @Override
+    public void dispose() {
         closeFonts();
     }
 
@@ -129,8 +184,8 @@ final class SplashScreen {
         fontKey = -1;
     }
 
-    /** Draws the splash over a {@code width} x {@code height} window. {@code api} is the graphics API's name, shown in the footer. */
-    void render(Renderer renderer, int width, int height, String api) {
+    @Override
+    public void render(Renderer renderer, int width, int height) {
         float seconds = time;
         // Everything is laid out for a 900x560 window and scaled by whichever dimension has less room, within 0.45x to 2x.
         float scale = Math.clamp(Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT), 0.45f, 2f);
@@ -207,8 +262,8 @@ final class SplashScreen {
             renderer.drawGradient(0, height - barHeight, width * ease(holdProgress), barHeight,
                     new LinearGradient(List.of(CYAN, VIOLET, PINK), 0f), 0);
         }
+        // Both needed
         renderer.popAlpha();
-
         renderer.popAlpha();
     }
 
@@ -330,7 +385,9 @@ final class SplashScreen {
         return pointCount;
     }
 
-    /** Writes vertex number {@code vertex} of a pointy-top hexagon into slot {@code slot} (an x, y pair) of {@link #trace}. */
+    /**
+     * Writes vertex number {@code vertex} of a pointy-top hexagon into slot {@code slot} (an x, y pair) of {@link #trace}.
+     */
     private void hexVertex(int slot, float centerX, float centerY, float radius, float rotationDegrees, int direction, int vertex) {
         // The vertices are 60 degrees apart (360 / 6). Starting at -90 degrees puts vertex 0 at the top, because the
         // y axis points down the screen; a negative direction runs round the other way.
@@ -340,7 +397,9 @@ final class SplashScreen {
         trace[slot * 2 + 1] = centerY + (float) Math.sin(angle) * radius;
     }
 
-    /** Puts the point {@code position} (0..1) of the way round a hexagon's outline in trace[0], trace[1]. */
+    /**
+     * Puts the point {@code position} (0..1) of the way round a hexagon's outline in trace[0], trace[1].
+     */
     private void hexPoint(float centerX, float centerY, float radius, float rotationDegrees, float position) {
         // Six edges: the whole part of position * 6 is the edge, the remainder is how far along that edge.
         float edgesCovered = position * 6f;
@@ -354,7 +413,9 @@ final class SplashScreen {
         trace[1] = trace[5] + (trace[7] - trace[5]) * alongEdge;
     }
 
-    /** Draws "RenGL" letter by letter, then a shimmer across it. {@code top} is the top of the line of text. */
+    /**
+     * Draws "RenGL" letter by letter, then a shimmer across it. {@code top} is the top of the line of text.
+     */
     private void drawWordmark(Renderer renderer, float centerX, float top, float scale, float seconds) {
         // The gap between letters is 4.5% of the font size.
         float spacing = wordFont.getSize() * 0.045f;
@@ -404,7 +465,9 @@ final class SplashScreen {
         }
     }
 
-    /** "Ren" is near white; "GL" carries the brand gradient. */
+    /**
+     * "Ren" is near white; "GL" carries the brand gradient.
+     */
     private static Paint letterPaint(int index) {
         return switch (index) {
             case 3 -> new LinearGradient(List.of(CYAN, VIOLET), 0f);
@@ -446,7 +509,9 @@ final class SplashScreen {
         }
     }
 
-    /** A soft pool of colour: one pre-rendered radial falloff, drawn tinted. Stacked translucent circles band in 8 bits. */
+    /**
+     * A soft pool of colour: one pre-rendered radial falloff, drawn tinted. Stacked translucent circles band in 8 bits.
+     */
     private void glow(Renderer renderer, float centerX, float centerY, float radius, Color color, float strength) {
         if (strength <= 0.001f || radius <= 0.5f) return;
         if (glowImage == null) glowImage = makeGlowImage();
@@ -455,7 +520,9 @@ final class SplashScreen {
                 new Color(color.getR(), color.getG(), color.getB(), 1f));
     }
 
-    /** White that fades with distance from the centre, as premultiplied pixels with a little noise so 8 bits don't band. */
+    /**
+     * White that fades with distance from the centre, as premultiplied pixels with a little noise so 8 bits don't band.
+     */
     private static Image makeGlowImage() {
         final int size = 256;
         byte[] pixels = new byte[size * size * 4];
@@ -503,12 +570,16 @@ final class SplashScreen {
         return Math.clamp((seconds - start) / duration, 0f, 1f);
     }
 
-    /** Smoothstep, 3x^2 - 2x^3: 0 to 1 with a slow start and a slow end. */
+    /**
+     * Smoothstep, 3x^2 - 2x^3: 0 to 1 with a slow start and a slow end.
+     */
     private static float ease(float progress) {
         return progress * progress * (3f - 2f * progress);
     }
 
-    /** 1 - (1 - x)^3: 0 to 1, fast at first and slowing to a stop. */
+    /**
+     * 1 - (1 - x)^3: 0 to 1, fast at first and slowing to a stop.
+     */
     private static float easeOut(float progress) {
         float remaining = 1f - progress;
         return 1f - remaining * remaining * remaining;

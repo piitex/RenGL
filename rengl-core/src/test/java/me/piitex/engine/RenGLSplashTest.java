@@ -12,24 +12,28 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The splash screen's timeline, drawn offscreen. Frames are also written to {@code target/splash-frames} to be looked at.
+ * The RenGL splash's timeline, drawn offscreen. Frames are also written to {@code target/splash-frames} to be looked at.
  */
-class SplashScreenTest {
+class RenGLSplashTest {
     private static final int WIDTH = 960;
     private static final int HEIGHT = 600;
 
-    /** Draws the splash at {@code seconds} into the animation. */
-    private static Image frame(SplashScreen splash, float seconds) {
+    /**
+     * Draws the splash at {@code seconds} into the animation.
+     */
+    private static Image frame(RenGLSplash splash, float seconds) {
         splash.seek(seconds);
         try (OffscreenRenderer renderer = new OffscreenRenderer(WIDTH, HEIGHT, 1f)) {
             renderer.begin();
-            splash.render(renderer, WIDTH, HEIGHT, "opengl");
+            splash.render(renderer, WIDTH, HEIGHT);
             renderer.end();
             return renderer.makeImage();
         }
     }
 
-    /** The pixel's average of red, green and blue, from 0 (black) to 1 (white). */
+    /**
+     * The pixel's average of red, green and blue, from 0 (black) to 1 (white).
+     */
     private static float brightness(Image image, int pixelX, int pixelY) {
         Bitmap bitmap = Bitmap.Companion.makeFromImage(image);
         int argb = bitmap.getColor(pixelX, pixelY);
@@ -40,30 +44,32 @@ class SplashScreenTest {
         return (red + green + blue) / 765f;
     }
 
-    /** The pixel's opacity, from 0 to 1: the top byte of its ARGB value over 255. */
+    /**
+     * The pixel's opacity, from 0 to 1: the top byte of its ARGB value over 255.
+     */
     private static float alphaAt(Image image, int pixelX, int pixelY) {
         return (Bitmap.Companion.makeFromImage(image).getColor(pixelX, pixelY) >>> 24) / 255f;
     }
 
     @Test
     void holdsTheApplicationUntilItFades() {
-        SplashScreen splash = new SplashScreen();
-        assertTrue(splash.holdsApp());
-        assertFalse(splash.finished());
-        splash.seek(SplashScreen.HOLD_END - 0.01f);
-        assertTrue(splash.holdsApp());
-        splash.seek(SplashScreen.HOLD_END + 0.01f);
-        assertFalse(splash.holdsApp(), "fading out, the application shows through");
-        assertFalse(splash.finished());
-        splash.seek(SplashScreen.HOLD_END + SplashScreen.FADE);
-        assertTrue(splash.finished());
+        RenGLSplash splash = new RenGLSplash();
+        assertTrue(splash.isHoldingApp());
+        assertFalse(splash.isFinished());
+        splash.seek(RenGLSplash.HOLD_END - 0.01f);
+        assertTrue(splash.isHoldingApp());
+        splash.seek(RenGLSplash.HOLD_END + 0.01f);
+        assertFalse(splash.isHoldingApp(), "fading out, the application shows through");
+        assertFalse(splash.isFinished());
+        splash.seek(RenGLSplash.HOLD_END + RenGLSplash.FADE);
+        assertTrue(splash.isFinished());
         splash.dispose();
     }
 
     @Test
     void aLongFrameDoesNotSkipTheAnimation() {
-        SplashScreen splash = new SplashScreen();
-        splash.advance(3f); // the first frame compiles shaders
+        RenGLSplash splash = new RenGLSplash();
+        splash.update(3f); // the first frame compiles shaders
         assertTrue(splash.time() <= 0.05f + 1e-6f);
         splash.dispose();
     }
@@ -72,7 +78,8 @@ class SplashScreenTest {
     void drawsTheWholeTimelineAndFadesToNothing() throws Exception {
         Path directory = Path.of("target", "splash-frames");
         Files.createDirectories(directory);
-        SplashScreen splash = new SplashScreen();
+        RenGLSplash splash = new RenGLSplash();
+        splash.showApi("opengl");
         float[] times = {0f, 0.35f, 0.7f, 1.0f, 1.3f, 1.6f, 1.9f, 2.2f, 2.5f, 2.7f, 2.95f};
         Image first = null, middle = null, last = null;
         for (float seconds : times) {
@@ -98,11 +105,12 @@ class SplashScreenTest {
     @Test
     void worksAtSmallAndLargeWindowSizes() {
         for (int[] size : new int[][]{{320, 200}, {1920, 1080}}) {
-            SplashScreen splash = new SplashScreen();
+            RenGLSplash splash = new RenGLSplash();
+            splash.showApi("vulkan");
             splash.seek(2f);
             try (OffscreenRenderer renderer = new OffscreenRenderer(size[0], size[1], 1f)) {
                 renderer.begin();
-                splash.render(renderer, size[0], size[1], "vulkan");
+                splash.render(renderer, size[0], size[1]);
                 renderer.end();
             }
             splash.dispose();

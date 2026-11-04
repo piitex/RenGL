@@ -50,6 +50,8 @@ drives one `Window`: passing the same instance to a second window throws.
 | `setResizable(boolean)` | `true` | `false` locks the window size (`setDimensions` still works). **Live** |
 | `setIcon(Image)` | `null` | An image from `ImageLoader.load(...)`. Wins over `setIconPath`. On macOS it sets the Dock icon. **Live** |
 | `setIconPath(String)` | `null` | File path or classpath resource. Same platform behavior as `setIcon`. **Live** |
+| `setSplashEnabled(boolean)` | `true` | Whether a [splash screen](engine.md#the-splash-screen) plays over the first window before the application appears. `false` opts out. Read once when `Engine.start` opens the window, so it is **not live**; windows opened later have no splash |
+| `setSplash(Splash)` | `null` | Your own `Splash` instead of the RenGL one (see [your own splash](engine.md#your-own-splash)). `null` is the RenGL splash. Plays only while the splash is enabled. **Not live** |
 
 The getters (`getTitle`, `getWidth`, `getHeight`, `isFullscreen`, ...) return the current state. The
 engine uses `getWidth()`/`getHeight()` for the window background, for clamping the mouse position, and for
@@ -107,8 +109,8 @@ the same call by another name:
 | `close()` | Closes the window, like clicking its close button. Closing the first window ends the engine |
 | `open()` | Opens the window beside the running engine's others, or again after it was closed. See [Several windows](engine.md#several-windows) |
 
-(The engine plays its own [RenGL splash](engine.md#the-splash-screen) over the first window before any of this appears;
-the code below is for an application's own loading screen after that.)
+(The engine plays a [splash](engine.md#the-splash-screen), the RenGL one unless you set your own or switch it off, over
+the first window before any of this appears; the code below is for an application's own loading screen after that.)
 
 A loading screen that becomes the main window, all in one OS window:
 
