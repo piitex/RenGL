@@ -55,6 +55,24 @@ import me.piitex.engine.ui.color.Color;
  */
 public interface Splash {
     /**
+     * Plays {@code splashes} one after another as a single splash, such as a publisher's, a framework's and then the
+     * RenGL splash itself:
+     * <pre>{@code
+     * options.setSplash(Splash.sequence(new PublisherSplash(), new FrameworkSplash(), new RenGLSplash()));
+     * }</pre>
+     * Each splash gets its own {@link #onStart}, runs until {@link #isFinished()}, and is disposed before the next
+     * begins. The application is held through every splash but the last, so it never shows between two; the last one
+     * decides for itself, so it can fade out over the application. The window is cleared to the colour of the splash
+     * playing. A splash that throws is logged and skipped, and the others still play. Splashes that never got to play
+     * because the window closed first are disposed too. A splash plays once, so list each instance only once.
+     * <p>
+     * RenGL's own splash is part of the sequence only if it is listed. With none listed, the sequence is over at once.
+     */
+    static Splash sequence(Splash... splashes) {
+        return new SplashSequence(splashes);
+    }
+
+    /**
      * Called once, before the first frame, with the window the splash plays over. Its {@link Window#getRenderer()} says
      * which graphics API draws the splash. Does nothing unless overridden.
      */
