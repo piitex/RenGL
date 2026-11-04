@@ -3,6 +3,7 @@ package me.piitex.engine;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.LinearGradient;
+import me.piitex.engine.ui.color.Paint;
 import me.piitex.engine.ui.text.Font;
 import me.piitex.engine.ui.text.FontMetricsCompat;
 import me.piitex.engine.ui.text.TextAlign;
@@ -32,34 +33,57 @@ final class SplashScreen {
     /** Seconds the fade over the application takes. */
     static final float FADE = 0.45f;
 
+    /** The colour at the top of the backdrop. The engine also clears the window to it while the splash holds the application. */
+    static final Color INK_TOP = new Color(0.027f, 0.035f, 0.075f, 1f);
+
     private static final Color CYAN = new Color(0.31f, 0.82f, 1f, 1f);
     private static final Color VIOLET = new Color(0.56f, 0.38f, 0.97f, 1f);
     private static final Color PINK = new Color(0.97f, 0.46f, 0.72f, 1f);
-    private static final Color INK_TOP = new Color(0.027f, 0.035f, 0.075f, 1f);
     private static final Color INK_BOTTOM = new Color(0.075f, 0.058f, 0.19f, 1f);
     private static final Color WHITE = new Color(0.95f, 0.96f, 1f, 1f);
+    private static final Color LETTER_BOTTOM = new Color(0.78f, 0.84f, 1f, 1f);
+    private static final Color PULSE_RING = new Color(0.7f, 0.8f, 1f, 1f);
+    private static final Color TAGLINE_COLOR = new Color(0.72f, 0.76f, 0.92f, 1f);
+    private static final Color FOOTER_COLOR = new Color(0.7f, 0.74f, 0.95f, 1f);
+    private static final Color STAR_COLOR = new Color(0.78f, 0.85f, 1f, 1f);
 
     private static final String TAGLINE = "Creativity and design for everyday applications";
+    private static final String WORD = "RenGL";
+
+    /** A full turn in radians, for the random twinkle phase of each star. */
+    private static final float TAU = (float) (2 * Math.PI);
+
+    /** The window size the layout was designed for; the splash scales with the tighter of the two dimensions. */
+    private static final float DESIGN_WIDTH = 900f;
+    private static final float DESIGN_HEIGHT = 560f;
 
     private static final int STARS = 72;
+    /** Start position as a fraction of the window (0..1). */
     private static final float[] starX = new float[STARS], starY = new float[STARS];
-    private static final float[] starVX = new float[STARS], starVY = new float[STARS];
+    /** Drift in window fractions per second. */
+    private static final float[] starVelocityX = new float[STARS], starVelocityY = new float[STARS];
     private static final float[] starPhase = new float[STARS], starSize = new float[STARS];
 
     static {
+        // The seed is "ReNG" in ASCII, so the star field is the same on every run.
         Random random = new Random(0x52656E47L);
         for (int i = 0; i < STARS; i++) {
             starX[i] = random.nextFloat();
             starY[i] = random.nextFloat();
-            starVX[i] = (random.nextFloat() - 0.5f) * 0.012f;
-            starVY[i] = -0.004f - random.nextFloat() * 0.012f; // drifts slowly upward
-            starPhase[i] = random.nextFloat() * 6.2832f;
+            // Sideways drift is uniform in -0.006..+0.006 of the window per second.
+            starVelocityX[i] = (random.nextFloat() - 0.5f) * 0.012f;
+            // Upward drift (negative y is up) of 0.004..0.016 of the window per second.
+            starVelocityY[i] = -0.004f - random.nextFloat() * 0.012f;
+            // A random point in the twinkle cycle, so the stars don't pulse together.
+            starPhase[i] = random.nextFloat() * TAU;
+            // Radius of 0.8..2.3 logical pixels before scaling.
             starSize[i] = 0.8f + random.nextFloat() * 1.5f;
         }
     }
 
     private float time;
-    private float[] trace = new float[16];
+    /** Scratch space for the points of a hexagon outline: x and y pairs, up to the 7 points a full outline needs. */
+    private final float[] trace = new float[16];
     private Image glowImage;
 
     // Fonts are built for one window scale and rebuilt when it changes.
@@ -98,239 +122,290 @@ final class SplashScreen {
             glowImage.close();
             glowImage = null;
         }
-        for (org.jetbrains.skia.Font f : new org.jetbrains.skia.Font[]{wordFont, markFont, tagFont, smallFont}) {
-            if (f != null) f.close();
+        for (org.jetbrains.skia.Font font : new org.jetbrains.skia.Font[]{wordFont, markFont, tagFont, smallFont}) {
+            if (font != null) font.close();
         }
         wordFont = markFont = tagFont = smallFont = null;
         fontKey = -1;
     }
 
     /** Draws the splash over a {@code width} x {@code height} window. {@code api} is the graphics API's name, shown in the footer. */
-    void render(Renderer r, int width, int height, String api) {
-        float t = time;
-        float s = Math.clamp(Math.min(width / 900f, height / 560f), 0.45f, 2f);
-        buildFonts(s);
+    void render(Renderer renderer, int width, int height, String api) {
+        float seconds = time;
+        // Everything is laid out for a 900x560 window and scaled by whichever dimension has less room, within 0.45x to 2x.
+        float scale = Math.clamp(Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT), 0.45f, 2f);
+        buildFonts(scale);
 
-        float exit = ease(clamp01((t - HOLD_END) / FADE));
-        float cx = width / 2f;
-        float markCy = height * 0.40f;
-        float radius = 74f * s;
+        // 0 while the splash holds, rising to 1 across the fade; eased so the fade starts and ends gently.
+        float exit = ease(progress(seconds, HOLD_END, FADE));
+        float centerX = width / 2f;
+        // The mark sits 40% of the way down the window, leaving the lower part for the wordmark and tagline.
+        float markCenterY = height * 0.40f;
+        float markRadius = 74f * scale;
 
-        r.pushAlpha(1f - exit);
+        renderer.pushAlpha(1f - exit);
 
         // Backdrop: deep ink, two soft colour pools, a drifting star field.
-        r.drawGradient(0, 0, width, height, new LinearGradient(List.of(INK_TOP, INK_BOTTOM), 90f), 0);
-        float bgIn = ease(clamp01(t / 0.9f));
-        r.pushAlpha(bgIn);
-        glow(r, width * 0.12f, height * 0.10f, Math.max(width, height) * 0.55f, CYAN, 0.14f);
-        glow(r, width * 0.92f, height * 0.95f, Math.max(width, height) * 0.60f, VIOLET, 0.24f);
-        stars(r, width, height, s, t);
-        r.popAlpha();
+        renderer.drawGradient(0, 0, width, height, new LinearGradient(List.of(INK_TOP, INK_BOTTOM), 90f), 0);
+        float backdropIn = ease(progress(seconds, 0f, 0.9f));
+        renderer.pushAlpha(backdropIn);
+        float longestSide = Math.max(width, height);
+        glow(renderer, width * 0.12f, height * 0.10f, longestSide * 0.55f, CYAN, 0.14f);
+        glow(renderer, width * 0.92f, height * 0.95f, longestSide * 0.60f, VIOLET, 0.24f);
+        drawStars(renderer, width, height, scale, seconds);
+        renderer.popAlpha();
 
-        // Everything else grows a little as it leaves.
-        r.pushScale(1f + 0.05f * exit, cx, height / 2f);
+        // Everything else grows 5% about the window centre as it leaves.
+        renderer.pushScale(1f + 0.05f * exit, centerX, height / 2f);
 
         // Halo behind the mark swells as the mark forms and then breathes.
-        float form = ease(clamp01((t - 0.2f) / 1.3f));
-        float breathe = 0.5f + 0.5f * (float) Math.sin(t * 2.2f);
-        glow(r, cx, markCy, radius * (2.6f + 0.15f * breathe), VIOLET, 0.8f * form);
-        glow(r, cx, markCy, radius * 1.7f, CYAN, 0.38f * form);
+        float form = ease(progress(seconds, 0.2f, 1.3f));
+        // A sine wave remapped from -1..1 to 0..1; 2.2 radians per second is a breath about every 2.9 seconds.
+        float breathe = 0.5f + 0.5f * (float) Math.sin(seconds * 2.2f);
+        glow(renderer, centerX, markCenterY, markRadius * (2.6f + 0.15f * breathe), VIOLET, 0.8f * form);
+        glow(renderer, centerX, markCenterY, markRadius * 1.7f, CYAN, 0.38f * form);
 
-        drawMark(r, cx, markCy, radius, s, t);
-        float wordTop = drawWordmark(r, cx, markCy + radius + 30f * s, s, t);
+        drawMark(renderer, centerX, markCenterY, markRadius, scale, seconds);
+        // The wordmark starts 30 units under the mark's lower edge (its centre plus its radius).
+        float wordTop = markCenterY + markRadius + 30f * scale;
+        drawWordmark(renderer, centerX, wordTop, scale, seconds);
 
         // Accent line and tagline.
-        float lineP = ease(clamp01((t - 1.3f) / 0.5f));
+        float lineProgress = ease(progress(seconds, 1.3f, 0.5f));
+        // The line sits 1.28 font sizes below the top of the word: the height of its letters plus a gap.
         float lineY = wordTop + wordFont.getSize() * 1.28f;
-        float lineW = 150f * s * lineP;
-        if (lineW > 0.5f) {
-            r.pushAlpha(lineP);
-            r.drawGradient(cx - lineW / 2f, lineY, lineW, Math.max(1.5f, 2f * s),
-                    new LinearGradient(List.of(CYAN, VIOLET, PINK), 0f), s);
-            r.popAlpha();
+        float lineWidth = 150f * scale * lineProgress; // grows from the middle outwards to 150 units
+        if (lineWidth > 0.5f) {
+            renderer.pushAlpha(lineProgress);
+            renderer.drawGradient(centerX - lineWidth / 2f, lineY, lineWidth, Math.max(1.5f, 2f * scale),
+                    new LinearGradient(List.of(CYAN, VIOLET, PINK), 0f), scale);
+            renderer.popAlpha();
         }
-        float tagP = ease(clamp01((t - 1.4f) / 0.5f));
-        if (tagP > 0f) {
-            r.pushAlpha(0.78f * tagP);
-            r.drawText(TAGLINE, cx, lineY + 16f * s + (1f - tagP) * 8f * s, tagFont, new Color(0.72f, 0.76f, 0.92f, 1f), TextAlign.CENTER);
-            r.popAlpha();
+        float taglineProgress = ease(progress(seconds, 1.4f, 0.5f));
+        if (taglineProgress > 0f) {
+            renderer.pushAlpha(0.78f * taglineProgress);
+            // The tagline is 16 units under the line and slides up the last 8 units as it fades in.
+            float taglineY = lineY + 16f * scale + (1f - taglineProgress) * 8f * scale;
+            renderer.drawText(TAGLINE, centerX, taglineY, tagFont, TAGLINE_COLOR, TextAlign.CENTER);
+            renderer.popAlpha();
         }
 
-        r.popScale();
+        renderer.popScale();
 
         // Footer and a thin progress line along the bottom edge.
-        float footP = ease(clamp01((t - 1.6f) / 0.4f));
-        if (footP > 0f && api != null) {
-            r.pushAlpha(0.42f * footP);
-            r.drawText("RENDERING WITH " + api.toUpperCase(), cx, height - 40f * s, smallFont, new Color(0.7f, 0.74f, 0.95f, 1f), TextAlign.CENTER);
-            r.popAlpha();
+        float footerProgress = ease(progress(seconds, 1.6f, 0.4f));
+        if (footerProgress > 0f && api != null) {
+            renderer.pushAlpha(0.42f * footerProgress);
+            renderer.drawText("RENDERING WITH " + api.toUpperCase(), centerX, height - 40f * scale, smallFont, FOOTER_COLOR, TextAlign.CENTER);
+            renderer.popAlpha();
         }
-        float progress = clamp01(t / HOLD_END);
-        float barH = Math.max(2f, 3f * s);
-        r.pushAlpha(0.9f);
-        if (progress > 0.001f) {
-            r.drawGradient(0, height - barH, width * ease(progress), barH, new LinearGradient(List.of(CYAN, VIOLET, PINK), 0f), 0);
+        // How far through the held part of the splash we are; the bar below fills the window width as it goes.
+        float holdProgress = progress(seconds, 0f, HOLD_END);
+        float barHeight = Math.max(2f, 3f * scale);
+        renderer.pushAlpha(0.9f);
+        if (holdProgress > 0.001f) {
+            renderer.drawGradient(0, height - barHeight, width * ease(holdProgress), barHeight,
+                    new LinearGradient(List.of(CYAN, VIOLET, PINK), 0f), 0);
         }
-        r.popAlpha();
+        renderer.popAlpha();
 
-        r.popAlpha();
+        renderer.popAlpha();
     }
 
-    // ---- the mark: two hexagons that trace themselves, a lettered core, an orbiting spark -------------------------
-
-    private void drawMark(Renderer r, float cx, float cy, float rad, float s, float t) {
+    /**
+     * The mark: two hexagons that trace themselves, a lettered core and two orbiting sparks.
+     */
+    private void drawMark(Renderer renderer, float centerX, float centerY, float radius, float scale, float seconds) {
         LinearGradient ring = new LinearGradient(List.of(CYAN, VIOLET, PINK, CYAN), 0f);
-        float spin = Math.max(0f, t - 1.2f) * 14f;
+        // The inner hexagon starts turning at 1.2 s, at 14 degrees per second.
+        float spinDegrees = Math.max(0f, seconds - 1.2f) * 14f;
 
         // Outer hexagon: traces clockwise from the top vertex.
-        float outer = ease(clamp01((t - 0.2f) / 0.85f));
+        float outer = ease(progress(seconds, 0.2f, 0.85f));
         if (outer > 0f) {
-            int n = hexTrace(cx, cy, rad, 0f, 1, outer);
-            for (int g = 0; g < 4; g++) { // a halo along the stroke: wide and faint to narrow and brighter
-                r.pushAlpha(0.045f + 0.03f * g);
-                r.drawPolyline(trace, n, ring, (18f - g * 3.6f) * s);
-                r.popAlpha();
+            int pointCount = hexTrace(centerX, centerY, radius, 0f, 1, outer);
+            // A halo along the stroke: four passes from wide and faint (18 units, 4.5% alpha) down to narrow and
+            // brighter (7.2 units, 13.5% alpha), each 3.6 units thinner and 3% more opaque than the one before.
+            for (int pass = 0; pass < 4; pass++) {
+                renderer.pushAlpha(0.045f + 0.03f * pass);
+                renderer.drawPolyline(trace, pointCount, ring, (18f - pass * 3.6f) * scale);
+                renderer.popAlpha();
             }
-            r.drawPolyline(trace, n, ring, Math.max(2f, 4f * s));
-            if (outer < 1f) { // the leading spark
-                float hx = trace[(n - 1) * 2], hy = trace[(n - 1) * 2 + 1];
-                glow(r, hx, hy, 22f * s, WHITE, 0.8f);
-                r.drawCircle(hx, hy, 3.2f * s, WHITE);
+            renderer.drawPolyline(trace, pointCount, ring, Math.max(2f, 4f * scale));
+            if (outer < 1f) {
+                // The leading spark rides the last point of the outline drawn so far.
+                float headX = trace[(pointCount - 1) * 2];
+                float headY = trace[(pointCount - 1) * 2 + 1];
+                glow(renderer, headX, headY, 22f * scale, WHITE, 0.8f);
+                renderer.drawCircle(headX, headY, 3.2f * scale, WHITE);
             }
         }
 
-        // Inner hexagon: turned a half step, traces the other way, then turns slowly.
-        float inner = ease(clamp01((t - 0.5f) / 0.75f));
+        // Inner hexagon: 64% of the outer radius, turned a half step (30 degrees), traces the other way, then turns slowly.
+        float inner = ease(progress(seconds, 0.5f, 0.75f));
         if (inner > 0f) {
-            int n = hexTrace(cx, cy, rad * 0.64f, 30f + spin, -1, inner);
-            r.pushAlpha(0.65f);
-            r.drawPolyline(trace, n, new LinearGradient(List.of(PINK, VIOLET, CYAN), 0f), Math.max(1.5f, 2.2f * s));
-            r.popAlpha();
+            int pointCount = hexTrace(centerX, centerY, radius * 0.64f, 30f + spinDegrees, -1, inner);
+            renderer.pushAlpha(0.65f);
+            renderer.drawPolyline(trace, pointCount, new LinearGradient(List.of(PINK, VIOLET, CYAN), 0f), Math.max(1.5f, 2.2f * scale));
+            renderer.popAlpha();
         }
 
         // A ring of light leaves the mark the moment the outer hexagon closes.
-        float pulse = clamp01((t - 1.05f) / 0.7f);
+        float pulse = progress(seconds, 1.05f, 0.7f);
         if (pulse > 0f && pulse < 1f) {
-            float pr = rad * (1f + 1.1f * easeOut(pulse));
-            r.pushAlpha(0.55f * (1f - pulse));
-            r.drawBorder(cx - pr, cy - pr, pr * 2, pr * 2, new Color(0.7f, 0.8f, 1f, 1f), Math.max(1.5f, 2f * s), pr);
-            r.popAlpha();
+            // The ring starts at the hexagon's radius and grows to 2.1 times it, quickly at first and then settling.
+            float pulseRadius = radius * (1f + 1.1f * easeOut(pulse));
+            renderer.pushAlpha(0.55f * (1f - pulse)); // fades linearly to nothing as it grows
+            // A square border whose corner radius equals the pulse radius is a circle.
+            renderer.drawBorder(centerX - pulseRadius, centerY - pulseRadius, pulseRadius * 2, pulseRadius * 2,
+                    PULSE_RING, Math.max(1.5f, 2f * scale), pulseRadius);
+            renderer.popAlpha();
         }
 
         // The R, springing in.
-        float letterP = clamp01((t - 0.95f) / 0.5f);
-        if (letterP > 0f) {
-            float pop = easeOutBack(letterP);
-            FontMetricsCompat m = FontMetricsCompat.of(markFont);
-            float capH = markFont.getSize() * 0.72f;
-            float top = cy + capH / 2f + m.getAscent(); // baseline sits half a cap height below the centre
-            r.pushAlpha(ease(letterP));
-            r.pushScale(pop, cx, cy);
-            r.drawText("R", cx, top, markFont, new LinearGradient(List.of(WHITE, new Color(0.78f, 0.84f, 1f, 1f)), 90f), TextAlign.CENTER);
-            r.popScale();
-            r.popAlpha();
+        float letterProgress = progress(seconds, 0.95f, 0.5f);
+        if (letterProgress > 0f) {
+            float pop = easeOutBack(letterProgress); // overshoots its size a little, then settles at 1
+            FontMetricsCompat metrics = FontMetricsCompat.of(markFont);
+            // A capital letter is about 72% as tall as the font size.
+            float capHeight = markFont.getSize() * 0.72f;
+            // drawText takes the top of the text. The ascent is negative (the distance from the baseline up to the top),
+            // so top = baseline + ascent, with the baseline half a cap height below the centre so the R is centred.
+            float textTop = centerY + capHeight / 2f + metrics.getAscent();
+            renderer.pushAlpha(ease(letterProgress));
+            renderer.pushScale(pop, centerX, centerY);
+            renderer.drawText("R", centerX, textTop, markFont, new LinearGradient(List.of(WHITE, LETTER_BOTTOM), 90f), TextAlign.CENTER);
+            renderer.popScale();
+            renderer.popAlpha();
         }
 
         // Two sparks run the outer edge once it is closed.
         if (outer >= 1f) {
-            float fade = ease(clamp01((t - 1.05f) / 0.5f));
-            for (int i = 0; i < 2; i++) {
-                float u = ((t - 1.05f) * 0.22f + i * 0.5f) % 1f;
-                for (int k = 6; k >= 0; k--) { // a short fading tail
-                    float tu = ((u - k * 0.006f) % 1f + 1f) % 1f;
-                    hexPoint(cx, cy, rad, 0f, tu);
-                    r.pushAlpha(fade * (1f - k / 7f));
-                    r.drawCircle(trace[0], trace[1], (3.2f - k * 0.3f) * s, i == 0 ? CYAN : PINK);
-                    r.popAlpha();
+            float sparkFade = ease(progress(seconds, 1.05f, 0.5f));
+            for (int spark = 0; spark < 2; spark++) {
+                // Position along the outline as a fraction 0..1 (the % 1 wraps it round): 0.22 of a lap per second, and
+                // the second spark starts half a lap behind the first.
+                float lapPosition = ((seconds - 1.05f) * 0.22f + spark * 0.5f) % 1f;
+                for (int tail = 6; tail >= 0; tail--) {
+                    // Each tail dot sits 0.006 of a lap behind the one in front. Java's % keeps the sign of the dividend, so
+                    // adding 1 and taking % 1 again wraps a negative position back into 0..1.
+                    float dotPosition = ((lapPosition - tail * 0.006f) % 1f + 1f) % 1f;
+                    hexPoint(centerX, centerY, radius, 0f, dotPosition);
+                    // The dots fade and shrink towards the end of the tail (from 100% alpha and 3.2 units to 14% and 1.4).
+                    renderer.pushAlpha(sparkFade * (1f - tail / 7f));
+                    renderer.drawCircle(trace[0], trace[1], (3.2f - tail * 0.3f) * scale, spark == 0 ? CYAN : PINK);
+                    renderer.popAlpha();
                 }
             }
         }
     }
 
-    /** Fills {@link #trace} with the outline of a pointy-top hexagon drawn up to {@code p} (0..1) of its way round; returns the point count. */
-    private int hexTrace(float cx, float cy, float rad, float rotDeg, int dir, float p) {
-        float edges = 6f * p;
-        int full = Math.min((int) edges, 6);
-        float frac = edges - full;
-        int n = 0;
-        for (int k = 0; k <= full; k++) {
-            hexVertex(n++, cx, cy, rad, rotDeg, dir, k);
+    /**
+     * Fills {@link #trace} with the outline of a pointy-top hexagon drawn up to {@code fraction} (0..1) of its way round
+     * and returns the number of points.
+     *
+     * @param rotationDegrees turns the hexagon clockwise by this many degrees
+     * @param direction       1 to trace clockwise, -1 for anticlockwise
+     */
+    private int hexTrace(float centerX, float centerY, float radius, float rotationDegrees, int direction, float fraction) {
+        // A hexagon has 6 edges, so the fraction of the way round times 6 is how many edges are covered, whole and partial.
+        float edgesCovered = 6f * fraction;
+        int wholeEdges = Math.min((int) edgesCovered, 6);
+        float partialEdge = edgesCovered - wholeEdges;
+        int pointCount = 0;
+        // Every whole edge ends on a vertex, and the first vertex begins the outline: wholeEdges + 1 points.
+        for (int vertex = 0; vertex <= wholeEdges; vertex++) {
+            hexVertex(pointCount++, centerX, centerY, radius, rotationDegrees, direction, vertex);
         }
-        if (full < 6 && frac > 0f) {
-            hexVertex(n, cx, cy, rad, rotDeg, dir, full + 1);
-            float x0 = trace[(n - 1) * 2], y0 = trace[(n - 1) * 2 + 1];
-            trace[n * 2] = x0 + (trace[n * 2] - x0) * frac;
-            trace[n * 2 + 1] = y0 + (trace[n * 2 + 1] - y0) * frac;
-            n++;
+        if (wholeEdges < 6 && partialEdge > 0f) {
+            // The next vertex goes in the slot after the last one, then is pulled back towards the last vertex so the
+            // outline stops partway along the unfinished edge: last + (next - last) * partialEdge.
+            hexVertex(pointCount, centerX, centerY, radius, rotationDegrees, direction, wholeEdges + 1);
+            float lastX = trace[(pointCount - 1) * 2];
+            float lastY = trace[(pointCount - 1) * 2 + 1];
+            trace[pointCount * 2] = lastX + (trace[pointCount * 2] - lastX) * partialEdge;
+            trace[pointCount * 2 + 1] = lastY + (trace[pointCount * 2 + 1] - lastY) * partialEdge;
+            pointCount++;
         }
-        return n;
+        return pointCount;
     }
 
-    private void hexVertex(int slot, float cx, float cy, float rad, float rotDeg, int dir, int k) {
-        double a = Math.toRadians(rotDeg - 90f + dir * 60f * k);
-        trace[slot * 2] = cx + (float) Math.cos(a) * rad;
-        trace[slot * 2 + 1] = cy + (float) Math.sin(a) * rad;
+    /** Writes vertex number {@code vertex} of a pointy-top hexagon into slot {@code slot} (an x, y pair) of {@link #trace}. */
+    private void hexVertex(int slot, float centerX, float centerY, float radius, float rotationDegrees, int direction, int vertex) {
+        // The vertices are 60 degrees apart (360 / 6). Starting at -90 degrees puts vertex 0 at the top, because the
+        // y axis points down the screen; a negative direction runs round the other way.
+        double angle = Math.toRadians(rotationDegrees - 90f + direction * 60f * vertex);
+        // A point on a circle of the given radius: centre + (cos, sin) * radius.
+        trace[slot * 2] = centerX + (float) Math.cos(angle) * radius;
+        trace[slot * 2 + 1] = centerY + (float) Math.sin(angle) * radius;
     }
 
-    /** Puts the point {@code u} (0..1) of the way round a hexagon's outline in trace[0], trace[1]. */
-    private void hexPoint(float cx, float cy, float rad, float rotDeg, float u) {
-        float e = u * 6f;
-        int k = (int) e;
-        float f = e - k;
-        hexVertex(2, cx, cy, rad, rotDeg, 1, k);
-        hexVertex(3, cx, cy, rad, rotDeg, 1, k + 1);
-        trace[0] = trace[4] + (trace[6] - trace[4]) * f;
-        trace[1] = trace[5] + (trace[7] - trace[5]) * f;
+    /** Puts the point {@code position} (0..1) of the way round a hexagon's outline in trace[0], trace[1]. */
+    private void hexPoint(float centerX, float centerY, float radius, float rotationDegrees, float position) {
+        // Six edges: the whole part of position * 6 is the edge, the remainder is how far along that edge.
+        float edgesCovered = position * 6f;
+        int edge = (int) edgesCovered;
+        float alongEdge = edgesCovered - edge;
+        // The two ends of the edge go in the spare slots 2 and 3 (indices 4..7), then the point is the blend between
+        // them: start + (end - start) * alongEdge.
+        hexVertex(2, centerX, centerY, radius, rotationDegrees, 1, edge);
+        hexVertex(3, centerX, centerY, radius, rotationDegrees, 1, edge + 1);
+        trace[0] = trace[4] + (trace[6] - trace[4]) * alongEdge;
+        trace[1] = trace[5] + (trace[7] - trace[5]) * alongEdge;
     }
 
-    // ---- the wordmark ----------------------------------------------------------------------------------------------
-
-    /** Draws "RenGL" letter by letter, then a shimmer across it. Returns the top of the line. */
-    private float drawWordmark(Renderer r, float cx, float top, float s, float t) {
-        String word = "RenGL";
+    /** Draws "RenGL" letter by letter, then a shimmer across it. {@code top} is the top of the line of text. */
+    private void drawWordmark(Renderer renderer, float centerX, float top, float scale, float seconds) {
+        // The gap between letters is 4.5% of the font size.
         float spacing = wordFont.getSize() * 0.045f;
-        float[] widths = new float[word.length()];
-        float total = 0f;
+        float[] widths = new float[WORD.length()];
+        float totalWidth = 0f;
         for (int i = 0; i < widths.length; i++) {
-            widths[i] = TextShaping.width(wordFont, word.substring(i, i + 1));
-            total += widths[i] + (i < widths.length - 1 ? spacing : 0f);
+            widths[i] = TextShaping.width(wordFont, WORD.substring(i, i + 1));
+            // The whole word is every letter plus a gap between each pair (so none after the last).
+            totalWidth += widths[i] + (i < widths.length - 1 ? spacing : 0f);
         }
-        float x = cx - total / 2f;
-        float left = x;
+        // Centred: the word starts half its width to the left of the centre.
+        float left = centerX - totalWidth / 2f;
+        float letterX = left;
         for (int i = 0; i < widths.length; i++) {
-            float p = ease(clamp01((t - (0.95f + 0.07f * i)) / 0.45f));
-            if (p > 0f) {
-                r.pushAlpha(p);
-                r.drawText(word.substring(i, i + 1), x, top + (1f - p) * 22f * s, wordFont, letterPaint(i));
-                r.popAlpha();
+            // Each letter starts 0.07 s after the one before it and takes 0.45 s to arrive.
+            float letterProgress = ease(progress(seconds, 0.95f + 0.07f * i, 0.45f));
+            if (letterProgress > 0f) {
+                renderer.pushAlpha(letterProgress);
+                // A letter rises 22 units into place as it fades in.
+                renderer.drawText(WORD.substring(i, i + 1), letterX, top + (1f - letterProgress) * 22f * scale, wordFont, letterPaint(i));
+                renderer.popAlpha();
             }
-            x += widths[i] + spacing;
+            letterX += widths[i] + spacing;
         }
 
         // Shimmer: a bright band crosses the word, drawn as a soft stack of clipped white copies.
-        float sweep = clamp01((t - 1.7f) / 0.55f);
+        float sweep = progress(seconds, 1.7f, 0.55f);
         if (sweep > 0f && sweep < 1f) {
-            float bandX = left - 80f * s + (total + 160f * s) * ease(sweep);
-            float h = wordFont.getSize() * 1.3f;
-            float[] halfWidth = {46f * s, 28f * s, 12f * s};
+            // The band's centre travels from 80 units left of the word to 80 units right of it (the word's width plus 160).
+            float bandX = left - 80f * scale + (totalWidth + 160f * scale) * ease(sweep);
+            float bandHeight = wordFont.getSize() * 1.3f;
+            // Three nested clips, wide and faint to narrow and bright; where they overlap their alphas add up, so the
+            // band is brightest in the middle and soft at the edges.
+            float[] halfWidth = {46f * scale, 28f * scale, 12f * scale};
             float[] alpha = {0.16f, 0.22f, 0.30f};
-            for (int b = 0; b < 3; b++) {
-                r.pushClip(bandX - halfWidth[b], top - 4f * s, halfWidth[b] * 2, h);
-                r.pushAlpha(alpha[b]);
-                float lx = left;
+            for (int band = 0; band < 3; band++) {
+                renderer.pushClip(bandX - halfWidth[band], top - 4f * scale, halfWidth[band] * 2, bandHeight);
+                renderer.pushAlpha(alpha[band]);
+                float copyX = left;
                 for (int i = 0; i < widths.length; i++) {
-                    r.drawText(word.substring(i, i + 1), lx, top, wordFont, WHITE);
-                    lx += widths[i] + spacing;
+                    renderer.drawText(WORD.substring(i, i + 1), copyX, top, wordFont, WHITE);
+                    copyX += widths[i] + spacing;
                 }
-                r.popAlpha();
-                r.popClip();
+                renderer.popAlpha();
+                renderer.popClip();
             }
         }
-        return top;
     }
 
     /** "Ren" is near white; "GL" carries the brand gradient. */
-    private static me.piitex.engine.ui.color.Paint letterPaint(int index) {
+    private static Paint letterPaint(int index) {
         return switch (index) {
             case 3 -> new LinearGradient(List.of(CYAN, VIOLET), 0f);
             case 4 -> new LinearGradient(List.of(VIOLET, PINK), 0f);
@@ -338,36 +413,45 @@ final class SplashScreen {
         };
     }
 
-    // ---- backdrop pieces -------------------------------------------------------------------------------------------
-
-    private static void stars(Renderer r, int width, int height, float s, float t) {
-        float[] px = new float[STARS], py = new float[STARS];
-        float link = 120f * s;
+    private static void drawStars(Renderer renderer, int width, int height, float scale, float seconds) {
+        float[] positionX = new float[STARS], positionY = new float[STARS];
+        // Two stars closer than this are joined by a line.
+        float linkDistance = 120f * scale;
         for (int i = 0; i < STARS; i++) {
-            px[i] = (((starX[i] + starVX[i] * t) % 1f + 1f) % 1f) * width;
-            py[i] = (((starY[i] + starVY[i] * t) % 1f + 1f) % 1f) * height;
+            // Start + velocity * time, wrapped into 0..1 (adding 1 and taking % 1 again fixes a negative remainder), then
+            // multiplied up from a fraction of the window to pixels.
+            positionX[i] = (((starX[i] + starVelocityX[i] * seconds) % 1f + 1f) % 1f) * width;
+            positionY[i] = (((starY[i] + starVelocityY[i] * seconds) % 1f + 1f) % 1f) * height;
         }
-        for (int i = 0; i < STARS; i++) {
-            for (int j = i + 1; j < STARS; j++) {
-                float dx = px[i] - px[j], dy = py[i] - py[j];
-                float d2 = dx * dx + dy * dy;
-                if (d2 < link * link) {
-                    float a = (1f - (float) Math.sqrt(d2) / link) * 0.16f;
-                    r.drawLine(px[i], py[i], px[j], py[j], new Color(0.55f, 0.65f, 1f, a), 1f);
+        for (int first = 0; first < STARS; first++) {
+            for (int second = first + 1; second < STARS; second++) {
+                float deltaX = positionX[first] - positionX[second];
+                float deltaY = positionY[first] - positionY[second];
+                // Pythagoras, left squared so the square root is only taken for stars that are close enough.
+                float distanceSquared = deltaX * deltaX + deltaY * deltaY;
+                if (distanceSquared < linkDistance * linkDistance) {
+                    // The line is 16% opaque when the stars touch and fades linearly to nothing at the link distance.
+                    float lineAlpha = (1f - (float) Math.sqrt(distanceSquared) / linkDistance) * 0.16f;
+                    renderer.drawLine(positionX[first], positionY[first], positionX[second], positionY[second],
+                            new Color(0.55f, 0.65f, 1f, lineAlpha), 1f);
                 }
             }
         }
         for (int i = 0; i < STARS; i++) {
-            float twinkle = 0.35f + 0.65f * (0.5f + 0.5f * (float) Math.sin(t * 1.6f + starPhase[i]));
-            r.drawCircle(px[i], py[i], starSize[i] * s, new Color(0.78f, 0.85f, 1f, 0.55f * twinkle));
+            // A sine wave (1.6 radians per second, offset by the star's own phase) remapped from -1..1 to 0..1, then to
+            // 0.35..1 so a star never disappears completely.
+            float twinkle = 0.35f + 0.65f * (0.5f + 0.5f * (float) Math.sin(seconds * 1.6f + starPhase[i]));
+            renderer.drawCircle(positionX[i], positionY[i], starSize[i] * scale,
+                    new Color(STAR_COLOR.getR(), STAR_COLOR.getG(), STAR_COLOR.getB(), 0.55f * twinkle));
         }
     }
 
     /** A soft pool of colour: one pre-rendered radial falloff, drawn tinted. Stacked translucent circles band in 8 bits. */
-    private void glow(Renderer r, float x, float y, float radius, Color color, float strength) {
+    private void glow(Renderer renderer, float centerX, float centerY, float radius, Color color, float strength) {
         if (strength <= 0.001f || radius <= 0.5f) return;
         if (glowImage == null) glowImage = makeGlowImage();
-        r.drawImage(glowImage, x - radius, y - radius, radius * 2, radius * 2, 0f, Math.clamp(strength, 0f, 1f),
+        // The image is a square twice the radius wide, centred on the point.
+        renderer.drawImage(glowImage, centerX - radius, centerY - radius, radius * 2, radius * 2, 0f, Math.clamp(strength, 0f, 1f),
                 new Color(color.getR(), color.getG(), color.getB(), 1f));
     }
 
@@ -376,52 +460,68 @@ final class SplashScreen {
         final int size = 256;
         byte[] pixels = new byte[size * size * 4];
         Random noise = new Random(1);
-        for (int y = 0; y < size; y++) {
-            for (int x = 0; x < size; x++) {
-                float d = (float) Math.hypot(x + 0.5f - size / 2f, y + 0.5f - size / 2f) / (size / 2f);
-                float f = Math.max(0f, 1f - d);
-                float a = f * f * f * (f * 0.6f + 0.4f); // soft shoulder, long tail
-                int v = Math.clamp(Math.round(a * 255f + noise.nextFloat() - 0.5f), 0, 255);
-                int i = (y * size + x) * 4;
-                pixels[i] = pixels[i + 1] = pixels[i + 2] = pixels[i + 3] = (byte) v; // premultiplied white
+        for (int row = 0; row < size; row++) {
+            for (int column = 0; column < size; column++) {
+                // Distance from the pixel's centre to the image's centre, as a fraction of the half size: 0 in the middle,
+                // 1 at the middle of an edge.
+                float distance = (float) Math.hypot(column + 0.5f - size / 2f, row + 0.5f - size / 2f) / (size / 2f);
+                // Closeness to the centre: 1 in the middle, 0 at distance 1 and beyond.
+                float closeness = Math.max(0f, 1f - distance);
+                // closeness cubed gives a long soft tail; the last factor (0.4 to 1) keeps the middle from looking pointed.
+                float opacity = closeness * closeness * closeness * (closeness * 0.6f + 0.4f);
+                // Up to half a step of random noise before rounding to 0..255 breaks the 8-bit steps into grain.
+                int value = Math.clamp(Math.round(opacity * 255f + noise.nextFloat() - 0.5f), 0, 255);
+                int offset = (row * size + column) * 4; // four bytes per pixel, rows one after the other
+                // Premultiplied white: every channel, alpha included, is the same value.
+                pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = pixels[offset + 3] = (byte) value;
             }
         }
         return Image.Companion.makeRaster(ImageInfo.Companion.makeN32Premul(size, size), pixels, size * 4);
     }
 
-    // ---- fonts and easing ------------------------------------------------------------------------------------------
-
-    private void buildFonts(float s) {
-        int key = Math.round(s * 100f);
+    private void buildFonts(float scale) {
+        // Rebuild only when the scale moves by at least one hundredth.
+        int key = Math.round(scale * 100f);
         if (key == fontKey && wordFont != null) return;
         closeFonts();
         Typeface face = Font.systemDefault();
         if (face == null) face = Font.getDefault();
-        wordFont = new org.jetbrains.skia.Font(face, 60f * s);
+        wordFont = new org.jetbrains.skia.Font(face, 60f * scale);
         wordFont.setEmboldened(true);
-        markFont = new org.jetbrains.skia.Font(face, 72f * s);
+        markFont = new org.jetbrains.skia.Font(face, 72f * scale);
         markFont.setEmboldened(true);
-        tagFont = new org.jetbrains.skia.Font(face, 15f * s);
-        smallFont = new org.jetbrains.skia.Font(face, 10.5f * s);
+        tagFont = new org.jetbrains.skia.Font(face, 15f * scale);
+        smallFont = new org.jetbrains.skia.Font(face, 10.5f * scale);
         fontKey = key;
     }
 
-    private static float clamp01(float v) {
-        return Math.clamp(v, 0f, 1f);
+    /**
+     * How far {@code seconds} is through a stretch of time that starts at {@code start} and lasts {@code duration}:
+     * 0 before it, 1 after it, a straight line between.
+     */
+    private static float progress(float seconds, float start, float duration) {
+        return Math.clamp((seconds - start) / duration, 0f, 1f);
     }
 
-    private static float ease(float x) { // smoothstep-ish ease in-out
-        return x * x * (3f - 2f * x);
+    /** Smoothstep, 3x^2 - 2x^3: 0 to 1 with a slow start and a slow end. */
+    private static float ease(float progress) {
+        return progress * progress * (3f - 2f * progress);
     }
 
-    private static float easeOut(float x) {
-        float inv = 1f - x;
-        return 1f - inv * inv * inv;
+    /** 1 - (1 - x)^3: 0 to 1, fast at first and slowing to a stop. */
+    private static float easeOut(float progress) {
+        float remaining = 1f - progress;
+        return 1f - remaining * remaining * remaining;
     }
 
-    private static float easeOutBack(float x) {
-        float c1 = 1.70158f, c3 = c1 + 1f;
-        float v = x - 1f;
-        return 1f + c3 * v * v * v + c1 * v * v;
+    /**
+     * The standard "back" easing: 0 to 1, but it overshoots to about 1.1 before settling. With c1 = 1.70158 (the usual
+     * overshoot constant) and c3 = c1 + 1 the curve is 1 + c3 * (x - 1)^3 + c1 * (x - 1)^2.
+     */
+    private static float easeOutBack(float progress) {
+        float overshoot = 1.70158f;
+        float cubicWeight = overshoot + 1f;
+        float shifted = progress - 1f;
+        return 1f + cubicWeight * shifted * shifted * shifted + overshoot * shifted * shifted;
     }
 }

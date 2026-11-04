@@ -735,7 +735,8 @@ public class Engine {
         // the very edges before that quad covers the whole canvas.
         Paint background = AnimatedPaint.resolve(window.getBackgroundColor());
         if (held) {
-            renderer.clear(0.027f, 0.035f, 0.075f, 1f); // the splash's own backdrop colour, so no frame flashes the window's
+            // The splash's own backdrop colour, so no frame flashes the window's.
+            renderer.clear(SplashScreen.INK_TOP.getR(), SplashScreen.INK_TOP.getG(), SplashScreen.INK_TOP.getB(), 1f);
         } else if (background instanceof Color solid) {
             renderer.clear(solid.getR(), solid.getG(), solid.getB(), solid.getA());
         } else {
