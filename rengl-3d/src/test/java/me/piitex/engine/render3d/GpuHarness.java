@@ -85,7 +85,7 @@ final class GpuHarness {
         Throwable[] startError = new Throwable[1];
 
         Window window = new Window(new WindowOptions("RenGL GPU test").setDimensions(viewportSize + 40, viewportSize + 40)
-                .setRenderer(api).setVsync(false));
+                .setRenderer(api).setVsync(false).setSplashEnabled(false));
         window.hide();
         Container root = new Container(viewportSize + 40, viewportSize + 40);
         window.addContainer(root);

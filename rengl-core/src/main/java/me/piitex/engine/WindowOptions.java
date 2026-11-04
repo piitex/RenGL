@@ -33,6 +33,8 @@ public class WindowOptions {
     private volatile int backgroundFPS = 30;
     private volatile String iconPath = null;
     private volatile Image icon = null;
+    private volatile boolean splashEnabled = true;
+    private volatile Splash splash = null;
 
     public WindowOptions(String title) {
         this.title = title;
@@ -273,6 +275,30 @@ public class WindowOptions {
     }
 
     /**
+     * Whether the engine plays a splash screen over this window before the application appears (default on). The
+     * splash is the {@link RenGLSplash RenGL splash} unless {@link #setSplash} gives another. Turn it off and the
+     * application's first frame is the window's first frame.
+     * <p>
+     * Unlike the other options this is not live: the engine reads it once, when {@link Engine#start} opens the window,
+     * and only the first window of an application has a splash.
+     */
+    public WindowOptions setSplashEnabled(boolean splashEnabled) {
+        this.splashEnabled = splashEnabled;
+        return this;
+    }
+
+    /**
+     * The splash screen to play instead of the RenGL one, such as the application's own logo or a loading screen. Pass
+     * null to go back to the RenGL splash. It plays only while {@link #isSplashEnabled()} is true. A {@link Splash}
+     * plays once, so give each window its own instance. Like {@link #setSplashEnabled} it is read when
+     * {@link Engine#start} opens the window.
+     */
+    public WindowOptions setSplash(Splash splash) {
+        this.splash = splash;
+        return this;
+    }
+
+    /**
      * The OS window title.
      */
     public WindowOptions setTitle(String title) {
@@ -358,6 +384,17 @@ public class WindowOptions {
 
     public boolean isResizable() {
         return resizable;
+    }
+
+    public boolean isSplashEnabled() {
+        return splashEnabled;
+    }
+
+    /**
+     * The application's own splash, or null when the RenGL splash is the one played.
+     */
+    public Splash getSplash() {
+        return splash;
     }
 
 }

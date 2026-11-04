@@ -228,7 +228,7 @@ class WindowsDragDropTest {
         AtomicReference<FileDrag.Outcome> started = new AtomicReference<>();
         List<Path> files = List.of(path("report.pdf"), path("a folder"));
 
-        Window window = new Window(new WindowOptions(TITLE).setDimensions(400, 220).setVsync(false));
+        Window window = new Window(new WindowOptions(TITLE).setDimensions(400, 220).setVsync(false).setSplashEnabled(false));
         window.hide();
         Container root = new Container(400, 220);
         root.onUpdate(_ -> frames.incrementAndGet());

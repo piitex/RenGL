@@ -111,7 +111,7 @@ public class Engine {
         MetalContext metalContext;   // Metal only; created on the main thread, closed there after the renderer is released
         RenderBackend.Context backendContext; // Vulkan only (a backend from its own module); same lifetime, but closed before the GLFW window is destroyed
         Renderer renderer;         // render thread
-        SplashScreen splash;       // render thread; the RenGL splash over the first window, null once it has finished
+        SplashPlayer splash;       // render thread; the splash over the first window, null when there is none or it has finished
         volatile int logicalW, logicalH, fbW, fbH;
         volatile boolean sizeDirty;
         volatile boolean focusLost;
@@ -219,7 +219,7 @@ public class Engine {
         OpenFiles.install(); // before GLFW starts, so macOS can hand over the file the app was launched to open
         Host main = createHost(window);
         primary = main;
-        main.splash = new SplashScreen(); // plays over the first window before the application appears
+        main.splash = SplashPlayer.start(window); // plays over the first window before the application appears, unless switched off
         Clipboard.attach(main.handle); // GLFW's clipboard is system-wide; any window's handle will do
 
         String gpu;
@@ -624,13 +624,10 @@ public class Engine {
                     }
                 }
 
-                SplashScreen splash = host.splash;
+                SplashPlayer splash = host.splash;
                 if (splash != null) {
-                    splash.advance(delta);
-                    if (splash.finished()) {
-                        splash.dispose();
-                        host.splash = null;
-                    }
+                    splash.update(delta);
+                    if (!splash.isActive()) host.splash = null;
                 }
                 if (holdsApp(host)) {
                     // The application hasn't appeared yet: what the user types or clicks meant for it is dropped.
@@ -736,7 +733,8 @@ public class Engine {
         Paint background = AnimatedPaint.resolve(window.getBackgroundColor());
         if (held) {
             // The splash's own backdrop colour, so no frame flashes the window's.
-            renderer.clear(SplashScreen.INK_TOP.getR(), SplashScreen.INK_TOP.getG(), SplashScreen.INK_TOP.getB(), 1f);
+            Color splashClear = host.splash.clearColor();
+            renderer.clear(splashClear.getR(), splashClear.getG(), splashClear.getB(), 1f);
         } else if (background instanceof Color solid) {
             renderer.clear(solid.getR(), solid.getG(), solid.getB(), solid.getA());
         } else {
@@ -767,7 +765,7 @@ public class Engine {
             }
             TooltipManager.render(renderer, window); // above every container
         }
-        if (host.splash != null) host.splash.render(renderer, width, height, host.backend.name()); // over the application while it fades out
+        if (host.splash != null) host.splash.render(renderer, width, height); // over the application while it fades out
         renderer.end();
 
         if (host.backend == RenderAPI.OPENGL) glfwSwapBuffers(host.handle);
@@ -776,11 +774,14 @@ public class Engine {
     }
 
     /**
-     * Whether the RenGL splash screen still holds this window's application back.
+     * Whether a splash screen still holds this window's application back.
      */
     private static boolean holdsApp(Host host) {
-        SplashScreen splash = host.splash;
-        return splash != null && splash.holdsApp();
+        SplashPlayer splash = host.splash;
+        if (splash == null) return false;
+        boolean holds = splash.holdsApp();
+        if (!splash.isActive()) host.splash = null; // it threw and was dropped
+        return holds;
     }
 
     /**
@@ -819,6 +820,10 @@ public class Engine {
      * Render thread. Frees a closing window's renderer, then lets the main thread destroy the window.
      */
     private void release(Host host) {
+        if (host.splash != null) {
+            host.splash.stop(); // closed while it was still playing
+            host.splash = null;
+        }
         if (host.renderer != null) {
             switch (host.backend) {
                 case METAL -> ((MetalSkikoRenderer) host.renderer).dispose();
