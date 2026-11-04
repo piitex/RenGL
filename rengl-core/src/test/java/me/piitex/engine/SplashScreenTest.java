@@ -15,26 +15,34 @@ import static org.junit.jupiter.api.Assertions.*;
  * The splash screen's timeline, drawn offscreen. Frames are also written to {@code target/splash-frames} to be looked at.
  */
 class SplashScreenTest {
-    private static final int W = 960, H = 600;
+    private static final int WIDTH = 960;
+    private static final int HEIGHT = 600;
 
-    private static Image frame(SplashScreen splash, float seconds, float[] cornerOut) {
+    /** Draws the splash at {@code seconds} into the animation. */
+    private static Image frame(SplashScreen splash, float seconds) {
         splash.seek(seconds);
-        try (OffscreenRenderer r = new OffscreenRenderer(W, H, 1f)) {
-            r.begin();
-            splash.render(r, W, H, "opengl");
-            r.end();
-            return r.makeImage();
+        try (OffscreenRenderer renderer = new OffscreenRenderer(WIDTH, HEIGHT, 1f)) {
+            renderer.begin();
+            splash.render(renderer, WIDTH, HEIGHT, "opengl");
+            renderer.end();
+            return renderer.makeImage();
         }
     }
 
-    private static float brightness(Image image, int x, int y) {
+    /** The pixel's average of red, green and blue, from 0 (black) to 1 (white). */
+    private static float brightness(Image image, int pixelX, int pixelY) {
         Bitmap bitmap = Bitmap.Companion.makeFromImage(image);
-        int argb = bitmap.getColor(x, y);
-        return (((argb >> 16) & 0xff) + ((argb >> 8) & 0xff) + (argb & 0xff)) / 765f;
+        int argb = bitmap.getColor(pixelX, pixelY);
+        int red = (argb >> 16) & 0xff;
+        int green = (argb >> 8) & 0xff;
+        int blue = argb & 0xff;
+        // Three channels of up to 255 each, so 765 is the brightest sum.
+        return (red + green + blue) / 765f;
     }
 
-    private static float alphaAt(Image image, int x, int y) {
-        return (Bitmap.Companion.makeFromImage(image).getColor(x, y) >>> 24) / 255f;
+    /** The pixel's opacity, from 0 to 1: the top byte of its ARGB value over 255. */
+    private static float alphaAt(Image image, int pixelX, int pixelY) {
+        return (Bitmap.Companion.makeFromImage(image).getColor(pixelX, pixelY) >>> 24) / 255f;
     }
 
     @Test
@@ -62,26 +70,28 @@ class SplashScreenTest {
 
     @Test
     void drawsTheWholeTimelineAndFadesToNothing() throws Exception {
-        Path dir = Path.of("target", "splash-frames");
-        Files.createDirectories(dir);
+        Path directory = Path.of("target", "splash-frames");
+        Files.createDirectories(directory);
         SplashScreen splash = new SplashScreen();
         float[] times = {0f, 0.35f, 0.7f, 1.0f, 1.3f, 1.6f, 1.9f, 2.2f, 2.5f, 2.7f, 2.95f};
-        Image first = null, mid = null, last = null;
-        for (float t : times) {
-            Image image = frame(splash, t, null);
-            Files.write(dir.resolve(String.format("splash-%04d.png", Math.round(t * 100))),
+        Image first = null, middle = null, last = null;
+        for (float seconds : times) {
+            Image image = frame(splash, seconds);
+            // The file name is the time in hundredths of a second, so the frames sort in order.
+            Files.write(directory.resolve(String.format("splash-%04d.png", Math.round(seconds * 100))),
                     image.encodeToData(EncodedImageFormat.PNG, 100, 0).getBytes());
-            if (t == 0f) first = image;
-            if (t == 2.2f) mid = image;
-            if (t >= 2.95f) last = image;
+            if (seconds == 0f) first = image;
+            if (seconds == 2.2f) middle = image;
+            if (seconds >= 2.95f) last = image;
         }
         // Dark, opaque backdrop from the first frame (no white flash) and the mark in the middle by the end.
         assertTrue(brightness(first, 5, 5) < 0.2f);
-        assertEquals(1f, alphaAt(first, W / 2, H - 1), 0.01f);
-        assertTrue(brightness(mid, W / 2, 240) > brightness(first, W / 2, 240) + 0.2f, "the R and hexagon are drawn");
+        assertEquals(1f, alphaAt(first, WIDTH / 2, HEIGHT - 1), 0.01f);
+        // Row 240 is 40% down the 600 pixel window, through the middle of the mark.
+        assertTrue(brightness(middle, WIDTH / 2, 240) > brightness(first, WIDTH / 2, 240) + 0.2f, "the R and hexagon are drawn");
         // Fully faded: nothing left, so the application underneath is untouched.
         assertEquals(0f, alphaAt(last, 5, 5), 0.02f);
-        assertEquals(0f, alphaAt(last, W / 2, H / 2), 0.02f);
+        assertEquals(0f, alphaAt(last, WIDTH / 2, HEIGHT / 2), 0.02f);
         splash.dispose();
     }
 
@@ -90,10 +100,10 @@ class SplashScreenTest {
         for (int[] size : new int[][]{{320, 200}, {1920, 1080}}) {
             SplashScreen splash = new SplashScreen();
             splash.seek(2f);
-            try (OffscreenRenderer r = new OffscreenRenderer(size[0], size[1], 1f)) {
-                r.begin();
-                splash.render(r, size[0], size[1], "vulkan");
-                r.end();
+            try (OffscreenRenderer renderer = new OffscreenRenderer(size[0], size[1], 1f)) {
+                renderer.begin();
+                splash.render(renderer, size[0], size[1], "vulkan");
+                renderer.end();
             }
             splash.dispose();
         }
