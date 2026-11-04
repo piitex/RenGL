@@ -52,6 +52,8 @@ drives one `Window`: passing the same instance to a second window throws.
 | `setIconPath(String)` | `null` | File path or classpath resource. Same platform behavior as `setIcon`. **Live** |
 | `setSplashEnabled(boolean)` | `true` | Whether a [splash screen](engine.md#the-splash-screen) plays over the first window before the application appears. `false` opts out. Read once when `Engine.start` opens the window, so it is **not live**; windows opened later have no splash |
 | `setSplash(Splash)` | `null` | Your own `Splash` instead of the RenGL one (see [your own splash](engine.md#your-own-splash)). `null` is the RenGL splash. Plays only while the splash is enabled. **Not live** |
+| `addWarmUp(WarmUp)` | none | Work to finish under the splash, such as preparing a 3D viewport, so the application's first frame does not stall (see [warm-ups](engine.md#loading-under-the-splash)). Runs only while there is a splash. **Not live** |
+| `setWarmUpTimeLimit(float)` | `30` | Seconds all the warm-ups may take together before the rest are abandoned and the application starts |
 
 The getters (`getTitle`, `getWidth`, `getHeight`, `isFullscreen`, ...) return the current state. The
 engine uses `getWidth()`/`getHeight()` for the window background, for clamping the mouse position, and for

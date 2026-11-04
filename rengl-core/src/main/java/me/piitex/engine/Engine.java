@@ -219,6 +219,10 @@ public class Engine {
         OpenFiles.install(); // before GLFW starts, so macOS can hand over the file the app was launched to open
         Host main = createHost(window);
         primary = main;
+        if (window.getWindowOptions().isSplashEnabled()) {
+            // The work to finish under the splash, queued before the splash starts so it can read the progress.
+            window.getLoading().begin(window.getWindowOptions().getWarmUps(), window.getWindowOptions().getWarmUpTimeLimit());
+        }
         main.splash = SplashPlayer.start(window); // plays over the first window before the application appears, unless switched off
         Clipboard.attach(main.handle); // GLFW's clipboard is system-wide; any window's handle will do
 
@@ -733,7 +737,8 @@ public class Engine {
         Paint background = AnimatedPaint.resolve(window.getBackgroundColor());
         if (held) {
             // The splash's own backdrop colour, so no frame flashes the window's.
-            Color splashClear = host.splash.clearColor();
+            // A splash that finished before the warm-ups did leaves the window black until they have.
+            Color splashClear = host.splash != null ? host.splash.clearColor() : Color.BLACK;
             renderer.clear(splashClear.getR(), splashClear.getG(), splashClear.getB(), 1f);
         } else if (background instanceof Color solid) {
             renderer.clear(solid.getR(), solid.getG(), solid.getB(), solid.getA());
@@ -742,6 +747,9 @@ public class Engine {
         }
 
         renderer.begin();
+
+        // The warm-ups start once the splash has been drawn at least once, so it is on screen before any work begins.
+        if (host.firstFrameRendered && !window.getLoading().isDone()) window.getLoading().step(window, renderer);
 
         int width = window.getWindowOptions().getWidth();
         int height = window.getWindowOptions().getHeight();
@@ -774,14 +782,16 @@ public class Engine {
     }
 
     /**
-     * Whether a splash screen still holds this window's application back.
+     * Whether this window's application is held back: while a splash screen says so, and while the warm-ups that run
+     * under it are not done, even if the splash itself has gone.
      */
     private static boolean holdsApp(Host host) {
+        boolean loading = !host.window.getLoading().isDone();
         SplashPlayer splash = host.splash;
-        if (splash == null) return false;
+        if (splash == null) return loading;
         boolean holds = splash.holdsApp();
         if (!splash.isActive()) host.splash = null; // it threw and was dropped
-        return holds;
+        return holds || loading;
     }
 
     /**

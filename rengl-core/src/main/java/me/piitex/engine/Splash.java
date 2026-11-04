@@ -20,6 +20,10 @@ import me.piitex.engine.ui.color.Color;
  *       that stops holding the application but is not finished yet is drawn over the running application, which is
  *       how a fade-out works.</li>
  * </ol>
+ * The application is also held while the window's {@linkplain WindowOptions#addWarmUp warm-ups} are running, whatever
+ * the splash says; {@link Window#getLoading()} tells how far they have got, so a splash can wait for them and show them,
+ * as the RenGL splash does.
+ * <p>
  * A splash that throws from any of these is logged and dropped, and the application carries on. One that never
  * finishes while it holds the application keeps the application held, which is what a splash that waits for a long
  * load wants; nothing else ends it.

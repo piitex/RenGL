@@ -24,9 +24,13 @@ import java.util.Random;
  * drawn and the input meant for them is dropped, so the application starts from its first frame once the splash lets
  * go. The splash then fades out over the running application.
  * <p>
- * The animation is a pure function of the time since it began, drawn with the plain {@link Renderer} API, so it looks
- * the same on every graphics backend and can be drawn at any moment into an offscreen renderer. It plays once; make
- * another for another window.
+ * If the window's {@linkplain WindowOptions#addWarmUp warm-ups} are still running when the hold ends, the splash stays
+ * up until they are done: the timeline waits at its end, the backdrop keeps moving, the progress bar stops short of
+ * full and the footer names the work.
+ * <p>
+ * The animation is a function of the time since it began (and of the time spent waiting), drawn with the plain
+ * {@link Renderer} API, so it looks the same on every graphics backend and can be drawn at any moment into an
+ * offscreen renderer. It plays once; make another for another window.
  */
 @GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public final class RenGLSplash implements Splash {
@@ -38,6 +42,10 @@ public final class RenGLSplash implements Splash {
      * Seconds the fade over the application takes.
      */
     static final float FADE = 0.45f;
+    /**
+     * The widest the progress bar gets while warm-ups are still running, as a fraction of the window.
+     */
+    private static final float WAITING_BAR = 0.9f;
 
     /**
      * The colour at the top of the backdrop. The engine also clears the window to it while the splash holds the application.
@@ -97,7 +105,18 @@ public final class RenGLSplash implements Splash {
         }
     }
 
+    /**
+     * Seconds of the timeline played. It stops at {@link #HOLD_END} while the window's warm-ups are still running.
+     */
     private float time;
+    /**
+     * Seconds spent at the end of the hold, waiting for the warm-ups. The backdrop keeps moving through them.
+     */
+    private float waited;
+    /**
+     * The window's warm-up progress, or null when the splash was not started on a window.
+     */
+    private Loading loading;
     /**
      * The graphics API's name, shown in the footer; null shows no footer.
      */
@@ -118,6 +137,14 @@ public final class RenGLSplash implements Splash {
     @Override
     public void onStart(Window window) {
         showApi(window.getRenderer().name());
+        loading = window.getLoading();
+    }
+
+    /**
+     * Whether warm-ups are still running, which keeps the splash up past its usual length.
+     */
+    private boolean isWaiting() {
+        return loading != null && !loading.isDone();
     }
 
     /**
@@ -132,7 +159,16 @@ public final class RenGLSplash implements Splash {
      */
     @Override
     public void update(float delta) {
-        time += Math.min(Math.max(delta, 0f), 0.05f);
+        float step = Math.min(Math.max(delta, 0f), 0.05f);
+        if (isWaiting()) {
+            // The timeline plays up to the end of the hold and no further; what is left of the step goes to the wait.
+            float room = Math.max(0f, HOLD_END - time);
+            float played = Math.min(step, room);
+            time += played;
+            waited += step - played;
+        } else {
+            time += step;
+        }
     }
 
     /**
@@ -142,16 +178,28 @@ public final class RenGLSplash implements Splash {
         time = seconds;
     }
 
+    /**
+     * Follows {@code progress} instead of a window's, for tests that have no window.
+     */
+    void watch(Loading progress) {
+        loading = progress;
+    }
+
+    float waited() {
+        return waited;
+    }
+
     float time() {
         return time;
     }
 
     /**
-     * True while the application is held back: nothing of it is updated, drawn or given input.
+     * True while the application is held back: nothing of it is updated, drawn or given input. That lasts the hold, and
+     * longer if the window's warm-ups are still running when it ends.
      */
     @Override
     public boolean isHoldingApp() {
-        return time < HOLD_END;
+        return time < HOLD_END || isWaiting();
     }
 
     @Override
@@ -186,13 +234,15 @@ public final class RenGLSplash implements Splash {
 
     @Override
     public void render(Renderer renderer, int width, int height) {
-        float seconds = time;
+        // The animation's clock: the timeline plus any time spent waiting at its end, so the backdrop never freezes. The
+        // timeline's own events (the intro, the fade) all follow time alone.
+        float seconds = time + waited;
         // Everything is laid out for a 900x560 window and scaled by whichever dimension has less room, within 0.45x to 2x.
         float scale = Math.clamp(Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT), 0.45f, 2f);
         buildFonts(scale);
 
         // 0 while the splash holds, rising to 1 across the fade; eased so the fade starts and ends gently.
-        float exit = ease(progress(seconds, HOLD_END, FADE));
+        float exit = ease(progress(time, HOLD_END, FADE));
         float centerX = width / 2f;
         // The mark sits 40% of the way down the window, leaving the lower part for the wordmark and tagline.
         float markCenterY = height * 0.40f;
@@ -249,22 +299,32 @@ public final class RenGLSplash implements Splash {
 
         // Footer and a thin progress line along the bottom edge.
         float footerProgress = ease(progress(seconds, 1.6f, 0.4f));
-        if (footerProgress > 0f && api != null) {
+        // While warm-ups run the footer says what is being loaded; otherwise it names the graphics API.
+        String loadingName = isWaiting() ? loading.getCurrent() : null;
+        String footer = loadingName != null ? "LOADING " + loadingName.toUpperCase()
+                : api != null ? "RENDERING WITH " + api.toUpperCase() : null;
+        if (footerProgress > 0f && footer != null) {
             renderer.pushAlpha(0.42f * footerProgress);
-            renderer.drawText("RENDERING WITH " + api.toUpperCase(), centerX, height - 40f * scale, smallFont, FOOTER_COLOR, TextAlign.CENTER);
+            renderer.drawText(footer, centerX, height - 40f * scale, smallFont, FOOTER_COLOR, TextAlign.CENTER);
             renderer.popAlpha();
         }
         // How far through the held part of the splash we are; the bar below fills the window width as it goes.
-        float holdProgress = progress(seconds, 0f, HOLD_END);
+        float barFraction = ease(progress(time, 0f, HOLD_END));
+        float barAlpha = 0.9f;
+        if (isWaiting()) {
+            // The work is not finished, so the bar stops at 90% of the width rather than claim it is, and breathes
+            // (5 radians per second, between half and full strength) to show that it is still going.
+            barFraction = Math.min(barFraction, WAITING_BAR);
+            barAlpha *= 0.75f + 0.25f * (float) Math.sin(seconds * 5f);
+        }
         float barHeight = Math.max(2f, 3f * scale);
-        renderer.pushAlpha(0.9f);
-        if (holdProgress > 0.001f) {
-            renderer.drawGradient(0, height - barHeight, width * ease(holdProgress), barHeight,
+        renderer.pushAlpha(barAlpha);
+        if (barFraction > 0.001f) {
+            renderer.drawGradient(0, height - barHeight, width * barFraction, barHeight,
                     new LinearGradient(List.of(CYAN, VIOLET, PINK), 0f), 0);
         }
-        // Both needed
-        renderer.popAlpha();
-        renderer.popAlpha();
+        renderer.popAlpha(); // the bar's
+        renderer.popAlpha(); // the splash's, from the fade
     }
 
     /**

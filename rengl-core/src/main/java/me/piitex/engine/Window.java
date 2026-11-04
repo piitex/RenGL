@@ -54,6 +54,7 @@ public class Window implements Themeable, PopupHost {
     private final InputManager inputManager = new InputManager();
     private final SceneManager sceneManager = new SceneManager(this);
     private final Input input = new Input(this);
+    private final Loading loading = new Loading();
     private volatile GLFWindow glfWindow;
     private Element focusedElement;
     private final java.util.concurrent.CopyOnWriteArrayList<me.piitex.engine.input.ShortcutHandler> shortcutHandlers = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -125,6 +126,14 @@ public class Window implements Themeable, PopupHost {
 
     public WindowOptions getWindowOptions() {
         return windowOptions;
+    }
+
+    /**
+     * How far the {@linkplain WindowOptions#addWarmUp warm-ups} that run under the splash screen have got. A
+     * {@link Splash} reads it to wait for them; it is done from the start for a window with none.
+     */
+    public Loading getLoading() {
+        return loading;
     }
 
     /**
