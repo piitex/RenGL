@@ -364,6 +364,29 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
 
     private void drawFrame(Renderer renderer, GpuInterop interop, int width, int height) {
         lastDrawnFrame = interop.frameNumber();
+        GpuDevice device = prepare(interop, width, height);
+
+        if (continuous || renderRequested || picture == null || activeContent.needsFrames()) {
+            renderRequested = false;
+            device.beginFrame();
+            try {
+                activeContent.render(device, target, delta);
+            } finally {
+                device.endFrame();
+            }
+            if (picture != null) picture.close();
+            picture = null;
+            picture = wrap(interop, target);
+        }
+        renderer.drawImage(picture, (float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(),
+                getStyling().getCornerRadius(), 1f);
+    }
+
+    /**
+     * Gets everything a frame needs ready: the window's device (made the first time), the content (initialised when it
+     * is new) and a target of {@code width} x {@code height}, resizing the content when either changed.
+     */
+    private GpuDevice prepare(GpuInterop interop, int width, int height) {
         if (gpu == null) {
             gpu = Gpu3D.of(interop);
             gpu.attach(this);
@@ -387,21 +410,70 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
             activeContent.resize(device, width, height);
             renderRequested = true;
         }
+        return device;
+    }
 
-        if (continuous || renderRequested || picture == null || activeContent.needsFrames()) {
-            renderRequested = false;
-            device.beginFrame();
-            try {
-                activeContent.render(device, target, delta);
-            } finally {
-                device.endFrame();
+    /**
+     * The most frames {@link #warmUp()} draws while the content still asks for more, so a content that always does cannot
+     * hold the application back for ever.
+     */
+    private static final int WARM_UP_MAX_FRAMES = 600;
+
+    /**
+     * Work for {@link me.piitex.engine.WindowOptions#addWarmUp}: gets this viewport ready under the splash screen, so its
+     * first frame in the application does not stall. It makes the window's 3D device, initialises the content and draws
+     * the content a frame or more into the viewport's own target, which builds the content's pipelines and acceleration
+     * structures and makes its {@linkplain me.piitex.engine.render3d.scene.Scene3D#setUpscaler upscaler} (loading a
+     * vendor's library, for DLSS), and goes on while the content {@linkplain Content#needsFrames needs frames}, such as
+     * a {@linkplain me.piitex.engine.render3d.scene.Scene3D#preload preload} in progress. The frames are not shown.
+     * <pre>{@code
+     * options.addWarmUp(viewport.warmUp());
+     * }</pre>
+     * Set the content before the engine starts, or there is nothing to warm. The viewport is drawn at the size it has
+     * been laid out at, or the window's if it has none yet; if it turns out another size the content resizes, which is
+     * cheap next to what was done. A failure switches the viewport off, as it would when drawn.
+     */
+    public me.piitex.engine.WarmUp warmUp() {
+        return new me.piitex.engine.WarmUp() {
+            private boolean prepared;
+            private int frames;
+
+            @Override
+            public String getName() {
+                return "3D scene";
             }
-            if (picture != null) picture.close();
-            picture = null;
-            picture = wrap(interop, target);
-        }
-        renderer.drawImage(picture, (float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(),
-                getStyling().getCornerRadius(), 1f);
+
+            @Override
+            public boolean step(me.piitex.engine.Window window, Renderer renderer) {
+                if (content == null || failed || !(renderer instanceof GpuInterop interop)) return true;
+                try {
+                    // The viewport may not be laid out yet, as the application is held back, so the window's size stands in.
+                    double layoutWidth = getWidth() >= 1 ? getWidth() : window.getWindowOptions().getWidth();
+                    double layoutHeight = getHeight() >= 1 ? getHeight() : window.getWindowOptions().getHeight();
+                    float scale = interop.pixelScale() * resolutionScale;
+                    int width = Math.max(1, Math.round((float) layoutWidth * scale));
+                    int height = Math.max(1, Math.round((float) layoutHeight * scale));
+                    GpuDevice device = prepare(interop, width, height);
+                    if (!prepared) {
+                        // The device and the content are made; the frames follow on later calls, so the splash is drawn between.
+                        prepared = true;
+                        return false;
+                    }
+                    device.beginFrame();
+                    try {
+                        activeContent.render(device, target, 0f);
+                    } finally {
+                        device.endFrame();
+                    }
+                    frames++;
+                    return !activeContent.needsFrames() || frames >= WARM_UP_MAX_FRAMES;
+                } catch (RuntimeException e) {
+                    failed = true;
+                    log.error("The 3D viewport failed while it was being warmed up and is switched off; set a new content to try again", e);
+                    return true;
+                }
+            }
+        };
     }
 
     /**

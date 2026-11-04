@@ -35,6 +35,8 @@ public class WindowOptions {
     private volatile Image icon = null;
     private volatile boolean splashEnabled = true;
     private volatile Splash splash = null;
+    private final java.util.concurrent.CopyOnWriteArrayList<WarmUp> warmUps = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private volatile float warmUpTimeLimit = 30f;
 
     public WindowOptions(String title) {
         this.title = title;
@@ -296,6 +298,38 @@ public class WindowOptions {
     public WindowOptions setSplash(Splash splash) {
         this.splash = splash;
         return this;
+    }
+
+    /**
+     * Adds work to finish under the splash screen, such as loading a 3D scene or an upscaler, so the application's first
+     * frame does not stall on it. The warm-ups run in the order added, from the render thread, and the application stays
+     * held back until all are done. They run only while there is a splash, and only for the first window; like the
+     * splash, they are read when {@link Engine#start} opens the window. See {@link WarmUp}.
+     */
+    public WindowOptions addWarmUp(WarmUp warmUp) {
+        warmUps.add(java.util.Objects.requireNonNull(warmUp, "warmUp"));
+        return this;
+    }
+
+    /**
+     * How long the warm-ups may take together, in seconds (default 30). When it runs out, the one that is running and
+     * those after it are abandoned, a warning says so, and the application starts. It stops a warm-up that never finishes
+     * from holding the application back for good.
+     */
+    public WindowOptions setWarmUpTimeLimit(float seconds) {
+        this.warmUpTimeLimit = seconds;
+        return this;
+    }
+
+    public float getWarmUpTimeLimit() {
+        return warmUpTimeLimit;
+    }
+
+    /**
+     * The warm-ups added so far, in the order they run.
+     */
+    public java.util.List<WarmUp> getWarmUps() {
+        return java.util.List.copyOf(warmUps);
     }
 
     /**

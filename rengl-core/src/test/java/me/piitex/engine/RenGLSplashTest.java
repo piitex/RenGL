@@ -103,6 +103,62 @@ class RenGLSplashTest {
     }
 
     @Test
+    void staysUpWhileWarmUpsRunAndFadesOnceTheyAreDone() {
+        Loading loading = new Loading();
+        loading.begin(java.util.List.of(WarmUp.of("3D scene", window -> { })), 30f);
+        RenGLSplash splash = new RenGLSplash();
+        splash.watch(loading);
+
+        // Ten seconds of 60 fps frames: the timeline stops at the end of the hold, and the backdrop clock goes on.
+        for (int frame = 0; frame < 600; frame++) splash.update(1f / 60f);
+        assertEquals(RenGLSplash.HOLD_END, splash.time(), 1e-4f);
+        assertTrue(splash.waited() > 7f, "the rest of the ten seconds was spent waiting");
+        assertTrue(splash.isHoldingApp(), "the application stays held");
+        assertFalse(splash.isFinished());
+
+        loading.step(null, null); // the warm-up finishes
+        assertTrue(loading.isDone());
+        splash.update(1f / 60f);
+        assertFalse(splash.isHoldingApp(), "fading out, the application shows through");
+        for (int frame = 0; frame < 60; frame++) splash.update(1f / 60f);
+        assertTrue(splash.isFinished());
+        splash.dispose();
+    }
+
+    @Test
+    void warmUpsThatFinishInTimeLeaveTheTimelineAlone() {
+        Loading loading = new Loading();
+        loading.begin(java.util.List.of(WarmUp.of("quick", window -> { })), 30f);
+        RenGLSplash splash = new RenGLSplash();
+        splash.watch(loading);
+        for (int frame = 0; frame < 60; frame++) splash.update(1f / 60f); // one second in
+        loading.step(null, null);
+        for (int frame = 0; frame < 240; frame++) splash.update(1f / 60f);
+        assertEquals(0f, splash.waited(), "it never had to wait");
+        assertTrue(splash.isFinished(), "five seconds is past the hold and the fade");
+        splash.dispose();
+    }
+
+    @Test
+    void drawsWhileWaitingWithTheWorkNamedAndTheBarShortOfFull() throws Exception {
+        Loading loading = new Loading();
+        loading.begin(java.util.List.of(WarmUp.of("3D scene", window -> { })), 30f);
+        RenGLSplash splash = new RenGLSplash();
+        splash.showApi("vulkan");
+        splash.watch(loading);
+        for (int frame = 0; frame < 400; frame++) splash.update(1f / 60f); // well into the wait
+        Path directory = Path.of("target", "splash-frames");
+        Files.createDirectories(directory);
+        Image waiting = frame(splash, splash.time()); // seek would drop the wait; draw as it stands
+        Files.write(directory.resolve("splash-waiting.png"), waiting.encodeToData(EncodedImageFormat.PNG, 100, 0).getBytes());
+        // The bar's row is the bottom pixel line. It stops at 90% of the width, so the far right is the backdrop and not the bar.
+        float nearEnd = brightness(waiting, WIDTH - 10, HEIGHT - 1);
+        float atStart = brightness(waiting, 10, HEIGHT - 1);
+        assertTrue(atStart > nearEnd + 0.15f, "the bar is lit at the left and has not reached the right");
+        splash.dispose();
+    }
+
+    @Test
     void worksAtSmallAndLargeWindowSizes() {
         for (int[] size : new int[][]{{320, 200}, {1920, 1080}}) {
             RenGLSplash splash = new RenGLSplash();

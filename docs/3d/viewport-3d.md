@@ -46,6 +46,7 @@ does not render and costs nothing.
 | `requestRender()` | Asks for a redraw on the next frame, for a viewport that is not continuous. Safe from any thread |
 | `getPixelWidth()` / `getPixelHeight()` | The target's size in pixels, `0` before the first frame |
 | `getDevice()` | The [`GpuDevice`](custom-rendering.md#the-gpu-device) the content draws with, `null` before the first frame |
+| `warmUp()` | A [`WarmUp`](../core/engine.md#loading-under-the-splash) for `WindowOptions.addWarmUp`: makes the window's 3D device, initialises the content and draws it a frame or more under the splash screen, so pipelines, acceleration structures and an [upscaler](upscaling.md) (a vendor's library, for DLSS) are loaded before the application appears and not in its first frame. Draws more frames while the content `needsFrames()`, such as a `Scene3D` preload |
 | `close()` | Frees the content and target now, for a viewport you remove before the window closes. It can draw again afterwards, starting afresh |
 
 One `Content` can be shown by several viewports, in the same window or in different ones. `init` and `dispose` are

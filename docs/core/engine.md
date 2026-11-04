@@ -59,13 +59,58 @@ new WindowOptions("My App").setSplash(null);               // back to the RenGL 
 A test that starts a real window should switch the splash off, or it waits the extra two and a half seconds for the
 application to appear.
 
+### Loading under the splash
+Some work is slow the first time it is needed: building a 3D scene's pipelines, creating a DLSS or FSR upscaler (which
+loads the vendor's library), compiling shaders. It normally happens in the application's first frame, which stalls
+right after the splash ends. A `WarmUp` moves it under the splash instead:
+
+```java nocompile
+Viewport3D viewport = new Viewport3D(1280, 720);
+viewport.setContent(sceneContent);                       // a Scene3D with its upscaler and ray tracing already set
+WindowOptions options = new WindowOptions("My App")
+        .addWarmUp(viewport.warmUp())                    // the 3D layer's own, for a viewport
+        .addWarmUp(WarmUp.of("Save games", window -> index.rebuild())); // or any work of your own
+```
+
+The engine draws the splash first, then runs the warm-ups one after another on the render thread, one `step` per frame.
+The application stays held until the last is done, so the splash lasts as long as the loading does (and never less than
+its usual two and a half seconds). The RenGL splash shows it: its backdrop keeps moving, the bar stops short of full, and
+the footer says `LOADING 3D SCENE`.
+
+```java nocompile
+public interface WarmUp {
+    String getName();                                     // shown by the splash
+    boolean step(Window window, Renderer renderer);       // one slice of the work; true when finished
+    static WarmUp of(String name, Consumer<Window> work); // all of the work in one call
+}
+```
+
+- **One thread.** A step runs on the render thread with the graphics context current, so the splash cannot move while one
+  runs. A long job should be split into slices (return `false` until it is done) so the splash gets frames between them.
+  Work that needs no graphics context, such as reading a file, is better done on another thread, with a step that only
+  checks whether it has finished.
+- **Failure.** A warm-up that throws is logged and dropped, and the rest still run; the application starts as it would have
+  without it. `setWarmUpTimeLimit` (30 seconds by default) abandons the warm-up that is running and those after it, with a
+  warning, so one that never finishes cannot hold the application back for good.
+- **Only with a splash.** Warm-ups run only while the first window has a splash. With `setSplashEnabled(false)` they are
+  skipped and the work happens when the application needs it, as before.
+- **`Viewport3D.warmUp()`** makes the window's 3D device, initialises the viewport's content and draws it a frame or more
+  into the viewport's own target (the picture is not shown). That builds the content's pipelines and acceleration
+  structures and makes its upscaler. It keeps drawing while the content `needsFrames()`, so a `Scene3D.preload` finishes
+  under the splash too. Set the content before the engine starts.
+- **What it cannot cover.** The Vulkan device itself, and with it starting Streamline for DLSS, is made before any
+  renderer exists, while the window is still hidden, so no splash can be drawn over it.
+- **Your own splash** reads `window.getLoading()` (`isDone()`, `getProgress()` and `getCurrent()`, the name of the work
+  running) to wait for the warm-ups and to show them. A splash that finishes while they are still running leaves the
+  window cleared to its colour (black without a splash) until they are done.
+
 ### Your own splash
 Implement `me.piitex.engine.Splash` and pass an instance to `setSplash`. The engine calls it on the render thread, every
 frame while it is active:
 
 | Method | What it does |
 |---|---|
-| `onStart(Window)` | Optional. Called once before the first frame; `window.getRenderer()` says which graphics API draws it |
+| `onStart(Window)` | Optional. Called once before the first frame; `window.getRenderer()` says which graphics API draws it, and `window.getLoading()` how far the [warm-ups](#loading-under-the-splash) have got |
 | `update(float delta)` | Advances the splash by the seconds since the last frame |
 | `isFinished()` | Checked after `update`. When true the splash is disposed and never called again |
 | `isHoldingApp()` | While true the application is held (see above) and the window is cleared to `getClearColor()` |
