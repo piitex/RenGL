@@ -59,6 +59,22 @@ new WindowOptions("My App").setSplash(null);               // back to the RenGL 
 A test that starts a real window should switch the splash off, or it waits the extra two and a half seconds for the
 application to appear.
 
+### The splash's sound
+With the [audio module](../audio/README.md) (`rengl-audio`) on the classpath, the RenGL splash also has a sound: a soft
+chord under the introduction, a rising breath that follows the spark round the hexagon with a pluck at each corner, a low
+thump and a bell chord as the hexagon closes, high chimes as the light crosses the wordmark, and a whoosh as the splash
+fades. Each sound starts on the frame the picture reaches its moment, so a slow first frame cannot put them out of step;
+one that is not ready in time is skipped rather than played late. Without the audio module the splash is silent.
+
+The sounds are made in code (no sound files ship with the engine), on a thread of their own, which also opens the audio
+device, so the first sound your application plays does not pay for opening it. They play on the `UI` channel, so the
+master volume, the `UI` volume and mute all apply; set those before `Engine.start` and the splash follows them. To keep
+the splash but drop its sound:
+
+```java nocompile
+new WindowOptions("My App").setSplashSoundEnabled(false);
+```
+
 ### Loading under the splash
 Some work is slow the first time it is needed: building a 3D scene's pipelines, creating a DLSS or FSR upscaler (which
 loads the vendor's library), compiling shaders. It normally happens in the application's first frame, which stalls

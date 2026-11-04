@@ -51,6 +51,7 @@ drives one `Window`: passing the same instance to a second window throws.
 | `setIcon(Image)` | `null` | An image from `ImageLoader.load(...)`. Wins over `setIconPath`. On macOS it sets the Dock icon. **Live** |
 | `setIconPath(String)` | `null` | File path or classpath resource. Same platform behavior as `setIcon`. **Live** |
 | `setSplashEnabled(boolean)` | `true` | Whether a [splash screen](engine.md#the-splash-screen) plays over the first window before the application appears. `false` opts out. Read once when `Engine.start` opens the window, so it is **not live**; windows opened later have no splash |
+| `setSplashSoundEnabled(boolean)` | `true` | Whether the RenGL splash plays [its sound](engine.md#the-splashs-sound). Needs `rengl-audio` on the classpath. **Not live** |
 | `setSplash(Splash)` | `null` | Your own `Splash` instead of the RenGL one (see [your own splash](engine.md#your-own-splash)). `null` is the RenGL splash. Plays only while the splash is enabled. **Not live** |
 | `addWarmUp(WarmUp)` | none | Work to finish under the splash, such as preparing a 3D viewport, so the application's first frame does not stall (see [warm-ups](engine.md#loading-under-the-splash)). Runs only while there is a splash. **Not live** |
 | `setWarmUpTimeLimit(float)` | `30` | Seconds all the warm-ups may take together before the rest are abandoned and the application starts |

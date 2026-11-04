@@ -31,6 +31,9 @@ import java.util.Random;
  * The animation is a function of the time since it began (and of the time spent waiting), drawn with the plain
  * {@link Renderer} API, so it looks the same on every graphics backend and can be drawn at any moment into an
  * offscreen renderer. It plays once; make another for another window.
+ * <p>
+ * With the {@code rengl-audio} module on the classpath it also has a sound, cue by cue in step with the picture (see
+ * {@link RenGLSplashSound}); {@link WindowOptions#setSplashSoundEnabled} turns it off.
  */
 @GeneratedFragments(prompter = "piitex", model = "Claude Sonnet 5.5", reviewed = false)
 public final class RenGLSplash implements Splash {
@@ -126,6 +129,10 @@ public final class RenGLSplash implements Splash {
      */
     private final float[] trace = new float[16];
     private Image glowImage;
+    /**
+     * The splash's sound, or null when it has none (switched off, no audio module, or not started on a window).
+     */
+    private RenGLSplashSound sound;
 
     // Fonts are built for one window scale and rebuilt when it changes.
     private int fontKey = -1;
@@ -138,6 +145,20 @@ public final class RenGLSplash implements Splash {
     public void onStart(Window window) {
         showApi(window.getRenderer().name());
         loading = window.getLoading();
+        if (window.getWindowOptions().isSplashSoundEnabled()) {
+            SoundOutput output = SoundOutput.find();
+            if (output != null) {
+                sound = new RenGLSplashSound(output);
+                sound.loadInBackground();
+            }
+        }
+    }
+
+    /**
+     * Plays {@code sound} with the timeline, for tests that have no window.
+     */
+    void playSound(RenGLSplashSound sound) {
+        this.sound = sound;
     }
 
     /**
@@ -169,6 +190,9 @@ public final class RenGLSplash implements Splash {
         } else {
             time += step;
         }
+        // While the warm-ups run the timeline rests at the end of the hold; rounding can leave it a hair past, which
+        // must not start the fade's sound before the fade.
+        if (sound != null) sound.advance(isWaiting() ? Math.min(time, HOLD_END) : time);
     }
 
     /**
@@ -218,6 +242,11 @@ public final class RenGLSplash implements Splash {
     @Override
     public void dispose() {
         closeFonts();
+        // The last sounds are left to ring out over the application; they are freed once they have finished.
+        if (sound != null) {
+            sound.release();
+            sound = null;
+        }
     }
 
     private void closeFonts() {
