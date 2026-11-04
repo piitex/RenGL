@@ -109,6 +109,9 @@ play.onAction(() -> {
 });
 ```
 
+The [RenGL splash](../core/engine.md#the-splashs-sound) uses this channel for its own sound, and opens the device while
+it plays, so your first sound starts without that wait.
+
 ## Threading
 
 Every method is safe to call from any thread. `onFinished` callbacks run on the render thread, like every other

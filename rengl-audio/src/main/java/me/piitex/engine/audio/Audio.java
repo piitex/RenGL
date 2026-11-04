@@ -578,6 +578,16 @@ public final class Audio {
     }
 
     /**
+     * Whether the device has been opened and not shut down since, without opening it the way {@link #isAvailable()}
+     * does.
+     */
+    static boolean isOpen() {
+        synchronized (LOCK) {
+            return initTried && available;
+        }
+    }
+
+    /**
      * Stops all audio and closes the device. The engine calls this when the window closes, so you only need it if
      * you use audio without an {@code Engine}. Audio can be used again afterwards.
      */

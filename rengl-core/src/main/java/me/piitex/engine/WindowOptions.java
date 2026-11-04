@@ -35,6 +35,7 @@ public class WindowOptions {
     private volatile Image icon = null;
     private volatile boolean splashEnabled = true;
     private volatile Splash splash = null;
+    private volatile boolean splashSoundEnabled = true;
     private final java.util.concurrent.CopyOnWriteArrayList<WarmUp> warmUps = new java.util.concurrent.CopyOnWriteArrayList<>();
     private volatile float warmUpTimeLimit = 30f;
     private volatile float warmUpDelay = 2f;
@@ -302,6 +303,17 @@ public class WindowOptions {
     }
 
     /**
+     * Whether the {@link RenGLSplash RenGL splash} plays its sound (default on). The sound needs the {@code rengl-audio}
+     * module on the classpath, plays on its {@code UI} channel and follows the master volume and mute, so an application
+     * that sets those before {@link Engine#start} has them apply to the splash too. Turn it off for a silent splash. Like
+     * {@link #setSplashEnabled} it is read when {@link Engine#start} opens the window.
+     */
+    public WindowOptions setSplashSoundEnabled(boolean splashSoundEnabled) {
+        this.splashSoundEnabled = splashSoundEnabled;
+        return this;
+    }
+
+    /**
      * Adds work to finish under the splash screen, such as loading a 3D scene or an upscaler, so the application's first
      * frame does not stall on it. The warm-ups run in the order added, from the render thread, and the application stays
      * held back until all are done. They run only while there is a splash, and only for the first window; like the
@@ -439,6 +451,13 @@ public class WindowOptions {
 
     public boolean isSplashEnabled() {
         return splashEnabled;
+    }
+
+    /**
+     * Whether the RenGL splash plays its sound. See {@link #setSplashSoundEnabled}.
+     */
+    public boolean isSplashSoundEnabled() {
+        return splashSoundEnabled;
     }
 
     /**
