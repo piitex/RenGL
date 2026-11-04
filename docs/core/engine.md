@@ -24,6 +24,7 @@ public static Engine getRunning(); // the running engine, or null
 5. Loops on the main thread, delivering GLFW events and servicing the clipboard and cursor, until the
    window is closed.
 6. Shows the window once the first frame has been drawn, so you never see a blank or garbage frame.
+7. Plays the [RenGL splash screen](#the-splash-screen) over the first window before your application appears.
 
 **`start` blocks** until the user closes the window. Build the window's UI before calling it; other windows can be
 [opened](#several-windows) at any time.
@@ -34,6 +35,20 @@ Window window = new Window(new WindowOptions("My App").setDimensions(1280, 720))
 new Engine().start(window);
 // Nothing after this line runs until the window is closed.
 ```
+
+## The splash screen
+Every application opens with the RenGL splash: an animated mark (two hexagons that draw themselves around an R), the
+RenGL wordmark with a light sweeping across it, and the tagline, over a slowly drifting star field. It plays for about
+two and a half seconds on the first window, then fades out over your application. It is part of the engine; it can't be
+turned off, and it is drawn with the engine's own renderer, so it looks the same on OpenGL, Vulkan and Metal.
+
+While it plays your application is held back: its containers and scenes are not updated or drawn, `onUpdate` hooks
+do not fire, and clicks and keys are dropped. Your first frame is the first one after the splash lets go, so scenes
+start from their beginning and nothing plays out unseen. Time-based work that does not belong to a window, such as
+the [scheduler](scheduler.md), keeps running meanwhile. Other windows opened with `open` get no splash.
+
+Every `Engine.start` plays it, so a test that starts a real window waits the extra two and a half seconds for the
+application to appear.
 
 ## Files the OS asks the app to open
 Double-clicking a `.zip` that is associated with your app, "Open With", or dropping a file on its Dock icon asks the

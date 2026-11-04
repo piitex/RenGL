@@ -107,7 +107,10 @@ the same call by another name:
 | `close()` | Closes the window, like clicking its close button. Closing the first window ends the engine |
 | `open()` | Opens the window beside the running engine's others, or again after it was closed. See [Several windows](engine.md#several-windows) |
 
-A splash screen that becomes the main window, all in one OS window:
+(The engine plays its own [RenGL splash](engine.md#the-splash-screen) over the first window before any of this appears;
+the code below is for an application's own loading screen after that.)
+
+A loading screen that becomes the main window, all in one OS window:
 
 ```java
 Window window = new Window(new WindowOptions("My App")

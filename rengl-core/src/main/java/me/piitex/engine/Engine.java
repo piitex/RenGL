@@ -111,6 +111,7 @@ public class Engine {
         MetalContext metalContext;   // Metal only; created on the main thread, closed there after the renderer is released
         RenderBackend.Context backendContext; // Vulkan only (a backend from its own module); same lifetime, but closed before the GLFW window is destroyed
         Renderer renderer;         // render thread
+        SplashScreen splash;       // render thread; the RenGL splash over the first window, null once it has finished
         volatile int logicalW, logicalH, fbW, fbH;
         volatile boolean sizeDirty;
         volatile boolean focusLost;
@@ -218,6 +219,7 @@ public class Engine {
         OpenFiles.install(); // before GLFW starts, so macOS can hand over the file the app was launched to open
         Host main = createHost(window);
         primary = main;
+        main.splash = new SplashScreen(); // plays over the first window before the application appears
         Clipboard.attach(main.handle); // GLFW's clipboard is system-wide; any window's handle will do
 
         String gpu;
@@ -622,6 +624,19 @@ public class Engine {
                     }
                 }
 
+                SplashScreen splash = host.splash;
+                if (splash != null) {
+                    splash.advance(delta);
+                    if (splash.finished()) {
+                        splash.dispose();
+                        host.splash = null;
+                    }
+                }
+                if (holdsApp(host)) {
+                    // The application hasn't appeared yet: what the user types or clicks meant for it is dropped.
+                    window.getInputManager().getEventQueue().clear();
+                    continue;
+                }
                 host.inputProcessor.processEvents(window);
 
                 if (window.getBackgroundColor() instanceof AnimatedPaint animated) {
@@ -643,11 +658,13 @@ public class Engine {
             // per-frame update
             GameTime.advance(delta, () -> {
                 for (Host host : live) {
+                    if (holdsApp(host)) continue;
                     select(host);
                     host.window.getSceneManager().fixedUpdate();
                 }
             });
             for (Host host : live) {
+                if (holdsApp(host)) continue;
                 select(host);
                 host.window.getSceneManager().update(GameTime.getDelta());
             }
@@ -691,19 +708,23 @@ public class Engine {
         Window window = host.window;
         Renderer renderer = host.renderer;
 
+        boolean held = holdsApp(host); // the splash is up: the application isn't updated or drawn yet
+
         // Update pass: fires onUpdate for every enabled container and element
-        for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
-            Container container = entry.getValue();
-            if (container.isEnabled()) {
-                container.update(delta);
+        if (!held) {
+            for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
+                Container container = entry.getValue();
+                if (container.isEnabled()) {
+                    container.update(delta);
+                }
             }
+
+            window.refreshTransitionLock(); // after the update pass, so a transition started this frame already locks
+
+            window.followPopupAnchor(); // after the update pass, so layouts have placed the anchor
+
+            TooltipManager.update(window, delta);
         }
-
-        window.refreshTransitionLock(); // after the update pass, so a transition started this frame already locks
-
-        window.followPopupAnchor(); // after the update pass, so layouts have placed the anchor
-
-        TooltipManager.update(window, delta);
 
         if (host.backend == RenderAPI.OPENGL) makeContextCurrent(host);
 
@@ -713,7 +734,9 @@ public class Engine {
         // An opaque black clear goes underneath it so no pixel is left undefined at
         // the very edges before that quad covers the whole canvas.
         Paint background = AnimatedPaint.resolve(window.getBackgroundColor());
-        if (background instanceof Color solid) {
+        if (held) {
+            renderer.clear(0.027f, 0.035f, 0.075f, 1f); // the splash's own backdrop colour, so no frame flashes the window's
+        } else if (background instanceof Color solid) {
             renderer.clear(solid.getR(), solid.getG(), solid.getB(), solid.getA());
         } else {
             renderer.clear(0f, 0f, 0f, 1f);
@@ -723,29 +746,40 @@ public class Engine {
 
         int width = window.getWindowOptions().getWidth();
         int height = window.getWindowOptions().getHeight();
-        if (background instanceof LinearGradient gradient) {
+        if (!held && background instanceof LinearGradient gradient) {
             // Passing gradient itself, not its unpacked colors, is what lets a
             // ScrollingGradient window background actually scroll.
             renderer.drawGradient(0f, 0f, width, height, gradient, 0f);
         }
 
-        Background windowBackground = window.getBackground();
-        if (windowBackground != null) {
-            windowBackground.render(renderer, 0f, 0f, width, height);
-        }
-
-        for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
-            Container container = entry.getValue();
-            if (container.isEnabled()) {
-                container.renderWithTransitions(renderer);
+        if (!held) {
+            Background windowBackground = window.getBackground();
+            if (windowBackground != null) {
+                windowBackground.render(renderer, 0f, 0f, width, height);
             }
+
+            for (Map.Entry<Integer, Container> entry : window.getContainers().entrySet()) {
+                Container container = entry.getValue();
+                if (container.isEnabled()) {
+                    container.renderWithTransitions(renderer);
+                }
+            }
+            TooltipManager.render(renderer, window); // above every container
         }
-        TooltipManager.render(renderer, window); // above every container
+        if (host.splash != null) host.splash.render(renderer, width, height, host.backend.name()); // over the application while it fades out
         renderer.end();
 
         if (host.backend == RenderAPI.OPENGL) glfwSwapBuffers(host.handle);
 
         if (!host.firstFrameRendered) host.firstFrameRendered = true;
+    }
+
+    /**
+     * Whether the RenGL splash screen still holds this window's application back.
+     */
+    private static boolean holdsApp(Host host) {
+        SplashScreen splash = host.splash;
+        return splash != null && splash.holdsApp();
     }
 
     /**
