@@ -100,9 +100,26 @@ class LoadingSplash implements Splash {
 }
 ```
 
-`new RenGLSplash()` is public too, so a splash of yours can draw it as part of its own, for example a studio logo that
-plays before it. `Splash` has no setting for how long it lasts; the splash decides, by when `isHoldingApp` and
-`isFinished` turn true.
+`Splash` has no setting for how long it lasts; the splash decides, by when `isHoldingApp` and `isFinished` turn true.
+
+### Several splashes in a row
+A publisher or a framework may need its own splash before yours, or before RenGL's. `Splash.sequence` plays splashes one
+after another as a single splash. `new RenGLSplash()` is public, so list it where you want it:
+
+```java nocompile
+new WindowOptions("My App").setSplash(Splash.sequence(
+        new PublisherSplash(),   // each plays in turn
+        new FrameworkSplash(),
+        new RenGLSplash()));     // RenGL's is part of the sequence only if it is listed
+```
+
+- Each splash gets its own `onStart`, runs until its `isFinished`, and is disposed before the next begins.
+- The application is held through every splash but the last, so it never shows between two. The last one decides for
+  itself, so it can fade out over the application.
+- The window is cleared to the `getClearColor()` of the splash that is playing.
+- A splash that throws is logged and skipped, and the rest still play.
+- If the window closes early, the playing splash and those that never played are disposed.
+- An instance plays once, so list each only once. A sequence is itself a `Splash`, so it can sit inside another.
 
 ## Files the OS asks the app to open
 Double-clicking a `.zip` that is associated with your app, "Open With", or dropping a file on its Dock icon asks the
