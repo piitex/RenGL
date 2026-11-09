@@ -38,25 +38,30 @@ complete list.
 LWJGL is Copyright (c) 2012-present Lightweight Java Game Library, under the BSD 3-Clause
 license: <https://www.lwjgl.org/license>.
 
-The LWJGL native libraries are built from other projects, each under its own license, which
-LWJGL documents in its repository under `doc/licenses`
-(<https://github.com/LWJGL/lwjgl3/tree/master/doc/licenses>). That list is the authoritative
-one. The ones relevant to RenGL's modules are:
+The LWJGL native libraries are built from other projects, each under its own license. LWJGL
+keeps each license text next to the binding, as `modules/lwjgl/<module>/<project>_license.txt`
+in its repository (<https://github.com/LWJGL/lwjgl3/tree/master/modules/lwjgl>), and that is
+the authoritative source. This table was checked against those files for LWJGL 3.4.3. The
+ones relevant to RenGL's modules are:
 
 | Project | Used for | License |
 |---|---|---|
 | GLFW | windows and input | zlib |
-| OpenAL Soft | audio | LGPL-2.1 |
+| OpenAL Soft | audio | LGPL 2.0 (the GNU Library General Public License, version 2) |
 | Opus | audio | BSD-3-Clause |
-| stb | images and fonts | public domain / MIT |
-| Assimp | model loading | BSD-3-Clause |
-| shaderc, SPIRV-Cross | shader compilation | Apache-2.0 |
+| Assimp | model loading | BSD-3-Clause (it also bundles some smaller libraries, such as Poly2Tri, under their own licenses) |
+| shaderc | shader compilation | Apache-2.0 |
 | Vulkan Memory Allocator | Vulkan memory | MIT |
-| Zstandard | tile map compression | BSD-3-Clause |
+| Zstandard | tile map compression | BSD-3-Clause (Zstandard is dual-licensed; LWJGL ships the BSD one) |
 | nativefiledialog-extended | file dialogs | zlib |
+| libffi | LWJGL core, native calls | MIT |
+| liburing | LWJGL core, Linux only | MIT |
+| Khronos OpenGL and Vulkan headers | OpenGL and Vulkan bindings | MIT-style Khronos license |
+| stb, SPIRV-Cross | images and fonts; shader cross-compilation | not in LWJGL's repository; from the upstream projects: stb is public domain / MIT, SPIRV-Cross is Apache-2.0 |
 
-OpenAL Soft is LGPL-2.1 and is loaded by LWJGL as a separate shared library, so you can
-replace it with your own build of OpenAL Soft.
+OpenAL Soft is loaded by LWJGL as a separate shared library, so you can replace it with
+your own build of OpenAL Soft. If you ship it, you must also pass on the LGPL's terms; the
+license text is in LWJGL's repository at `modules/lwjgl/openal/openal_soft_license.txt`.
 
 ### JLayer and the LGPL
 
