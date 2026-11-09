@@ -187,7 +187,7 @@ final class Sl {
         if (type == 2) log.error("[Streamline] {}", text);
         else if (type == 1) log.warn("[Streamline] {}", text);
         else if (Boolean.getBoolean("rengl.dlss.log")) log.info("[Streamline] {}", text);
-        else log.debug("[Streamline] {}", text);
+        //else log.debug("[Streamline] {}", text);
     }
 
     private static MemorySegment messageCallback;
