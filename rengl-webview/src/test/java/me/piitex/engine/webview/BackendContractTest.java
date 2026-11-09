@@ -206,6 +206,8 @@ abstract class BackendContractTest {
     @Test
     void aClickAndTypingReachThePage() throws Exception {
         loadPage();
+        // a person can only click what has been shown, and a slow machine may not have drawn the page yet
+        until(() -> frames.stream().anyMatch(WebViewBackend.Frame::crisp), "the page was shown before it was clicked");
         backend.setFocused(true);
         backend.pointerMove(60, 80 + 20, 0, 0);
         backend.pointerButton(60, 100, 0, true, 0);
