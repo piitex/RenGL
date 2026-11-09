@@ -111,7 +111,9 @@ public class RayTracingDemo {
         new Engine().start(window);
     }
 
-    /** The scene and what the controls change in it. */
+    /**
+     * The scene and what the controls change in it.
+     */
     private static final class Room {
         final Scene3D scene = new Scene3D();
         final OrbitControls orbit = new OrbitControls(scene.camera());
@@ -153,8 +155,6 @@ public class RayTracingDemo {
             orbit.setTarget(new Vec3(0, 2.6f, 0)).setDistance(14f).setAngles(0f, 0.12f).setDistanceLimits(3f, 40f);
             applyEffects();
         }
-
-        // ---- the scene ---------------------------------------------------------------------------------------------
 
         private void slab(String name, Color color, float x, float y, float z, float sx, float sy, float sz) {
             Node3D node = new Node3D(name, Mesh.cube(1f), new Material(color).setRoughness(0.9f));
@@ -214,8 +214,6 @@ public class RayTracingDemo {
             scene.lights().add(orbLight);
         }
 
-        // ---- every frame -------------------------------------------------------------------------------------------
-
         private void update(Scene3D s, float delta) {
             GpuDevice device = view == null ? null : view.getDevice();
             if (device == null) return;
@@ -235,9 +233,9 @@ public class RayTracingDemo {
             count(delta);
         }
 
-        // ---- the choices -------------------------------------------------------------------------------------------
-
-        /** The device is there: see what it can do, and begin with the best upscaler of it. */
+        /**
+         * The device is there: see what it can do, and begin with the best upscaler of it.
+         */
         private void start(GpuDevice device) {
             ready = true;
             String dlss = DlssProvider.unavailableReason(device);
@@ -281,7 +279,9 @@ public class RayTracingDemo {
             reconstructBox.setEnabled(rr == null);
         }
 
-        /** What the panel says of a library: ready, or the short of why not (the whole of it is printed). */
+        /**
+         * What the panel says of a library: ready, or the short of why not (the whole of it is printed).
+         */
         private static String brief(String reason, String vendor) {
             if (reason == null) return "ready";
             if (reason.contains("not found")) return "libraries not found (-Drengl." + vendor + ".dir)";
@@ -318,7 +318,9 @@ public class RayTracingDemo {
             setting = false;
         }
 
-        /** Hands the switches to the scene. Path tracing is global illumination with the rest of the way added, so it takes its place. */
+        /**
+         * Hands the switches to the scene. Path tracing is global illumination with the rest of the way added, so it takes its place.
+         */
         void applyEffects() {
             scene.setRayTracedShadows(shadows);
             scene.setRayTracedReflections(reflections);
@@ -332,7 +334,9 @@ public class RayTracingDemo {
             scene.resetTemporalHistory();
         }
 
-        /** A preset sets all the switches, and the boxes follow. */
+        /**
+         * A preset sets all the switches, and the boxes follow.
+         */
         void applyPreset(int preset) {
             shadows = preset >= 1;
             reflections = preset >= 2;
@@ -356,8 +360,6 @@ public class RayTracingDemo {
             scene.resetTemporalHistory();
         }
 
-        // ---- the numbers -------------------------------------------------------------------------------------------
-
         private void count(float delta) {
             framesSince++;
             timeSince += delta;
@@ -378,12 +380,14 @@ public class RayTracingDemo {
             if (scene.isUsingRayTracedShadows()) used.append("shadows, ");
             if (scene.isUsingRayTracedReflections()) used.append("reflections, ");
             if (scene.isUsingRayTracedAmbientOcclusion()) used.append("occlusion, ");
-            if (scene.isUsingPathTracing()) used.append("paths (").append(scene.getPathTracingBounces()).append(" bounces), ");
+            if (scene.isUsingPathTracing())
+                used.append("paths (").append(scene.getPathTracingBounces()).append(" bounces), ");
             else if (scene.isUsingRayTracedGlobalIllumination()) used.append("one bounce, ");
             inUseLine = used.length() == before ? "In use: no rays" : used.substring(0, used.length() - 2);
 
             if (scene.isUsingRayReconstruction()) denoiserLine = "Denoiser: DLSS Ray Reconstruction";
-            else if (scene.isUsingPathTracing() || scene.isUsingRayTracedGlobalIllumination()) denoiserLine = "Denoiser: the engine's own filter";
+            else if (scene.isUsingPathTracing() || scene.isUsingRayTracedGlobalIllumination())
+                denoiserLine = "Denoiser: the engine's own filter";
             else denoiserLine = "Denoiser: not needed";
             show();
         }
@@ -396,7 +400,9 @@ public class RayTracingDemo {
 
         // ---- the controls ------------------------------------------------------------------------------------------
 
-        /** Fills the panel; returns how far down it goes. */
+        /**
+         * Fills the panel; returns how far down it goes.
+         */
         float buildControls(Container panel) {
             float y = 16;
             TextOverlay title = new TextOverlay("Ray tracing and path tracing", 20f, Color.WHITE);
@@ -544,7 +550,9 @@ public class RayTracingDemo {
             return y;
         }
 
-        /** A check box with its label; the change is handed on when the user makes it, not when a preset sets the box. */
+        /**
+         * A check box with its label; the change is handed on when the user makes it, not when a preset sets the box.
+         */
         private CheckBoxOverlay check(Container panel, String text, float y, boolean on, Consumer<Boolean> change) {
             CheckBoxOverlay box = new CheckBoxOverlay(20, on);
             box.setPosition(16, y);
