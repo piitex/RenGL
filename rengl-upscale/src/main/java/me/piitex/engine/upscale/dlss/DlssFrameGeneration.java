@@ -70,8 +70,6 @@ public final class DlssFrameGeneration {
     private static boolean tagged;
     private static boolean lastOn;
 
-    // ---- for the application ---------------------------------------------------------------------------------------
-
     /** Whether frame generation can run: the libraries are there, were started, and this GPU and system can do it. */
     public static boolean isAvailable() {
         synchronized (lock) {
@@ -137,8 +135,6 @@ public final class DlssFrameGeneration {
         if ((status & 16) != 0) text.append("current back buffer index not asked for, ");
         return text.isEmpty() ? "status " + status : text.substring(0, text.length() - 2);
     }
-
-    // ---- for the DLSS module -----------------------------------------------------------------------------------------
 
     /**
      * Whether the upscaler should hand depth and motion over for the frame to be generated from. It does so even while frame
