@@ -13,6 +13,9 @@ import me.piitex.engine.render3d.scene.file.SceneMeta.MaterialInfo;
 import me.piitex.engine.render3d.scene.file.SceneMeta.NodeInfo;
 import me.piitex.engine.render3d.scene.file.SceneMeta.SkyInfo;
 import me.piitex.engine.render3d.scene.file.SceneProperty.Hint;
+import me.piitex.engine.render3d.upscale.BestUpscaler;
+import me.piitex.engine.render3d.upscale.UpscalerProvider;
+import me.piitex.engine.render3d.upscale.Upscalers;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.utils.flags.GeneratedClass;
 
@@ -591,6 +594,69 @@ public final class SceneKinds {
                 .omitWhen(1f).range(0, 10).step(0.1).tip("Raise it if a lit surface shows stripes, lower it if shadows float away");
         prop(WORLD, "shadowSoftness", "Softness", Float.class, gShadow, Scene3D::getShadowSoftness, (s, x, b) -> s.setShadowSoftness(f(x)))
                 .omitWhen(1f).range(0.25, 4).step(0.05).tip("The width of a shadow's soft edge");
+
+        String gRay = "Ray Tracing", gUpscale = "Upscaling";
+        String needs = " Needs a Vulkan window on a GPU with ray queries (NVIDIA RTX, AMD RDNA 2 and later, Intel Arc); anywhere else the usual way is kept";
+        prop(WORLD, "rayTracedShadows", "Shadows", Boolean.class, gRay, Scene3D::isRayTracedShadows, (s, x, b) -> s.setRayTracedShadows((Boolean) x))
+                .omitWhen(false).tip("Exact hard shadows from every light that casts them, in place of shadow maps." + needs);
+        prop(WORLD, "rayTracedReflections", "Reflections", Boolean.class, gRay, Scene3D::isRayTracedReflections,
+                (s, x, b) -> s.setRayTracedReflections((Boolean) x)).omitWhen(false)
+                .tip("Smooth surfaces reflect the objects around them, in place of the sky alone." + needs);
+        prop(WORLD, "rayTracedReflectionRoughness", "Max Roughness", Float.class, gRay, Scene3D::getRayTracedReflectionRoughness,
+                (s, x, b) -> s.setRayTracedReflectionRoughness(f(x))).omitWhen(0.3f).range(0.05, 1).step(0.05).when(Scene3D::isRayTracedReflections)
+                .tip("The roughest surface that reflects by ray. Rougher ones keep the sky's blurred reflection");
+        prop(WORLD, "rayTracedReflectionDistance", "Reflection Distance", Float.class, gRay, Scene3D::getRayTracedReflectionDistance,
+                (s, x, b) -> s.setRayTracedReflectionDistance(f(x))).omitWhen(500f).range(0.1, 5000).step(10).when(Scene3D::isRayTracedReflections)
+                .tip("How far a reflection looks. Past it the sky shows");
+        prop(WORLD, "rayTracedAmbientOcclusion", "Traced Occlusion", Boolean.class, gRay, Scene3D::isRayTracedAmbientOcclusion,
+                (s, x, b) -> s.setRayTracedAmbientOcclusion((Boolean) x)).omitWhen(false)
+                .tip("Works the Ambient Occlusion of the Light section out from what is really there, off screen and thin things included. "
+                        + "It does nothing while that is 0." + needs);
+        prop(WORLD, "rayTracedGlobalIllumination", "Global Illumination", Boolean.class, gRay, Scene3D::isRayTracedGlobalIllumination,
+                (s, x, b) -> s.setRayTracedGlobalIllumination((Boolean) x)).omitWhen(false)
+                .tip("Light that bounces: a red wall tints the floor beside it, and a roof shuts the sky out." + needs);
+        prop(WORLD, "rayTracedGlobalIlluminationRays", "Rays per Pixel", Integer.class, gRay, Scene3D::getRayTracedGlobalIlluminationRays,
+                (s, x, b) -> s.setRayTracedGlobalIlluminationRays(((Number) x).intValue())).omitWhen(1).range(1, 8)
+                .when(Scene3D::isRayTracedGlobalIllumination).tip("More rays are smoother and cost in proportion");
+        prop(WORLD, "rayTracedGlobalIlluminationDistance", "Bounce Distance", Float.class, gRay, Scene3D::getRayTracedGlobalIlluminationDistance,
+                (s, x, b) -> s.setRayTracedGlobalIlluminationDistance(f(x))).omitWhen(100f).range(0.1, 5000).step(5)
+                .when(Scene3D::isRayTracedGlobalIllumination).tip("How far a ray looks for something to bounce off. Past it the sky shows");
+        prop(WORLD, "rayTracedGlobalIlluminationStrength", "Bounce Strength", Float.class, gRay, Scene3D::getRayTracedGlobalIlluminationStrength,
+                (s, x, b) -> s.setRayTracedGlobalIlluminationStrength(f(x))).omitWhen(1f).range(0, 10).step(0.05)
+                .when(Scene3D::isRayTracedGlobalIllumination).tip("1 is the light that is there, 0 none, above 1 more");
+        prop(WORLD, "pathTracing", "Path Tracing", Boolean.class, gRay, Scene3D::isPathTracing, (s, x, b) -> s.setPathTracing((Boolean) x))
+                .omitWhen(false).tip("Global illumination with the rest of the way: light goes round several corners, so a room is lit "
+                        + "through a doorway. It takes the place of Global Illumination." + needs);
+        prop(WORLD, "pathTracingBounces", "Bounces", Integer.class, gRay, Scene3D::getPathTracingBounces,
+                (s, x, b) -> s.setPathTracingBounces(((Number) x).intValue())).omitWhen(3).range(1, 8).when(Scene3D::isPathTracing)
+                .tip("How many times a ray goes on from what it hit");
+        prop(WORLD, "rayReconstruction", "Ray Reconstruction", Boolean.class, gRay, Scene3D::isRayReconstruction,
+                (s, x, b) -> s.setRayReconstruction((Boolean) x)).omitWhen(true).when(Scene3D::isPathTracing)
+                .tip("Lets DLSS clean up the noise of path tracing where there is an RTX GPU and the upscaler is on. "
+                        + "Anywhere else the scene's own filter is used");
+
+        prop(WORLD, "renderScale", "Render Scale", Float.class, gUpscale, Scene3D::getRenderScale, (s, x, b) -> s.setRenderScale(f(x)))
+                .omitWhen(1f).range(0.25, 1).step(0.05).tip("The share of the picture's width and height the scene is drawn at: 0.67 draws "
+                        + "45% of the pixels, which is faster. It is enlarged by the Upscaler");
+        prop(WORLD, "upscaler", "Upscaler", UpscalerChoice.class, gUpscale, SceneKinds::upscalerChoice, (s, x, b) -> setUpscalerChoice(s, (UpscalerChoice) x))
+                .omitWhen(UpscalerChoice.NONE).tip("What enlarges a scene drawn smaller, and smooths its edges from one frame to the next. "
+                        + "Best Available is DLSS or FSR where the game has them and the GPU runs them, and the built-in one anywhere else");
+    }
+
+    /** What the scene enlarges itself with, as a scene file says it. */
+    private static UpscalerChoice upscalerChoice(Scene3D scene) {
+        UpscalerProvider provider = scene.getUpscaler();
+        if (provider == null) return UpscalerChoice.NONE;
+        return provider == Upscalers.builtIn() ? UpscalerChoice.BUILT_IN : UpscalerChoice.BEST;
+    }
+
+    private static void setUpscalerChoice(Scene3D scene, UpscalerChoice choice) {
+        if (upscalerChoice(scene) == choice) return;
+        scene.setUpscaler(switch (choice) {
+            case NONE -> null;
+            case BUILT_IN -> Upscalers.builtIn();
+            case BEST -> new BestUpscaler();
+        });
     }
 
     // --- Physics ---------------------------------------------------------------------------------------------------
