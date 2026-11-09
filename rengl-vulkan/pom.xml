@@ -142,6 +142,22 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <!-- MoltenVK is macOS only, so only the macOS jars get the license texts (parent pom, natives-licenses). Must stay after the unpack execution. -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>natives-licenses</id>
+                                <configuration combine.self="override">
+                                    <target>
+                                        <copy todir="${project.build.directory}/natives/natives-macos/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
+                                        <copy todir="${project.build.directory}/natives/natives-macos-arm64/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
                 </plugins>
             </build>
         </profile>
