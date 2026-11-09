@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-parent</artifactId>
         <version>0.1.0</version>
     </parent>
@@ -16,18 +16,18 @@
 
     <dependencies>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <!-- Reads the layout a material shows as a screen. -->
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-ui-file</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-vulkan</artifactId>
             <version>${project.version}</version>
         </dependency>

@@ -112,12 +112,12 @@ a Mac to try it on, Intel XeSS is not supported, and ray tracing has only been c
 RenGL is split into Maven modules, so a project depends on what it uses. `rengl-core` is the window, UI toolkit, input
 and 2D game framework; audio, video, web views (WebView2 on Windows; an installed Chrome, Edge or Chromium elsewhere; WKWebView and WebKitGTK written, opt-in, never run), Vulkan, 3D, spell checking, tile maps, entities, charts, downloads and UI files are
 separate artifacts, and so are the vendor upscalers (`rengl-upscale`), which carry no vendor code and are kept out of the
-all-in-one jar for licensing reasons. `me.piitex.engine:RenGL` pulls in all the others, as the single jar did before. See
+all-in-one jar for licensing reasons. `io.github.piitex:RenGL` pulls in all the others, as the single jar did before. See
 [Modules](docs/modules.md) for what each brings and which to pick.
 
 ```xml
 <dependency>
-    <groupId>me.piitex.engine</groupId>
+    <groupId>io.github.piitex</groupId>
     <artifactId>rengl-core</artifactId>
     <version>0.1.0</version>
 </dependency>

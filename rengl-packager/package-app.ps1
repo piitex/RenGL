@@ -120,7 +120,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $bound = $PSBoundParameters
 $RenglRoot = Split-Path $PSScriptRoot -Parent
-$Repository = Join-Path $env:USERPROFILE '.m2\repository\me\piitex\engine'
+$Repository = Join-Path $env:USERPROFILE '.m2\repository\io\github\piitex'
 $ConfigName = 'rengl-package.properties'
 # The engine's natives jar for each platform: LWJGL's and Skiko's native libraries.
 $Natives = [ordered]@{

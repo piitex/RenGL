@@ -62,7 +62,7 @@ at start-up.
 
 ## Getting Vulkan working
 
-Vulkan needs the `me.piitex.engine:rengl-vulkan` dependency (the [3D layer](../3d/README.md) brings it) and a Skiko build
+Vulkan needs the `io.github.piitex:rengl-vulkan` dependency (the [3D layer](../3d/README.md) brings it) and a Skiko build
 with Vulkan support. If the Skiko on the classpath has none, a `VULKAN` request logs
 `the Skiko on the classpath (...) has no Vulkan support` and the window uses the platform default.
 

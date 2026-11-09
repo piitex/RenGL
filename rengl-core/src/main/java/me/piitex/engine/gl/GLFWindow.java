@@ -135,7 +135,7 @@ public class GLFWindow {
         RenderAPI resolved = RenderAPI.resolve(requested);
         if (resolved == RenderAPI.VULKAN) {
             String problem = vulkan == null
-                    ? "the rengl-vulkan module is not on the classpath (add the me.piitex.engine:rengl-vulkan dependency)"
+                    ? "the rengl-vulkan module is not on the classpath (add the io.github.piitex:rengl-vulkan dependency)"
                     : vulkan.unsupportedReason();
             if (problem != null) {
                 log.warn("Vulkan was requested, but {}. Using {} instead.", problem, RenderAPI.platformDefault());

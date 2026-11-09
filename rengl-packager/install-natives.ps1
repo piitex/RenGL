@@ -32,6 +32,6 @@ foreach ($platform in $Platforms) {
 }
 
 Write-Host '==> Done'
-$repository = Join-Path $env:USERPROFILE '.m2\repository\me\piitex\engine\RenGL'
+$repository = Join-Path $env:USERPROFILE '.m2\repository\io\github\piitex\RenGL'
 Get-ChildItem $repository -Recurse -Filter '*-natives-*.jar' |
     Select-Object @{ n = 'Jar'; e = { $_.Name } }, @{ n = 'MB'; e = { [math]::Round($_.Length / 1MB, 1) } } | Format-Table -AutoSize

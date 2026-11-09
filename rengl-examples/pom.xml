@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-parent</artifactId>
         <version>0.1.0</version>
     </parent>
@@ -16,68 +16,68 @@
 
     <dependencies>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-audio</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-video</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-webview</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-3d</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-vulkan</artifactId>
             <version>${project.version}</version>
         </dependency>
         <!-- Only UpscalingDemo and RayTracingDemo use it. It carries none of the vendors' libraries; they are found at run time. -->
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-upscale</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-spellcheck</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-tilemap</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-entity</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-charts</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-downloads</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-ui-file</artifactId>
             <version>${project.version}</version>
         </dependency>

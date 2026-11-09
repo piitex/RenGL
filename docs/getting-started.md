@@ -11,11 +11,11 @@
 ## Dependencies
 
 RenGL is a set of Maven modules. Start with `rengl-core` and add the others when you need them (audio, video, Vulkan,
-3D, spell checking, ...), or depend on `me.piitex.engine:RenGL` for all of them. [Modules](modules.md) lists them.
+3D, spell checking, ...), or depend on `io.github.piitex:RenGL` for all of them. [Modules](modules.md) lists them.
 
 ```xml
 <dependency>
-    <groupId>me.piitex.engine</groupId>
+    <groupId>io.github.piitex</groupId>
     <artifactId>rengl-core</artifactId>
     <version>0.1.0</version>
 </dependency>
@@ -80,13 +80,13 @@ sets, so the same `pom.xml` builds on Windows, Linux and macOS:
 
     <dependencies>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>RenGL</artifactId>
             <version>${rengl.version}</version>
         </dependency>
         <!-- The native libraries (LWJGL and Skiko) of the platform the profiles below pick. -->
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>RenGL</artifactId>
             <version>${rengl.version}</version>
             <classifier>${rengl.natives}</classifier>
@@ -183,7 +183,7 @@ A project that depends on individual modules adds the classifier to each module 
 <dependencyManagement>
     <dependencies>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-bom</artifactId>
             <version>${rengl.version}</version>
             <type>pom</type>
@@ -194,20 +194,20 @@ A project that depends on individual modules adds the classifier to each module 
 
 <dependencies>
     <dependency>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-core</artifactId>
     </dependency>
     <dependency>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-core</artifactId>
         <classifier>${rengl.natives}</classifier>
     </dependency>
     <dependency>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-audio</artifactId>
     </dependency>
     <dependency>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-audio</artifactId>
         <classifier>${rengl.natives}</classifier>
     </dependency>

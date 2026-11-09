@@ -21,7 +21,7 @@ This turns any RenGL project into an app you can hand to someone. It assumes onl
 - **JDK 25** is installed and on your `PATH`. `java -version` should say 25.
 - **The RenGL source folder** (this repository) is on your computer. Below, `C:\Path\To\RenGL` stands for wherever you
   cloned it.
-- **Your project is a Maven project** (it has a `pom.xml`) that depends on `me.piitex.engine:RenGL` and has a class
+- **Your project is a Maven project** (it has a `pom.xml`) that depends on `io.github.piitex:RenGL` and has a class
   with a `main` method. It needs no packaging files of its own.
 
 You need an internet connection the first time.
@@ -167,7 +167,7 @@ Your build brings only the jar of the computer it runs on. Step 1 of the quick s
 repository, so copy them in:
 
 ```powershell
-Copy-Item "$env:USERPROFILE\.m2\repository\me\piitex\engine\RenGL\0.1.0\RenGL-0.1.0-natives-*.jar" target\input\
+Copy-Item "$env:USERPROFILE\.m2\repository\io\github\piitex\RenGL\0.1.0\RenGL-0.1.0-natives-*.jar" target\input\
 ```
 
 `0.1.0` is the engine's version in its `pom.xml`. With the RenGL [modules](../modules.md) rather than the one
@@ -178,7 +178,7 @@ Copy-Item "$env:USERPROFILE\.m2\repository\me\piitex\engine\RenGL\0.1.0\RenGL-0.
 The packager is the jar that step 1 installed, with a version in its name. Run it with Java 25:
 
 ```powershell
-$packager = "$env:USERPROFILE\.m2\repository\me\piitex\engine\rengl-packager\0.1.0\rengl-packager-0.1.0.jar"
+$packager = "$env:USERPROFILE\.m2\repository\io\github\piitex\rengl-packager\0.1.0\rengl-packager-0.1.0.jar"
 
 java --enable-native-access=ALL-UNNAMED -jar $packager `
   --name MyApp --app-version 1.0.0 `
