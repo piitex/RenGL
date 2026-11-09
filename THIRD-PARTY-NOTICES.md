@@ -61,6 +61,10 @@ ones relevant to RenGL's modules are:
 | Khronos OpenGL and Vulkan headers | OpenGL and Vulkan bindings | MIT-style Khronos license |
 | stb, SPIRV-Cross | images and fonts; shader cross-compilation | not in LWJGL's repository; from the upstream projects: stb is public domain / MIT, SPIRV-Cross is Apache-2.0 |
 
+The `natives-<platform>` jars that RenGL publishes contain these libraries' binaries. Each of
+those jars carries the license texts in `META-INF/licenses/rengl/` (the sources are in
+[licenses/natives](licenses/natives)), because several of the licenses require it.
+
 OpenAL Soft is loaded by LWJGL as a separate shared library, so you can replace it with
 your own build of OpenAL Soft. If you ship it, you must also pass on the LGPL's terms; the
 license text is in LWJGL's repository at `modules/lwjgl/openal/openal_soft_license.txt`.

@@ -593,6 +593,34 @@
                         </execution>
                     </executions>
                 </plugin>
+                <!--
+                  Puts the licenses of the native libraries (licenses/natives) into every natives-<platform> jar, under
+                  META-INF/licenses/rengl, because the BSD and MIT licenses require the notice to travel with the binaries.
+                  A module that owns natives lists this plugin in its natives-bundle-all profile, after the unpack execution
+                  (both run in prepare-package, in the order they are declared, and the jar is built in package).
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <version>3.1.0</version>
+                    <executions>
+                        <execution>
+                            <id>natives-licenses</id>
+                            <phase>prepare-package</phase>
+                            <goals><goal>run</goal></goals>
+                            <configuration>
+                                <target>
+                                    <copy todir="${project.build.directory}/natives/natives-linux/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
+                                    <copy todir="${project.build.directory}/natives/natives-linux-arm64/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
+                                    <copy todir="${project.build.directory}/natives/natives-macos/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
+                                    <copy todir="${project.build.directory}/natives/natives-macos-arm64/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
+                                    <copy todir="${project.build.directory}/natives/natives-windows/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
+                                    <copy todir="${project.build.directory}/natives/natives-windows-arm64/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
+                                </target>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
