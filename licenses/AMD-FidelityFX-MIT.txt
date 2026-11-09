@@ -4,12 +4,11 @@ The rengl-upscale module calls the FidelityFX libraries and follows the interfac
 (Kits/FidelityFX/api/include, upscalers/include, framegeneration/include). It contains none of the SDK's
 files. The libraries are not part of RenGL.
 
-This is NOT the license of the compiled libraries in the SDK's Kits/FidelityFX/signedbin folder
-(amd_fidelityfx_*.dll). Those are under the first, binary-only part of the SDK's license file, which
-allows redistribution in binary form only, forbids reverse engineering, and requires the copyright
-notice, permission notice and disclaimers of that license to be reproduced in the documentation or other
-materials that come with them. If you ship those libraries, take the license file from the SDK you got
-them from and ship it with them.
+The SDK's license file has two parts. The first (binary-only redistribution, no reverse engineering,
+notices reproduced) covers all files except those the file lists. The second, the text below, covers the
+listed files. In the version we read, that list includes the headers and the compiled libraries in
+Kits/FidelityFX/signedbin (amd_fidelityfx_*.dll). If you ship those libraries, take the license file from
+the SDK you got them from, since its list can change, and ship it with them.
 
 Copyright (C) Advanced Micro Devices, Inc.
 

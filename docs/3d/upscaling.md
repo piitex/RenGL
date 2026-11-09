@@ -281,12 +281,13 @@ Points to look for, as the licenses read when this was written (the text can cha
   before a commercial release (at <https://developer.nvidia.com/sw-notification>), to credit the SDK on the splash
   screen, the about box and the credits, and to get NVIDIA's approval for use of its trademarks. It also forbids using
   the SDK in a way that puts it under an open-source license.
-- **AMD FSR and FidelityFX.** The source and header files of the
-  [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) are under the MIT license, but the
-  compiled libraries in its `Kits/FidelityFX/signedbin` folder (`amd_fidelityfx_*.dll`) are not: they are under the
-  first part of the SDK's license file. That part lets you redistribute them in binary form only, forbids reverse
-  engineering them, and requires the SDK's copyright notice, permission notice and disclaimers to be reproduced in
-  the documentation or other materials that come with them. So ship the SDK's license file with them. AMD's
+- **AMD FSR and FidelityFX.** The [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK)'s
+  license file has two parts. The first (redistribution in binary form only, no reverse engineering, notices
+  reproduced) applies to all files except the ones the file lists. The second, the MIT license, applies to the files it
+  lists, and in the version we read that list includes the headers and the compiled libraries in
+  `Kits/FidelityFX/signedbin` (`amd_fidelityfx_*.dll`). So those libraries are under the MIT license: keep AMD's copyright
+  and permission notice with them (ship the SDK's license file). Check the license file of the SDK version you ship,
+  since the list can change, and treat any file it does not list as covered by the first part. AMD's
   [naming guidelines](https://gpuopen.com/amd-fsr-naming-guidelines/) for options screens and logos are
   recommendations, not requirements.
 - **Apple MetalFX** is part of macOS. You do not ship it.
