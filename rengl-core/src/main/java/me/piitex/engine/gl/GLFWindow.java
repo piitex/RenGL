@@ -741,4 +741,12 @@ public class GLFWindow {
     public long getWindow() {
         return window;
     }
+
+    /**
+     * The Win32 window handle (an {@code HWND}) of this window, or 0 when this is not Windows or the window is not open.
+     */
+    public long getWin32Handle() {
+        if (window == 0 || !System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("windows")) return 0;
+        return GLFWNativeWin32.glfwGetWin32Window(window);
+    }
 }

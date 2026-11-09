@@ -150,6 +150,15 @@ public class Window implements Themeable, PopupHost {
     }
 
     /**
+     * The operating system's handle for this window: the {@code HWND} on Windows. 0 on other systems, and before the
+     * window has opened. For code that has to hand the window to the system, such as a child window that sits in it.
+     */
+    public long getNativeHandle() {
+        GLFWindow g = glfWindow;
+        return g == null ? 0 : g.getWin32Handle();
+    }
+
+    /**
      * Changes the window's frame while the app is running, for example {@link WindowStyle#BORDERLESS} for a splash
      * screen and {@link WindowStyle#STANDARD} once the main UI is ready. Safe from any thread. Before
      * {@link Engine#start} it just records the style for the window to be created with.
