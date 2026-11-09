@@ -174,6 +174,42 @@ class Scene3DFileTest {
     }
 
     @Test
+    void aHeightMapAndItsDepthAreKeptAndOnlyShownWhenThereIsOne() throws IOException {
+        png(temp.resolve("assets/height.png"), 4, 4, 0x808080);
+        Scene3D scene = new Scene3D();
+        Node3D cube = SceneKinds.newNode(Shape.CUBE, "Box");
+        Material m = cube.getMaterial();
+        material("pbr").set(m, true);
+        assertFalse(material("heightScale").appliesTo(m), "no depth to set until there is a height map");
+        material("heightTexture").set(m, "assets/height.png", temp);
+        material("heightScale").set(m, 0.12f);
+        assertTrue(material("heightScale").appliesTo(m));
+        assertNotNull(m.getHeightTexture());
+        scene.add(cube);
+
+        String json = roundTrip(scene, temp);
+        assertTrue(json.contains("heightTexture") && json.contains("heightScale"), json);
+        Material back = Scene3DFile.find(Scene3DFile.parse(json, temp, false), "Box").getMaterial();
+        assertNotNull(back.getHeightTexture());
+        assertEquals(0.12f, back.getHeightScale(), 1e-6f);
+        assertEquals("assets/height.png", material("heightTexture").get(back));
+
+        material("heightScale").set(back, 99f);
+        assertEquals(Material.MAX_HEIGHT_SCALE, back.getHeightScale(), 1e-6f, "too deep is held at the most");
+
+        Material plain = SceneKinds.newNode(Shape.CUBE, "Plain").getMaterial();
+        assertFalse(roundTrip(sceneOf(plain), temp).contains("heightTexture"), "a material with none doesn't write one");
+    }
+
+    private static Scene3D sceneOf(Material material) {
+        Scene3D scene = new Scene3D();
+        Node3D cube = SceneKinds.newNode(Shape.CUBE, "Plain");
+        cube.setMaterial(material);
+        scene.add(cube);
+        return scene;
+    }
+
+    @Test
     void aPlainMaterialStaysPlainAndSettingTexturesDoesntTurnOnPbr() throws IOException {
         png(temp.resolve("t.png"), 2, 2, 0xffffff);
         Material m = new Material();

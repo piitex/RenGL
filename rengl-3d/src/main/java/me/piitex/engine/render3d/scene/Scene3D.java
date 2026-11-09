@@ -1060,7 +1060,7 @@ public class Scene3D implements Viewport3D.Content {
             Material m = node.getMaterial();
             if (m == null) return;
             for (TextureData t : new TextureData[]{m.getTexture(), m.getNormalTexture(), m.getMetallicRoughnessTexture(),
-                    m.getOcclusionTexture(), m.getEmissiveTexture()}) {
+                    m.getOcclusionTexture(), m.getEmissiveTexture(), m.getHeightTexture()}) {
                 if (t != null && seen.put(t, true) == null) items.add(t);
             }
         });

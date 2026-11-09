@@ -62,7 +62,8 @@ properties does nothing. It can still be hidden with `visible`. `Scene3DFile.isF
 
 A `material` has the properties of [`Material`](scenes.md#material): `color`, `texture`, `unlit`, `doubleSided`, `blend`,
 `additive`, `alphaCutoff`, `pbr`, `specular`, `shininess`, `metallic`, `roughness`, `normalTexture`, `normalScale`,
-`metallicRoughnessTexture`, `occlusionTexture`, `emissiveTexture`, and a glow as `emissiveColor` and `emissiveStrength`.
+`metallicRoughnessTexture`, `occlusionTexture`, `emissiveTexture`, `heightTexture` with its depth `heightScale`, and a glow as
+`emissiveColor` and `emissiveStrength`.
 A glow that also [lights its surroundings](lighting.md#glowing-surfaces) adds `glowRange` and `glowStrength`. Every node has a
 material of its own. A node can be an `occluder`, and the scene has a `lightMode` (`AUTO`, `DIRECT` or `CLUSTERED`) and
 `occlusionCulling`; see [Many lights](lighting.md#many-lights) and [Occlusion culling](scenes.md#occlusion-culling). All of
