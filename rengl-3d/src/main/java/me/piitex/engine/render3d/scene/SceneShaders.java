@@ -40,6 +40,14 @@ final class SceneShaders {
      * from this one up: base colour, normal, metallic-roughness, occlusion, emissive.
      */
     static final int FLAG_UV1_SHIFT = 2;
+    /**
+     * A material's height map is on when the bits from here up, which hold its depth in thousandths of a unit, are not 0. The
+     * slots' coordinate bits end at bit 7, and a float holds a whole number up to 2^24, which leaves room for a depth of 32.
+     */
+    static final int FLAG_HEIGHT_SHIFT = 8;
+    static final int FLAG_HEIGHT_UNITS = 1000;
+    /** The binding of a material's height map, after the ray tracing and light bounce bindings, which stay clear of the material's own. */
+    static final int HEIGHT_BINDING = 19;
 
     static final int MODE_CLASSIC = 0;
     static final int MODE_PBR = 1;
@@ -968,6 +976,8 @@ final class SceneShaders {
             layout(set = 0, binding = 5) uniform sampler2D occlusionTexture;
             layout(set = 0, binding = 6) uniform sampler2D emissiveTexture;
             layout(set = 0, binding = 7) uniform sampler2D shadowMap;
+            layout(set = 0, binding = """ + HEIGHT_BINDING + """
+            ) uniform sampler2D heightTexture;
             //@RAY_DECLS
             #if ENV_KIND == 2
             layout(set = 0, binding = 8) uniform samplerCube envMap;
@@ -1180,6 +1190,41 @@ final class SceneShaders {
 
             //@GI_FUNCTIONS
 
+            // How far a texture coordinate moves for the point it reads to move by d, a distance along the surface in the world.
+            // The surface's directions of increasing u and v come from the screen-space derivatives of the coordinate, and d is
+            // put in terms of them (it is Cramer's rule on the plane of the surface, so a stretched or skewed mapping is right).
+            vec2 uvShift(vec2 uv, vec3 n, vec3 d) {
+                vec3 dp1 = dFdx(vWorldPos);
+                vec3 dp2 = dFdy(vWorldPos);
+                vec2 duv1 = dFdx(uv);
+                vec2 duv2 = dFdy(uv);
+                float det = duv1.x * duv2.y - duv1.y * duv2.x;
+                if (abs(det) < 1e-20) return vec2(0.0);
+                float invDet = 1.0 / det;
+                vec3 pu = (dp1 * duv2.y - dp2 * duv1.y) * invDet;
+                vec3 pv = (dp2 * duv1.x - dp1 * duv2.x) * invDet;
+                float area = dot(cross(pu, pv), n);
+                if (abs(area) < 1e-20) return vec2(0.0);
+                return vec2(dot(cross(d, pv), n), dot(cross(pu, d), n)) / area;
+            }
+
+            // The fraction of the height map's depth where a view ray, going down into the surface, meets it (parallax occlusion
+            // mapping): stepped along in layers until the ray is under the surface, then the last two steps are blended to find
+            // where it crossed. full is the shift of the texture coordinate when the ray has gone all the way down.
+            float parallaxDepth(vec2 uv, vec2 full, vec2 ddx, vec2 ddy, float facing) {
+                int layers = int(mix(48.0, 12.0, facing));
+                float prevS = 0.0;
+                float prevF = textureGrad(heightTexture, uv, ddx, ddy).r - 1.0;
+                for (int i = 1; i <= layers; i++) {
+                    float s = float(i) / float(layers);
+                    float f = s + textureGrad(heightTexture, uv + full * s, ddx, ddy).r - 1.0;
+                    if (f >= 0.0) return mix(prevS, s, clamp(-prevF / max(f - prevF, 1e-5), 0.0, 1.0));
+                    prevS = s;
+                    prevF = f;
+                }
+                return 1.0;
+            }
+
             void main() {
                 int mode = int(vParams.z + 0.5);
                 int flags = int(vExtra.w + 0.5);
@@ -1189,6 +1234,36 @@ final class SceneShaders {
                 vec2 uvMetalRough = (flags & 16) != 0 ? vUv1 : vUv;
                 vec2 uvOcclusion = (flags & 32) != 0 ? vUv1 : vUv;
                 vec2 uvEmissive = (flags & 64) != 0 ? vUv1 : vUv;
+                // The normal map's frame is worked out from the coordinates the surface really has, not the ones a height map moved.
+                vec2 uvFrame = uvNormal;
+                float heightDepth = float(flags >> """ + FLAG_HEIGHT_SHIFT + """
+            ) / """ + (float) FLAG_HEIGHT_UNITS + """
+            ;
+                if (heightDepth > 0.0) {
+                    // The height map moves where every texture is read, as if the surface were deep: a point lower down is seen
+                    // further along the line of sight, so it shifts away from the camera as the camera goes round.
+                    vec2 uvHeight = (flags & 128) != 0 ? vUv1 : vUv;
+                    vec3 sn = normalize(vNormal);
+                    if (!gl_FrontFacing) sn = -sn;
+                    vec3 toEye = normalize(cameraPos.xyz - vWorldPos);
+                    float facing = clamp(dot(toEye, sn), 0.0, 1.0);
+                    // The ray's way along the surface for each unit it goes down; the last of the angle is left out so that a surface
+                    // seen edge on does not fling the texture across itself.
+                    vec3 along = -(toEye - sn * dot(toEye, sn)) / max(facing, 0.2) * heightDepth;
+                    vec2 full = uvShift(uvHeight, sn, along);
+                    float s = parallaxDepth(uvHeight, full, dFdx(uvHeight), dFdy(uvHeight), facing);
+                    vec2 shift = full * s;
+                    // The other set of coordinates, for the textures that read it, is moved by the same distance along the surface.
+                    vec3 moved = along * s;
+                    bool heightOn1 = (flags & 128) != 0;
+                    vec2 shift0 = heightOn1 ? ((flags & 124) != 124 ? uvShift(vUv, sn, moved) : vec2(0.0)) : shift;
+                    vec2 shift1 = heightOn1 ? shift : ((flags & 124) != 0 ? uvShift(vUv1, sn, moved) : vec2(0.0));
+                    uvBase += (flags & 4) != 0 ? shift1 : shift0;
+                    uvNormal += (flags & 8) != 0 ? shift1 : shift0;
+                    uvMetalRough += (flags & 16) != 0 ? shift1 : shift0;
+                    uvOcclusion += (flags & 32) != 0 ? shift1 : shift0;
+                    uvEmissive += (flags & 64) != 0 ? shift1 : shift0;
+                }
                 vec4 tex = texture(baseTexture, uvBase, cameraFwd.w);
                 vec3 albedo = pow(tex.rgb * vTint.rgb, vec3(2.2));
                 float alpha = tex.a * vTint.a;
@@ -1202,8 +1277,8 @@ final class SceneShaders {
                     if (!gl_FrontFacing) n = -n;
                     vec3 dp1 = dFdx(vWorldPos);
                     vec3 dp2 = dFdy(vWorldPos);
-                    vec2 duv1 = dFdx(uvNormal);
-                    vec2 duv2 = dFdy(uvNormal);
+                    vec2 duv1 = dFdx(uvFrame);
+                    vec2 duv2 = dFdy(uvFrame);
                     if ((flags & 1) != 0) {
                         // The surface's own directions of increasing u and v, solved from the screen-space derivatives
                         // (the same on both APIs, whichever way the screen's y runs). Image rows run down, so the

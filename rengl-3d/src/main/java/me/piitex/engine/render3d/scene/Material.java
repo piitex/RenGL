@@ -33,6 +33,8 @@ public final class Material {
     private TextureData metallicRoughnessTexture;
     private TextureData occlusionTexture;
     private TextureData emissiveTexture;
+    private TextureData heightTexture;
+    private float heightScale = DEFAULT_HEIGHT_SCALE;
     private float emissiveR, emissiveG, emissiveB;
     private float glowRange, glowStrength = 1f;
     /** How many materials have a glow on, so a scene with none skips looking for them. */
@@ -293,6 +295,45 @@ public final class Material {
         return this;
     }
 
+    /**
+     * How deep a height map looks when no other depth is set: 5 cm, if a world unit is a metre.
+     */
+    public static final float DEFAULT_HEIGHT_SCALE = 0.05f;
+    /**
+     * The deepest a height map can be made, in world units. Past this the picture tears apart.
+     */
+    public static final float MAX_HEIGHT_SCALE = 0.5f;
+
+    public TextureData getHeightTexture() {
+        return heightTexture;
+    }
+
+    /**
+     * A picture of how high each point of the surface is, white high and black low, read from the red channel (a grey picture
+     * is fine). The surface is drawn as if it had that relief: what is deeper moves behind what is higher as the camera moves
+     * (parallax occlusion mapping), which a normal map alone can't show. The geometry itself stays flat, so the outline of the
+     * object, its shadows and its collision are not changed. It reads the same texture coordinates as the colour, and how deep
+     * it is comes from {@link #setHeightScale}.
+     */
+    public Material setHeightTexture(TextureData texture) {
+        this.heightTexture = texture;
+        this.pbr = true;
+        return this;
+    }
+
+    public float getHeightScale() {
+        return heightScale;
+    }
+
+    /**
+     * How far down the black parts of the height map are from the white ones, in world units (the node's own scale
+     * counts). 0 flattens it. Up to {@link #MAX_HEIGHT_SCALE}; a few centimetres is plenty for bricks and tiles.
+     */
+    public Material setHeightScale(float heightScale) {
+        this.heightScale = Math.max(0f, Math.min(MAX_HEIGHT_SCALE, heightScale));
+        return this;
+    }
+
     public float getEmissiveRed() {
         return emissiveR;
     }
@@ -366,7 +407,7 @@ public final class Material {
      * What a material's textures can read the second set of texture coordinates for.
      */
     public enum Slot {
-        BASE_COLOR, NORMAL, METALLIC_ROUGHNESS, OCCLUSION, EMISSIVE
+        BASE_COLOR, NORMAL, METALLIC_ROUGHNESS, OCCLUSION, EMISSIVE, HEIGHT
     }
 
     /**

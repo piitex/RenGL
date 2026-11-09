@@ -197,6 +197,9 @@ class SceneGpuTest {
                 }), null, (scene, b, a, px, r) -> allRed(px, r)),
                 new Scenario("second coordinates a mesh does not have", () -> uvPlane(m -> m.setTexCoordSet(Material.Slot.BASE_COLOR, 1), null), null,
                         (scene, b, a, px, r) -> halves("second set missing", px, r, true, true)),
+                new Scenario("a surface with no height map", () -> ridge(false, 0.5f), null, (scene, b, a, px, r) -> ridgeCheck(false, px, r)),
+                new Scenario("a height map as deep as nothing", () -> ridge(true, 0f), null, (scene, b, a, px, r) -> ridgeCheck(false, px, r)),
+                new Scenario("a height map", () -> ridge(true, 0.5f), null, (scene, b, a, px, r) -> ridgeCheck(true, px, r)),
                 new Scenario("sorted triangles", () -> folded(true), null, (scene, before, after, px, r) -> foldedCheck(true, px, r)),
                 new Scenario("unsorted triangles", () -> folded(false), null, (scene, before, after, px, r) -> foldedCheck(false, px, r))};
     }
@@ -593,6 +596,42 @@ class SceneGpuTest {
             boolean sameAcross = (red(a) && red(b) && blue(c) && blue(d)) || (blue(a) && blue(b) && red(c) && red(d));
             r.check("textures: turned a quarter", sameAcross, java.util.Arrays.toString(a) + java.util.Arrays.toString(b)
                     + java.util.Arrays.toString(c) + java.util.Arrays.toString(d));
+        });
+    }
+
+    // ---- a height map ------------------------------------------------------------------------------------------------
+
+    /**
+     * A plane with a 64-pixel colour texture, red up to x = 0.16 and blue after it, and, with {@code map}, a height map that is high
+     * (white) up to x = 0 and low (black) after it: a step down. The camera looks from the +X side and down, so a ray into the
+     * surface travels towards -X, and over the low part sees the wall of the step, which is red, a little way in from the edge.
+     */
+    private static Scene3D ridge(boolean map, float depth) {
+        Scene3D scene = base();
+        byte[] colour = new byte[64 * 4];
+        byte[] height = new byte[64 * 4];
+        for (int x = 0; x < 64; x++) {
+            boolean red = x < 33; // the colour changes a little past the step, so the wall of the step is red and not on the edge
+            colour[x * 4] = (byte) (red ? 255 : 0);
+            colour[x * 4 + 2] = (byte) (red ? 0 : 255);
+            colour[x * 4 + 3] = (byte) 255;
+            height[x * 4] = height[x * 4 + 1] = height[x * 4 + 2] = (byte) (x < 32 ? 255 : 0);
+            height[x * 4 + 3] = (byte) 255;
+        }
+        Material m = new Material(new TextureData(64, 1, colour)).setUnlit(true);
+        if (map) m.setHeightTexture(new TextureData(64, 1, height)).setHeightScale(depth);
+        scene.add(new Node3D("plane", Mesh.plane(10f, 10f), m));
+        scene.camera().lookAt(new Vec3(8f, 6f, 0f), new Vec3(0, 0, 0)).setFovYDegrees(50);
+        return scene;
+    }
+
+    private static void ridgeCheck(boolean deep, Pixels px, GpuHarness.Recorder r) {
+        String name = deep ? "a height map" : "no depth";
+        r.guard("height maps: " + name, () -> {
+            int[] left = px.rgb(-2.5f, 0f, 0f), near = px.rgb(0.3f, 0f, 0f), far = px.rgb(2.5f, 0f, 0f);
+            String seen = java.util.Arrays.toString(left) + java.util.Arrays.toString(near) + java.util.Arrays.toString(far);
+            r.check("height maps: " + name + ", away from the step", red(left) && blue(far), seen);
+            r.check("height maps: " + name + ", at the step", deep ? red(near) : blue(near), seen);
         });
     }
 

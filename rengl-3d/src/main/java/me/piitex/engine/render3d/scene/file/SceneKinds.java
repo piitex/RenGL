@@ -295,6 +295,14 @@ public final class SceneKinds {
                 .tip("Baked shadow in creases, in its red channel");
         prop(MATERIAL, "emissiveTexture", "Glow Map", String.class, maps, m -> SceneMeta.material(m).textures[MaterialInfo.EMISSIVE],
                 (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.EMISSIVE, s(x), b)).omitWhen("").hint(Hint.IMAGE).when(Material::isPbr);
+        prop(MATERIAL, "heightTexture", "Height Map", String.class, maps, m -> SceneMeta.material(m).textures[MaterialInfo.HEIGHT],
+                (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.HEIGHT, s(x), b)).omitWhen("").hint(Hint.IMAGE).when(Material::isPbr)
+                .tip("How high each point of the surface is, white high and black low, so bricks and tiles look deep and shift as you move. "
+                        + "Downloads call it Height or Displacement. It only changes how the surface looks, not its shape, shadows or collision");
+        prop(MATERIAL, "heightScale", "Height Depth", Float.class, maps, Material::getHeightScale, (m, x, b) -> m.setHeightScale(f(x)))
+                .omitWhen(Material.DEFAULT_HEIGHT_SCALE).range(0, Material.MAX_HEIGHT_SCALE).step(0.005)
+                .when(m -> pbr(m) && !SceneMeta.material(m).textures[MaterialInfo.HEIGHT].isEmpty())
+                .tip("How far down the black parts of the height map are from the white, in scene units. A few centimetres is plenty");
 
         String placing = "Texture Placement";
         prop(MATERIAL, "uvOffsetU", "Shift Across", Float.class, placing, Material::getUvOffsetU,

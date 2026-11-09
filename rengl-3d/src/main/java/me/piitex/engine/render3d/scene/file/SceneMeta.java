@@ -58,8 +58,8 @@ final class SceneMeta {
 
     /** A material's own settings. */
     static final class MaterialInfo {
-        static final int BASE = 0, NORMAL = 1, METALLIC_ROUGHNESS = 2, OCCLUSION = 3, EMISSIVE = 4;
-        final String[] textures = {"", "", "", "", ""};
+        static final int BASE = 0, NORMAL = 1, METALLIC_ROUGHNESS = 2, OCCLUSION = 3, EMISSIVE = 4, HEIGHT = 5;
+        final String[] textures = {"", "", "", "", "", ""};
         Color emissiveColor = Color.WHITE;
         float emissiveStrength;
         /** How the glow blinks while the game runs, with no light needed. Its glow node is not used. */
@@ -382,6 +382,7 @@ final class SceneMeta {
             case MaterialInfo.NORMAL -> material.setNormalTexture(data);
             case MaterialInfo.METALLIC_ROUGHNESS -> material.setMetallicRoughnessTexture(data);
             case MaterialInfo.OCCLUSION -> material.setOcclusionTexture(data);
+            case MaterialInfo.HEIGHT -> material.setHeightTexture(data);
             default -> {
                 // A glow picture does nothing while there is no glow, so choosing one turns it on, as the engine does.
                 if (data != null && info.emissiveStrength == 0f) info.emissiveStrength = 1f;

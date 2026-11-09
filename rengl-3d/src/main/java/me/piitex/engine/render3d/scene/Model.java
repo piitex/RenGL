@@ -642,7 +642,8 @@ public final class Model {
                 log.warn("{} gives the textures of one material different transforms; every texture of it gets the first.", name);
             }
             Material.Slot[] slots = Material.Slot.values();
-            for (int slot = 0; slot < slots.length; slot++) material.setTexCoordSet(slots[slot], info.texCoords()[slot]);
+            // A glTF material has no height map, so it names a set for the slots before it only.
+            for (int slot = 0; slot < slots.length && slot < info.texCoords().length; slot++) material.setTexCoordSet(slots[slot], info.texCoords()[slot]);
         }
 
         /**

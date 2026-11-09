@@ -658,6 +658,7 @@ final class SceneRenderer {
                 pass.bindTexture(4, material.getMetallicRoughnessTexture() == null ? whiteTexture : gpuImage(material.getMetallicRoughnessTexture()));
                 pass.bindTexture(5, material.getOcclusionTexture() == null ? whiteTexture : gpuImage(material.getOcclusionTexture()));
                 pass.bindTexture(6, material.getEmissiveTexture() == null ? whiteTexture : gpuImage(material.getEmissiveTexture()));
+                pass.bindTexture(HEIGHT_BINDING, material.getHeightTexture() == null ? whiteTexture : gpuImage(material.getHeightTexture()));
             }
             lastMaterial[0] = material;
         }
@@ -1177,6 +1178,8 @@ final class SceneRenderer {
             if (before == null) before = world;
         }
         int flags = (m.getNormalTexture() != null ? FLAG_NORMAL_MAP : 0) | (draw.receive ? FLAG_RECEIVE_SHADOW : 0) | (m.texCoordBits() << FLAG_UV1_SHIFT);
+        // A height map is on when the depth, in thousandths of a unit, is above 0 in the bits over the flags.
+        if (m.getHeightTexture() != null) flags |= Math.round(m.getHeightScale() * FLAG_HEIGHT_UNITS) << FLAG_HEIGHT_SHIFT;
         int mode = m.isUnlit() || draw.mesh.isLines() ? MODE_UNLIT : m.isPbr() ? MODE_PBR : MODE_CLASSIC;
         float p0 = m.isPbr() ? m.getMetallic() : m.getSpecular();
         float p1 = m.isPbr() ? m.getRoughness() : Math.max(1f, m.getShininess());
