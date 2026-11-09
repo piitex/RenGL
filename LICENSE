@@ -1,10 +1,11 @@
 RenGL Open-Source-Game License (RSGL) 1.0
 
-Copyright (c) 2026 [LICENSOR NAME] ("Licensor")
+Copyright (c) 2026 Piitex ("Licensor")
 
 RenGL is free to use for games and applications whose source code is public, and for
-non-commercial work. Closed-source commercial products need a Commercial License. Nobody
-may sell or otherwise commercialize RenGL itself.
+non-commercial work. Closed-source commercial products need a Commercial License, which the
+Licensor does not currently offer, so for now they are not permitted. Nobody may sell or
+otherwise commercialize RenGL itself.
 
 This is a source-available license. It is not an OSI-approved open-source license.
 
@@ -82,8 +83,16 @@ the source of an Application you do not commercialize.
 4. COMMERCIAL USE OF CLOSED APPLICATIONS
 
 If an Application is not an Open Application, you need a Commercial License before you
-make any Commercial Use of it. Contact the Licensor at [CONTACT EMAIL OR URL]. The
-Licensor decides the fee and terms of a Commercial License and may refuse to grant one.
+make any Commercial Use of it.
+
+Commercial Licenses are not currently available. The Licensor is not accepting requests for
+them, so until that changes you may not make Commercial Use of an Application that is not an
+Open Application. The Licensor may start offering Commercial Licenses in the future and will
+announce it at https://github.com/piitex/RenGL. Whether, when, to whom and on what fee and
+terms is for the Licensor alone to decide, and the Licensor has no duty to offer one or to
+grant one to you. A Commercial License exists only once the Licensor has signed or issued it
+to you in writing; an announcement that licenses are available, correspondence, or silence
+does not create one.
 
 Making Commercial Use without a Commercial License, or after a Commercial License has
 ended, is a violation of this License.
@@ -182,7 +191,7 @@ IN CONNECTION WITH RENGL OR ITS USE OR OTHER DEALINGS IN IT.
 
 13. GENERAL
 
-This License is governed by the laws of [JURISDICTION], without regard to its conflict
+This License is governed by the laws of the State of South Dakota, USA, without regard to its conflict
 of laws rules. If a part of this License is unenforceable, the rest remains in force and
 that part is applied to the extent allowed. No rights are granted except those written
 here; the Licensor keeps everything else, including the rights to trademarks, and to offer
