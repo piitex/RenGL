@@ -42,6 +42,7 @@ public class Container extends Element implements Themeable, Draggable {
 
     private Container parent;
     private Window window;
+    private boolean addedBeforeWindowOpened = false;
     private me.piitex.engine.ui.PopupHost popupHost;
 
     private boolean draggable = false;
@@ -249,6 +250,20 @@ public class Container extends Element implements Themeable, Draggable {
      */
     public void setWindow(Window window) {
         this.window = window;
+        // The design size is set when the window opens, so while it is 0 this container is being laid out for the size the window was asked for
+        this.addedBeforeWindowOpened = window != null && window.getWindowOptions().getDesignWidth() == 0;
+    }
+
+    /**
+     * Whether the top-level Container this one sits in was added to its Window before the window opened, which means it was laid out for the
+     * size the window was asked for. A container added later (the window was already open, so its size is known) is laid out for the real size.
+     */
+    public boolean wasAddedBeforeWindowOpened() {
+        Container root = this;
+        while (root.parent != null) {
+            root = root.parent;
+        }
+        return root.addedBeforeWindowOpened;
     }
 
     /**

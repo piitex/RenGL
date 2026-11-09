@@ -26,6 +26,39 @@ class WindowOpenedMaximizedTest {
     }
 
     @Test
+    void aSplashScreenDelayingTheFirstUpdateDoesNotLeaveTheUiAtTheRequestedSize() {
+        WindowOptions options = new WindowOptions("test").setDimensions(800, 500);
+        Window window = new Window(options);
+        ResizableContainer panel = new ResizableContainer(0, 0, 800, 500);
+        window.addContainer(panel);
+
+        options.markOpened();
+        options.syncDimensions(1600, 1000);
+        // The splash and the warm-ups hold the application back, so many frames run before the panel's first update
+        for (int frame = 0; frame < 300; frame++) window.recordFrame(16_000_000L);
+
+        panel.update(0f);
+
+        assertEquals(1600, panel.getWidth(), 0.001);
+        assertEquals(1000, panel.getHeight(), 0.001);
+    }
+
+    @Test
+    void aContainerAddedAfterTheWindowOpenedIsLaidOutForItsRealSize() {
+        WindowOptions options = new WindowOptions("test").setDimensions(800, 500);
+        Window window = new Window(options);
+        options.markOpened();
+        options.syncDimensions(1600, 1000);
+
+        ResizableContainer panel = new ResizableContainer(0, 0, 1600, 1000);
+        window.addContainer(panel);
+        panel.update(0f);
+
+        assertEquals(1600, panel.getWidth(), 0.001);
+        assertEquals(1000, panel.getHeight(), 0.001);
+    }
+
+    @Test
     void theDesignSizeIsTheFirstOpenOnly() {
         WindowOptions options = new WindowOptions("test").setDimensions(800, 500);
         options.markOpened();
