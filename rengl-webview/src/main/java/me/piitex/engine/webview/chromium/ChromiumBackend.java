@@ -223,9 +223,13 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
                 throw new IllegalStateException("The browser exited at start (code " + started.exitValue() + ")");
             }
             if (Files.isRegularFile(file)) {
-                List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-                if (lines.size() >= 2 && !lines.get(0).isBlank() && !lines.get(1).isBlank()) {
-                    return URI.create("ws://127.0.0.1:" + lines.get(0).trim() + lines.get(1).trim());
+                try {
+                    List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+                    if (lines.size() >= 2 && !lines.get(0).isBlank() && !lines.get(1).isBlank()) {
+                        return URI.create("ws://127.0.0.1:" + lines.get(0).trim() + lines.get(1).trim());
+                    }
+                } catch (IOException stillBeingWritten) {
+                    // Windows refuses to read a file the browser has open for writing; the next try will get it
                 }
             }
             Thread.sleep(40);
