@@ -458,7 +458,10 @@
           that Central requires are already built by every module (see the build below). This
           profile adds the other requirement, GPG signatures, and uploads the bundle:
 
-            ./mvnw -Prelease -DskipTests -DskipAutoNatives -Dnatives.platform=all deploy
+            ./mvnw -Prelease -DskipTests -Dnatives.platform=all deploy
+
+          (Not -DskipAutoNatives: the "all" bundle needs the host's own natives profile for its
+          placeholders. On Windows, add -Dgpg.executable=... if gpg is not on the PATH.)
 
           It needs your GPG key (set up with gpg or the key's passphrase in an agent) and a
           Central Portal user token saved under the id "central" in ~/.m2/settings.xml. The
