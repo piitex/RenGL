@@ -38,6 +38,11 @@
         </dependency>
         <dependency>
             <groupId>me.piitex.engine</groupId>
+            <artifactId>rengl-webview</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>me.piitex.engine</groupId>
             <artifactId>rengl-vulkan</artifactId>
             <version>${project.version}</version>
         </dependency>
