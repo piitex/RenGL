@@ -66,7 +66,7 @@ public final class RenGLSplash implements Splash {
     private static final Color FOOTER_COLOR = new Color(0.7f, 0.74f, 0.95f, 1f);
     private static final Color STAR_COLOR = new Color(0.78f, 0.85f, 1f, 1f);
 
-    private static final String TAGLINE = "Java GUI Engine";
+    private static final String TAGLINE = "A Modern LWJGL Framework";
     private static final String WORD = "RenGL";
 
     /**
