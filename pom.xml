@@ -25,6 +25,7 @@
         <module>rengl-core</module>
         <module>rengl-audio</module>
         <module>rengl-video</module>
+        <module>rengl-webview</module>
         <module>rengl-vulkan</module>
         <module>rengl-3d</module>
         <module>rengl-upscale</module>
