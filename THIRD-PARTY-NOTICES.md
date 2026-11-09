@@ -204,9 +204,12 @@ vendors under their terms.
 
 The rengl-upscale module carries no vendor binaries; the libraries are found at run time. It
 is RenGL's own code that calls them, written against the interfaces that NVIDIA publishes with
-Streamline (MIT-style license, Copyright (c) 2023 NVIDIA Corporation) and AMD publishes with the
-FidelityFX SDK (MIT license, Copyright (C) Advanced Micro Devices, Inc.). It does not include
-the source files of either. If you ship any of the libraries, their licenses are yours to follow; see
+Streamline (MIT-style license, Copyright (c) 2023 NVIDIA Corporation, text in
+[licenses/NVIDIA-Streamline-MIT.txt](licenses/NVIDIA-Streamline-MIT.txt)) and AMD publishes with the
+FidelityFX SDK (MIT license for its source and headers, Copyright (C) Advanced Micro Devices, Inc.,
+text in [licenses/AMD-FidelityFX-MIT.txt](licenses/AMD-FidelityFX-MIT.txt)). It does not include
+the source files of either. AMD's compiled libraries are under a different, binary-only license, and
+NVIDIA's DLSS libraries under the NVIDIA RTX SDKs license. If you ship any of the libraries, their licenses are yours to follow; see
 [Licenses and names](docs/3d/upscaling.md#licenses-and-names).
 
 ## Trademarks

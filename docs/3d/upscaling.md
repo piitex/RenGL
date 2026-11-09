@@ -271,19 +271,24 @@ not cover them and does not give you any right to them**. Read those licenses be
 
 Points to look for, as the licenses read when this was written (the text can change, so check the current one):
 
-- **NVIDIA DLSS and Streamline.** DLSS is licensed through the
+- **NVIDIA Streamline.** Streamline's own files (its headers and `sl.*.dll` libraries) are under an
+  [MIT-style license](https://github.com/NVIDIAGameWorks/Streamline/blob/main/license.txt), except
+  `sl_nvperf.h` and `sl_nvperf.dll`, which are under the Nsight Perf SDK license. RenGL does not use those two.
+- **NVIDIA DLSS.** The DLSS libraries (`nvngx_dlss*.dll`) are licensed through the
   [NVIDIA RTX SDKs license](https://github.com/NVIDIA/DLSS/blob/main/LICENSE.txt) (version of March 14, 2024 when this was
   written). It lets you distribute the libraries only inside an application that has substantial functionality of its
   own, not on their own, and its DLSS supplement limits the use to systems with NVIDIA GPUs. It asks you to tell NVIDIA
   before a commercial release (at <https://developer.nvidia.com/sw-notification>), to credit the SDK on the splash
   screen, the about box and the credits, and to get NVIDIA's approval for use of its trademarks. It also forbids using
-  the SDK in a way that puts it under an open-source license. Streamline has its own
-  [license](https://github.com/NVIDIAGameWorks/Streamline/blob/main/license.txt) for its files.
-- **AMD FSR and FidelityFX.** The source files of the [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK)
-  are under the MIT license. The [license page of the FSR SDK](https://gpuopen.com/manuals/fsr_sdk/license/) lists
-  the compiled libraries separately: they may be redistributed in binary form, with AMD's copyright and license
-  notices, and not reverse engineered. AMD's [naming guidelines](https://gpuopen.com/amd-fsr-naming-guidelines/) for
-  options screens and logos are recommendations, not requirements.
+  the SDK in a way that puts it under an open-source license.
+- **AMD FSR and FidelityFX.** The source and header files of the
+  [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) are under the MIT license, but the
+  compiled libraries in its `Kits/FidelityFX/signedbin` folder (`amd_fidelityfx_*.dll`) are not: they are under the
+  first part of the SDK's license file. That part lets you redistribute them in binary form only, forbids reverse
+  engineering them, and requires the SDK's copyright notice, permission notice and disclaimers to be reproduced in
+  the documentation or other materials that come with them. So ship the SDK's license file with them. AMD's
+  [naming guidelines](https://gpuopen.com/amd-fsr-naming-guidelines/) for options screens and logos are
+  recommendations, not requirements.
 - **Apple MetalFX** is part of macOS. You do not ship it.
 
 If you ship the libraries with your program, you ship them yourself (RenGL's packager does not add them for you), with
