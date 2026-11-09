@@ -1,0 +1,20 @@
+AMD FidelityFX SDK: license of its source files and headers (the MIT part of its license file)
+
+The rengl-upscale module calls the FidelityFX libraries and follows the interface of the SDK's headers
+(Kits/FidelityFX/api/include, upscalers/include, framegeneration/include). It contains none of the SDK's
+files. The libraries are not part of RenGL.
+
+This is NOT the license of the compiled libraries in the SDK's Kits/FidelityFX/signedbin folder
+(amd_fidelityfx_*.dll). Those are under the first, binary-only part of the SDK's license file, which
+allows redistribution in binary form only, forbids reverse engineering, and requires the copyright
+notice, permission notice and disclaimers of that license to be reproduced in the documentation or other
+materials that come with them. If you ship those libraries, take the license file from the SDK you got
+them from and ship it with them.
+
+Copyright (C) Advanced Micro Devices, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
