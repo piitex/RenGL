@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-parent</artifactId>
         <version>0.1.0</version>
     </parent>
@@ -21,7 +21,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-core</artifactId>
             <version>${project.version}</version>
         </dependency>

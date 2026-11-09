@@ -7,7 +7,7 @@ that only needs a window and UI does not carry OpenAL, Opus, Vulkan, Lucene, ass
 the package names it always had (`me.piitex.engine.*`), so moving between the modules and the one-jar `RenGL` below
 changes the `pom.xml` and no code.
 
-All artifacts have the group id `me.piitex.engine` and the same version.
+All artifacts have the group id `io.github.piitex` and the same version.
 
 | Artifact | What it adds | Third-party libraries it brings | Natives |
 |---|---|---|---|
@@ -33,7 +33,7 @@ The simplest choice is the whole engine, as before:
 
 ```xml
 <dependency>
-    <groupId>me.piitex.engine</groupId>
+    <groupId>io.github.piitex</groupId>
     <artifactId>RenGL</artifactId>
     <version>0.1.0</version>
 </dependency>
@@ -45,7 +45,7 @@ To take less, import the BOM once so the modules share a version, then list the 
 <dependencyManagement>
     <dependencies>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-bom</artifactId>
             <version>0.1.0</version>
             <type>pom</type>
@@ -56,11 +56,11 @@ To take less, import the BOM once so the modules share a version, then list the 
 
 <dependencies>
     <dependency>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-core</artifactId>
     </dependency>
     <dependency>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-audio</artifactId>
     </dependency>
 </dependencies>
@@ -108,7 +108,7 @@ it for each module you use that has natives. `RenGL` has one too, holding the na
 
 ```xml
 <dependency>
-    <groupId>me.piitex.engine</groupId>
+    <groupId>io.github.piitex</groupId>
     <artifactId>RenGL</artifactId>
     <version>0.1.0</version>
     <classifier>natives-windows</classifier>
@@ -158,7 +158,7 @@ macOS add `-XstartOnFirstThread`. The 3D demos choose their API with `-Drengl.de
 
 `rengl-core` must not depend on another module, or on a library another module owns. A Maven Enforcer rule in its
 `pom.xml` fails the build if OpenAL, Opus, jlayer, Vulkan, assimp, shaderc, spvc, VMA, zstd, Lucene or any
-`me.piitex.engine` module appears among its dependencies, directly or through another one.
+`io.github.piitex` module appears among its dependencies, directly or through another one.
 
 A feature that needs a library most programs don't have belongs in its own module. The core finds such a module
 without depending on it: the Vulkan renderer registers a `RenderBackend` with `java.util.ServiceLoader`, and audio uses

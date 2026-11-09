@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>me.piitex.engine</groupId>
+        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-parent</artifactId>
         <version>0.1.0</version>
     </parent>
@@ -13,7 +13,7 @@
     <!--
       The whole engine in one dependency, as RenGL was before it was split into modules. It has no code of its own: the
       jar holds a marker file, and the dependencies bring every module. It stays a jar (not a pom) so that an existing
-      <dependency> on me.piitex.engine:RenGL, which does not say <type>pom</type>, keeps resolving.
+      <dependency> on io.github.piitex:RenGL, which does not say <type>pom</type>, keeps resolving.
       A project that wants less depends on the modules it uses instead; see docs/modules.md.
     -->
     <artifactId>RenGL</artifactId>
@@ -22,62 +22,62 @@
 
     <dependencies>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-audio</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-video</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-webview</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-vulkan</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-3d</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-spellcheck</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-tilemap</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-entity</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-charts</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-downloads</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>me.piitex.engine</groupId>
+            <groupId>io.github.piitex</groupId>
             <artifactId>rengl-ui-file</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -144,182 +144,182 @@
                                     <excludes>META-INF/*.SF,META-INF/*.DSA,META-INF/*.RSA,META-INF/MANIFEST.MF,META-INF/INDEX.LIST,META-INF/versions/**,module-info.class</excludes>
                                     <artifactItems>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-core</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-linux</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-audio</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-linux</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-3d</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-linux</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-tilemap</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-linux</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-core</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-linux-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-audio</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-linux-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-3d</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-linux-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-tilemap</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-linux-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-core</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-audio</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-3d</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-tilemap</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-core</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-audio</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-3d</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-tilemap</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-core</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-windows</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-audio</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-windows</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-3d</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-windows</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-tilemap</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-windows</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-core</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-windows-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-audio</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-windows-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-3d</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-windows-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-tilemap</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-windows-arm64</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-vulkan</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos</classifier>
                                     <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>me.piitex.engine</groupId>
+                                    <groupId>io.github.piitex</groupId>
                                     <artifactId>rengl-vulkan</artifactId>
                                     <version>${project.version}</version>
                                     <classifier>natives-macos-arm64</classifier>

@@ -5,7 +5,7 @@
          child.project.url.inherit.append.path="false">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>me.piitex.engine</groupId>
+    <groupId>io.github.piitex</groupId>
     <artifactId>rengl-parent</artifactId>
     <version>0.1.0</version>
     <packaging>pom</packaging>
@@ -568,7 +568,7 @@
                                 <createDependencyReducedPom>false</createDependencyReducedPom>
                                 <filters>
                                     <filter>
-                                        <artifact>me.piitex.engine:*</artifact>
+                                        <artifact>io.github.piitex:*</artifact>
                                         <excludes>
                                             <exclude>**</exclude>
                                         </excludes>

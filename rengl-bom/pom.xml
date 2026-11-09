@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!-- Deliberately has no parent: a consumer that imports this BOM should not pick up the build's plugin and profile setup. -->
-    <groupId>me.piitex.engine</groupId>
+    <groupId>io.github.piitex</groupId>
     <artifactId>rengl-bom</artifactId>
     <version>0.1.0</version>
     <packaging>pom</packaging>
@@ -46,72 +46,72 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-audio</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-video</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-webview</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-3d</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-upscale</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-vulkan</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-spellcheck</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-tilemap</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-entity</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-charts</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-downloads</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>rengl-ui-file</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>me.piitex.engine</groupId>
+                <groupId>io.github.piitex</groupId>
                 <artifactId>RenGL</artifactId>
                 <version>${project.version}</version>
             </dependency>
