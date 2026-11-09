@@ -14,6 +14,7 @@ All artifacts have the group id `me.piitex.engine` and the same version.
 | **`rengl-core`** | Everything a program needs: `Engine`, windows, the UI toolkit, layouts, theming, input, the 2D game framework, the OpenGL and Metal renderers | LWJGL (core, GLFW, OpenGL, stb, NFD), Skiko, Kotlin runtime, log4j API | LWJGL core, GLFW, OpenGL, stb, NFD, and Skiko |
 | `rengl-audio` | [Audio](audio/README.md): `Sound`, `Music`, channels, spatial sound | LWJGL OpenAL and Opus, jlayer (MP3) | OpenAL, Opus |
 | `rengl-video` | [Video](video/README.md): `VideoOverlay` and the decoders | none (needs `rengl-audio`) | none |
+| `rengl-webview` | [Web views](webview/README.md): `WebViewOverlay`, login-portal helpers; WebView2 on Windows, an installed Chrome/Edge/Chromium on Windows, macOS and Linux; WKWebView (macOS) and WebKitGTK (Linux) opt-in, never run | none (the system's WebView2 runtime, or an installed Chromium-based browser; WKWebView and WebKitGTK need nothing shipped) | none |
 | `rengl-vulkan` | The Vulkan renderer for `RenderAPI.VULKAN` | LWJGL Vulkan | MoltenVK on macOS only |
 | `rengl-3d` | The optional [3D layer](3d/README.md) (needs `rengl-vulkan`) | LWJGL assimp, shaderc, spvc, VMA | those four |
 | `rengl-upscale` | Vendor [upscalers and frame generation](3d/upscaling.md) for the 3D layer (AMD FSR and NVIDIA DLSS on Windows, Apple MetalFX on a Mac). Carries no vendor binaries and is left out of `RenGL` | none (needs the vendors' libraries at run time, except MetalFX, which is part of macOS) | none |
@@ -72,6 +73,7 @@ What to add for common programs:
 | A tool or app with a UI | `rengl-core` |
 | An app with sound | `rengl-core`, `rengl-audio` |
 | A video player | `rengl-core`, `rengl-audio`, `rengl-video` |
+| A login portal or an embedded browser | `rengl-core`, `rengl-webview` |
 | A 2D game with tile maps and entities | `rengl-core`, `rengl-tilemap`, `rengl-entity` (and `rengl-audio` for sound) |
 | A text editor with spell checking | `rengl-core`, `rengl-spellcheck` |
 | A 3D program | `rengl-core`, `rengl-3d` (it brings `rengl-vulkan`) |
