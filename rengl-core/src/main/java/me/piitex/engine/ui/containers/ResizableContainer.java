@@ -264,10 +264,12 @@ public class ResizableContainer extends Container {
 
         if (!hasReference) {
             // A container built before the window opened was laid out for the size the window was asked for. If the
-            // window opened maximized, or shrunk to fit the screen, that is not the size it has now.
+            // window opened maximized, or shrunk to fit the screen, that is not the size it has now. This is told by
+            // when the container was added, not by how many frames have run: a splash screen and warm-ups hold the
+            // application back, so its first update can come many frames after the window opened.
             int designWidth = window.getWindowOptions().getDesignWidth();
             int designHeight = window.getWindowOptions().getDesignHeight();
-            boolean builtForDesign = window.getFrameCount() <= 2 && designWidth > 0 && designHeight > 0;
+            boolean builtForDesign = wasAddedBeforeWindowOpened() && designWidth > 0 && designHeight > 0;
             refWindowWidth = builtForDesign ? designWidth : windowWidth;
             refWindowHeight = builtForDesign ? designHeight : windowHeight;
             refX = getX();
