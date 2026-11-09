@@ -189,7 +189,7 @@ Engine ──drives──▶ Window ──holds──▶ Container ──holds�
 ## RenGL vs RenEngine
 
 RenEngine was built on JavaFX, which restricts a lot of styling to CSS. That frustration is why RenGL exists. RenGL
-trades some of JavaFX's heavier components for full control over how everything looks, plus things
+draws every widget itself, so you control how everything looks, and it has things
 JavaFX doesn't offer: draggable, resizable and reorderable containers, animated backgrounds, and a game and 3D
 toolkit built on the same windows. The class structure (Window, Container, Layout, Element) will feel familiar if you
 used RenEngine, except that a layout is now a subclass of `Container` and there is no `Application` or `FXLoad` class.
@@ -197,8 +197,7 @@ used RenEngine, except that a layout is now a subclass of `Container` and there 
 ## Project status
 
 RenGL is actively developed and used for my own apps and games. It is not on Maven Central yet, and the API can still
-change. Development happens on macOS (Metal) and Windows (OpenGL and Vulkan), so Linux is the least tested platform (it compiles and runs on Arch Linux). The video player decodes H.264, HEVC and AAC through the system: AVFoundation on macOS, Media Foundation on Windows and GStreamer on Linux
-(the Linux route was only written from GStreamer's headers and is not confirmed). Where the system has no decoder it plays the formats RenGL decodes itself. See [known limitations](docs/reference/known-limitations.md) for the full list.
+change. The demos have been run on macOS (Metal), Windows (OpenGL and Vulkan) and Linux, with no problems. AMD and Intel GPUs on Windows, and arm64 Windows, have not been tried. The video player decodes H.264, HEVC and AAC through the system: AVFoundation on macOS, Media Foundation on Windows and GStreamer on Linux. Where the system has no decoder it plays the formats RenGL decodes itself. See [known limitations](docs/reference/known-limitations.md) for the full list.
 
 There is a test suite of over 1,700 test methods, run with `./mvnw test`. The 3D tests draw on a real GPU, with both
 Vulkan and OpenGL, and skip themselves on a machine that has none.

@@ -20,10 +20,10 @@ something not listed, please add it.
 The 2D UI looks the same on every [rendering API](../core/rendering-apis.md). These limits are about Vulkan and the
 optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) has the reasons and the plans.
 
-- **Vulkan and OpenGL have been checked closely on two machines:** macOS on Apple silicon (Vulkan through MoltenVK,
-  OpenGL only in a harness) and Windows 11 on an NVIDIA RTX 4090 (both natively). The engine also compiles and runs on
-  Arch Linux; which GPU and API were used there was not recorded, so Linux is the least checked. AMD and Intel GPUs on
-  Windows, and arm64 Windows, are untested.
+- **Where it has been run:** the demos work on macOS on Apple silicon (Vulkan through MoltenVK, OpenGL only in a
+  harness), on Windows 11 with an NVIDIA RTX 4090 (Vulkan and OpenGL, both natively) and on Linux (Arch). The detailed
+  checks in the [3D status document](../3d-status.md#verification-so-far) were made on the first two; for Linux the GPU
+  and API used were not recorded. AMD and Intel GPUs on Windows, and arm64 Windows, are untested.
 - **On Windows,** the 3D and 2D demos, the GPU tests and several apps were run on both APIs with no errors in the logs
   (see the [3D status document](../3d-status.md#verification-so-far)). Only a few of them were looked at by eye, and
   nobody has driven the demos with a real mouse and keyboard there. What is checked is a click, a check box and typing
