@@ -258,7 +258,8 @@ public final class SceneKinds {
         prop(MATERIAL, "color", "Color", Color.class, surface, m -> new Color(m.getRed(), m.getGreen(), m.getBlue(), m.getAlpha()),
                 (m, x, b) -> m.setColor(c(x))).omitWhen(Color.WHITE).tip("Times the picture, if it has one");
         prop(MATERIAL, "texture", "Picture", String.class, surface, m -> SceneMeta.material(m).textures[MaterialInfo.BASE],
-                (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.BASE, s(x), b)).omitWhen("").hint(Hint.IMAGE);
+                (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.BASE, s(x), b)).omitWhen("").hint(Hint.IMAGE)
+                .tip("What the surface looks like. Downloads call it Color, Albedo or Diffuse. A whole folder can be set at once with Texture Set");
         prop(MATERIAL, "unlit", "Unlit", Boolean.class, surface, Material::isUnlit, (m, x, b) -> m.setUnlit((Boolean) x))
                 .omitWhen(false).tip("Draw it in its plain color, ignoring the lights");
         prop(MATERIAL, "doubleSided", "Double Sided", Boolean.class, surface, Material::isDoubleSided, (m, x, b) -> m.setDoubleSided((Boolean) x))
@@ -283,16 +284,17 @@ public final class SceneKinds {
 
         prop(MATERIAL, "normalTexture", "Normal Map", String.class, maps, m -> SceneMeta.material(m).textures[MaterialInfo.NORMAL],
                 (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.NORMAL, s(x), b)).omitWhen("").hint(Hint.IMAGE).when(Material::isPbr)
-                .tip("Bumps and dents on a flat surface");
+                .tip("Fake bumps and dents on a flat surface. Downloads call it Normal: use the NormalGL one");
         prop(MATERIAL, "normalScale", "Normal Strength", Float.class, maps, Material::getNormalScale, (m, x, b) -> m.setNormalScale(f(x)))
                 .omitWhen(1f).range(0, 4).step(0.1).when(m -> pbr(m) && !SceneMeta.material(m).textures[MaterialInfo.NORMAL].isEmpty());
         prop(MATERIAL, "metallicRoughnessTexture", "Metal/Rough Map", String.class, maps,
                 m -> SceneMeta.material(m).textures[MaterialInfo.METALLIC_ROUGHNESS],
                 (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.METALLIC_ROUGHNESS, s(x), b)).omitWhen("").hint(Hint.IMAGE).when(Material::isPbr)
-                .tip("Roughness in its green channel and metal in its blue");
+                .tip("One picture for shiny against dull (its green) and metal against not (its blue). A download with separate Roughness and Metalness pictures "
+                        + "needs them put together, which Texture Set does. Metallic and Roughness above are multiplied with it, so set both to 1");
         prop(MATERIAL, "occlusionTexture", "Occlusion Map", String.class, maps, m -> SceneMeta.material(m).textures[MaterialInfo.OCCLUSION],
                 (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.OCCLUSION, s(x), b)).omitWhen("").hint(Hint.IMAGE).when(Material::isPbr)
-                .tip("Baked shadow in creases, in its red channel");
+                .tip("Shadow painted into creases and corners, in its red channel. Downloads call it AmbientOcclusion or AO");
         prop(MATERIAL, "emissiveTexture", "Glow Map", String.class, maps, m -> SceneMeta.material(m).textures[MaterialInfo.EMISSIVE],
                 (m, x, b) -> SceneMeta.setTexture(m, MaterialInfo.EMISSIVE, s(x), b)).omitWhen("").hint(Hint.IMAGE).when(Material::isPbr);
         prop(MATERIAL, "heightTexture", "Height Map", String.class, maps, m -> SceneMeta.material(m).textures[MaterialInfo.HEIGHT],
