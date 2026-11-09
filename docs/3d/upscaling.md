@@ -262,6 +262,37 @@ metal ball has almost no diffuse colour and a strong specular one, the sky none)
 textures and normal maps, and the image quality by eye beyond a simple scene. The specular hit distance and the reflection motion
 vectors that Ray Reconstruction can use for mirrors are not given, so a reflection that moves differently from its surface may smear.
 
+## Licenses and names
+
+RenGL contains none of the vendors' code or libraries, and it does not download them. `rengl-upscale` is RenGL's own
+code that calls the libraries, written against the headers that NVIDIA (Streamline) and AMD (FidelityFX) publish. The
+libraries are yours to get from the vendors, under the license each vendor gives with them, and **RenGL's license does
+not cover them and does not give you any right to them**. Read those licenses before you ship a program that uses one.
+
+Points to look for, as the licenses read when this was written (the text can change, so check the current one):
+
+- **NVIDIA DLSS and Streamline.** DLSS is licensed through the
+  [NVIDIA RTX SDKs license](https://github.com/NVIDIA/DLSS/blob/main/LICENSE.txt) (version of March 14, 2024 when this was
+  written). It lets you distribute the libraries only inside an application that has substantial functionality of its
+  own, not on their own, and its DLSS supplement limits the use to systems with NVIDIA GPUs. It asks you to tell NVIDIA
+  before a commercial release (at <https://developer.nvidia.com/sw-notification>), to credit the SDK on the splash
+  screen, the about box and the credits, and to get NVIDIA's approval for use of its trademarks. It also forbids using
+  the SDK in a way that puts it under an open-source license. Streamline has its own
+  [license](https://github.com/NVIDIAGameWorks/Streamline/blob/main/license.txt) for its files.
+- **AMD FSR and FidelityFX.** The source files of the [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK)
+  are under the MIT license. The [license page of the FSR SDK](https://gpuopen.com/manuals/fsr_sdk/license/) lists
+  the compiled libraries separately: they may be redistributed in binary form, with AMD's copyright and license
+  notices, and not reverse engineered. AMD's [naming guidelines](https://gpuopen.com/amd-fsr-naming-guidelines/) for
+  options screens and logos are recommendations, not requirements.
+- **Apple MetalFX** is part of macOS. You do not ship it.
+
+If you ship the libraries with your program, you ship them yourself (RenGL's packager does not add them for you), with
+the license files that came with them.
+
+NVIDIA, DLSS, RTX and GeForce are trademarks of NVIDIA Corporation. AMD, FidelityFX and FSR are trademarks of Advanced
+Micro Devices, Inc. Apple, macOS and MetalFX are trademarks of Apple Inc. RenGL uses the names only to say which
+libraries it works with. It is not made, approved or endorsed by any of them.
+
 ## The demo
 
 `me.piitex.examples.demo.UpscalingDemo` (in `rengl-examples`) flies a camera through a yard that is hard on a smaller picture
