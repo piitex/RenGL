@@ -69,6 +69,11 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 - **Only files on disk can be dragged in.** Files that exist only inside another program (the contents of a zip
   folder in Explorer) are not taken.
 - **No Dock or taskbar progress, and no system notification** when a long job finishes in the background.
+- **Web views need an installed browser outside Windows, by default.** On macOS and Linux a [web view](../webview/README.md)
+  runs an installed Chrome, Edge, Chromium or Brave headless and draws it as pictures, with no native-window mode. That
+  path has been run only on Windows, against Edge. Engines of the system's own, WKWebView (macOS) and WebKitGTK (Linux),
+  exist and are opt-in with `setEngine`, but were written without a Mac or a Linux desktop and have never run; `AUTO`
+  does not pick them. The web view page lists what is untested and has a self-check to run on a real machine.
 
 ## Audio
 

@@ -97,6 +97,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [Playback](audio/playback.md) | Volume, pitch, pan, pause, fades and callbacks on a playing sound |
 | [3D audio](audio/spatial-audio.md) | Listener, positioned sounds, distance falloff, Doppler, and 2D hearing in one call |
 | **[Video](video/README.md)** | `VideoOverlay` and `VideoPlayer`: streamed playback of large files with synced sound |
+| **[Web views](webview/README.md)** | `WebViewOverlay`: a web page in an element, login portals (sign-in redirect, PKCE, system-browser sign-in) and an embedded browser; WebView2 on Windows, an installed Chromium browser elsewhere, WKWebView and WebKitGTK opt-in and never run |
 | **[Styling](styling/README.md)** | Colors, box styling, themes, backgrounds, fonts, images |
 | [Colors and paints](styling/colors-and-paints.md) | `Color`, `RainbowColor` (RGB cycling), gradients, animated paints |
 | [Styling](styling/styling.md) | Background, border, hover, and corner radius on every element |
