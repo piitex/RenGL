@@ -139,7 +139,7 @@ final class RenGLSplashSound {
             SoundOutput.Clip clip = clips.get(next);
             if (!tooLate) {
                 if (clip == null) return; // not made yet, and there is still time to wait for it
-                clip.play(1f);
+                clip.play(0.2f);
                 log.debug("Splash sound {} at {} s", cue.name(), time);
             } else {
                 log.debug("Splash sound {} skipped: {} s late", cue.name(), time - cue.at());
