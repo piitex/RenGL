@@ -6,6 +6,7 @@ import me.piitex.engine.ui.Draggable;
 import me.piitex.engine.ui.FileDraggable;
 import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
+import me.piitex.engine.ui.PointerInput;
 import me.piitex.engine.ui.PopupKeyListener;
 import me.piitex.engine.ui.scroll.Scrollable;
 import me.piitex.engine.ui.CursorMode;
@@ -34,6 +35,16 @@ public class InputProcessor {
      * lands on it.
      */
     private final List<Element> clickTargets = new ArrayList<>();
+    /**
+     * The {@link PointerInput} element the pointer is over with no button held, or null.
+     */
+    private PointerInput pointerHover;
+    /**
+     * The {@link PointerInput} element that took a press and so keeps the pointer until every button is released, or
+     * null, and the buttons held (bit n for button n).
+     */
+    private PointerInput pointerCapture;
+    private int pointerButtons;
     /**
      * The disabled Element a left press landed on, whose {@link Element#onDisabledClick} runs if the release lands on
      * it too, or null.
@@ -218,6 +229,10 @@ public class InputProcessor {
     }
 
     private void clearAllHover(Window window) {
+        if (pointerCapture == null && pointerHover != null) {
+            pointerHover.onPointerLeave();
+            pointerHover = null;
+        }
         for (Container container : window.getContainers().values()) {
             UiHitTest.applyHover(container, null);
         }
@@ -262,6 +277,8 @@ public class InputProcessor {
             UiHitTest.applyHover(container, hit);
         }
 
+        updatePointer(window, hit);
+
         // Whatever is now hovered decides the OS cursor. Null, meaning nothing hovered
         // or something hovered that specifies no mode, falls back to CursorMode.DEFAULT.
         // While a drag is in progress the dragged Element keeps the cursor, even once
@@ -283,6 +300,14 @@ public class InputProcessor {
         Input input = window.getInput();
         if (event.action == GLFW.GLFW_RELEASE) {
             input.mouseReleased(event.buttonOrKey);
+            if (pointerCapture != null) {
+                PointerInput holder = pointerCapture;
+                pointerButtons &= ~pointerBit(event.buttonOrKey);
+                if (pointerButtons == 0) pointerCapture = null;
+                Element holderElement = (Element) holder;
+                holder.onPointerButton(absoluteMouseX - holderElement.getAbsoluteX(), absoluteMouseY - holderElement.getAbsoluteY(),
+                        event.buttonOrKey, false, input.getModifiers());
+            }
             // Only the button that began a drag (always the left one) ends it; releasing a right-click mid-drag must not.
             if (event.buttonOrKey != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
             if (dragTarget instanceof Draggable draggable) {
@@ -313,6 +338,15 @@ public class InputProcessor {
         }
 
         if (input.captureMouse(event.buttonOrKey, event.mods)) return; // a controls menu waiting for a binding
+
+        // A button pressed while another is held belongs to the element that holds the pointer.
+        if (pointerCapture != null) {
+            pointerButtons |= pointerBit(event.buttonOrKey);
+            Element holder = (Element) pointerCapture;
+            pointerCapture.onPointerButton(absoluteMouseX - holder.getAbsoluteX(), absoluteMouseY - holder.getAbsoluteY(),
+                    event.buttonOrKey, true, input.getModifiers());
+            return;
+        }
 
         // An open popup (dropdown list, ...) is modal-ish: a press outside it just dismisses it.
         if (window.getPopup() != null && !window.getPopup().contains(absoluteMouseX, absoluteMouseY)) {
@@ -355,6 +389,22 @@ public class InputProcessor {
                 if (!e.isPropagateClicks()) break;
             }
             break;
+        }
+
+        // An element that wants the raw pointer takes the press whole: no context menu, no drag of what it sits in, and
+        // the pointer stays with it until every button is released.
+        PointerInput pointer = hitElement == null || window.getPopup() != null ? null : pointerAt(hitElement);
+        if (pointer != null) {
+            Element target = (Element) pointer;
+            Element focusNow = window.getFocusedElement();
+            if (focusNow == focusBefore || focusNow == null) {
+                window.requestFocus(target instanceof Focusable ? target : null);
+            }
+            pointerCapture = pointer;
+            pointerButtons |= pointerBit(event.buttonOrKey);
+            pointer.onPointerButton(absoluteMouseX - target.getAbsoluteX(), absoluteMouseY - target.getAbsoluteY(),
+                    event.buttonOrKey, true, input.getModifiers());
+            return;
         }
 
         // A right-click opens the context menu of the hit Element, or of the nearest ancestor that has one.
@@ -414,6 +464,42 @@ public class InputProcessor {
         if (!taken) input.mousePressed(event.buttonOrKey, event.mods);
     }
 
+    private static int pointerBit(int button) {
+        return button >= 0 && button < 31 ? 1 << button : 0;
+    }
+
+    /**
+     * The nearest element at or above {@code hit} that implements {@link PointerInput} and is not disabled, or null.
+     */
+    private static PointerInput pointerAt(Element hit) {
+        for (Element e = hit; e != null; e = e.owner) {
+            if (e instanceof PointerInput pointer && !e.isEffectivelyDisabled()) return pointer;
+        }
+        return null;
+    }
+
+    /**
+     * Sends a move to the {@link PointerInput} element that holds the pointer, or else to the one under it, and tells the
+     * one it left that it did.
+     */
+    private void updatePointer(Window window, Element hit) {
+        int mods = window.getInput().getModifiers();
+        if (pointerCapture != null) {
+            Element holder = (Element) pointerCapture;
+            pointerCapture.onPointerMove(absoluteMouseX - holder.getAbsoluteX(), absoluteMouseY - holder.getAbsoluteY(), pointerButtons, mods);
+            return;
+        }
+        PointerInput target = dragTarget != null || window.getPopup() != null || hit == null ? null : pointerAt(hit);
+        if (target != pointerHover) {
+            if (pointerHover != null) pointerHover.onPointerLeave();
+            pointerHover = target;
+        }
+        if (target != null) {
+            Element element = (Element) target;
+            target.onPointerMove(absoluteMouseX - element.getAbsoluteX(), absoluteMouseY - element.getAbsoluteY(), 0, mods);
+        }
+    }
+
     /**
      * Whether {@code element} is, or contains, the topmost thing under the cursor, found the same way a press finds it.
      */
@@ -448,6 +534,22 @@ public class InputProcessor {
     private void handleScroll(Window window, InputEvent event) {
         Input input = window.getInput();
         if (input.captureScroll(event.x, event.y)) return;
+        PointerInput holder = pointerCapture;
+        if (holder == null && window.getPopup() == null) {
+            for (Container container : window.getContainers().descendingMap().values()) {
+                if (!container.isEnabled()) continue;
+                Element hit = UiHitTest.findTopmostHit(container, absoluteMouseX, absoluteMouseY);
+                if (hit == null) continue;
+                holder = pointerAt(hit);
+                break;
+            }
+        }
+        if (holder != null) {
+            Element target = (Element) holder;
+            holder.onPointerScroll(absoluteMouseX - target.getAbsoluteX(), absoluteMouseY - target.getAbsoluteY(),
+                    event.x, event.y, input.getModifiers());
+            return;
+        }
         boolean taken = window.getPopup() != null || window.getModal() != null;
         for (Map.Entry<Integer, Container> entry : window.getContainers().descendingMap().entrySet()) {
             Container container = entry.getValue();

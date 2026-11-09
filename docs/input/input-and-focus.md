@@ -164,6 +164,26 @@ lets a form's `ScrollContainer` scroll on instead of trapping the wheel. Overrid
 and the dropdown's open list implement it. While a [modal](../containers/modal-container.md) is up, scrolling is limited
 to it.
 
+## PointerInput
+
+For an element that shows someone else's interface (a web page, a remote desktop, an emulator) clicks and drags are not
+enough. An element that implements `PointerInput` gets the raw pointer:
+
+```java
+public interface PointerInput {
+    void onPointerMove(double x, double y, int buttons, int mods);                  // also with no button held
+    void onPointerButton(double x, double y, int button, boolean pressed, int mods); // every button, press and release
+    void onPointerScroll(double x, double y, double deltaX, double deltaY, int mods);
+    default void onPointerLeave() {}
+}
+```
+
+Positions are in the element's own coordinates. A press on it is its own: it opens no context menu, does not start a
+drag of the draggable it sits in, and is not passed to the game. Once a button goes down the element keeps the pointer
+until every button is released, so a drag that leaves its bounds (or the window) still reaches it, with `buttons` saying
+which are held. The wheel goes to it before any `Scrollable` under the same point. A disabled element, and any element
+while a popup is open, hears nothing. [`WebViewOverlay`](../webview/README.md) is built on it.
+
 ## Keyboard focus
 
 At most one element holds keyboard focus. Only elements implementing `Focusable` can:
