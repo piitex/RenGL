@@ -455,6 +455,12 @@ arm64 image was run on a Mac and works. Not checked:
 
 ### Rebuilding the Windows launcher and setup
 
+The two `.exe` files in `rengl-packager/src/main/resources/me/piitex/engine/packager/` (`launcher-windows-x64.exe` and
+`setup-windows-x64.exe`) are the compiled output of `launcher.c` and `setup.c` in `rengl-packager/native/windows`, built
+with MSVC by the two scripts below and checked in so that the packager needs no compiler. They are not code-signed, so
+Windows SmartScreen may warn about an app or setup made with them. The builds are not reproducible byte for byte, so to
+check what you run, rebuild from the C files.
+
 You only need this to change `launcher.c` or `setup.c`. It needs Visual Studio's C++ build tools. Then rebuild the
 packager with `.\mvnw.cmd -pl rengl-packager install -DskipTests` so it picks up the new `.exe`.
 
