@@ -36,7 +36,9 @@ complete list.
 ### LWJGL
 
 LWJGL is Copyright (c) 2012-present Lightweight Java Game Library, under the BSD 3-Clause
-license: <https://www.lwjgl.org/license>.
+license: <https://www.lwjgl.org/license>. The text is in
+[licenses/LWJGL-BSD-3-Clause.txt](licenses/LWJGL-BSD-3-Clause.txt), copied from
+<https://github.com/LWJGL/lwjgl3/blob/master/LICENSE.md>.
 
 The LWJGL native libraries are built from other projects, each under its own license. LWJGL
 keeps each license text next to the binding, as `modules/lwjgl/<module>/<project>_license.txt`
