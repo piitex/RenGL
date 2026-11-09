@@ -275,12 +275,16 @@ Points to look for, as the licenses read when this was written (the text can cha
   [MIT-style license](https://github.com/NVIDIAGameWorks/Streamline/blob/main/license.txt), except
   `sl_nvperf.h` and `sl_nvperf.dll`, which are under the Nsight Perf SDK license. RenGL does not use those two.
 - **NVIDIA DLSS.** The DLSS libraries (`nvngx_dlss*.dll`) are licensed through the
-  [NVIDIA RTX SDKs license](https://github.com/NVIDIA/DLSS/blob/main/LICENSE.txt) (version of March 14, 2024 when this was
-  written). It lets you distribute the libraries only inside an application that has substantial functionality of its
-  own, not on their own, and its DLSS supplement limits the use to systems with NVIDIA GPUs. It asks you to tell NVIDIA
-  before a commercial release (at <https://developer.nvidia.com/sw-notification>), to credit the SDK on the splash
-  screen, the about box and the credits, and to get NVIDIA's approval for use of its trademarks. It also forbids using
-  the SDK in a way that puts it under an open-source license.
+  [NVIDIA RTX SDKs license](https://github.com/NVIDIA/DLSS/blob/main/LICENSE.txt) and its RTX supplement (the version of
+  March 14, 2024, which is the text this was checked against). If you ship them with a program:
+  - They go only inside an application that has material additional functionality of its own, never on their own, under
+    terms at least as protective as NVIDIA's, and not in a way that puts them under an open-source license.
+  - Use is limited to systems with NVIDIA GPUs, and cloud use to services that run on NVIDIA vGPU software.
+  - Tell NVIDIA before a commercial release, at <https://developer.nvidia.com/sw-notification>.
+  - Credit the SDK and show the NVIDIA marks on the splash screen, in the about box and in the credits. Naming NVIDIA in
+    your marketing, and each use of its marks, needs NVIDIA's approval first.
+  - You indemnify NVIDIA for use outside the license. NVIDIA may update the libraries over the air and, as a last
+    resort, switch off the DLSS integration of a program that has serious problems with it.
 - **AMD FSR and FidelityFX.** The [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK)'s
   license file has two parts. The first (redistribution in binary form only, no reverse engineering, notices
   reproduced) applies to all files except the ones the file lists. The second, the MIT license, applies to the files it
