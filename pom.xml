@@ -452,6 +452,59 @@
                 <skiko.runtime.optional>false</skiko.runtime.optional>
             </properties>
         </profile>
+
+        <!--
+          Publishing to Maven Central. Not part of a normal build. The sources and Javadoc jars
+          that Central requires are already built by every module (see the build below). This
+          profile adds the other requirement, GPG signatures, and uploads the bundle:
+
+            ./mvnw -Prelease -DskipTests -DskipAutoNatives -Dnatives.platform=all deploy
+
+          It needs your GPG key (set up with gpg or the key's passphrase in an agent) and a
+          Central Portal user token saved under the id "central" in ~/.m2/settings.xml. The
+          upload stops at "validated"; the release is published by hand from the Central
+          Portal once you have looked at it. Version 0.1.0 can be published once, ever.
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.8</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.12.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>false</autoPublish>
+                            <waitUntil>validated</waitUntil>
+                            <!-- The demos are not a library. -->
+                            <excludeArtifacts>
+                                <artifact>rengl-examples</artifact>
+                            </excludeArtifacts>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 
     <repositories>
