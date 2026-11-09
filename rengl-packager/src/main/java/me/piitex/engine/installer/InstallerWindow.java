@@ -73,7 +73,7 @@ final class InstallerWindow {
 
     /** Shows the window and returns when it closes: 0 when it was closed or installed, 1 when the install failed. */
     int run() {
-        window = new Window(new WindowOptions(info.name() + " Setup").setDimensions(WIDTH, HEIGHT).setResizable(false));
+        window = new Window(new WindowOptions(info.name() + " Setup").setDimensions(WIDTH, HEIGHT).setResizable(false).setSplashEnabled(false));
         window.onCloseRequest(() -> {
             if (state != State.WORKING) window.close();   // the files are half-written until the setup program ends
         });
@@ -99,8 +99,6 @@ final class InstallerWindow {
         page = next;
         window.addContainer(next);
     }
-
-    // ---- pages ----------------------------------------------------------------------------------------------------
 
     private Container optionsPage(String problemText) {
         Container c = new Container(WIDTH, HEIGHT);
@@ -163,8 +161,6 @@ final class InstallerWindow {
         button(c, "Close", 440, 322, () -> window.close());
         return c;
     }
-
-    // ---- actions --------------------------------------------------------------------------------------------------
 
     private void browse(TextFieldOverlay folder) {
         FileDialog dialog = FileDialog.pickFolder().onSelect(path -> folder.setText(path.toString()));
