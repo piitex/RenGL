@@ -12,6 +12,28 @@
 
     <name>RenGL BOM</name>
     <description>Versions of every RenGL module. Import it, then declare the modules you use without a version.</description>
+    <url>https://github.com/piitex/RenGL</url>
+    <inceptionYear>2026</inceptionYear>
+
+    <developers>
+        <developer>
+            <id>piitex</id>
+            <name>Piitex</name>
+            <url>https://github.com/piitex</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/piitex/RenGL.git</connection>
+        <developerConnection>scm:git:git@github.com:piitex/RenGL.git</developerConnection>
+        <url>https://github.com/piitex/RenGL</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/piitex/RenGL/issues</url>
+    </issueManagement>
 
     <licenses>
         <license>
