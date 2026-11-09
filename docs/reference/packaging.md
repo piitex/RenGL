@@ -167,10 +167,10 @@ Your build brings only the jar of the computer it runs on. Step 1 of the quick s
 repository, so copy them in:
 
 ```powershell
-Copy-Item "$env:USERPROFILE\.m2\repository\me\piitex\engine\RenGL\1.0-SNAPSHOT\RenGL-1.0-SNAPSHOT-natives-*.jar" target\input\
+Copy-Item "$env:USERPROFILE\.m2\repository\me\piitex\engine\RenGL\0.1.0\RenGL-0.1.0-natives-*.jar" target\input\
 ```
 
-`1.0-SNAPSHOT` is the engine's version in its `pom.xml`. With the RenGL [modules](../modules.md) rather than the one
+`0.1.0` is the engine's version in its `pom.xml`. With the RenGL [modules](../modules.md) rather than the one
 `RenGL` jar, copy the `natives-<platform>` jar of each module that has them.
 
 ### Running it
@@ -178,7 +178,7 @@ Copy-Item "$env:USERPROFILE\.m2\repository\me\piitex\engine\RenGL\1.0-SNAPSHOT\R
 The packager is the jar that step 1 installed, with a version in its name. Run it with Java 25:
 
 ```powershell
-$packager = "$env:USERPROFILE\.m2\repository\me\piitex\engine\rengl-packager\1.0-SNAPSHOT\rengl-packager-1.0-SNAPSHOT.jar"
+$packager = "$env:USERPROFILE\.m2\repository\me\piitex\engine\rengl-packager\0.1.0\rengl-packager-0.1.0.jar"
 
 java --enable-native-access=ALL-UNNAMED -jar $packager `
   --name MyApp --app-version 1.0.0 `
