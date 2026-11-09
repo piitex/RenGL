@@ -202,4 +202,17 @@ vendors under their terms.
 - GStreamer, WebKitGTK and WKWebView, which the video and web view modules load from the
   system
 
-The rengl-upscale module carries no vendor binaries; the libraries are found at run time.
+The rengl-upscale module carries no vendor binaries; the libraries are found at run time. It
+is RenGL's own code that calls them, written against the interfaces that NVIDIA publishes with
+Streamline (MIT-style license, Copyright (c) 2023 NVIDIA Corporation) and AMD publishes with the
+FidelityFX SDK (MIT license, Copyright (C) Advanced Micro Devices, Inc.). It does not include
+the source files of either. If you ship any of the libraries, their licenses are yours to follow; see
+[Licenses and names](docs/3d/upscaling.md#licenses-and-names).
+
+## Trademarks
+
+NVIDIA, DLSS, RTX and GeForce are trademarks of NVIDIA Corporation. AMD, FidelityFX and FSR are
+trademarks of Advanced Micro Devices, Inc. Apple, macOS and MetalFX are trademarks of Apple
+Inc. Microsoft, Windows and Edge are trademarks of Microsoft Corporation. All other names
+belong to their owners. They are used here only to say what RenGL works with, and RenGL is
+not made, approved or endorsed by any of them.
