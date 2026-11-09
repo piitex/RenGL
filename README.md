@@ -202,6 +202,8 @@ change. The demos have been run on macOS (Metal), Windows (OpenGL and Vulkan) an
 There is a test suite of over 1,700 test methods, run with `./mvnw test`. The 3D tests draw on a real GPU, with both
 Vulkan and OpenGL, and skip themselves on a machine that has none.
 
+RenGL is a personal project. Issues are welcome, but I answer when I can and make no promises about timing or fixes.
+
 ## License
 
 RenGL is source-available under the [RenGL Open-Source-Game License](LICENSE). In short:
