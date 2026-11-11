@@ -726,6 +726,35 @@ public final class RigidBody {
         world = null;
     }
 
+    Vec3 inertiaOverride() {
+        return inertiaOverride;
+    }
+
+    Vec3 centerOverride() {
+        return centerOverride;
+    }
+
+    /**
+     * Takes where a {@link PhysicsBackend} left the body after a step: no waking, no teleport, the node left alone.
+     */
+    void simulated(Vec3 position, Quat rotation, Vec3 velocity, Vec3 angularVelocity, boolean asleep) {
+        Quat q = rotation.normalized();
+        boolean turned = q.x() != qx || q.y() != qy || q.z() != qz || q.w() != qw;
+        if (turned) setOrientation(q);
+        Vec3 center = position.add(q.rotate(localCenter));
+        boolean moved = turned || center.x() != cx || center.y() != cy || center.z() != cz;
+        setCenter(center);
+        vx = velocity.x();
+        vy = velocity.y();
+        vz = velocity.z();
+        wx = angularVelocity.x();
+        wy = angularVelocity.y();
+        wz = angularVelocity.z();
+        sleeping = asleep && type == BodyType.DYNAMIC;
+        if (!sleeping) sleepTime = 0f;
+        if (world != null && (moved || shapePoses.length != scaledShapes.size())) updateCollisionShapes(PhysicsWorld.CONTACT_MARGIN);
+    }
+
     /**
      * Whether a shape has no volume (a plane or a mesh), so the body can't be dynamic.
      */

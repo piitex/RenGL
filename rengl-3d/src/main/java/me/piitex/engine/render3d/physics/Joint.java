@@ -44,6 +44,7 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
     private boolean broken;
     private Consumer<Joint> breakHandler;
     private Object userData;
+    private Vec3 reportedForce, reportedTorque;
     float dt = 1f / 60f;
 
     Joint(RigidBody a, RigidBody b) {
@@ -147,6 +148,7 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
      * bodies together took. For a body held to the world, it is the force on that body.
      */
     public Vec3 getReactionForce() {
+        if (reportedForce != null) return reportedForce;
         return linearImpulse().mul(1f / dt);
     }
 
@@ -154,6 +156,7 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
      * The torque the joint put on body B in the last step, in newton metres, or on body A when it's held to the world.
      */
     public Vec3 getReactionTorque() {
+        if (reportedTorque != null) return reportedTorque;
         return angularImpulse().mul(1f / dt);
     }
 
@@ -170,6 +173,22 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
 
     void detach() {
         world = null;
+        reportedForce = reportedTorque = null;
+    }
+
+    /**
+     * What a {@link PhysicsBackend} measured holding the joint in the last step.
+     */
+    void reported(Vec3 force, Vec3 torque) {
+        reportedForce = force;
+        reportedTorque = torque;
+    }
+
+    /**
+     * Marks the joint broken, as a {@link PhysicsBackend} found it.
+     */
+    void breakNow() {
+        broken = true;
     }
 
     /**
