@@ -16,6 +16,7 @@ public final class Contact {
     Vec3 normal = Vec3.UP;
     final Point[] points = new Point[Manifold.MAX_POINTS];
     int count;
+    private boolean reported; // made by a backend, which decides what touches
 
     float friction, restitution;
     // The two directions friction acts along, across the normal.
@@ -88,6 +89,25 @@ public final class Contact {
             p.normalImpulse = match >= 0 ? oldNormal[match] : 0f;
             p.warmTangent = match >= 0 ? oldTangent[match] : Vec3.ZERO;
             p.tangentImpulse1 = p.tangentImpulse2 = 0f;
+        }
+    }
+
+    /**
+     * Fills the contact with what a {@link PhysicsBackend} found, keeping the deepest points when there are too many.
+     */
+    void report(Vec3 normal, Vec3[] positions, float[] depths, float[] impulses, int n) {
+        reported = true;
+        this.normal = normal;
+        count = 0;
+        boolean[] taken = new boolean[n];
+        for (int k = 0; k < Math.min(n, points.length); k++) {
+            int deepest = -1;
+            for (int i = 0; i < n; i++) if (!taken[i] && (deepest < 0 || depths[i] > depths[deepest])) deepest = i;
+            taken[deepest] = true;
+            Point p = points[count++];
+            p.position = positions[deepest];
+            p.depth = depths[deepest];
+            p.normalImpulse = impulses[deepest];
         }
     }
 
@@ -173,7 +193,7 @@ public final class Contact {
      * Whether the shapes actually touch, rather than only being about to.
      */
     public boolean isTouching() {
-        return getDepth() >= 0f;
+        return reported || getDepth() >= 0f;
     }
 
     @Override

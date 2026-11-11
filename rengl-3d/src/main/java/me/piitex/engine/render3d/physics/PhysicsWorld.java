@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * Moves {@link RigidBody rigid bodies}: gravity, forces, spin and inertia. Give it to a scene and it runs once per
@@ -107,6 +108,63 @@ public final class PhysicsWorld {
     private double time;
     private long stepCount;
     private StepHandler stepHandler;
+    private PhysicsBackend backend;
+    private static Supplier<? extends PhysicsBackend> defaultBackend;
+
+    /**
+     * A world stepped by the built-in solver, or by the backend {@link #setDefaultBackend} names.
+     */
+    public PhysicsWorld() {
+        Supplier<? extends PhysicsBackend> factory = defaultBackend;
+        if (factory != null) setBackend(factory.get());
+    }
+
+    /**
+     * Gives every world made from now on a backend from {@code factory}, the worlds of loaded scenes included; null
+     * goes back to the built-in solver. Worlds that exist already keep what they have.
+     */
+    public static void setDefaultBackend(Supplier<? extends PhysicsBackend> factory) {
+        defaultBackend = factory;
+    }
+
+    /**
+     * The backend stepping this world, or null for the built-in solver.
+     */
+    public PhysicsBackend getBackend() {
+        return backend;
+    }
+
+    /**
+     * Hands the stepping of this world to {@code backend}, bodies and joints already in it included, or back to the
+     * built-in solver with null. The backend it had is closed. See {@link PhysicsBackend} for what changes hands.
+     */
+    public PhysicsWorld setBackend(PhysicsBackend backend) {
+        if (backend == this.backend) return this;
+        PhysicsBackend old = this.backend;
+        this.backend = null;
+        if (old != null) old.close();
+        // Whatever the other solver knew about the contacts is gone; the pairs touching stay, so no listener hears an
+        // end and a begin for bodies that never parted.
+        contacts = new ArrayList<>();
+        contactMap = new HashMap<>();
+        for (RigidBody body : bodies) {
+            body.wakeUp();
+            body.updateCollisionShapes(CONTACT_MARGIN, fixedStep, gravity);
+        }
+        if (backend != null) {
+            backend.attach(this);
+            this.backend = backend;
+        }
+        return this;
+    }
+
+    /**
+     * Frees what a {@link PhysicsBackend} holds outside the Java heap. A world on the built-in solver has nothing to
+     * free. The world can't be stepped by that backend again; it goes back to the built-in solver.
+     */
+    public void close() {
+        setBackend(null);
+    }
 
     /**
      * Adds a body; it starts where its node is. Adding a body twice does nothing.
@@ -119,6 +177,7 @@ public final class PhysicsWorld {
         bodies.add(body);
         body.attach(this);
         body.updateCollisionShapes(CONTACT_MARGIN, fixedStep, gravity);
+        if (backend != null) backend.bodyAdded(body);
         return this;
     }
 
@@ -137,6 +196,7 @@ public final class PhysicsWorld {
         }
         contacts.removeIf(c -> c.getBodyA() == body || c.getBodyB() == body);
         contactMap.values().removeIf(c -> c.getBodyA() == body || c.getBodyB() == body);
+        if (backend != null) backend.bodyRemoved(body);
         body.detach();
         for (BodyPair pair : ended) {
             boolean trigger = touching.remove(pair).isTrigger();
@@ -163,6 +223,7 @@ public final class PhysicsWorld {
         joint.getBodyA().joints.add(joint);
         if (joint.getBodyB() != null) joint.getBodyB().joints.add(joint);
         joint.attach(this);
+        if (backend != null) backend.jointAdded(joint);
         return this;
     }
 
@@ -175,6 +236,7 @@ public final class PhysicsWorld {
         if (joint.getBodyB() != null) joint.getBodyB().joints.remove(joint);
         joint.getBodyA().wakeUp();
         if (joint.getBodyB() != null) joint.getBodyB().wakeUp();
+        if (backend != null) backend.jointRemoved(joint);
         joint.detach();
         return true;
     }
@@ -554,7 +616,9 @@ public final class PhysicsWorld {
         for (CharacterController character : List.copyOf(characters)) character.step(dt);
         List<Joint> broken = null;
         float h = dt / substeps;
-        for (int sub = 0; sub < substeps; sub++) {
+        if (backend != null) {
+            broken = simulateBackend(dt);
+        } else for (int sub = 0; sub < substeps; sub++) {
             List<Joint> snapped = substep(active, h, sub == substeps - 1);
             if (snapped != null) {
                 if (broken == null) broken = new ArrayList<>();
@@ -565,6 +629,27 @@ public final class PhysicsWorld {
         stepCount++;
         fireEvents();
         if (broken != null) for (Joint joint : broken) joint.fireBreak();
+    }
+
+    /**
+     * The whole step done by the {@link PhysicsBackend}: it has placed the bodies; what is left is taking its contacts
+     * for the events, taking out the joints it broke and dropping the forces the step used up.
+     *
+     * @return the joints that broke, or null
+     */
+    private List<Joint> simulateBackend(float dt) {
+        backend.step(this, dt);
+        contacts = new ArrayList<>(backend.contacts());
+        List<Joint> broken = null;
+        for (Joint joint : List.copyOf(backend.brokenJoints())) {
+            if (joint.getWorld() != this) continue;
+            joint.breakNow();
+            removeJoint(joint);
+            if (broken == null) broken = new ArrayList<>();
+            broken.add(joint);
+        }
+        for (RigidBody body : bodies) body.clearForces();
+        return broken;
     }
 
     /**
