@@ -8,6 +8,9 @@ ground and convex hulls for objects of any shape, joints (hinges, ropes, springs
 controller that walks a player around, and a view that draws the colliders. It is plain Java with no native library, and like the rest of the 3D
 layer it costs nothing until you use it.
 
+The same world can be stepped by **NVIDIA PhysX** instead, with one line and the separate `rengl-physx` module: see
+[PhysX](physx.md).
+
 A **`PhysicsWorld`** holds **`RigidBody`** objects. Each body moves a [`Node3D`](scenes.md#node3d): the world works out
 where the body goes and writes the position and rotation into the node, so the scene draws it there.
 
@@ -119,6 +122,7 @@ want crates you can push around easily, give them a smaller mass: what matters f
 | `getContacts()` | Every pair of shapes touching or about to, with points and normal |
 | `raycast`, `raycastAll`, `overlap`, `overlapSphere`, `overlapBox` | Queries, below |
 | `addContactListener(ContactListener)` | Hears contacts begin and end, and triggers entered and left |
+| `setBackend(PhysicsBackend)` / `getBackend()` / `PhysicsWorld.setDefaultBackend(...)` / `close()` | Another solver stepping the world, such as [PhysX](physx.md); null is the built-in one. `close()` frees what a backend holds |
 | `getTime()` / `getStepCount()` / `getInterpolationAlpha()` | Simulated seconds, steps run, and how far the nodes sit between the last two steps |
 
 ### Fixed steps

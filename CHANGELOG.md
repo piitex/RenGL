@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `rengl-physx`: NVIDIA PhysX 5 as the solver behind `PhysicsWorld`, switched on with `PhysX.install()` or `world.setBackend(new PhysXBackend())`. Bodies, joints, characters, queries and listeners stay as they are. See [PhysX](docs/3d/physx.md).
+- `PhysicsBackend` and `PhysicsBridge` in `rengl-3d`, the interface a solver other than the built-in one plugs into.
+
 ## 0.1.0
 
 First public release.

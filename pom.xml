@@ -54,6 +54,7 @@
         <module>rengl-vulkan</module>
         <module>rengl-3d</module>
         <module>rengl-upscale</module>
+        <module>rengl-physx</module>
         <module>rengl-spellcheck</module>
         <module>rengl-tilemap</module>
         <module>rengl-entity</module>
@@ -82,9 +83,48 @@
         <natives.bundle.skip>true</natives.bundle.skip>
         <!-- The Skiko runtime (native library) is optional in a dev build, so it never reaches a consumer; a release build makes it a normal dependency so the bundle can pick it up. -->
         <skiko.runtime.optional>true</skiko.runtime.optional>
+        <!-- The physx-jni natives that rengl-physx tests on and the examples run on: this machine's, set by the physx-natives-* profiles below. There are none for Linux or Windows on arm64. -->
+        <physx-jni.version>2.9.0</physx-jni.version>
+        <physx.natives>natives-windows</physx.natives>
     </properties>
 
     <profiles>
+        <profile>
+            <id>physx-natives-linux</id>
+            <activation>
+                <os>
+                    <family>unix</family>
+                    <name>Linux</name>
+                </os>
+            </activation>
+            <properties>
+                <physx.natives>natives-linux</physx.natives>
+            </properties>
+        </profile>
+        <profile>
+            <id>physx-natives-macos-x86_64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>x86_64</arch>
+                </os>
+            </activation>
+            <properties>
+                <physx.natives>natives-macos</physx.natives>
+            </properties>
+        </profile>
+        <profile>
+            <id>physx-natives-macos-aarch64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <properties>
+                <physx.natives>natives-macos-arm64</physx.natives>
+            </properties>
+        </profile>
         <profile>
             <id>test-macos</id>
             <activation>

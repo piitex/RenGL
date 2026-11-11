@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.piitex</groupId>
+        <artifactId>rengl-parent</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>rengl-physx</artifactId>
+    <name>RenGL PhysX</name>
+    <description>NVIDIA PhysX 5 as the solver behind the 3D layer's PhysicsWorld, through the physx-jni bindings. It is apart from the 3D layer so that nothing else depends on PhysX or its licence. The PhysX native library for a platform is a separate physx-jni artifact that the program adds.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.piitex</groupId>
+            <artifactId>rengl-3d</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.fabmax</groupId>
+            <artifactId>physx-jni</artifactId>
+            <version>${physx-jni.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.fabmax</groupId>
+            <artifactId>physx-jni</artifactId>
+            <version>${physx-jni.version}</version>
+            <classifier>${physx.natives}</classifier>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          The Skia API is shaded into the rengl-core jar, not passed on as a dependency, so the modules that compile
+          against it need it to build. It stays out of the published dependencies.
+        -->
+        <dependency>
+            <groupId>org.jetbrains.skiko</groupId>
+            <artifactId>skiko-awt</artifactId>
+            <version>${skiko.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>

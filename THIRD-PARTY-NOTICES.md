@@ -19,6 +19,7 @@ These are downloaded by Maven. They are not copied into the RenGL source tree.
 | [JetBrains Runtime API (jbr-api)](https://github.com/JetBrains/JetBrainsRuntime) | 1.5.0 | Apache-2.0 | rengl-core, at run time |
 | [Apache Lucene](https://lucene.apache.org) (analysis-common) | 10.2.2 | Apache-2.0 | rengl-spellcheck |
 | [Apache Log4j API](https://logging.apache.org/log4j/) | 2.26.1 | Apache-2.0 | rengl-core |
+| [physx-jni](https://github.com/fabmax/physx-jni) (Java bindings for NVIDIA PhysX) | 2.9.0 | MIT | rengl-physx |
 | [JLayer](https://www.javazoom.net/javalayer/javalayer.html) (`com.googlecode.soundlibs:jlayer`) | 1.0.1-1 | LGPL-2.1 | rengl-audio (MP3 decoding) |
 
 The full Apache License 2.0 is in [licenses/Apache-2.0.txt](licenses/Apache-2.0.txt). Apache
@@ -68,6 +69,15 @@ those jars carries the license texts in `META-INF/licenses/rengl/` (the sources 
 OpenAL Soft is loaded by LWJGL as a separate shared library, so you can replace it with
 your own build of OpenAL Soft. If you ship it, you must also pass on the LGPL's terms; the
 license text is in LWJGL's repository at `modules/lwjgl/openal/openal_soft_license.txt`.
+
+### PhysX
+
+The rengl-physx module calls [NVIDIA PhysX 5](https://github.com/NVIDIA-Omniverse/PhysX) through physx-jni, which is
+Copyright (c) 2021 Max Thiele under the MIT license (text in [licenses/physx-jni-MIT.txt](licenses/physx-jni-MIT.txt)).
+RenGL publishes no PhysX binary. The PhysX native libraries are in physx-jni's `natives-*` jars, which a program adds
+itself; they contain PhysX (Copyright (c) NVIDIA Corporation, BSD-3-Clause) and V-HACD (Copyright (c) 2011 Khaled
+Mamou, BSD-3-Clause). The notices those jars carry are copied in
+[licenses/physx-jni-NOTICE.md](licenses/physx-jni-NOTICE.md); keep them with the natives if you ship them.
 
 ### JLayer and the LGPL
 
@@ -214,7 +224,7 @@ and stricter one. If you ship any of the libraries, their licenses are yours to 
 
 ## Trademarks
 
-NVIDIA, DLSS, RTX and GeForce are trademarks of NVIDIA Corporation. AMD, FidelityFX and FSR are
+NVIDIA, DLSS, RTX, PhysX and GeForce are trademarks of NVIDIA Corporation. AMD, FidelityFX and FSR are
 trademarks of Advanced Micro Devices, Inc. Apple, macOS and MetalFX are trademarks of Apple
 Inc. Microsoft, Windows and Edge are trademarks of Microsoft Corporation. All other names
 belong to their owners. They are used here only to say what RenGL works with, and RenGL is
