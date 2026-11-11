@@ -51,6 +51,19 @@
             <artifactId>rengl-upscale</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Only PhysicsDemo uses it, with -Drengl.demo.physics=physx. The natives are this machine's. -->
+        <dependency>
+            <groupId>io.github.piitex</groupId>
+            <artifactId>rengl-physx</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.fabmax</groupId>
+            <artifactId>physx-jni</artifactId>
+            <version>${physx-jni.version}</version>
+            <classifier>${physx.natives}</classifier>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>io.github.piitex</groupId>
             <artifactId>rengl-spellcheck</artifactId>

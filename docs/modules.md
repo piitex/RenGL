@@ -18,6 +18,7 @@ All artifacts have the group id `io.github.piitex` and the same version.
 | `rengl-vulkan` | The Vulkan renderer for `RenderAPI.VULKAN` | LWJGL Vulkan | MoltenVK on macOS only |
 | `rengl-3d` | The optional [3D layer](3d/README.md) (needs `rengl-vulkan`) | LWJGL assimp, shaderc, spvc, VMA | those four |
 | `rengl-upscale` | Vendor [upscalers and frame generation](3d/upscaling.md) for the 3D layer (AMD FSR and NVIDIA DLSS on Windows, Apple MetalFX on a Mac). Carries no vendor binaries and is left out of `RenGL` | none (needs the vendors' libraries at run time, except MetalFX, which is part of macOS) | none |
+| `rengl-physx` | [NVIDIA PhysX 5](3d/physx.md) as the solver behind the 3D layer's `PhysicsWorld`. Left out of `RenGL` | physx-jni (which carries PhysX) | none of its own: add the `physx-jni` natives jar for each platform |
 | `rengl-spellcheck` | `HunspellChecker` and the en_US dictionary for [spell checking](text/spell-checking.md) | Lucene analysis | none |
 | `rengl-tilemap` | [Tile maps](graphics/tile-maps.md) | LWJGL zstd | zstd |
 | `rengl-entity` | [Entities and components](game/entities.md) | none | none |
@@ -25,7 +26,7 @@ All artifacts have the group id `io.github.piitex` and the same version.
 | `rengl-downloads` | `DownloadManager` and the download UI ([downloads](reference/downloads.md)) | none | none |
 | `rengl-ui-file` | UI files: a screen described in a file ([layout files](containers/layout-files.md)) | none | none |
 | `rengl-examples` | The demos. Not meant as a dependency | none | none |
-| **`RenGL`** | Every module above except the examples and `rengl-upscale`, in one dependency, as before the split | all of them | all of them |
+| **`RenGL`** | Every module above except the examples, `rengl-upscale` and `rengl-physx`, in one dependency, as before the split | all of them | all of them |
 
 ## Using them
 
@@ -77,6 +78,7 @@ What to add for common programs:
 | A 2D game with tile maps and entities | `rengl-core`, `rengl-tilemap`, `rengl-entity` (and `rengl-audio` for sound) |
 | A text editor with spell checking | `rengl-core`, `rengl-spellcheck` |
 | A 3D program | `rengl-core`, `rengl-3d` (it brings `rengl-vulkan`) |
+| A 3D game on PhysX | `rengl-core`, `rengl-3d`, `rengl-physx` and the `physx-jni` natives |
 | A program on Vulkan, without 3D | `rengl-core`, `rengl-vulkan` |
 | A program that wants everything | `RenGL` |
 

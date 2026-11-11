@@ -4,6 +4,8 @@ import me.piitex.engine.Engine;
 import me.piitex.engine.RenderAPI;
 import me.piitex.engine.Window;
 import me.piitex.engine.WindowOptions;
+import me.piitex.engine.physx.PhysX;
+import me.piitex.engine.physx.PhysXBackend;
 import me.piitex.engine.render3d.Viewport3D;
 import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Ray;
@@ -55,6 +57,8 @@ import java.util.Random;
  *   <li>Right of the panel, "What's under the mouse" is a {@link PhysicsWorld#raycast} along the same ray.</li>
  * </ul>
  * Like the 3D demo it asks for Vulkan on macOS and OpenGL elsewhere; {@code -Drengl.demo.api=OPENGL} chooses.
+ * {@code -Drengl.demo.physics=physx} steps the same world with NVIDIA PhysX ({@code rengl-physx}) in place of the
+ * built-in solver; nothing else in the demo changes.
  */
 public class PhysicsDemo {
     private static final Mesh CUBE = Mesh.cube(1f);
@@ -164,7 +168,7 @@ public class PhysicsDemo {
     private static final class Playground {
         final Scene3D scene = new Scene3D();
         final OrbitControls orbit = new OrbitControls(scene.camera());
-        final PhysicsWorld world = new PhysicsWorld();
+        final PhysicsWorld world = newWorld();
         final ColliderView colliders = new ColliderView(world).setVisible(false);
         final List<RigidBody> crates = new ArrayList<>();
         final Deque<RigidBody> shots = new ArrayDeque<>();
@@ -285,10 +289,23 @@ public class PhysicsDemo {
             scene.root().remove(body.getNode());
         }
 
+        /**
+         * A world on the built-in solver, or on PhysX with {@code -Drengl.demo.physics=physx} when its natives loaded.
+         */
+        private static PhysicsWorld newWorld() {
+            PhysicsWorld world = new PhysicsWorld();
+            if ("physx".equalsIgnoreCase(System.getProperty("rengl.demo.physics"))) {
+                if (PhysX.isAvailable()) world.setBackend(new PhysXBackend());
+                else System.err.println("PhysX is not available, using the built-in solver: " + PhysX.getFailure());
+            }
+            return world;
+        }
+
         private void updateStats() {
             int awake = 0;
             for (RigidBody body : world.bodies()) if (body.isDynamic() && !body.isSleeping()) awake++;
-            String text = world.bodies().size() + " bodies, " + awake + " awake, " + world.getContacts().size() + " contacts";
+            String text = world.bodies().size() + " bodies, " + awake + " awake, " + world.getContacts().size() + " contacts"
+                    + (world.getBackend() == null ? "" : " (" + world.getBackend().name() + ")");
             if (!text.equals(shownStats)) {
                 shownStats = text;
                 onStats.accept(text);

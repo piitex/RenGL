@@ -32,6 +32,7 @@ first time something draws 3D, and closed with the window.
 | [Models](models.md) | `Model.load`: glTF, GLB, OBJ, FBX and Collada files, and what carries over |
 | [Animation](animation.md) | Clips, `AnimationPlayer`, and skinned meshes that bend with a skeleton |
 | [Physics](physics.md) | Rigid bodies: gravity, velocity, mass and inertia, forces, collisions with friction and bounce, sleeping, raycasts and trigger zones, mesh and hull colliders, joints, a character controller |
+| [PhysX](physx.md) | The same physics world stepped by NVIDIA PhysX 5, from the separate `rengl-physx` module |
 | [Instancing](instancing.md) | Thousands of copies of one mesh in a single draw |
 | [Upscaling](upscaling.md) | Drawing a scene smaller and enlarging it: render scale, the built-in temporal upscaler, and the `Upscaler` interface for FSR, DLSS and XeSS modules |
 | [Ray tracing](ray-tracing.md) | Shadows, reflections, ambient occlusion, global illumination and path tracing (with their denoiser) traced with rays through the scene (DLSS Ray Reconstruction as the denoiser where there is one), with ray queries on Vulkan GPUs that have them and in shader code on any other (a Mac included), and the structures behind them |
