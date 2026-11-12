@@ -703,9 +703,13 @@ public class Element {
     }
 
     /**
-     * Longer help read after the name and role, such as what a setting does. Null by default.
+     * Longer help read after the name and role, such as what a setting does. Null by default, or the {@link #setTooltip
+     * tooltip} when there is one and it is not already the name.
      */
     public String getAccessibleDescription() {
+        if (accessibleDescription == null && tooltip != null && !tooltip.isBlank() && !tooltip.equals(getAccessibleName())) {
+            return tooltip; // the hover help is the longer help a screen reader would give too
+        }
         return accessibleDescription;
     }
 

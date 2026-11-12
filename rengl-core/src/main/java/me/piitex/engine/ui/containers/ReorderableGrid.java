@@ -1,8 +1,13 @@
 package me.piitex.engine.ui.containers;
 
+import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.ui.CursorMode;
 import me.piitex.engine.ui.Element;
+import me.piitex.engine.ui.Focusable;
+import me.piitex.engine.ui.overlays.TextOverlay;
 import me.piitex.engine.ui.scroll.ScrollContainer;
+import me.piitex.engine.ui.theme.ThemeManager;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,8 +41,15 @@ import java.util.function.Consumer;
  * By default the items are a packed list: dropping one shifts the others along, so there are never gaps. With
  * {@link #setFreePlacement free placement} on, the grid is instead a set of fixed slots, some of them empty, and
  * an item can be dropped into any slot: an empty one moves it there, and an occupied one swaps the two.
+ * <p>
+ * Without a mouse, Tab reaches the grid. The arrow keys, Home and End move between items, Enter or Space chooses the
+ * one it is on ({@link #onItemClick}), and M picks it up: the arrows then move it (in a packed list, through the
+ * order; with free placement, over the slots), M or Enter puts it down and reports the new order as a drag would, and
+ * Escape puts it back. A screen reader hears the item's name and place ("Sword, 3 of 8"); an item is named by its
+ * {@link Element#setAccessibleName accessible name} or else the first text in it. Dropping onto a target (see
+ * {@link #setDropTargets}) is a mouse drag only.
  */
-public class ReorderableGrid extends ScrollContainer {
+public class ReorderableGrid extends ScrollContainer implements Focusable {
     private static final double DRAG_THRESHOLD = 6;
     private static final double AUTO_SCROLL_EDGE = 56;
     private static final double AUTO_SCROLL_SPEED = 900;
@@ -75,11 +87,17 @@ public class ReorderableGrid extends ScrollContainer {
     private int startIndex;
     private double pressX, pressY, grabX, grabY, lastX, lastY;
 
+    // Keyboard: the slot it is on, and an item picked up with M and not yet put down (-1 when none).
+    private boolean focused;
+    private int cursor;
+    private int carryStart = -1;
+
     public ReorderableGrid(double width, double height, double itemWidth, double itemHeight, double gap) {
         super(width, height);
         this.itemWidth = itemWidth;
         this.itemHeight = itemHeight;
         this.gap = gap;
+        setFocusTraversable(true);
     }
 
     /**
@@ -96,6 +114,7 @@ public class ReorderableGrid extends ScrollContainer {
         hoverTarget = null;
         outside = false;
         previewSlot = -1;
+        carryStart = -1;
 
         for (Container item : newItems) {
             if (item == null && !freePlacement) continue;
@@ -103,6 +122,7 @@ public class ReorderableGrid extends ScrollContainer {
             if (item != null) addElement(item);
         }
         ensureSlots();
+        cursor = Math.max(0, Math.min(cursor, items.size() - 1));
         for (int i = 0; i < items.size(); i++) {
             if (items.get(i) == null) continue;
             items.get(i).setX(slotX(i));
@@ -383,6 +403,7 @@ public class ReorderableGrid extends ScrollContainer {
             lifted = true;
             pressed.bringToFront();
             if (liftListener != null) liftListener.accept(pressed, true);
+            speak("Picked up " + labelOf(pressed));
         }
         followPointer(0f);
     }
@@ -410,8 +431,10 @@ public class ReorderableGrid extends ScrollContainer {
 
         if (target != null) {
             if (dropOntoListener != null) dropOntoListener.accept(item, target);
+            speak("Dropped " + labelOf(item) + " onto " + labelOf(target));
         } else if (dropOutsideListener != null && !withinBounds(x, y)) {
             dropOutsideListener.accept(item);
+            speak("Dropped " + labelOf(item) + " outside");
         } else if (freePlacement) {
             int slot = previewSlot;
             previewSlot = -1;
@@ -420,10 +443,247 @@ public class ReorderableGrid extends ScrollContainer {
                 items.set(startIndex, items.get(slot));
                 items.set(slot, item);
                 if (reorderListener != null) reorderListener.accept(getSlots());
+                speak("Dropped " + labelOf(item) + " in slot " + (slot + 1));
+            } else {
+                speak("Put back " + labelOf(item));
             }
-        } else if (reorderListener != null && items.indexOf(item) != startIndex) {
-            reorderListener.accept(List.copyOf(items));
+        } else {
+            if (reorderListener != null && items.indexOf(item) != startIndex) reorderListener.accept(List.copyOf(items));
+            speak(items.indexOf(item) == startIndex ? "Put back " + labelOf(item)
+                    : "Dropped " + labelOf(item) + ", " + (items.indexOf(item) + 1) + " of " + items.size());
         }
+    }
+
+    // --- Keyboard and accessibility ----------------------------------------------------------------
+
+    /**
+     * What an item is called to a screen reader: its accessible name, else the first text inside it, else "Item".
+     */
+    private String labelOf(Container item) {
+        if (item == null) return "empty";
+        String name = item.getAccessibleName();
+        if (name != null && !name.isBlank()) return name;
+        String text = firstText(item);
+        return text == null ? "Item" : text;
+    }
+
+    private static String firstText(Container container) {
+        for (Element child : container.getElements().values()) {
+            if (child instanceof TextOverlay text && text.getText() != null && !text.getText().isBlank()) return text.getText().strip();
+            if (child instanceof Container inner && !(child instanceof ReorderableGrid)) {
+                String found = firstText(inner);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private void speak(String text) {
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.announce(text, true);
+    }
+
+    @Override
+    public boolean isFocusTraversable() {
+        return super.isFocusTraversable() && !items.isEmpty();
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
+    }
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.LIST;
+    }
+
+    /**
+     * The item the keyboard is on and where it is: "Sword, 3 of 8", "Sword, picked up, 3 of 8", or with free placement
+     * "Slot 5 of 24, empty".
+     */
+    @Override
+    public String getAccessibleValue() {
+        int n = items.size();
+        if (n == 0) return "Empty";
+        int c = Math.max(0, Math.min(cursor, n - 1));
+        Container item = items.get(c);
+        if (freePlacement) {
+            StringBuilder text = new StringBuilder("Slot ").append(c + 1).append(" of ").append(n).append(", ").append(labelOf(item));
+            if (carryStart >= 0) text.append(c == carryStart ? ", picked up" : ", carrying " + labelOf(items.get(carryStart)));
+            return text.toString();
+        }
+        return labelOf(item) + (carryStart >= 0 ? ", picked up, " : ", ") + (c + 1) + " of " + n;
+    }
+
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        return set != null ? set : "Arrow keys move between items, Enter chooses one, M picks one up to move it";
+    }
+
+    @Override
+    public void onFocusGained() {
+        focused = true;
+        cursor = Math.max(0, Math.min(cursor, items.size() - 1));
+    }
+
+    @Override
+    public void onFocusLost() {
+        if (carryStart >= 0) putBack(false);
+        focused = false;
+    }
+
+    @Override
+    public void onCharTyped(int codepoint) {
+    }
+
+    /**
+     * Clicking the grid does not take the keyboard from the game; once Tab has focused it the arrows, Home, End, Enter,
+     * Space and M are its own.
+     */
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        if ((mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_SUPER)) != 0) return false;
+        return switch (key) {
+            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_HOME,
+                 GLFW.GLFW_KEY_END, GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE, GLFW.GLFW_KEY_M -> true;
+            case GLFW.GLFW_KEY_ESCAPE -> carryStart >= 0;
+            default -> false;
+        };
+    }
+
+    @Override
+    public void onKeyPressed(int key, int action, int mods) {
+        if (action == GLFW.GLFW_RELEASE || items.isEmpty() || lifted) return;
+        int n = items.size(), columns = columns();
+        cursor = Math.max(0, Math.min(cursor, n - 1));
+        switch (key) {
+            case GLFW.GLFW_KEY_LEFT -> moveCursor(cursor - 1);
+            case GLFW.GLFW_KEY_RIGHT -> moveCursor(cursor + 1);
+            case GLFW.GLFW_KEY_UP -> moveCursor(cursor - columns);
+            case GLFW.GLFW_KEY_DOWN -> moveCursor(cursor + columns);
+            case GLFW.GLFW_KEY_HOME -> moveCursor(0);
+            case GLFW.GLFW_KEY_END -> moveCursor(n - 1);
+            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+                if (action != GLFW.GLFW_PRESS) return;
+                if (carryStart >= 0) putDown();
+                else if (items.get(cursor) != null && clickListener != null) clickListener.accept(items.get(cursor));
+            }
+            case GLFW.GLFW_KEY_M -> {
+                if (action != GLFW.GLFW_PRESS) return;
+                if (carryStart >= 0) putDown();
+                else pickUp();
+            }
+            case GLFW.GLFW_KEY_ESCAPE -> {
+                if (carryStart >= 0) putBack(true);
+            }
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * Whether an item has been picked up with the keyboard and is waiting to be put down.
+     */
+    public boolean isCarrying() {
+        return carryStart >= 0;
+    }
+
+    private void moveCursor(int target) {
+        int n = items.size();
+        if (target < 0 || target >= n || target == cursor) return;
+        if (carryStart >= 0) {
+            if (freePlacement) {
+                previewSlot = target == carryStart ? -1 : target;
+            } else {
+                items.add(target, items.remove(cursor)); // the picked-up item travels through the order
+            }
+        }
+        cursor = target;
+        scrollToSlot(target);
+        notifyAccessibleChange();
+    }
+
+    private void scrollToSlot(int slot) {
+        double top = slotY(slot), bottom = top + itemHeight, offset = getScrollOffsetY();
+        if (top < offset) scrollBy(0, top - offset);
+        else if (bottom > offset + getHeight()) scrollBy(0, bottom - offset - getHeight());
+    }
+
+    private void pickUp() {
+        Container item = items.get(cursor);
+        if (item == null) {
+            speak("Nothing to pick up");
+            return;
+        }
+        carryStart = cursor;
+        if (liftListener != null) liftListener.accept(item, true);
+        speak("Picked up " + labelOf(item) + ". The arrow keys move it, M or Enter puts it down, Escape cancels.");
+    }
+
+    private void putDown() {
+        int start = carryStart;
+        carryStart = -1;
+        if (freePlacement) {
+            Container item = items.get(start);
+            int slot = previewSlot;
+            previewSlot = -1;
+            if (liftListener != null) liftListener.accept(item, false);
+            if (slot < 0 || slot == start) {
+                cursor = start;
+                speak("Put back " + labelOf(item));
+                return;
+            }
+            Container other = items.get(slot);
+            items.set(start, other);
+            items.set(slot, item);
+            cursor = slot;
+            if (reorderListener != null) reorderListener.accept(getSlots());
+            speak("Put " + labelOf(item) + " in slot " + (slot + 1) + (other == null ? "" : ", swapped with " + labelOf(other)));
+            return;
+        }
+        Container item = items.get(cursor);
+        if (liftListener != null) liftListener.accept(item, false);
+        if (cursor == start) {
+            speak("Put back " + labelOf(item));
+            return;
+        }
+        if (reorderListener != null) reorderListener.accept(List.copyOf(items));
+        speak("Put " + labelOf(item) + " at " + (cursor + 1) + " of " + items.size());
+    }
+
+    private void putBack(boolean say) {
+        int start = carryStart;
+        carryStart = -1;
+        previewSlot = -1;
+        Container item;
+        if (freePlacement) {
+            item = items.get(start);
+        } else {
+            item = items.remove(cursor);
+            items.add(start, item);
+        }
+        cursor = start;
+        if (liftListener != null) liftListener.accept(item, false);
+        if (say) speak("Cancelled. " + labelOf(item) + ", " + (start + 1) + " of " + items.size());
+    }
+
+    @Override
+    public void render(Renderer renderer) {
+        super.render(renderer);
+        if (!focused || !isEnabled() || items.isEmpty() || lifted) return;
+        int c = Math.max(0, Math.min(cursor, items.size() - 1));
+        float x = (float) (getContentOriginX() + slotX(c)), y = (float) (getContentOriginY() + slotY(c));
+        renderer.pushClip((float) getAbsoluteX(), (float) getAbsoluteY(), (float) getWidth(), (float) getHeight());
+        renderer.drawBorder(x - 2f, y - 2f, (float) itemWidth + 4f, (float) itemHeight + 4f,
+                ThemeManager.getCurrent().getAccent(), carryStart >= 0 ? 4f : 2f, 4f);
+        renderer.popClip();
     }
 
     // --- Dragging ----------------------------------------------------------------------------------

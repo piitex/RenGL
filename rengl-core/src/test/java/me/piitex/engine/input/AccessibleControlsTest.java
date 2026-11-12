@@ -659,4 +659,127 @@ class AccessibleControlsTest {
         assertEquals("announce Done loading", heard.getLast());
         assertEquals("Done", spinner.getAccessibleValue());
     }
+
+    private Container card(String text) {
+        Container card = new Container(60, 40);
+        card.addElement(new TextOverlay(text));
+        return card;
+    }
+
+    @Test
+    void aReorderableGridIsATabStopThatTheKeyboardCanRearrange() {
+        me.piitex.engine.ui.containers.ReorderableGrid grid = put(new me.piitex.engine.ui.containers.ReorderableGrid(300, 100, 60, 40, 10), 10, 10);
+        List<Container> cards = List.of(card("Sword"), card("Shield"), card("Potion"));
+        grid.setItems(cards);
+        List<String> orders = new ArrayList<>();
+        grid.onReorder(list -> orders.add("changed"));
+        assertTrue(grid.isFocusTraversable());
+        window.requestFocus(grid);
+        assertEquals(AccessibleRole.LIST, grid.getAccessibleRole());
+        assertFalse(grid.grabsKeyboard());
+        assertEquals("Sword, 1 of 3", grid.getAccessibleValue());
+
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("LIST Shield, 2 of 3", heard.getLast());
+        key(GLFW.GLFW_KEY_M);
+        assertTrue(heard.getLast().startsWith("announce Picked up Shield"), heard.getLast());
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("LIST Shield, picked up, 3 of 3", heard.getLast());
+        assertSame(cards.get(1), grid.getItems().get(2), "the picked up card moved through the order");
+        key(GLFW.GLFW_KEY_M);
+        assertEquals("announce Put Shield at 3 of 3", heard.getLast());
+        assertEquals(1, orders.size(), "the new order is reported once, as a drag would");
+
+        // Pick up and change your mind.
+        key(GLFW.GLFW_KEY_HOME);
+        key(GLFW.GLFW_KEY_M);
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_ESCAPE);
+        assertEquals("announce Cancelled. Sword, 1 of 3", heard.getLast());
+        assertSame(cards.get(0), grid.getItems().get(0));
+        assertEquals(1, orders.size(), "cancelling reports nothing");
+    }
+
+    @Test
+    void aGridWithFreePlacementReadsEmptySlotsAndSwaps() {
+        me.piitex.engine.ui.containers.ReorderableGrid grid = put(new me.piitex.engine.ui.containers.ReorderableGrid(180, 50, 60, 40, 0), 10, 10);
+        grid.setFreePlacement(true);
+        Container sword = card("Sword");
+        grid.setItems(java.util.Arrays.asList(sword, null, null));
+        window.requestFocus(grid);
+        assertEquals("Slot 1 of 6, Sword", grid.getAccessibleValue());
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("LIST Slot 2 of 6, empty", heard.getLast());
+        key(GLFW.GLFW_KEY_M);
+        assertEquals("announce Nothing to pick up", heard.getLast());
+        key(GLFW.GLFW_KEY_LEFT);
+        key(GLFW.GLFW_KEY_M);
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("LIST Slot 3 of 6, empty, carrying Sword", heard.getLast());
+        key(GLFW.GLFW_KEY_M);
+        assertEquals("announce Put Sword in slot 3", heard.getLast());
+        assertSame(sword, grid.getSlots().get(2));
+    }
+
+    @Test
+    void aTooltipIsTheDescriptionWhenTheNameIsSomethingElse() {
+        me.piitex.engine.ui.overlays.ButtonOverlay save = put(new me.piitex.engine.ui.overlays.ButtonOverlay("Save", 80, 30), 10, 10);
+        assertNull(save.getAccessibleDescription());
+        save.setTooltip("Writes the file to disk");
+        assertEquals("Writes the file to disk", save.getAccessibleDescription());
+        save.setAccessibleDescription("Saves");
+        assertEquals("Saves", save.getAccessibleDescription());
+        me.piitex.engine.ui.overlays.ButtonOverlay icon = put(new me.piitex.engine.ui.overlays.ButtonOverlay("", 30, 30), 100, 10);
+        icon.setTooltip("Paste");
+        assertEquals("Paste", icon.getAccessibleName());
+        assertNull(icon.getAccessibleDescription(), "already read as the name");
+    }
+
+    @Test
+    void aSpellCheckedAreaFindsProblemsAndReadsTheCorrectionList() throws Exception {
+        me.piitex.engine.ui.overlays.RichTextAreaOverlay rich = put(new me.piitex.engine.ui.overlays.RichTextAreaOverlay(300, 100), 10, 10);
+        me.piitex.engine.ui.text.TextChecker checker = new me.piitex.engine.ui.text.TextChecker() {
+            @Override
+            public List<me.piitex.engine.ui.text.TextIssue> check(String text) {
+                int at = text.indexOf("teh");
+                return at < 0 ? List.of() : List.of(new me.piitex.engine.ui.text.TextIssue(at, at + 3,
+                        me.piitex.engine.ui.text.TextIssue.Kind.SPELLING, null));
+            }
+
+            @Override
+            public List<String> suggest(String text, me.piitex.engine.ui.text.TextIssue issue) {
+                return List.of("the", "them");
+            }
+        };
+        rich.setChecker(checker);
+        rich.setText("see teh cat");
+        assertTrue(rich.getAccessibleDescription().contains("F8"));
+        // The check runs on a worker once the box has been drawn; start it as drawing would.
+        java.lang.reflect.Method schedule = rich.getClass().getDeclaredMethod("scheduleCheckIfNeeded",
+                me.piitex.engine.ui.text.TextChecker.class, String.class);
+        schedule.setAccessible(true);
+        schedule.invoke(rich, checker, rich.getText());
+        window.requestFocus(rich);
+        rich.setCaretIndex(0);
+
+        long deadline = System.currentTimeMillis() + 4000;
+        while (System.currentTimeMillis() < deadline) {
+            key(GLFW.GLFW_KEY_F8);
+            if (heard.getLast().startsWith("announce Misspelled")) break;
+            Thread.sleep(60);
+        }
+        assertTrue(heard.getLast().startsWith("announce Misspelled: teh"), heard.getLast());
+        assertEquals(4, rich.getCaretIndex());
+
+        key(GLFW.GLFW_KEY_PERIOD, GLFW.GLFW_MOD_CONTROL);
+        assertTrue(window.getPopup() instanceof me.piitex.engine.ui.PopupKeyListener, "the list is a keyboard popup");
+        assertEquals("announce Misspelled: teh. 2 suggestions. the, 1 of 2", heard.getLast());
+        key(GLFW.GLFW_KEY_DOWN);
+        assertEquals("announce them, 2 of 2", heard.getLast());
+        key(GLFW.GLFW_KEY_ENTER);
+        assertEquals("see them cat", rich.getText());
+        assertEquals("announce Replaced teh with them", heard.getLast());
+        assertNull(window.getPopup());
+    }
 }

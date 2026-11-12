@@ -2,6 +2,7 @@ package me.piitex.engine.ui.overlays;
 
 import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.ui.PopupHost;
+import me.piitex.engine.ui.PopupKeyListener;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.containers.Container;
@@ -198,17 +199,100 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
      * The still-valid issue whose word is at window-space (x, y), or null. This uses the same staleness rule as {@link #drawIssues}.
      */
     private TextIssue issueAt(double x, double y) {
+        return issueAtIndex(indexAtPoint(x, y));
+    }
+
+    private TextIssue issueAtIndex(int index) {
         CheckResult result = checkResult;
         String current = getText();
-        int index = indexAtPoint(x, y);
         for (TextIssue issue : result.issues()) {
             if (index < issue.start() || index > issue.end()) continue;
-            int len = issue.end() - issue.start();
-            if (issue.end() <= current.length() && current.regionMatches(issue.start(), result.text(), issue.start(), len)) {
-                return issue;
-            }
+            if (stillValid(result, current, issue)) return issue;
         }
         return null;
+    }
+
+    private static boolean stillValid(CheckResult result, String current, TextIssue issue) {
+        int len = issue.end() - issue.start();
+        return issue.end() <= current.length() && current.regionMatches(issue.start(), result.text(), issue.start(), len);
+    }
+
+    /* Keyboard and speech */
+
+    private void say(String text) {
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.announce(text, true);
+    }
+
+    private static String kindWord(TextIssue issue) {
+        return issue.kind() == TextIssue.Kind.GRAMMAR ? "Grammar problem" : "Misspelled";
+    }
+
+    /**
+     * F8 and Shift+F8: the caret goes to the next or previous flagged word and its problem is read out.
+     */
+    private void goToIssue(int direction) {
+        CheckResult result = checkResult;
+        String current = getText();
+        List<TextIssue> valid = new ArrayList<>();
+        for (TextIssue issue : result.issues()) if (stillValid(result, current, issue)) valid.add(issue);
+        if (valid.isEmpty()) {
+            say(checker != null && result.text().equals(current) ? "No spelling or grammar problems" : "No problems found yet");
+            return;
+        }
+        valid.sort(Comparator.comparingInt(TextIssue::start));
+        int caret = getCaretIndex();
+        TextIssue found = null;
+        if (direction > 0) {
+            for (TextIssue issue : valid) if (issue.start() > caret) { found = issue; break; }
+            if (found == null) found = valid.getFirst();
+        } else {
+            for (TextIssue issue : valid) if (issue.start() < caret) found = issue;
+            if (found == null) found = valid.getLast();
+        }
+        setCaretIndex(found.start());
+        say(kindWord(found) + ": " + current.substring(found.start(), found.end())
+                + (found.message() == null || found.message().isBlank() ? "" : ". " + found.message())
+                + ". Ctrl and period opens corrections.");
+    }
+
+    /**
+     * Ctrl+period, Shift+F10 or the menu key: the correction list for the flagged word the caret is in or touches.
+     */
+    private void openSuggestionsAtCaret() {
+        if (checker == null || isReadOnly()) return;
+        TextIssue issue = issueAtIndex(getCaretIndex());
+        if (issue == null) {
+            say("No spelling or grammar problem here");
+            return;
+        }
+        double[] at = getBoundsAt(issue.start());
+        showSuggestions(issue, at[0], at[1] + at[2]);
+    }
+
+    @Override
+    public void onKeyPressed(int key, int action, int mods) {
+        if (action == GLFW.GLFW_PRESS && checker != null) {
+            boolean command = (mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
+            boolean shift = (mods & GLFW.GLFW_MOD_SHIFT) != 0;
+            if ((command && key == GLFW.GLFW_KEY_PERIOD) || (shift && key == GLFW.GLFW_KEY_F10) || key == GLFW.GLFW_KEY_MENU) {
+                openSuggestionsAtCaret();
+                return;
+            }
+            if (key == GLFW.GLFW_KEY_F8) {
+                goToIssue(shift ? -1 : 1);
+                return;
+            }
+        }
+        super.onKeyPressed(key, action, mods);
+    }
+
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        if (checker == null) return set;
+        String hint = "F8 goes to the next spelling problem, Ctrl and period opens corrections";
+        return set == null ? hint : set + ". " + hint;
     }
 
     /**
@@ -221,6 +305,13 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
 
         TextIssue issue = issueAt(x, y);
         if (issue == null) return;
+        showSuggestions(issue, x, y);
+    }
+
+    private void showSuggestions(TextIssue issue, double x, double y) {
+        TextChecker activeChecker = checker;
+        PopupHost host = getPopupHost();
+        if (activeChecker == null || host == null) return;
 
         String current = getText();
         List<String> suggestions = activeChecker.suggest(current, issue);
@@ -235,6 +326,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         float py = (float) Math.min(y, area[1] + area[3] - h);
         popup.setBounds(Math.max(area[0], px), Math.max(area[1], py), w, h);
         host.showPopup(popup, this, popup::closeFont);
+        popup.announceOpening();
     }
 
     /**
@@ -258,7 +350,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
      * draws and hit-tests its own rows. Window#showPopup dismisses it on an outside
      * click or on Escape. Choosing a row replaces the misspelled word with it.
      */
-    private class SuggestionPopup extends Container {
+    private class SuggestionPopup extends Container implements PopupKeyListener {
         static final int MAX_ROWS = 6;
         private static final float FONT_SIZE = 16f;
         private static final float ROW_HEIGHT = 28f;
@@ -272,6 +364,9 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
         private final int firstActionRow;
         private final List<Runnable> actions = new ArrayList<>();
         private org.jetbrains.skia.Font font;
+        private int active = -1; // the row the keyboard is on
+        private int spokenRow = -1; // the row the pointer was last read out at
+        private boolean hoverPrimed; // the first look only notes where the pointer already is, so the opening is not cut off
 
         SuggestionPopup(TextIssue issue, String word, List<String> suggestions, TextChecker checker) {
             super(0, 0);
@@ -295,21 +390,95 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
                 actions.add(() -> ignoreWord(word));
             }
             this.rows = all;
+            this.active = suggestionCount > 0 ? 0 : (all.size() > firstActionRow ? firstActionRow : -1);
             setCursorMode(CursorMode.POINTER);
             onMouseClick(event -> {
                 int row = (int) Math.floor((event.getMouseY() - getY()) / ROW_HEIGHT) - headerRows();
                 if (!isClickable(row)) return;
-                PopupHost host = getPopupHost();
-                if (row < suggestionCount) {
-                    String current = getText();
-                    if (issue.end() <= current.length() && current.regionMatches(issue.start(), word, 0, word.length())) {
-                        replaceRange(issue.start(), issue.end(), rows.get(row));
-                    }
-                } else {
-                    actions.get(row - firstActionRow).run();
-                }
-                if (host != null) host.closePopup();
+                choose(row);
             });
+        }
+
+        /** Replaces the word, or runs the action, then closes the list. */
+        private void choose(int row) {
+            PopupHost host = getPopupHost();
+            if (row < suggestionCount) {
+                String current = getText();
+                if (issue.end() <= current.length() && current.regionMatches(issue.start(), word, 0, word.length())) {
+                    replaceRange(issue.start(), issue.end(), rows.get(row));
+                    say("Replaced " + word + " with " + rows.get(row));
+                }
+            } else {
+                actions.get(row - firstActionRow).run();
+                say(rows.get(row).equals("Ignore") ? "Ignoring " + word : "Added " + word + " to the dictionary");
+            }
+            if (host != null) host.closePopup();
+        }
+
+        /** "Misspelled: teh. 3 suggestions. the, 1 of 3": what the list is and the row the keyboard starts on. */
+        void announceOpening() {
+            StringBuilder text = new StringBuilder(kindWord(issue)).append(": ").append(word).append(". ");
+            if (header != null) text.append(header).append(". ");
+            if (suggestionCount == 0) text.append("No suggestions. ");
+            else text.append(suggestionCount == 1 ? "1 suggestion. " : suggestionCount + " suggestions. ");
+            if (active >= 0) text.append(rowReading(active));
+            say(text.toString().strip());
+        }
+
+        private String rowReading(int row) {
+            if (row < suggestionCount) return rows.get(row) + ", " + (row + 1) + " of " + suggestionCount;
+            return rows.get(row);
+        }
+
+        @Override
+        public void onPopupKey(int key, int mods) {
+            int before = active;
+            switch (key) {
+                case GLFW.GLFW_KEY_DOWN -> {
+                    for (int r = active + 1; r < rows.size(); r++) if (isClickable(r)) { active = r; break; }
+                }
+                case GLFW.GLFW_KEY_UP -> {
+                    for (int r = active - 1; r >= 0; r--) if (isClickable(r)) { active = r; break; }
+                }
+                case GLFW.GLFW_KEY_HOME -> {
+                    for (int r = 0; r < rows.size(); r++) if (isClickable(r)) { active = r; break; }
+                }
+                case GLFW.GLFW_KEY_END -> {
+                    for (int r = rows.size() - 1; r >= 0; r--) if (isClickable(r)) { active = r; break; }
+                }
+                case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+                    if (isClickable(active)) choose(active);
+                    return;
+                }
+                case GLFW.GLFW_KEY_ESCAPE -> {
+                    PopupHost host = getPopupHost();
+                    if (host != null) host.closePopup();
+                    say("Corrections closed");
+                    return;
+                }
+                default -> {
+                }
+            }
+            if (active != before && active >= 0) say(rowReading(active));
+        }
+
+        @Override
+        public void update(float delta) {
+            super.update(delta);
+            // The mouse reading a row out as it passes over it, as a menu does.
+            int hover = MouseTracker.isInWindow() && contains(MouseTracker.getX(), MouseTracker.getY())
+                    ? (int) Math.floor((MouseTracker.getY() - getY()) / ROW_HEIGHT) - headerRows() : -1;
+            if (!isClickable(hover)) hover = -1;
+            if (!hoverPrimed) {
+                hoverPrimed = true;
+                spokenRow = hover;
+            } else if (hover != spokenRow) {
+                spokenRow = hover;
+                if (hover >= 0) {
+                    active = hover;
+                    say(rowReading(hover));
+                }
+            }
         }
 
         private boolean isClickable(int row) {
@@ -354,7 +523,7 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
             renderer.pushClip(x, y, w, h);
             int hoverRow = MouseTracker.isInWindow() && contains(MouseTracker.getX(), MouseTracker.getY())
                     ? (int) Math.floor((MouseTracker.getY() - y) / ROW_HEIGHT) - headerRows() : -1;
-            if (!isClickable(hoverRow)) hoverRow = -1;
+            if (!isClickable(hoverRow)) hoverRow = active; // the keyboard's row looks like a hovered one
             org.jetbrains.skia.Font f = font();
             float textHeight = FontMetricsCompat.of(f).getHeight();
             if (header != null) {
