@@ -668,8 +668,8 @@ public class Element {
 
     /**
      * The name a screen reader gives this Element: "Save" for a save button. It is the first that exists of
-     * {@link #setAccessibleName the name set}, the text of the Element named by {@link #setLabelledBy}, and what the
-     * control knows about itself (a button's label). Null when there is none, which a check box or a slider has
+     * {@link #setAccessibleName the name set}, the text of the Element named by {@link #setLabelledBy}, what the
+     * control knows about itself (a button's label), and last its {@link #setTooltip tooltip}, which names an icon button. Null when there is none, which a check box or a slider has
      * until one is given, since the words beside it are separate Elements.
      */
     public String getAccessibleName() {
@@ -678,7 +678,9 @@ public class Element {
             String name = labelledBy.accessibleName != null ? labelledBy.accessibleName : labelledBy.defaultAccessibleName();
             if (name != null) return name;
         }
-        return defaultAccessibleName();
+        String own = defaultAccessibleName();
+        if ((own == null || own.isBlank()) && tooltip != null && !tooltip.isBlank()) return tooltip; // an icon button
+        return own;
     }
 
     public void setAccessibleName(String name) {

@@ -384,7 +384,9 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         host.showPopup(p, this, () -> {
             p.dispose();
             if (popup == p) popup = null;
+            notifyAccessibleChange(); // reads out what the box holds now, whichever way the panel was left
         });
+        p.announceOpening();
     }
 
     public void close() {
@@ -467,6 +469,51 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         r.drawLine(cx, cy, x + s * 0.74f, cy, c, 1.5f);
     }
 
+    /* Accessibility */
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.COMBO_BOX;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return switch (mode) {
+            case DATE -> "Date";
+            case TIME -> "Time";
+            case DATE_TIME -> "Date and time";
+        };
+    }
+
+    /** What is typed so far, else the chosen value as the box shows it, else that nothing is chosen. */
+    @Override
+    public String getAccessibleValue() {
+        if (typed != null) return typed.toString();
+        String shown = getDisplayText();
+        if (shown != null) return shown;
+        return switch (mode) {
+            case DATE -> "No date chosen";
+            case TIME -> "No time chosen";
+            case DATE_TIME -> "No date and time chosen";
+        };
+    }
+
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        if (set != null) return set;
+        return switch (mode) {
+            case DATE -> "Press Enter to open the calendar, or type a date";
+            case TIME -> "Press Enter to open the clock, or type a time";
+            case DATE_TIME -> "Press Enter to open the calendar and clock, or type a date and time";
+        };
+    }
+
+    private void say(String text, boolean urgent) {
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.announce(text, urgent);
+    }
+
     /* Keyboard (closed box) */
 
     @Override
@@ -520,10 +567,17 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         if (typed != null) {
             if (key == GLFW.GLFW_KEY_ESCAPE) {
                 typed = null;
+                notifyAccessibleChange(); // back to what the box held
                 return;
             }
             if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
-                if (commitTyped()) typed = null;
+                if (commitTyped()) {
+                    typed = null;
+                    notifyAccessibleChange();
+                } else {
+                    say("Not a valid " + (mode == Mode.TIME ? "time" : mode == Mode.DATE ? "date" : "date and time")
+                            + ". It should look like " + exampleText(), true);
+                }
                 return;
             }
             if (key == GLFW.GLFW_KEY_SPACE) return; // a space inside what is being typed
@@ -564,6 +618,16 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
         } catch (java.time.format.DateTimeParseException e) {
             return false;
         }
+    }
+
+    /** Today (or now) written the way the box reads it, as the example of what to type. */
+    private String exampleText() {
+        DateTimeFormatter df = dateFormat(), tf = timeFormat();
+        return switch (mode) {
+            case DATE -> df.format(LocalDate.now());
+            case TIME -> tf.format(LocalTime.now());
+            case DATE_TIME -> df.format(LocalDate.now()) + " " + tf.format(LocalTime.now());
+        };
     }
 
     private boolean commitTyped() {
@@ -632,6 +696,42 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
 
         void dispose() {
             bigFont.close();
+        }
+
+        /* Speech */
+
+        /** The day the keyboard is on, with what matters about it: "Saturday, November 14, 2026, selected". */
+        private String dayReading() {
+            StringBuilder text = new StringBuilder(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.FULL)
+                    .withLocale(Locale.getDefault()).format(cursor));
+            if (cursor.equals(LocalDate.now())) text.append(", today");
+            if (cursor.equals(date)) text.append(", selected");
+            if (!inRange(cursor)) text.append(", unavailable");
+            return text.toString();
+        }
+
+        /** The clock column the keyboard is on and its value: "Minutes, 30". */
+        private String timeReading() {
+            LocalTime t = shownTime();
+            return switch (columns()[Math.clamp(timeCol, 0, colCount() - 1)]) {
+                case HOUR -> "Hours, " + (use24Hour ? t.getHour() : (t.getHour() % 12 == 0 ? 12 : t.getHour() % 12));
+                case MINUTE -> "Minutes, " + t.getMinute();
+                case SECOND -> "Seconds, " + t.getSecond();
+                default -> t.getHour() < 12 ? "AM" : "PM";
+            };
+        }
+
+        private String reading() {
+            return focusTime ? timeReading() : dayReading();
+        }
+
+        private void sayMonth() {
+            say(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(view), true);
+        }
+
+        void announceOpening() {
+            String kind = hasDate && hasTime ? "Calendar and clock" : hasDate ? "Calendar" : "Clock";
+            say(kind + ". " + reading() + ". Arrow keys move, Enter picks, Escape closes.", true);
         }
 
         /* Value changes */
@@ -757,12 +857,14 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                     else if (lx >= PAD + NAV_BTN && lx < PAD + 2 * NAV_BTN) view = view.minusMonths(1);
                     else if (lx >= W - PAD - NAV_BTN) view = view.plusYears(1);
                     else if (lx >= W - PAD - 2 * NAV_BTN) view = view.plusMonths(1);
+                    sayMonth();
                     return;
                 }
                 if (ly >= gridY && ly < gridY + 6 * CELL_H && lx >= PAD && lx < PAD + 7 * CELL_W) {
                     int row = (int) ((ly - gridY) / CELL_H), col = (int) ((lx - PAD) / CELL_W);
                     pickDate(cellDate(row, col), true);
                     focusTime = false;
+                    if (isOpen()) say(dayReading(), true); // in date mode the panel closes and the box reads the value
                     return;
                 }
             }
@@ -771,11 +873,14 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                 focusTime = true;
                 timeCol = hit[0];
                 if (hit[1] != 0 || columns()[hit[0]] == AMPM) adjustTime(hit[0], hit[1] == 0 ? 1 : hit[1]);
+                say(timeReading(), true);
                 return;
             }
             if (ly >= footY && ly < footY + FOOT_H) {
-                if (lx >= PAD && lx < PAD + 90f) today();
-                else if (clearable && lx >= W - PAD - 90f) clear();
+                if (lx >= PAD && lx < PAD + 90f) {
+                    today();
+                    if (isOpen()) say(mode == Mode.TIME ? timeReading() : dayReading(), true);
+                } else if (clearable && lx >= W - PAD - 90f) clear();
             }
         }
 
@@ -786,8 +891,11 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             int[] hit = timeHit(lx, ly);
             if (hit != null) {
                 adjustTime(hit[0], dir);
+                timeCol = hit[0];
+                say(timeReading(), true);
             } else if (hasDate && ly >= navY && ly < gridY + 6 * CELL_H) {
                 view = view.plusMonths(-dir); // wheel up = earlier
+                sayMonth();
             }
         }
 
@@ -801,7 +909,10 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                 return;
             }
             if (key == GLFW.GLFW_KEY_TAB) {
-                if (hasDate && hasTime) focusTime = !focusTime;
+                if (hasDate && hasTime) {
+                    focusTime = !focusTime;
+                    say((focusTime ? "Clock, " : "Calendar, ") + reading(), true);
+                }
                 return;
             }
             if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
@@ -818,8 +929,10 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
                     case GLFW.GLFW_KEY_UP -> adjustTime(timeCol, 1);
                     case GLFW.GLFW_KEY_DOWN -> adjustTime(timeCol, -1);
                     default -> {
+                        return;
                     }
                 }
+                say(timeReading(), true);
                 return;
             }
 
@@ -835,8 +948,10 @@ public class DateTimePickerOverlay extends Overlay implements Themeable, Focusab
             if (next != null) {
                 cursor = next;
                 view = YearMonth.from(next);
+                say(dayReading(), true);
             } else if (key == GLFW.GLFW_KEY_SPACE) {
                 pickDate(cursor, true);
+                if (isOpen()) say(dayReading(), true);
             }
         }
 

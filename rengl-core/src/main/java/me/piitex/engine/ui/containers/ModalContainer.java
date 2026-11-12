@@ -44,6 +44,7 @@ public class ModalContainer extends Container {
     // True while the fade-out is running, so a second close doesn't restart it.
     private boolean closing = false;
     private Runnable onClose;
+    private Window shownIn; // for saying it closed once it is off the window
     // Where the panel was centered last frame, so an offset the user dragged it to can be told from the centre.
     private double lastCenterX = Double.NaN, lastCenterY = Double.NaN;
     // The part of the window the modal covers, x, y, width, height. Null is all of it.
@@ -180,7 +181,18 @@ public class ModalContainer extends Container {
      * Shows this modal over everything in {@code window}.
      */
     public void show(Window window) {
+        show(window, true);
+    }
+
+    /**
+     * As {@link #show(Window)}, but with {@code speak} false the dialog does not announce itself, for a caller that
+     * puts the keyboard somewhere and wants that read first. A screen reader says the dialog's
+     * {@linkplain #setAccessibleName name} and {@linkplain #setAccessibleDescription description}, then how to move in it.
+     */
+    public void show(Window window, boolean speak) {
         window.showModal(this);
+        shownIn = window;
+        if (speak) window.announce(openingText(), true);
         closing = false;
         // Put it back the way it started, in case a close animation ran on an earlier show.
         setOpacity(1f);
@@ -215,7 +227,23 @@ public class ModalContainer extends Container {
     /**
      * Called by {@link Window#closeModal()} once the modal has been removed. Not meant to be called directly.
      */
+    /** "Delete file? dialog. This cannot be undone. Tab moves through it, Escape closes it." */
+    String openingText() {
+        String name = getAccessibleName();
+        String description = getAccessibleDescription();
+        StringBuilder text = new StringBuilder(name == null || name.isBlank() ? "Dialog" : name + " dialog");
+        text.append('.');
+        if (description != null && !description.isBlank()) {
+            String said = description.strip();
+            text.append(' ').append(said);
+            if (".!?:".indexOf(said.charAt(said.length() - 1)) < 0) text.append('.'); // no second full stop after one
+        }
+        text.append(dismissOnEscape ? " Tab moves through it, Escape closes it." : " Tab moves through it.");
+        return text.toString();
+    }
+
     public void notifyClosed() {
+        if (shownIn != null) shownIn.announce("Dialog closed", false);
         if (onClose != null) onClose.run();
     }
 

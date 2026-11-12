@@ -47,7 +47,7 @@ import java.util.List;
  * hovered title is marked with {@link Theme#getSelection()}. Its own click handling is kept
  * apart from {@link #onMouseClick}, so setting one does not stop the bar from responding to clicks.
  */
-public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandler {
+public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandler, me.piitex.engine.ui.Focusable {
     private static final float TITLE_PAD = 12f;
 
     private final List<String> titles = new ArrayList<>();
@@ -60,6 +60,7 @@ public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandle
     private boolean useNativeMenuBar = true;
     private boolean nativeSubmitted;
     private int openIndex = -1;
+    private int focusIndex; // the title Tab landed on, which Left and Right move
     private float fontSize = 15f;
     private final Overridable<Paint> textColor = new Overridable<>(Color.BLACK);
     private final Overridable<Paint> highlightColor = new Overridable<>(new Color(0.60f, 0.78f, 1.0f, 0.55f));
@@ -72,6 +73,7 @@ public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandle
         setWidth(width);
         setHeight(height);
         setCursorMode(CursorMode.POINTER);
+        setFocusTraversable(true);
         setBuiltInClickListener(event -> {
             int index = titleAt(event.getMouseX());
             if (index >= 0) toggle(index);
@@ -129,6 +131,7 @@ public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandle
         titles.add(title == null ? "" : title);
         menus.add(menu);
         mnemonics.add('\0');
+        if (menu.getAccessibleName() == null) menu.setAccessibleName(title);
         menu.sidewaysListener = this::moveOpenMenu;
         menu.closeListener = () -> {
             if (menus.indexOf(menu) == openIndex) openIndex = -1;
@@ -175,6 +178,7 @@ public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandle
         if (window == null || isNative()) return;
         ensureLayout();
 
+        focusIndex = index;
         PopupMenu menu = menus.get(index);
         // Anchor to the title, but skip the toggle logic, since swapping menus goes through here too.
         menu.show(this, getAbsoluteX() + titleX[index], getAbsoluteY() + getHeight());
@@ -197,6 +201,92 @@ public class MenuBarOverlay extends Overlay implements Themeable, ShortcutHandle
     private void moveOpenMenu(int dir) {
         if (openIndex < 0 || menus.isEmpty()) return;
         open(Math.floorMod(openIndex + dir, menus.size()));
+    }
+
+
+    /* Keyboard focus and speech */
+
+    /** Not a Tab stop when the system draws the bar, since there is nothing in the window to land on. */
+    @Override
+    public boolean isFocusTraversable() {
+        return super.isFocusTraversable() && !isNative() && !menus.isEmpty();
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
+    }
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.MENU;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return "Menu bar";
+    }
+
+    /** The title the keyboard is on and where it is: "File, 1 of 3". */
+    @Override
+    public String getAccessibleValue() {
+        if (titles.isEmpty()) return "";
+        int i = Math.clamp(focusIndex, 0, titles.size() - 1);
+        return titles.get(i) + ", " + (i + 1) + " of " + titles.size();
+    }
+
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        return set != null ? set : "Left and Right choose a menu, Down opens it";
+    }
+
+    @Override
+    public void onFocusGained() {
+        focusIndex = Math.clamp(focusIndex, 0, Math.max(0, titles.size() - 1));
+    }
+
+    @Override
+    public void onFocusLost() {
+    }
+
+    @Override
+    public void onCharTyped(int codepoint) {
+    }
+
+    /** Takes only the keys that move along the bar or open a menu, so the game keeps the rest and a click does not focus the bar. */
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        if ((mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_SUPER)) != 0) return false;
+        return key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_RIGHT || key == GLFW.GLFW_KEY_DOWN
+                || key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER || key == GLFW.GLFW_KEY_SPACE;
+    }
+
+    @Override
+    public void onKeyPressed(int key, int action, int mods) {
+        if (action == GLFW.GLFW_RELEASE || titles.isEmpty() || isNative()) return;
+        switch (key) {
+            case GLFW.GLFW_KEY_LEFT -> {
+                focusIndex = Math.floorMod(focusIndex - 1, titles.size());
+                notifyAccessibleChange();
+            }
+            case GLFW.GLFW_KEY_RIGHT -> {
+                focusIndex = Math.floorMod(focusIndex + 1, titles.size());
+                notifyAccessibleChange();
+            }
+            case GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+                if (action != GLFW.GLFW_PRESS) return; // a held key must not reopen it
+                int index = Math.clamp(focusIndex, 0, menus.size() - 1);
+                open(index);
+                if (menus.get(index).isOpen()) menus.get(index).highlightFirst();
+            }
+            default -> { }
+        }
     }
 
     /* Shortcuts */

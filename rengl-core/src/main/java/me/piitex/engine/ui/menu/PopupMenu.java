@@ -51,6 +51,8 @@ public class PopupMenu {
     private Consumer<PopupMenu> onOpen;
     private Runnable onClose;
 
+    private String accessibleName;
+
     private MenuPopup popup;
     /**
      * Set by {@link MenuBarOverlay}: called with -1/+1 when Left/Right is pressed with no submenu to enter or leave.
@@ -126,6 +128,18 @@ public class PopupMenu {
      */
     public void onClose(Runnable onClose) {
         this.onClose = onClose;
+    }
+
+    /**
+     * What a screen reader calls this menu when it opens: "File" is spoken as "File menu". A {@link MenuBarOverlay} sets
+     * its title here unless a name is already given. Null says just "Menu".
+     */
+    public void setAccessibleName(String name) {
+        this.accessibleName = name;
+    }
+
+    public String getAccessibleName() {
+        return accessibleName;
     }
 
     /* Appearance */

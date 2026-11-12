@@ -42,6 +42,16 @@ public class ToolBar extends HorizontalLayout {
         useTheme();
     }
 
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.GROUP;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return "Toolbar";
+    }
+
     public float getButtonSize() {
         return buttonSize;
     }

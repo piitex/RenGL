@@ -89,6 +89,9 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
     private double lastMouseX = Double.NaN, lastMouseY = Double.NaN;
     private int pendingPanel = -1, pendingRow = -1;
     private float pendingTime;
+    /** What is said when the menu appears, folded into the first row's reading when a key gets there first. */
+    private String opening;
+    private int spokenPanel = -1, spokenRow = -1;
 
     MenuPopup(PopupMenu menu, PopupHost win, double x, double y) {
         super(0, 0);
@@ -99,6 +102,7 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
 
         panels.add(layout(menu.getItems(), x, y));
         syncBounds();
+        opening = openingText();
         lastMouseX = MouseTracker.getX();
         lastMouseY = MouseTracker.getY();
 
@@ -179,6 +183,7 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
      */
     private void openChild(int p, int row, boolean selectFirst) {
         truncate(p + 1);
+        spokenPanel = -1;
         Panel parent = panels.get(p);
         parent.active = row;
         MenuItem item = parent.items.get(row);
@@ -283,6 +288,8 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
         }
         close();
         item.fire(); // after closing, so the callback may open a dialog or another menu
+        if (item.isRadio()) say(item.getLabel() + ", selected", false);
+        else if (item.isCheckable()) say(item.getLabel() + (item.isChecked() ? ", checked" : ", not checked"), false);
     }
 
     void close() {
@@ -316,6 +323,7 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
         keyboardMode = true;
         Panel last = panels.get(panels.size() - 1);
         int depth = panels.size() - 1;
+        int sizeBefore = panels.size(), activeBefore = last.active;
 
         switch (key) {
             case GLFW.GLFW_KEY_DOWN -> {
@@ -365,6 +373,13 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
                 if ((mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_SUPER)) == 0) chooseByMnemonic(last, depth, key);
             }
         }
+
+        if (closed) {
+            if (key == GLFW.GLFW_KEY_ESCAPE && depth == 0) say("Menu closed", true);
+            return;
+        }
+        Panel top = panels.get(panels.size() - 1);
+        if (panels.size() != sizeBefore || top != last || top.active != activeBefore) sayRow(panels.size() - 1);
     }
 
     /**
@@ -400,6 +415,11 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
     public void update(float delta) {
         super.update(delta);
         menu.advance(delta);
+        if (opening != null && !closed) {
+            String text = opening;
+            opening = null;
+            say(text, true);
+        }
         if (closed || !MouseTracker.isInWindow()) return;
 
         double mx = MouseTracker.getX(), my = MouseTracker.getY();
@@ -443,6 +463,56 @@ final class MenuPopup extends Container implements PopupKeyListener, Scrollable 
         } else {
             panel.active = hitRow;
         }
+        if (panel.active == hitRow && (spokenPanel != hitPanel || spokenRow != hitRow)) sayRow(hitPanel);
+    }
+
+    /* Speech */
+
+    private me.piitex.engine.Window speechWindow() {
+        return win instanceof me.piitex.engine.Window window ? window : getWindow();
+    }
+
+    private void say(String text, boolean urgent) {
+        me.piitex.engine.Window window = speechWindow();
+        if (window != null) window.announce(text, urgent);
+    }
+
+    /** "File menu, 6 items", or just "Menu" for a menu with no name. */
+    private String openingText() {
+        int count = 0;
+        for (MenuItem item : menu.getItems()) if (!item.isSeparator()) count++;
+        String name = menu.getAccessibleName();
+        return (name == null || name.isBlank() ? "Menu" : name + " menu") + ", " + count + (count == 1 ? " item" : " items");
+    }
+
+    /**
+     * Reads the highlighted row of the panel at depth {@code p}: "Save, Ctrl+S, 3 of 8", with its check state or "submenu"
+     * where it has one. A menu's opening words go first if they have not been said yet.
+     */
+    private void sayRow(int p) {
+        Panel panel = panels.get(p);
+        spokenPanel = p;
+        spokenRow = panel.active;
+        if (panel.active < 0) return;
+        MenuItem item = panel.items.get(panel.active);
+        int position = 0, count = 0;
+        for (int i = 0; i < panel.items.size(); i++) {
+            if (panel.items.get(i).isSeparator()) continue;
+            count++;
+            if (i <= panel.active) position = count;
+        }
+        StringBuilder text = new StringBuilder(item.getLabel());
+        if (item.isRadio()) text.append(item.isChecked() ? ", selected" : ", not selected");
+        else if (item.isCheckable()) text.append(item.isChecked() ? ", checked" : ", not checked");
+        if (item.hasSubmenu()) text.append(", submenu");
+        String shortcut = item.getShortcut();
+        if (shortcut != null && !shortcut.isEmpty()) text.append(", ").append(shortcut);
+        text.append(", ").append(position).append(" of ").append(count);
+        if (opening != null) {
+            text.insert(0, opening + ". ");
+            opening = null;
+        }
+        say(text.toString(), true);
     }
 
     /* Rendering */

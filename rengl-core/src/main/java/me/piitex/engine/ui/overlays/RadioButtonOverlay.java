@@ -188,6 +188,17 @@ public class RadioButtonOverlay extends Overlay implements Themeable, me.piitex.
         return selected;
     }
 
+    /** Where it is among its group's buttons: "2 of 3". */
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        if (set != null) return set;
+        RadioGroup group = getGroup();
+        if (group == null) return null;
+        int index = group.getButtons().indexOf(this);
+        return index < 0 ? null : (index + 1) + " of " + group.getButtons().size();
+    }
+
     /**
      * Selects the button from the keyboard: Tab to it, then Space or Enter.
      */

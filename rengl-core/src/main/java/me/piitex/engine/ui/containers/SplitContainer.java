@@ -304,12 +304,95 @@ public class SplitContainer extends Layout {
     /**
      * The draggable bar between the panes. A child like any other, so hit-testing, hover and the resize cursor need no special handling.
      */
-    private final class Divider extends Overlay implements Themeable, Draggable {
+    private final class Divider extends Overlay implements Themeable, Draggable, me.piitex.engine.ui.Focusable {
         private double grabOffset;
 
         Divider() {
             getStyling().applyThemeBorderThickness(0f);
+            setFocusTraversable(true);
             ThemeManager.register(this);
+        }
+
+        /* Accessibility: Tab to the divider, then the arrow keys along the split move it */
+
+        @Override
+        protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+            return me.piitex.engine.access.AccessibleRole.SLIDER;
+        }
+
+        @Override
+        protected String defaultAccessibleName() {
+            return "Divider";
+        }
+
+        /** How much of the space the first pane has: "50 percent". */
+        @Override
+        public String getAccessibleValue() {
+            double available = available();
+            return (available <= 0 ? 0 : Math.round(firstSize() / available * 100)) + " percent";
+        }
+
+        @Override
+        public String getAccessibleDescription() {
+            String set = super.getAccessibleDescription();
+            if (set != null) return set;
+            return orientation == Orientation.HORIZONTAL ? "Left and Right move it" : "Up and Down move it";
+        }
+
+        @Override
+        protected boolean usesFocusRing() {
+            return true;
+        }
+
+        @Override
+        public void onFocusGained() {
+        }
+
+        @Override
+        public void onFocusLost() {
+        }
+
+        @Override
+        public void onCharTyped(int codepoint) {
+        }
+
+        @Override
+        public boolean grabsKeyboard() {
+            return false;
+        }
+
+        @Override
+        public boolean handlesKey(int key, int mods) {
+            return key == lessKey() || key == moreKey() || key == org.lwjgl.glfw.GLFW.GLFW_KEY_HOME
+                    || key == org.lwjgl.glfw.GLFW.GLFW_KEY_END;
+        }
+
+        private int lessKey() {
+            return orientation == Orientation.HORIZONTAL ? org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT : org.lwjgl.glfw.GLFW.GLFW_KEY_UP;
+        }
+
+        private int moreKey() {
+            return orientation == Orientation.HORIZONTAL ? org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT : org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN;
+        }
+
+        @Override
+        public void onKeyPressed(int key, int action, int mods) {
+            if (action == org.lwjgl.glfw.GLFW.GLFW_RELEASE) return;
+            double available = available();
+            if (available <= 0) return;
+            double step = ((mods & org.lwjgl.glfw.GLFW.GLFW_MOD_SHIFT) != 0 ? 0.10 : 0.02) * available;
+            double size = firstSize();
+            if (key == lessKey()) size -= step;
+            else if (key == moreKey()) size += step;
+            else if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_HOME) size = 0;
+            else if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_END) size = available;
+            else return;
+            double next = clampFirstSize(size, available) / available;
+            if (next == dividerPosition) return;
+            dividerPosition = next;
+            relayout();
+            if (onDividerMoved != null) onDividerMoved.accept(dividerPosition);
+            notifyAccessibleChange();
         }
 
         @Override
@@ -348,6 +431,14 @@ public class SplitContainer extends Layout {
 
         @Override
         public void onDragEnd(double x, double y) {
+            notifyAccessibleChange(); // once, where it was let go, not for every pixel on the way
         }
+    }
+
+    /**
+     * What a screen reader calls the divider, such as "Sidebar width". Default "Divider".
+     */
+    public void setDividerAccessibleName(String name) {
+        divider.setAccessibleName(name);
     }
 }

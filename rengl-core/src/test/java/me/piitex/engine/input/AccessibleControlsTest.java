@@ -462,4 +462,201 @@ class AccessibleControlsTest {
         assertEquals(5, heard.size(), heard.toString());
         assertEquals(40, console.getLineCount(), "every line is still in the log");
     }
+
+    private me.piitex.engine.ui.menu.MenuBarOverlay menuBar(boolean[] grid) {
+        me.piitex.engine.ui.menu.MenuBarOverlay bar = put(new me.piitex.engine.ui.menu.MenuBarOverlay(400), 0, 0);
+        bar.setUseNativeMenuBar(false);
+        bar.addMenu("File",
+                new me.piitex.engine.ui.menu.MenuItem("New", () -> { }),
+                new me.piitex.engine.ui.menu.MenuItem("Open", () -> { }),
+                me.piitex.engine.ui.menu.MenuItem.separator(),
+                me.piitex.engine.ui.menu.MenuItem.check("Show grid", grid[0], on -> grid[0] = on),
+                me.piitex.engine.ui.menu.MenuItem.submenu("Recent",
+                        new me.piitex.engine.ui.menu.MenuItem("A.txt", () -> { }),
+                        new me.piitex.engine.ui.menu.MenuItem("B.txt", () -> { })),
+                new me.piitex.engine.ui.menu.MenuItem("Quit", () -> { }));
+        bar.addMenu("Edit", new me.piitex.engine.ui.menu.MenuItem("Undo", () -> { }));
+        return bar;
+    }
+
+    @Test
+    void theMenuBarIsATabStopThatReadsEachTitleAndOpensAMenuFromTheKeyboard() {
+        boolean[] grid = {true};
+        me.piitex.engine.ui.menu.MenuBarOverlay bar = menuBar(grid);
+        window.requestFocus(bar);
+        assertTrue(bar.isFocusTraversable());
+        assertFalse(bar.grabsKeyboard());
+        assertEquals(AccessibleRole.MENU, bar.getAccessibleRole());
+        assertEquals("File, 1 of 2", bar.getAccessibleValue());
+
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("MENU Edit, 2 of 2", heard.getLast());
+        key(GLFW.GLFW_KEY_LEFT);
+        assertEquals("MENU File, 1 of 2", heard.getLast());
+
+        key(GLFW.GLFW_KEY_DOWN);
+        assertEquals("announce File menu, 5 items. New, 1 of 5", heard.getLast());
+        key(GLFW.GLFW_KEY_DOWN);
+        assertEquals("announce Open, 2 of 5", heard.getLast());
+        key(GLFW.GLFW_KEY_DOWN);
+        assertEquals("announce Show grid, checked, 3 of 5", heard.getLast());
+        key(GLFW.GLFW_KEY_DOWN);
+        assertEquals("announce Recent, submenu, 4 of 5", heard.getLast());
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("announce A.txt, 1 of 2", heard.getLast());
+        key(GLFW.GLFW_KEY_LEFT);
+        assertEquals("announce Recent, submenu, 4 of 5", heard.getLast());
+        key(GLFW.GLFW_KEY_ESCAPE);
+        assertEquals("announce Menu closed", heard.getLast());
+        assertSame(bar, window.getFocusedElement(), "the bar keeps the keyboard so it can be reopened");
+    }
+
+    @Test
+    void choosingACheckItemSaysWhereItEndedUp() {
+        boolean[] grid = {true};
+        me.piitex.engine.ui.menu.MenuBarOverlay bar = menuBar(grid);
+        window.requestFocus(bar);
+        key(GLFW.GLFW_KEY_DOWN);
+        key(GLFW.GLFW_KEY_DOWN);
+        key(GLFW.GLFW_KEY_DOWN);
+        key(GLFW.GLFW_KEY_ENTER);
+        assertFalse(grid[0]);
+        assertEquals("announce Show grid, not checked", heard.getLast());
+    }
+
+    @Test
+    void movingSidewaysInAnOpenMenuNamesTheNextMenu() {
+        me.piitex.engine.ui.menu.MenuBarOverlay bar = menuBar(new boolean[]{false});
+        window.requestFocus(bar);
+        key(GLFW.GLFW_KEY_DOWN);
+        key(GLFW.GLFW_KEY_LEFT); // nothing to leave, so it moves to the neighbouring menu
+        window.getPopup().update(0f);
+        assertEquals("announce Edit menu, 1 item", heard.getLast());
+    }
+
+    @Test
+    void aContextMenuSaysItOpenedWithoutANameToGoWith() {
+        me.piitex.engine.ui.menu.PopupMenu menu = new me.piitex.engine.ui.menu.PopupMenu(
+                new me.piitex.engine.ui.menu.MenuItem("Copy", () -> { }),
+                new me.piitex.engine.ui.menu.MenuItem("Paste", () -> { }));
+        menu.show(window, 100, 100);
+        window.getPopup().update(0f);
+        assertEquals("announce Menu, 2 items", heard.getLast());
+    }
+
+    @Test
+    void aDatePickerReadsItsDateOpensOnTheKeyboardAndReadsEachDayItMovesTo() {
+        me.piitex.engine.ui.overlays.DateTimePickerOverlay picker = put(new me.piitex.engine.ui.overlays.DateTimePickerOverlay(150, 30), 10, 100);
+        picker.setDate(java.time.LocalDate.of(2026, 11, 14));
+        window.requestFocus(picker);
+        assertEquals(AccessibleRole.COMBO_BOX, picker.getAccessibleRole());
+        assertEquals("Date", picker.getAccessibleName());
+        assertEquals("2026-11-14", picker.getAccessibleValue());
+
+        key(GLFW.GLFW_KEY_DOWN);
+        assertTrue(picker.isOpen());
+        assertTrue(heard.getLast().startsWith("announce Calendar. "), heard.getLast());
+        assertTrue(heard.getLast().contains("2026") && heard.getLast().contains("selected"), heard.getLast());
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertTrue(heard.getLast().startsWith("announce ") && heard.getLast().contains("15"), heard.getLast());
+        assertFalse(heard.getLast().contains("selected"), "the 15th is not the chosen day yet");
+        key(GLFW.GLFW_KEY_ENTER);
+        assertFalse(picker.isOpen());
+        assertEquals("COMBO_BOX 2026-11-15", heard.getLast(), "closing says what the box holds");
+    }
+
+    @Test
+    void aTimePickerReadsTheColumnItIsOnAndItsValue() {
+        me.piitex.engine.ui.overlays.DateTimePickerOverlay picker = put(new me.piitex.engine.ui.overlays.DateTimePickerOverlay(
+                150, 30, me.piitex.engine.ui.overlays.DateTimePickerOverlay.Mode.TIME), 10, 100);
+        picker.setTime(java.time.LocalTime.of(14, 30));
+        window.requestFocus(picker);
+        key(GLFW.GLFW_KEY_ENTER);
+        assertTrue(heard.getLast().startsWith("announce Clock. Hours, 14."), heard.getLast());
+        key(GLFW.GLFW_KEY_UP);
+        assertEquals("announce Hours, 15", heard.getLast());
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("announce Minutes, 30", heard.getLast());
+        key(GLFW.GLFW_KEY_DOWN);
+        assertEquals("announce Minutes, 29", heard.getLast());
+    }
+
+    @Test
+    void aDatePickerSaysWhenWhatWasTypedIsNotADate() {
+        me.piitex.engine.ui.overlays.DateTimePickerOverlay picker = put(new me.piitex.engine.ui.overlays.DateTimePickerOverlay(150, 30), 10, 100);
+        window.requestFocus(picker);
+        assertEquals("No date chosen", picker.getAccessibleValue());
+        picker.onCharTyped('x');
+        key(GLFW.GLFW_KEY_ENTER);
+        assertTrue(heard.getLast().startsWith("announce Not a valid date. It should look like "), heard.getLast());
+    }
+
+    @Test
+    void aDialogIntroducesItselfAndTellsYouWhenItClosed() {
+        me.piitex.engine.ui.containers.MessageBox.alert(window, "Save changes?", "Your work will be lost.");
+        assertEquals("announce Save changes? dialog. Your work will be lost. Tab moves through it, Escape closes it.", heard.getLast());
+        key(GLFW.GLFW_KEY_ESCAPE);
+        assertEquals("announce Dialog closed", heard.getLast());
+    }
+
+    @Test
+    void aPromptLetsTheFieldBeReadFirstThenSaysWhatTheDialogIs() {
+        me.piitex.engine.ui.containers.MessageBox.prompt(window, "Rename", "Enter a new name", "old", name -> { });
+        assertEquals("announce Rename dialog. Enter a new name. Tab moves through it, Escape closes it.", heard.getLast());
+        assertEquals(1, heard.stream().filter(h -> h.contains("dialog")).count(), "said once, not before and after the field");
+    }
+
+    @Test
+    void aStatusBarReadsEachNewMessageOnceButNotTheSameOneAgain() {
+        me.piitex.engine.ui.containers.StatusBar status = put(new me.piitex.engine.ui.containers.StatusBar(400), 0, 500);
+        status.setMessage("Ready");
+        status.setMessage("Ready");
+        status.setMessage("Saved");
+        assertEquals(List.of("announce Ready", "announce Saved"), heard);
+        status.setAnnounceMessages(false);
+        status.setMessage("Quiet");
+        assertEquals(2, heard.size());
+    }
+
+    @Test
+    void anIconButtonIsNamedByItsTooltipAndRadioButtonsSayWhereTheyAre() {
+        me.piitex.engine.ui.containers.ToolBar bar = put(new me.piitex.engine.ui.containers.ToolBar(300), 0, 0);
+        me.piitex.engine.ui.overlays.ButtonOverlay save = bar.addButton(null, "Save the file", () -> { });
+        assertEquals("Save the file", save.getAccessibleName());
+
+        me.piitex.engine.ui.overlays.RadioGroup group = new me.piitex.engine.ui.overlays.RadioGroup();
+        me.piitex.engine.ui.overlays.RadioButtonOverlay a = put(new me.piitex.engine.ui.overlays.RadioButtonOverlay(), 10, 50);
+        me.piitex.engine.ui.overlays.RadioButtonOverlay b = put(new me.piitex.engine.ui.overlays.RadioButtonOverlay(), 10, 80);
+        group.add(a);
+        group.add(b);
+        assertEquals("2 of 2", b.getAccessibleDescription());
+    }
+
+    @Test
+    void aSplitDividerIsATabStopThatTheArrowKeysMoveAndRead() {
+        me.piitex.engine.ui.containers.SplitContainer split = put(new me.piitex.engine.ui.containers.SplitContainer(
+                me.piitex.engine.ui.containers.SplitContainer.Orientation.HORIZONTAL, 400, 200), 10, 10);
+        split.setFirst(new Container(10, 10));
+        split.setSecond(new Container(10, 10));
+        Element divider = split.getElements().get(1);
+        assertTrue(divider.isFocusTraversable());
+        window.requestFocus(divider);
+        assertEquals(AccessibleRole.SLIDER, divider.getAccessibleRole());
+        assertEquals("50 percent", divider.getAccessibleValue());
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("SLIDER 52 percent", heard.getLast());
+        key(GLFW.GLFW_KEY_HOME);
+        assertTrue(heard.getLast().startsWith("SLIDER ") && heard.getLast().endsWith(" percent"), heard.getLast());
+        assertTrue(split.getDividerPosition() < 0.2, "the first pane stops at its smallest size");
+    }
+
+    @Test
+    void aSpinnerSaysWhenTheWaitIsOver() {
+        me.piitex.engine.ui.overlays.LoadingSpinnerOverlay spinner = put(new me.piitex.engine.ui.overlays.LoadingSpinnerOverlay(), 10, 10);
+        assertEquals(AccessibleRole.PROGRESS_BAR, spinner.getAccessibleRole());
+        assertEquals("Please wait", spinner.getAccessibleValue());
+        spinner.setSpinning(false);
+        assertEquals("announce Done loading", heard.getLast());
+        assertEquals("Done", spinner.getAccessibleValue());
+    }
 }

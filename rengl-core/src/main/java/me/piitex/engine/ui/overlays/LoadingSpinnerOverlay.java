@@ -48,6 +48,22 @@ public class LoadingSpinnerOverlay extends Overlay implements Themeable {
         setSpinning(true);
     }
 
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.PROGRESS_BAR;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return "Loading";
+    }
+
+    /** "Loading" while it spins and "Done" once stopped, so a reader can tell the wait is over. */
+    @Override
+    public String getAccessibleValue() {
+        return isSpinning() ? "Please wait" : "Done";
+    }
+
     public boolean isSpinning() {
         return activeSpin != null;
     }
@@ -57,6 +73,7 @@ public class LoadingSpinnerOverlay extends Overlay implements Themeable {
      */
     public void setSpinning(boolean spinning) {
         if (spinning == isSpinning()) return;
+        if (!spinning && getWindow() != null) getWindow().announce("Done loading"); // the wait is over
         if (spinning) {
             activeSpin = new SpinTransition(PERIOD_SECONDS);
             playTransition(activeSpin);

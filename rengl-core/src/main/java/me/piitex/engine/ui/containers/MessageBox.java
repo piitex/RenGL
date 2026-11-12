@@ -111,8 +111,14 @@ public final class MessageBox {
     }
 
     private static ModalContainer show(Window window, ModalContainer modal, TextFieldOverlay field) {
-        modal.show(window);
-        if (field != null) window.requestFocus(field);
+        if (field == null) {
+            modal.show(window);
+        } else {
+            // The field takes the keyboard and is read first; the dialog's words follow rather than being cut off by it.
+            modal.show(window, false);
+            window.requestFocus(field);
+            window.announce(modal.openingText(), false);
+        }
         return modal;
     }
 
@@ -144,6 +150,8 @@ public final class MessageBox {
         row.setAlignment(Layout.Alignment.CENTER_RIGHT);
 
         ModalContainer modal = new ModalContainer(panel);
+        if (title != null && !title.isEmpty()) modal.setAccessibleName(title);
+        if (message != null && !message.isEmpty()) modal.setAccessibleDescription(message);
         boolean[] answered = {false};
         IntConsumer answer = index -> {
             if (answered[0]) return;

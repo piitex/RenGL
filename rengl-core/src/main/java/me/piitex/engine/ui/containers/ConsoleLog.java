@@ -193,6 +193,16 @@ public class ConsoleLog extends Container implements Scrollable, FontScalable {
     private static final int SPOKEN_BURST = 5; // lines spoken within one window of time before the rest are skipped
     private static final long SPOKEN_WINDOW_NANOS = 2_000_000_000L;
 
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.GROUP;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return "Console";
+    }
+
     private Level announceFrom = Level.INFO;
     private final long[] spokenAt = new long[SPOKEN_BURST];
     private int spokenNext;

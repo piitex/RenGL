@@ -32,6 +32,7 @@ public class StatusBar extends HorizontalLayout {
     private final SpacerOverlay middle = new SpacerOverlay();
     private TextOverlay message;
     private int leftCount;  // children before the spacer, dividers included
+    private boolean announceMessages = true;
     private int rightCount; // children after the spacer, dividers included
 
     public StatusBar(double width) {
@@ -56,9 +57,30 @@ public class StatusBar extends HorizontalLayout {
             message = text(text);
             insertElement(message, 0);
             leftCount++;
+            sayMessage(text);
             return;
         }
+        String previous = message.getText();
         message.setText(text == null ? "" : text);
+        if (text != null && !text.equals(previous)) sayMessage(text);
+    }
+
+    /**
+     * Whether a changed {@link #setMessage message} is read out by a screen reader. On by default, so "Saved" is heard
+     * without the user going to look for it. The readouts added at the sides are not read; they change too often.
+     */
+    public void setAnnounceMessages(boolean announce) {
+        this.announceMessages = announce;
+    }
+
+    public boolean isAnnounceMessages() {
+        return announceMessages;
+    }
+
+    private void sayMessage(String text) {
+        if (!announceMessages || text.isEmpty()) return;
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.announce(text);
     }
 
     public String getMessage() {
