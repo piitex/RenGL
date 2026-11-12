@@ -4,6 +4,8 @@ import me.piitex.engine.Engine;
 import me.piitex.engine.RenderAPI;
 import me.piitex.engine.Window;
 import me.piitex.engine.WindowOptions;
+import me.piitex.engine.physx.PhysX;
+import me.piitex.engine.physx.PhysXBackend;
 import me.piitex.engine.render3d.Viewport3D;
 import me.piitex.engine.render3d.math.Quat;
 import me.piitex.engine.render3d.math.Vec3;
@@ -198,6 +200,11 @@ public class FastBodiesDemo {
             scene.setPhysics(world);
             scene.add(colliders.getNode());
             scene.setUpdateHandler((s, dt) -> updateCount());
+
+            if (PhysX.isAvailable()) {
+                PhysX.install();
+                world.setBackend(new PhysXBackend());
+            }
 
             Node3D floor = new Node3D("floor", Mesh.plane(80, 80), new Material(
                     TextureData.checker(256, 40, new float[]{0.5f, 0.5f, 0.52f}, new float[]{0.32f, 0.32f, 0.35f})).setSpecular(0.05f));
