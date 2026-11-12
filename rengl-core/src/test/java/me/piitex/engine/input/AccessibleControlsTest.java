@@ -15,6 +15,7 @@ import me.piitex.engine.ui.containers.TableView;
 import me.piitex.engine.ui.containers.TreeView;
 import me.piitex.engine.ui.overlays.ColorPickerOverlay;
 import me.piitex.engine.ui.overlays.GaugeOverlay;
+import me.piitex.engine.ui.overlays.HotkeyOverlay;
 import me.piitex.engine.ui.overlays.KnobOverlay;
 import me.piitex.engine.ui.overlays.RangeSliderOverlay;
 import me.piitex.engine.ui.overlays.TextOverlay;
@@ -254,5 +255,211 @@ class AccessibleControlsTest {
             if (inside != null) return inside;
         }
         return null;
+    }
+
+    private void press(int key) {
+        window.getInputManager().onKey(0, key, 0, GLFW.GLFW_PRESS, 0);
+        processor.processEvents(window);
+    }
+
+    private void release(int key) {
+        window.getInputManager().onKey(0, key, 0, GLFW.GLFW_RELEASE, 0);
+        processor.processEvents(window);
+    }
+
+    @Test
+    void aHotkeyBoxSaysWhatItHoldsAndSpeaksWhileItLearnsAKey() {
+        HotkeyOverlay jump = put(new HotkeyOverlay(160, 32), 10, 10);
+        jump.setBinding(me.piitex.engine.input.Binding.key(GLFW.GLFW_KEY_SPACE));
+        assertEquals(AccessibleRole.BUTTON, jump.getAccessibleRole());
+        assertEquals("Space", jump.getAccessibleValue());
+        key(GLFW.GLFW_KEY_TAB);
+        assertSame(jump, window.getFocusedElement());
+        key(GLFW.GLFW_KEY_ENTER);
+        assertTrue(jump.isListening());
+        assertEquals("announce Press a key... Escape cancels.", heard.getLast());
+        key(GLFW.GLFW_KEY_F);
+        assertFalse(jump.isListening());
+        assertEquals("BUTTON F", heard.getLast());
+        key(GLFW.GLFW_KEY_ENTER);
+        key(GLFW.GLFW_KEY_ESCAPE);
+        assertEquals("announce Cancelled, F", heard.getLast());
+        assertEquals("F", jump.getAccessibleValue(), "cancelling keeps the old key");
+    }
+
+    @Test
+    void aHotkeyBoxTellsWhyAKeyWasRefusedAndKeepsListening() {
+        HotkeyOverlay fire = put(new HotkeyOverlay(160, 32), 10, 10);
+        fire.setConflictCheck(binding -> "In use by Jump");
+        window.requestFocus(fire);
+        fire.startListening();
+        key(GLFW.GLFW_KEY_J);
+        assertTrue(fire.isListening());
+        assertEquals("announce In use by Jump. Press another key.", heard.getLast());
+        fire.setConflictCheck(null);
+        key(GLFW.GLFW_KEY_BACKSPACE);
+        assertEquals("BUTTON Unbound", heard.getLast());
+    }
+
+    @Test
+    void anInventoryGridIsListedSlotBySlotAndItemsMoveWithTheKeyboard() {
+        me.piitex.engine.ui.overlays.InventoryGridOverlay<String> bag = put(new me.piitex.engine.ui.overlays.InventoryGridOverlay<>(3, 2, 40), 10, 10);
+        bag.setSlot(0, "Sword", 1);
+        bag.setSlot(1, "Potion", 5);
+        bag.setLocked(5, true);
+        assertEquals(AccessibleRole.LIST, bag.getAccessibleRole());
+        key(GLFW.GLFW_KEY_TAB);
+        assertSame(bag, window.getFocusedElement());
+        assertFalse(bag.grabsKeyboard(), "a click on the grid must not keep WASD from the game");
+        assertFalse(bag.handlesKey(GLFW.GLFW_KEY_W, 0));
+        assertEquals("Slot 1 of 6, Sword", bag.getAccessibleValue());
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_DOWN);
+        assertEquals(List.of("LIST Slot 2 of 6, Potion, 5", "LIST Slot 3 of 6, empty", "LIST Slot 6 of 6, locked"), heard);
+
+        heard.clear();
+        key(GLFW.GLFW_KEY_HOME);
+        key(GLFW.GLFW_KEY_M);
+        assertTrue(bag.isCarrying());
+        assertTrue(heard.getLast().startsWith("announce Picked up Sword"), heard.getLast());
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_M);
+        assertFalse(bag.isCarrying());
+        assertEquals("announce Moved Sword to slot 3", heard.getLast());
+        assertTrue(bag.isEmpty(0));
+        assertEquals("Sword", bag.getItem(2));
+    }
+
+    @Test
+    void aStackBeingCarriedCanBeCancelledAndASlotThatRefusesItSaysSo() {
+        me.piitex.engine.ui.overlays.InventoryGridOverlay<String> bag = put(new me.piitex.engine.ui.overlays.InventoryGridOverlay<>(2, 1, 40), 10, 10);
+        bag.setSlot(0, "Helmet", 1);
+        bag.setSlotFilter(1, item -> item.equals("Sword"));
+        key(GLFW.GLFW_KEY_TAB);
+        key(GLFW.GLFW_KEY_M);
+        key(GLFW.GLFW_KEY_ESCAPE);
+        assertFalse(bag.isCarrying());
+        assertEquals("announce Cancelled", heard.getLast());
+        key(GLFW.GLFW_KEY_M);
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_M);
+        assertEquals("announce It does not go there", heard.getLast());
+        assertEquals("Helmet", bag.getItem(0), "nothing moved");
+    }
+
+    @Test
+    void aJoystickIsAGroupThatSaysWhichWayItIsPushedWhenItChanges() {
+        me.piitex.engine.ui.overlays.JoystickOverlay stick = put(new me.piitex.engine.ui.overlays.JoystickOverlay(100), 10, 10);
+        assertEquals(AccessibleRole.GROUP, stick.getAccessibleRole());
+        assertEquals("Joystick", stick.getAccessibleName());
+        assertEquals("centered", stick.getAccessibleValue());
+        key(GLFW.GLFW_KEY_TAB);
+        assertSame(stick, window.getFocusedElement());
+        assertFalse(stick.grabsKeyboard());
+        assertFalse(stick.handlesKey(GLFW.GLFW_KEY_W, 0), "WASD is the game's");
+        press(GLFW.GLFW_KEY_UP);
+        assertEquals(1.0, stick.getAxisY(), 1e-9);
+        press(GLFW.GLFW_KEY_RIGHT);
+        release(GLFW.GLFW_KEY_UP);
+        release(GLFW.GLFW_KEY_RIGHT);
+        assertEquals(0.0, stick.getMagnitude(), 1e-9, "it springs back");
+        assertEquals(List.of("GROUP up, 100 percent", "GROUP up right, 100 percent", "GROUP right, 100 percent", "GROUP centered"), heard);
+    }
+
+    @Test
+    void aJoystickDraggedWithTheMouseSpeaksTheDirectionOnlyWhenItChanges() {
+        me.piitex.engine.ui.overlays.JoystickOverlay stick = put(new me.piitex.engine.ui.overlays.JoystickOverlay(100), 10, 10);
+        stick.onDragStart(60, 10); // straight up from the middle
+        stick.onDragUpdate(60, 8);
+        stick.onDragUpdate(61, 6); // same sector: nothing new
+        stick.onDragUpdate(110, 60); // to the right
+        stick.onDragEnd(110, 60);
+        assertEquals(3, heard.size(), heard.toString());
+        assertTrue(heard.get(0).startsWith("GROUP up"), heard.get(0));
+        assertTrue(heard.get(1).startsWith("GROUP right"), heard.get(1));
+        assertEquals("GROUP centered", heard.get(2));
+    }
+
+    @Test
+    void aMinimapListsItsMarkersAndTheKeyboardWalksThemAndNavigates() {
+        me.piitex.engine.ui.overlays.MinimapOverlay map = put(new me.piitex.engine.ui.overlays.MinimapOverlay(200, 200), 10, 10);
+        map.setWorld(0, 0, 1000, 1000);
+        map.addMarker(900, 900, me.piitex.engine.ui.color.Color.RED).setLabel("Shop");
+        me.piitex.engine.ui.overlays.MinimapOverlay.Marker player = map.addMarker(100, 100, me.piitex.engine.ui.color.Color.WHITE).setLabel("Player");
+        map.addMarker(500, 500, me.piitex.engine.ui.color.Color.GREEN); // no label: left out
+        map.setFollow(player);
+        List<String> went = new ArrayList<>();
+        map.onNavigate((x, y) -> went.add(Math.round(x) + "," + Math.round(y)));
+        assertEquals(AccessibleRole.IMAGE, map.getAccessibleRole());
+        assertEquals("Map", map.getAccessibleName());
+        assertEquals("2 markers", map.getAccessibleValue());
+        key(GLFW.GLFW_KEY_TAB);
+        assertSame(map, window.getFocusedElement());
+        assertFalse(map.grabsKeyboard());
+
+        key(GLFW.GLFW_KEY_PAGE_DOWN);
+        key(GLFW.GLFW_KEY_PAGE_DOWN);
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_ENTER);
+        assertEquals("IMAGE Shop, bottom right, 1131 units south east of you", heard.get(0));
+        assertEquals("IMAGE Player, top left", heard.get(1));
+        assertEquals("IMAGE top left, near Player", heard.get(2));
+        assertEquals(List.of("150,100"), went);
+        assertEquals("announce Going to the top left", heard.getLast());
+    }
+
+    @Test
+    void aMinimapMarkerClickedWithTheMouseIsSaidAloud() {
+        me.piitex.engine.ui.overlays.MinimapOverlay map = put(new me.piitex.engine.ui.overlays.MinimapOverlay(200, 200), 10, 10);
+        map.setWorld(0, 0, 200, 200);
+        map.addMarker(100, 100, me.piitex.engine.ui.color.Color.RED).setLabel("Gate");
+        map.onDragStart(110, 110); // the marker sits at the middle of the map
+        map.onDragEnd(110, 110);
+        assertEquals("IMAGE Gate, center", heard.getLast());
+    }
+
+    @Test
+    void aRadialMenuReadsOutEachWedgeAsItIsReached() {
+        me.piitex.engine.ui.menu.RadialMenu radial = new me.piitex.engine.ui.menu.RadialMenu();
+        List<String> chosen = new ArrayList<>();
+        radial.addItem("Attack", () -> chosen.add("Attack"));
+        radial.addItem("Defend", () -> chosen.add("Defend"));
+        radial.addItem("Item", () -> chosen.add("Item"));
+        radial.show(window, 300, 300);
+        assertTrue(radial.isOpen());
+        assertTrue(heard.getLast().startsWith("announce Radial menu, 3 choices"), heard.getLast());
+        key(GLFW.GLFW_KEY_RIGHT);
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals("announce Attack, 1 of 3", heard.get(1));
+        assertEquals("announce Defend, 2 of 3", heard.get(2));
+        key(GLFW.GLFW_KEY_ENTER);
+        assertEquals("announce Chose Defend", heard.getLast());
+        assertEquals(List.of("Defend"), chosen);
+        assertFalse(radial.isOpen());
+    }
+
+    @Test
+    void aConsoleReadsNewLinesAloudWithTheirLevelAndSenderButNotNoise() {
+        me.piitex.engine.ui.containers.ConsoleLog console = put(new me.piitex.engine.ui.containers.ConsoleLog(300, 200), 10, 10);
+        console.info("Game loaded");
+        console.debug("shader cache warm");
+        console.warn("Low fuel");
+        console.error("Engine failed");
+        console.chat("Ana", "anyone seen the key?", null);
+        assertEquals(List.of("announce Game loaded", "announce Warning, Low fuel", "announce Error, Engine failed",
+                "announce Ana says, anyone seen the key?"), heard);
+        console.setAnnounceLevel(null);
+        console.info("silent now");
+        assertEquals(4, heard.size());
+    }
+
+    @Test
+    void aBurstOfConsoleLinesIsCutShortInsteadOfLeavingTheVoiceBehind() {
+        me.piitex.engine.ui.containers.ConsoleLog console = put(new me.piitex.engine.ui.containers.ConsoleLog(300, 200), 10, 10);
+        for (int i = 0; i < 40; i++) console.info("line " + i);
+        assertEquals(5, heard.size(), heard.toString());
+        assertEquals(40, console.getLineCount(), "every line is still in the log");
     }
 }

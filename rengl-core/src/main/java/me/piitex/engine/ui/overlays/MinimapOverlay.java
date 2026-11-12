@@ -44,7 +44,7 @@ import java.util.function.Consumer;
  * <p>
  * Colors come from the theme: the box from the field background and border, the camera outline from the accent.
  */
-public class MinimapOverlay extends Overlay implements Themeable, Draggable, Scrollable {
+public class MinimapOverlay extends Overlay implements Themeable, Draggable, Scrollable, me.piitex.engine.ui.Focusable {
     /**
      * What a {@link Marker} looks like.
      */
@@ -73,6 +73,7 @@ public class MinimapOverlay extends Overlay implements Themeable, Draggable, Scr
         private float size = 4f;
         private double heading; // degrees, clockwise on screen from pointing right
         private boolean visible = true;
+        private String label = "";
         private Object data;
 
         private Marker(double x, double y, Paint paint) {
@@ -153,6 +154,19 @@ public class MinimapOverlay extends Overlay implements Themeable, Draggable, Scr
             return this;
         }
 
+        public String getLabel() {
+            return label;
+        }
+
+        /**
+         * What the marker is called, such as "Shop" or "Player": read aloud for someone who cannot see the map, which lists
+         * the markers that have one. A marker with no label is left out of that.
+         */
+        public Marker setLabel(String label) {
+            this.label = label == null ? "" : label;
+            return this;
+        }
+
         public Object getData() {
             return data;
         }
@@ -192,6 +206,9 @@ public class MinimapOverlay extends Overlay implements Themeable, Draggable, Scr
     private BiConsumer<Double, Double> onNavigate;
     private Consumer<Marker> onMarkerClick;
     private boolean navigating;
+    private Marker chosen; // the marker Page Up / Page Down or a click is on, for someone listening
+    private double cursorX = Double.NaN; // the keyboard's spot on the map, in world units; NaN until used
+    private double cursorY = Double.NaN;
 
     public MinimapOverlay(double width, double height) {
         setWidth(width);
@@ -199,6 +216,7 @@ public class MinimapOverlay extends Overlay implements Themeable, Draggable, Scr
         setCursorMode(CursorMode.POINTER);
         getStyling().applyThemeBorderThickness(1f);
         getStyling().applyThemeCornerRadius(4f);
+        setFocusTraversable(true);
         ThemeManager.register(this);
     }
 
@@ -432,10 +450,19 @@ public class MinimapOverlay extends Overlay implements Themeable, Draggable, Scr
         Marker hit = markerAt(mx, my);
         if (hit != null) {
             if (onMarkerClick != null) onMarkerClick.accept(hit);
+            if (!hit.label.isEmpty()) {
+                chosen = hit;
+                notifyAccessibleChange();
+            }
             return;
         }
         navigating = true;
         navigate(mx, my);
+        // Say where the press landed once, not at every step of the drag that follows.
+        chosen = null;
+        cursorX = Math.max(worldX, Math.min(worldX + worldWidth, screenToWorldX(mx)));
+        cursorY = Math.max(worldY, Math.min(worldY + worldHeight, screenToWorldY(my)));
+        notifyAccessibleChange();
     }
 
     @Override
@@ -464,6 +491,209 @@ public class MinimapOverlay extends Overlay implements Themeable, Draggable, Scr
     @Override
     public boolean canScroll(double deltaX, double deltaY) {
         return deltaY > 0 ? zoom < maxZoom : deltaY < 0 && zoom > minZoom;
+    }
+
+    /* Accessibility and the keyboard */
+
+    private static final String[] COMPASS = {"east", "north east", "north", "north west", "west", "south west", "south", "south east"};
+    private static final double CURSOR_STEP = 0.05; // of the world, per arrow press
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.IMAGE;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return "Map";
+    }
+
+    /**
+     * What a listener is on: the marker chosen, else the spot the keyboard cursor is at, else how many markers have a label.
+     */
+    @Override
+    public String getAccessibleValue() {
+        if (chosen != null && chosen.visible && markers.contains(chosen)) return describeMarker(chosen);
+        if (!Double.isNaN(cursorX)) return describeSpot(cursorX, cursorY);
+        int named = labelled().size();
+        return named == 0 ? "" : named == 1 ? "1 marker" : named + " markers";
+    }
+
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        return set != null ? set
+                : "Page Up and Page Down move between markers, arrow keys move a cursor, Enter goes there, plus and minus zoom";
+    }
+
+    private List<Marker> labelled() {
+        List<Marker> out = new ArrayList<>();
+        for (Marker m : markers) {
+            if (m.visible && !m.label.isEmpty()) out.add(m);
+        }
+        return out;
+    }
+
+    /**
+     * "Shop, bottom right", and how far and which way from the marker the view follows (the player) when there is one.
+     */
+    private String describeMarker(Marker m) {
+        StringBuilder text = new StringBuilder(m.label.isEmpty() ? "Marker" : m.label);
+        text.append(", ").append(region(m.x, m.y));
+        if (follow != null && follow != m) {
+            double dx = m.x - follow.x, dy = flipY ? m.y - follow.y : follow.y - m.y; // dy up
+            long distance = Math.round(Math.hypot(dx, dy));
+            int sector = (int) Math.round(Math.toDegrees(Math.atan2(dy, dx)) / 45.0);
+            text.append(", ").append(distance).append(distance == 1 ? " unit " : " units ")
+                    .append(COMPASS[((sector % 8) + 8) % 8]).append(" of you");
+        }
+        return text.toString();
+    }
+
+    /**
+     * Where the cursor is: the region of the map, and the nearest labelled marker if one is close.
+     */
+    private String describeSpot(double x, double y) {
+        String text = region(x, y);
+        Marker nearest = null;
+        double best = Math.max(worldWidth, worldHeight) * 0.08;
+        for (Marker m : labelled()) {
+            double d = Math.hypot(m.x - x, m.y - y);
+            if (d <= best) {
+                best = d;
+                nearest = m;
+            }
+        }
+        return nearest == null ? text : text + ", near " + nearest.label;
+    }
+
+    /**
+     * A position as a part of the map: "top left", "center", "bottom".
+     */
+    private String region(double x, double y) {
+        double fx = (x - worldX) / worldWidth, fy = (y - worldY) / worldHeight;
+        if (flipY) fy = 1.0 - fy;
+        String h = fx < 1.0 / 3 ? "left" : fx > 2.0 / 3 ? "right" : "middle";
+        String v = fy < 1.0 / 3 ? "top" : fy > 2.0 / 3 ? "bottom" : "middle";
+        if (h.equals("middle") && v.equals("middle")) return "center";
+        if (h.equals("middle")) return v;
+        if (v.equals("middle")) return h;
+        return v + " " + h;
+    }
+
+    private void say(String text) {
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.announce(text);
+    }
+
+    @Override
+    public void onFocusGained() {
+    }
+
+    @Override
+    public void onFocusLost() {
+    }
+
+    @Override
+    public void onCharTyped(int codepoint) {
+    }
+
+    /**
+     * The wheel zooms and a press navigates, so a click must not take the keyboard from the game: only Tab focuses the map,
+     * and then the arrows, Page Up and Down, Home, Enter, Space, plus and minus are its own.
+     */
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        return switch (key) {
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT, org.lwjgl.glfw.GLFW.GLFW_KEY_UP,
+                 org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN, org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_UP, org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_DOWN,
+                 org.lwjgl.glfw.GLFW.GLFW_KEY_HOME, org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER,
+                 org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE, org.lwjgl.glfw.GLFW.GLFW_KEY_EQUAL, org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ADD,
+                 org.lwjgl.glfw.GLFW.GLFW_KEY_MINUS, org.lwjgl.glfw.GLFW.GLFW_KEY_KP_SUBTRACT -> true;
+            default -> false;
+        };
+    }
+
+    @Override
+    public void onKeyPressed(int key, int action, int mods) {
+        if (action == org.lwjgl.glfw.GLFW.GLFW_RELEASE) return;
+        switch (key) {
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT -> moveCursor(-1, 0);
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT -> moveCursor(1, 0);
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_UP -> moveCursor(0, flipY ? 1 : -1);
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN -> moveCursor(0, flipY ? -1 : 1);
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_DOWN -> cycleMarker(1);
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_UP -> cycleMarker(-1);
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_HOME -> {
+                chosen = null;
+                cursorX = centerX;
+                cursorY = centerY;
+                notifyAccessibleChange();
+            }
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER, org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE -> {
+                if (action == org.lwjgl.glfw.GLFW.GLFW_PRESS) activate();
+            }
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_EQUAL, org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ADD -> zoomBy(ZOOM_PER_NOTCH);
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_MINUS, org.lwjgl.glfw.GLFW.GLFW_KEY_KP_SUBTRACT -> zoomBy(1.0 / ZOOM_PER_NOTCH);
+            default -> {
+            }
+        }
+    }
+
+    private void moveCursor(int right, int down) {
+        if (Double.isNaN(cursorX)) {
+            cursorX = centerX;
+            cursorY = centerY;
+        } else if (chosen != null) {
+            cursorX = chosen.x; // leave from the marker that was read out
+            cursorY = chosen.y;
+        }
+        chosen = null;
+        cursorX = Math.max(worldX, Math.min(worldX + worldWidth, cursorX + right * worldWidth * CURSOR_STEP));
+        cursorY = Math.max(worldY, Math.min(worldY + worldHeight, cursorY + down * worldHeight * CURSOR_STEP));
+        notifyAccessibleChange();
+    }
+
+    private void cycleMarker(int direction) {
+        List<Marker> named = labelled();
+        if (named.isEmpty()) {
+            say("No markers to move between");
+            return;
+        }
+        int at = chosen == null ? -1 : named.indexOf(chosen);
+        int next = at < 0 ? (direction > 0 ? 0 : named.size() - 1) : ((at + direction) % named.size() + named.size()) % named.size();
+        chosen = named.get(next);
+        cursorX = chosen.x;
+        cursorY = chosen.y;
+        notifyAccessibleChange();
+    }
+
+    /**
+     * Enter: the marker that was read out is clicked, or the map is navigated to the cursor, as a mouse press would.
+     */
+    private void activate() {
+        if (chosen != null && chosen.visible && markers.contains(chosen)) {
+            if (onMarkerClick != null) onMarkerClick.accept(chosen);
+            say("Selected " + chosen.label);
+            return;
+        }
+        if (Double.isNaN(cursorX)) {
+            say("Move the cursor first with the arrow keys");
+            return;
+        }
+        if (onNavigate != null) onNavigate.accept(cursorX, cursorY);
+        say("Going to the " + region(cursorX, cursorY));
+    }
+
+    private void zoomBy(double factor) {
+        double before = zoom;
+        setZoom(zoom * factor);
+        if (zoom != before) say("Zoom " + Math.round(zoom * 10) / 10.0 + " times");
     }
 
     /* Theme */

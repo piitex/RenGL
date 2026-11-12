@@ -199,6 +199,7 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
         message = "";
         if (onListenStart != null) onListenStart.run();
         waitForGamepad();
+        say(getDisplayText() + " Escape cancels.", false);
     }
 
     /**
@@ -329,6 +330,13 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
      */
     public String getDisplayText() {
         if (messageTime > 0 && !message.isEmpty()) return message;
+        return settledText();
+    }
+
+    /**
+     * The text without a passing refusal message on top: the prompt while listening, else the binding.
+     */
+    private String settledText() {
         if (listening) {
             if (previewMods != 0 && allowModifiers) {
                 // "Ctrl+Shift+" and then dots where the key will go: the name of a combination with a stand-in key, cut short.
@@ -443,16 +451,20 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
             if (!gamepadOnly) previewMods = modifiersFor(mods);
             return;
         }
-        if (action == GLFW.GLFW_RELEASE) return;
+        if (action != GLFW.GLFW_PRESS) return; // a held Enter that started listening must not bind itself by repeating
         int pressedMods = modifiersFor(mods);
         if (key == GLFW.GLFW_KEY_ESCAPE && pressedMods == 0) {
             stopListening();
+            say("Cancelled, " + settledText(), false);
             return;
         }
         if (allowClear && pressedMods == 0 && (key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_DELETE)) {
             binding = null;
             stopListening();
+            message = "";
+            messageTime = 0;
             if (onBindingChange != null) onBindingChange.accept(null);
+            notifyAccessibleChange();
             return;
         }
         if (gamepadOnly) return; // a box for the controller does not learn keys
@@ -491,6 +503,7 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
             message = refusal;
             messageTime = MESSAGE_SECONDS;
             previewMods = 0;
+            say(refusal + ". Press another key.", true);
             return;
         }
         binding = learned;
@@ -498,6 +511,33 @@ public class HotkeyOverlay extends Overlay implements Themeable, Focusable, Scro
         message = "";
         messageTime = 0;
         if (onBindingChange != null) onBindingChange.accept(learned);
+        notifyAccessibleChange();
+    }
+
+    /* Accessibility */
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.BUTTON;
+    }
+
+    /**
+     * What the box shows: the key, "Unbound", or the prompt while it listens.
+     */
+    @Override
+    public String getAccessibleValue() {
+        return settledText(); // a refusal is spoken once as it happens, not what the box holds
+    }
+
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        return set != null ? set : "Press Enter to change it";
+    }
+
+    private void say(String text, boolean urgent) {
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.announce(text, urgent);
     }
 
     /* Theme */

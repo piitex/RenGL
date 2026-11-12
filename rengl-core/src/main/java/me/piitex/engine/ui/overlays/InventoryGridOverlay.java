@@ -123,6 +123,8 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
     private boolean focused;
     private int lastPressSlot = -1;
     private long lastPressNanos;
+    private int carrying = -1; // the slot a keyboard "pick up" is holding
+    private boolean quiet; // a move that announces itself once rather than slot by slot
 
     private final Overridable<Paint> slotColor = new Overridable<>(new Color(0.2f, 0.2f, 0.2f, 1f));
     private final Overridable<Paint> slotBorderColor = new Overridable<>(Color.GRAY);
@@ -492,6 +494,8 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
 
     private void changed(int slot) {
         if (onSlotChange != null) onSlotChange.accept(slot);
+        // Whoever has the grid focused hears the slot they are on change under them (a pickup, a stack running out).
+        if (focused && slot == selected && !quiet) notifyAccessibleChange();
     }
 
     /**
@@ -530,6 +534,7 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
         if (slot == selected) return;
         selected = slot;
         if (onSelect != null && slot >= 0) onSelect.accept(slot);
+        notifyAccessibleChange();
     }
 
     private void use(int slot) {
@@ -688,7 +693,14 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
         int releasedOn = slotAt(x, y);
         boolean clicked = !moved && pressSlot >= 0 && releasedOn == pressSlot && !locked[pressSlot];
 
-        if (clicked && shiftPress && items[pressSlot] != null && quickMove(pressSlot)) return;
+        if (clicked && shiftPress && items[pressSlot] != null) {
+            if (links.isEmpty()) {
+                clickedSlot(pressSlot); // nothing to send it to: it is a plain click
+            } else {
+                quickMoveAnnounced(pressSlot);
+            }
+            return;
+        }
         if (clicked) {
             clickedSlot(pressSlot);
             return;
@@ -717,11 +729,19 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
         for (InventoryGridOverlay<T> grid : candidates) {
             if (!grid.isOver(x, y)) continue;
             int target = grid.slotAt(x, y);
-            if (target >= 0) move(finished.slot, grid, target, finished.count);
+            if (target >= 0) {
+                String what = stackText(finished.slot);
+                boolean ok = quietMove(finished.slot, grid, target, finished.count);
+                say(ok ? "Moved " + what + " to slot " + (target + 1) : "It does not go there");
+            }
             return; // over a grid but not a slot, or the move was refused: cancelled either way
         }
-        if (onDropOutside != null && onDropOutside.drop(finished.slot, item, finished.count)) {
-            take(finished.slot, finished.count);
+        if (onDropOutside != null) {
+            String what = stackText(finished.slot);
+            if (onDropOutside.drop(finished.slot, item, finished.count)) {
+                take(finished.slot, finished.count);
+                say("Dropped " + what);
+            }
         }
     }
 
@@ -753,10 +773,30 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
     @Override
     public void onFocusLost() {
         focused = false;
+        carrying = -1;
     }
 
     @Override
     public void onCharTyped(int codepoint) {
+    }
+
+    /**
+     * Like a slider, the grid does not take the keyboard from the game when it is only clicked; once Tab has focused it the
+     * arrows, Home, End, Enter, Space and M are its own.
+     */
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        return switch (key) {
+            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_HOME,
+                 GLFW.GLFW_KEY_END, GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE, GLFW.GLFW_KEY_M -> true;
+            case GLFW.GLFW_KEY_ESCAPE -> carrying >= 0;
+            default -> false;
+        };
     }
 
     @Override
@@ -771,11 +811,128 @@ public class InventoryGridOverlay<T> extends Overlay implements Themeable, Dragg
             case GLFW.GLFW_KEY_HOME -> select(0);
             case GLFW.GLFW_KEY_END -> select(items.length - 1);
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
-                if (action == GLFW.GLFW_PRESS) use(selected);
+                if (action != GLFW.GLFW_PRESS) return;
+                if (carrying >= 0) putDown();
+                else if ((mods & GLFW.GLFW_MOD_SHIFT) != 0 && selected >= 0) quickMoveAnnounced(selected);
+                else use(selected);
+            }
+            case GLFW.GLFW_KEY_M -> {
+                if (action != GLFW.GLFW_PRESS) return;
+                if (carrying >= 0) putDown();
+                else pickUp();
+            }
+            case GLFW.GLFW_KEY_ESCAPE -> {
+                if (carrying >= 0) {
+                    carrying = -1;
+                    say("Cancelled");
+                }
             }
             default -> {
             }
         }
+    }
+
+    /* Moving with the keyboard */
+
+    /**
+     * Whether a keyboard pick-up is holding a stack, waiting to be put down.
+     */
+    public boolean isCarrying() {
+        return carrying >= 0;
+    }
+
+    private void pickUp() {
+        if (selected < 0 || items[selected] == null || locked[selected]) {
+            say(selected >= 0 && locked[selected] ? "That slot is locked" : "Nothing to pick up");
+            return;
+        }
+        carrying = selected;
+        say("Picked up " + stackText(selected) + ". Go to another slot and press M or Enter to put it down. Escape cancels.");
+    }
+
+    private void putDown() {
+        int source = carrying;
+        carrying = -1;
+        if (source == selected) {
+            say("Put back");
+            return;
+        }
+        String what = items[source] == null ? "nothing" : stackText(source);
+        boolean ok = quietMove(source, this, selected, counts[source]);
+        say(ok ? "Moved " + what + " to slot " + (selected + 1) : "It does not go there");
+    }
+
+    private boolean quietMove(int slot, InventoryGridOverlay<T> target, int targetSlot, int count) {
+        quiet = true;
+        target.quiet = true;
+        try {
+            return move(slot, target, targetSlot, count);
+        } finally {
+            quiet = false;
+            target.quiet = false;
+        }
+    }
+
+    private boolean quickMoveAnnounced(int slot) {
+        if (links.isEmpty()) {
+            say("No other inventory is linked");
+            return false;
+        }
+        String what = items[slot] == null ? "nothing" : stackText(slot);
+        quiet = true;
+        boolean any;
+        try {
+            any = quickMove(slot);
+        } finally {
+            quiet = false;
+        }
+        say(any ? "Moved " + what + " to the other inventory" : "No room in the other inventory");
+        return any;
+    }
+
+    private void say(String text) {
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.announce(text);
+    }
+
+    /* Accessibility */
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.LIST;
+    }
+
+    /**
+     * The slot the selection is on: "Slot 3 of 24, Health potion, 5", "Slot 4 of 24, empty" or "Slot 5 of 24, locked".
+     */
+    @Override
+    public String getAccessibleValue() {
+        return selected < 0 ? "" : slotText(selected);
+    }
+
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        return set != null ? set : "Arrow keys move between slots, Enter uses the item, M picks one up and puts it down";
+    }
+
+    private String stackText(int slot) {
+        @SuppressWarnings("unchecked") T item = (T) items[slot];
+        String label = String.valueOf(labelProvider.apply(item));
+        return counts[slot] > 1 ? counts[slot] + " " + label : label;
+    }
+
+    private String slotText(int slot) {
+        StringBuilder text = new StringBuilder("Slot ").append(slot + 1).append(" of ").append(items.length);
+        if (locked[slot]) text.append(", locked");
+        else if (items[slot] == null) text.append(", empty");
+        else {
+            @SuppressWarnings("unchecked") T item = (T) items[slot];
+            text.append(", ").append(labelProvider.apply(item));
+            if (counts[slot] > 1) text.append(", ").append(counts[slot]);
+        }
+        if (carrying == slot) text.append(", picked up");
+        return text.toString();
     }
 
     /* Theme */

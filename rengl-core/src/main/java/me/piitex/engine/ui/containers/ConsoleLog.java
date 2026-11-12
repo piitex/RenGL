@@ -176,11 +176,65 @@ public class ConsoleLog extends Container implements Scrollable, FontScalable {
     }
 
     private void add(Level level, String sender, Paint senderPaint, String text, Paint textPaint) {
+        add(level, sender, senderPaint, text, textPaint, true);
+    }
+
+    private void add(Level level, String sender, Paint senderPaint, String text, Paint textPaint, boolean speak) {
         Line line = new Line(level, System.currentTimeMillis(), sender, senderPaint, text == null ? "" : text, textPaint);
         synchronized (lock) {
             lines.add(line);
             while (lines.size() > maxLines) lines.removeFirst();
         }
+        if (speak) announceLine(line);
+    }
+
+    /* Accessibility */
+
+    private static final int SPOKEN_BURST = 5; // lines spoken within one window of time before the rest are skipped
+    private static final long SPOKEN_WINDOW_NANOS = 2_000_000_000L;
+
+    private Level announceFrom = Level.INFO;
+    private final long[] spokenAt = new long[SPOKEN_BURST];
+    private int spokenNext;
+    private int skipped;
+
+    /**
+     * The least serious level of new line that is read aloud to someone using an accessibility host; {@link Level#INFO} by
+     * default, so debug chatter is not. Null reads nothing. A line the player typed (the echoed command) is never read, and a
+     * burst of lines is cut short with a count of how many were skipped, so a flood does not leave the voice minutes behind.
+     */
+    public void setAnnounceLevel(Level level) {
+        this.announceFrom = level;
+    }
+
+    public Level getAnnounceLevel() {
+        return announceFrom;
+    }
+
+    private void announceLine(Line line) {
+        Level from = announceFrom;
+        if (from == null || line.level.compareTo(from) < 0 || line.level.compareTo(minLevel) < 0) return;
+        me.piitex.engine.Window window = getWindow();
+        if (window == null || window.getAccessibilityHost() == null) return;
+        String prefix;
+        synchronized (spokenAt) {
+            long now = System.nanoTime();
+            long oldest = spokenAt[spokenNext];
+            if (oldest != 0 && now - oldest < SPOKEN_WINDOW_NANOS) {
+                skipped++;
+                return;
+            }
+            spokenAt[spokenNext] = now;
+            spokenNext = (spokenNext + 1) % SPOKEN_BURST;
+            prefix = skipped > 0 ? skipped + " lines skipped. " : "";
+            skipped = 0;
+        }
+        StringBuilder text = new StringBuilder(prefix);
+        if (line.level == Level.WARN) text.append("Warning, ");
+        else if (line.level == Level.ERROR) text.append("Error, ");
+        if (!line.sender.isEmpty()) text.append(line.sender).append(" says, ");
+        text.append(line.text);
+        window.announce(text.toString(), line.level == Level.ERROR);
     }
 
     public void clear() {
@@ -385,7 +439,7 @@ public class ConsoleLog extends Container implements Scrollable, FontScalable {
             history.addFirst(command);
             while (history.size() > MAX_HISTORY) history.removeLast();
         }
-        if (echoCommands) add(Level.INFO, "", null, "> " + command, accentColor.get());
+        if (echoCommands) add(Level.INFO, "", null, "> " + command, accentColor.get(), false);
         if (onCommand != null) onCommand.accept(command);
     }
 

@@ -35,7 +35,12 @@ import java.util.function.BiConsumer;
  * Colors come from the theme: the base from {@link Theme#getFieldBackground()} and {@link Theme#getFieldBorder()}, the
  * thumb from {@link Theme#getAccent()}.
  */
-public class JoystickOverlay extends Overlay implements Themeable, Draggable {
+public class JoystickOverlay extends Overlay implements Themeable, Draggable, me.piitex.engine.ui.Focusable {
+    private static final int HELD_LEFT = 1, HELD_RIGHT = 2, HELD_UP = 4, HELD_DOWN = 8;
+    private static final String[] COMPASS = {"right", "up right", "up", "up left", "left", "down left", "down", "down right"};
+
+    private int heldKeys; // arrow keys held while the stick has the keyboard focus
+    private String lastWord = "centered"; // what was last said, so only a change in direction is spoken
     private double thumbRatio = 0.4; // thumb radius as a fraction of the base's
     private double deadZone = 0.1;
     private int directions; // 0 is analog
@@ -63,6 +68,7 @@ public class JoystickOverlay extends Overlay implements Themeable, Draggable {
         getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
         getStyling().applyThemeHoverColor(Color.TRANSPARENT);
         getStyling().applyThemeBorderThickness(0f);
+        setFocusTraversable(true);
         ThemeManager.register(this);
     }
 
@@ -188,6 +194,7 @@ public class JoystickOverlay extends Overlay implements Themeable, Draggable {
         rawX = x;
         rawY = -y;
         clampRaw();
+        lastWord = directionWord();
     }
 
     /**
@@ -253,6 +260,7 @@ public class JoystickOverlay extends Overlay implements Themeable, Draggable {
             rawX = 0;
             rawY = 0;
             if ((beforeX != 0 || beforeY != 0) && onMove != null) onMove.accept(0.0, 0.0);
+            tellIfDirectionChanged();
         }
         if (onRelease != null) onRelease.run();
     }
@@ -267,6 +275,123 @@ public class JoystickOverlay extends Overlay implements Themeable, Draggable {
         clampRaw();
         double afterX = getAxisX(), afterY = getAxisY();
         if ((afterX != beforeX || afterY != beforeY) && onMove != null) onMove.accept(afterX, afterY);
+        tellIfDirectionChanged();
+    }
+
+    /* Accessibility and the keyboard */
+
+    /**
+     * Where the stick points in words: "centered", or "up right" and so on.
+     */
+    private String directionWord() {
+        if (!isActive()) return "centered";
+        int sector = (int) Math.round(getAngle() / 45.0) % 8;
+        return COMPASS[sector];
+    }
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.GROUP;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return "Joystick";
+    }
+
+    /**
+     * "Centered", or the way it is pushed and how hard: "up right, 70 percent". A digital stick is always at full push, so
+     * it says only the way.
+     */
+    @Override
+    public String getAccessibleValue() {
+        String word = directionWord();
+        if (!isActive() || directions > 0) return word;
+        return word + ", " + Math.round(getMagnitude() * 100) + " percent";
+    }
+
+    @Override
+    public String getAccessibleDescription() {
+        String set = super.getAccessibleDescription();
+        return set != null ? set : "Hold the arrow keys to push it";
+    }
+
+    /**
+     * Speaks the stick's direction when it changes, not for every pixel of a drag or every step of how hard it is pushed.
+     */
+    private void tellIfDirectionChanged() {
+        String word = directionWord();
+        if (word.equals(lastWord)) return;
+        lastWord = word;
+        notifyAccessibleChange();
+    }
+
+    @Override
+    public void onFocusGained() {
+    }
+
+    @Override
+    public void onFocusLost() {
+        if (heldKeys == 0) return;
+        heldKeys = 0;
+        pushFromKeys(); // a key released while focus was elsewhere would otherwise leave the stick pushed
+    }
+
+    @Override
+    public void onCharTyped(int codepoint) {
+    }
+
+    /**
+     * Only the arrow keys are the stick's; WASD and everything else stay with the game.
+     */
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        return heldBit(key) != 0;
+    }
+
+    private static int heldBit(int key) {
+        return switch (key) {
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT -> HELD_LEFT;
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT -> HELD_RIGHT;
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_UP -> HELD_UP;
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN -> HELD_DOWN;
+            default -> 0;
+        };
+    }
+
+    @Override
+    public void onKeyPressed(int key, int action, int mods) {
+        int bit = heldBit(key);
+        if (bit == 0) return;
+        if (action == org.lwjgl.glfw.GLFW.GLFW_PRESS) heldKeys |= bit;
+        else if (action == org.lwjgl.glfw.GLFW.GLFW_RELEASE) heldKeys &= ~bit;
+        else return;
+        pushFromKeys();
+    }
+
+    /**
+     * Pushes the stick the way the held arrow keys say; with none held it springs back, or stays if it does not snap back.
+     */
+    private void pushFromKeys() {
+        double beforeX = getAxisX(), beforeY = getAxisY();
+        int dx = ((heldKeys & HELD_RIGHT) != 0 ? 1 : 0) - ((heldKeys & HELD_LEFT) != 0 ? 1 : 0);
+        int dy = ((heldKeys & HELD_DOWN) != 0 ? 1 : 0) - ((heldKeys & HELD_UP) != 0 ? 1 : 0);
+        if (dx != 0 || dy != 0) {
+            double len = Math.hypot(dx, dy);
+            rawX = dx / len;
+            rawY = dy / len;
+        } else if (snapBack) {
+            rawX = 0;
+            rawY = 0;
+        }
+        double afterX = getAxisX(), afterY = getAxisY();
+        if ((afterX != beforeX || afterY != beforeY) && onMove != null) onMove.accept(afterX, afterY);
+        tellIfDirectionChanged();
     }
 
     private void clampRaw() {

@@ -93,6 +93,7 @@ public class RadialMenu extends Container implements PopupKeyListener, Themeable
     private float innerRadius = 36f;
 
     private int keyboardIndex = -1;
+    private int spokenIndex = -1; // the wedge last read out, so each is said once as it is entered
     private boolean useKeyboard;
     private double lastMouseX = Double.NaN;
     private double lastMouseY = Double.NaN;
@@ -196,11 +197,14 @@ public class RadialMenu extends Container implements PopupKeyListener, Themeable
         setBounds(cx - outerRadius, cy - outerRadius, outerRadius * 2, outerRadius * 2);
         keyboardIndex = -1;
         useKeyboard = false;
+        spokenIndex = -1;
         lastMouseX = lastMouseY = Double.NaN;
         host.showPopup(this, null, () -> {
             this.host = null;
             if (onClose != null) onClose.run();
         });
+        say("Radial menu, " + items.size() + (items.size() == 1 ? " choice" : " choices")
+                + ". Arrow keys to choose, Enter to select, Escape to close.", true);
     }
 
     /**
@@ -243,6 +247,7 @@ public class RadialMenu extends Container implements PopupKeyListener, Themeable
     public void pick(int index) {
         if (index < 0 || index >= items.size() || !items.get(index).enabled) return;
         Runnable action = items.get(index).action;
+        say("Chose " + items.get(index).label, true);
         close();
         if (action != null) action.run();
     }
@@ -252,7 +257,10 @@ public class RadialMenu extends Container implements PopupKeyListener, Themeable
         int n = items.size();
         if (n == 0) return;
         switch (key) {
-            case GLFW.GLFW_KEY_ESCAPE -> close();
+            case GLFW.GLFW_KEY_ESCAPE -> {
+                say("Menu closed", true);
+                close();
+            }
             case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_DOWN -> step(+1);
             case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_UP -> step(-1);
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> pick(keyboardIndex);
@@ -273,9 +281,30 @@ public class RadialMenu extends Container implements PopupKeyListener, Themeable
             if (items.get(candidate).enabled) {
                 keyboardIndex = candidate;
                 useKeyboard = true;
+                spokenIndex = candidate;
+                sayItem(candidate);
                 return;
             }
         }
+    }
+
+    /* Accessibility */
+
+    private me.piitex.engine.Window speechWindow() {
+        return host instanceof me.piitex.engine.Window window ? window : getWindow();
+    }
+
+    private void say(String text, boolean urgent) {
+        me.piitex.engine.Window window = speechWindow();
+        if (window != null) window.announce(text, urgent);
+    }
+
+    /**
+     * "Attack, 2 of 6": the wedge's label and where it is in the ring. Urgent, so stepping quickly does not queue up.
+     */
+    private void sayItem(int index) {
+        if (index < 0 || index >= items.size()) return;
+        say(items.get(index).label + ", " + (index + 1) + " of " + items.size(), true);
     }
 
     /**
@@ -364,6 +393,12 @@ public class RadialMenu extends Container implements PopupKeyListener, Themeable
             if (!Double.isNaN(lastMouseX)) useKeyboard = false;
             lastMouseX = MouseTracker.getX();
             lastMouseY = MouseTracker.getY();
+        }
+        // The wedge under the pointer is read out as it changes, the way the keyboard's is.
+        int lit = isOpen() ? getLitIndex() : -1;
+        if (lit != spokenIndex) {
+            spokenIndex = lit;
+            if (lit >= 0 && !useKeyboard) sayItem(lit);
         }
         AnimatedPaint.advanceIfAnimated(wedgeColor.get(), delta);
         AnimatedPaint.advanceIfAnimated(edgeColor.get(), delta);
