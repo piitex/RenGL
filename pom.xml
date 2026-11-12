@@ -79,10 +79,6 @@
         <!-- JVM arguments for the test JVM. The macOS profile below adds -XstartOnFirstThread, which GLFW needs for the GPU tests. -->
         <rengl.test.jvmargs>--enable-native-access=ALL-UNNAMED</rengl.test.jvmargs>
 
-        <!-- The natives bundle (see the release profiles below) is only built when a natives-bundle-* profile turns this off. -->
-        <natives.bundle.skip>true</natives.bundle.skip>
-        <!-- The Skiko runtime (native library) is optional in a dev build, so it never reaches a consumer; a release build makes it a normal dependency so the bundle can pick it up. -->
-        <skiko.runtime.optional>true</skiko.runtime.optional>
         <!-- The physx-jni natives that rengl-physx tests on and the examples run on: this machine's, set by the physx-natives-* profiles below. There are none for Linux or Windows on arm64. -->
         <physx-jni.version>2.9.0</physx-jni.version>
         <physx.natives>natives-windows</physx.natives>
@@ -138,11 +134,14 @@
         </profile>
 
         <!--
-          All six platforms in ONE build: -Pnatives-bundle-all (tick it in IntelliJ's Maven tool window, and nothing
-          else from the lwjgl-natives-* / natives-bundle-<platform> lists), then package or install. Each module that
-          owns natives unpacks every platform's natives (its own natives-bundle-all profile) and the jar executions
-          below attach one natives-<platform> jar per platform; rengl-all merges the modules' jars. No other platform
-          profile may be active with it, since they all set the same lwjgl.natives property.
+          The platform natives artifacts for a release: -Dnatives.platform=all adds the rengl-natives modules, six small
+          artifacts (rengl-natives-windows, rengl-natives-linux-arm64, ...) that each hold the Skiko runtime of one platform
+          and depend on LWJGL's own natives for it. They are left out of a normal build because they need all six Skiko
+          runtimes. Nothing else in the build reads the property below.
+
+          The properties are placeholders so the poms resolve when the host's lwjgl-natives-* profile is not active
+          (IntelliJ passes -P !lwjgl-natives-<host> for every profile left unticked). When the host profile is active,
+          it wins.
         -->
         <profile>
             <id>natives-bundle-all</id>
@@ -152,104 +151,13 @@
                     <value>all</value>
                 </property>
             </activation>
-            <!--
-              Placeholders so the poms resolve when the host's lwjgl-natives-* profile is not active (IntelliJ passes
-              -P !lwjgl-natives-<host> for every profile left unticked). Nothing in the all-platform bundle reads them: the
-              modules unpack each platform's natives by explicit coordinates. When the host profile is active, it wins.
-            -->
+            <modules>
+                <module>rengl-natives</module>
+            </modules>
             <properties>
                 <lwjgl.natives>natives-windows</lwjgl.natives>
                 <skiko.runtime.artifact>skiko-awt-runtime-windows-x64</skiko.runtime.artifact>
             </properties>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-jar-plugin</artifactId>
-                        <version>3.4.2</version>
-                        <executions>
-                            <execution>
-                                <id>natives-jar-natives-linux</id>
-                                <phase>package</phase>
-                                <goals><goal>jar</goal></goals>
-                                <configuration>
-                                    <classifier>natives-linux</classifier>
-                                    <classesDirectory>${project.build.directory}/natives/natives-linux</classesDirectory>
-                                    <skipIfEmpty>true</skipIfEmpty>
-                                    <archive>
-                                        <addMavenDescriptor>false</addMavenDescriptor>
-                                    </archive>
-                                </configuration>
-                            </execution>
-                            <execution>
-                                <id>natives-jar-natives-linux-arm64</id>
-                                <phase>package</phase>
-                                <goals><goal>jar</goal></goals>
-                                <configuration>
-                                    <classifier>natives-linux-arm64</classifier>
-                                    <classesDirectory>${project.build.directory}/natives/natives-linux-arm64</classesDirectory>
-                                    <skipIfEmpty>true</skipIfEmpty>
-                                    <archive>
-                                        <addMavenDescriptor>false</addMavenDescriptor>
-                                    </archive>
-                                </configuration>
-                            </execution>
-                            <execution>
-                                <id>natives-jar-natives-macos</id>
-                                <phase>package</phase>
-                                <goals><goal>jar</goal></goals>
-                                <configuration>
-                                    <classifier>natives-macos</classifier>
-                                    <classesDirectory>${project.build.directory}/natives/natives-macos</classesDirectory>
-                                    <skipIfEmpty>true</skipIfEmpty>
-                                    <archive>
-                                        <addMavenDescriptor>false</addMavenDescriptor>
-                                    </archive>
-                                </configuration>
-                            </execution>
-                            <execution>
-                                <id>natives-jar-natives-macos-arm64</id>
-                                <phase>package</phase>
-                                <goals><goal>jar</goal></goals>
-                                <configuration>
-                                    <classifier>natives-macos-arm64</classifier>
-                                    <classesDirectory>${project.build.directory}/natives/natives-macos-arm64</classesDirectory>
-                                    <skipIfEmpty>true</skipIfEmpty>
-                                    <archive>
-                                        <addMavenDescriptor>false</addMavenDescriptor>
-                                    </archive>
-                                </configuration>
-                            </execution>
-                            <execution>
-                                <id>natives-jar-natives-windows</id>
-                                <phase>package</phase>
-                                <goals><goal>jar</goal></goals>
-                                <configuration>
-                                    <classifier>natives-windows</classifier>
-                                    <classesDirectory>${project.build.directory}/natives/natives-windows</classesDirectory>
-                                    <skipIfEmpty>true</skipIfEmpty>
-                                    <archive>
-                                        <addMavenDescriptor>false</addMavenDescriptor>
-                                    </archive>
-                                </configuration>
-                            </execution>
-                            <execution>
-                                <id>natives-jar-natives-windows-arm64</id>
-                                <phase>package</phase>
-                                <goals><goal>jar</goal></goals>
-                                <configuration>
-                                    <classifier>natives-windows-arm64</classifier>
-                                    <classesDirectory>${project.build.directory}/natives/natives-windows-arm64</classesDirectory>
-                                    <skipIfEmpty>true</skipIfEmpty>
-                                    <archive>
-                                        <addMavenDescriptor>false</addMavenDescriptor>
-                                    </archive>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
         </profile>
 
         <!--
@@ -367,133 +275,6 @@
         </profile>
 
         <!--
-          The six profiles below are the actual release mechanism. Each is activated manually
-          (-P) and picks exactly one platform. A module that owns natives (see its pom) then
-          shades ONLY those natives, with no RenGL classes and no LWJGL or Skiko API classes,
-          into one small jar attached to that module under a "natives-<platform>" classifier,
-          matching LWJGL's own naming convention. The module's natives are listed in the
-          "natives-bundle" execution in its own pom; this file only supplies the platform.
-
-          A consumer targeting one platform adds, for each RenGL module it uses that has
-          natives, the module plus that classifier. The RenGL aggregate artifact collects every
-          module's natives into a single natives-<platform> jar, so depending on RenGL and its
-          classifier still works the way it did before the split.
-
-          These share the lwjgl.natives property with the dev profiles above, so they can't be
-          combined in one list (whichever profile's value "wins" would silently apply to all
-          of them). Run one platform per invocation, and pass -DskipAutoNatives so the host
-          machine's own OS-detected dev profile doesn't also activate. The platform is chosen
-          with -Dnatives.platform=<platform> rather than -P: Maven reads the poms of the other
-          modules in the build as dependencies, and only a -D property reaches those poms, so
-          the ${lwjgl.natives} in them resolves to the same platform:
-            mvn -DskipAutoNatives -Dnatives.platform=linux-amd64 package
-            mvn -DskipAutoNatives -Dnatives.platform=linux-aarch64 package
-            mvn -DskipAutoNatives -Dnatives.platform=macos-x86_64 package
-            mvn -DskipAutoNatives -Dnatives.platform=macos-aarch64 package
-            mvn -DskipAutoNatives -Dnatives.platform=windows-amd64 package
-            mvn -DskipAutoNatives -Dnatives.platform=windows-aarch64 package
-          (-P natives-bundle-<platform> still works for a single module.)
-          This only resolves and repackages already-published artifacts, so all six can be run
-          from any single host OS: no cross-compilation, no target-platform execution needed.
-        -->
-        <profile>
-            <id>natives-bundle-linux-amd64</id>
-            <activation>
-                <property>
-                    <name>natives.platform</name>
-                    <value>linux-amd64</value>
-                </property>
-            </activation>
-            <properties>
-                <lwjgl.natives>natives-linux</lwjgl.natives>
-                <skiko.runtime.artifact>skiko-awt-runtime-linux-x64</skiko.runtime.artifact>
-                <natives.classifier>natives-linux</natives.classifier>
-                <natives.bundle.skip>false</natives.bundle.skip>
-                <skiko.runtime.optional>false</skiko.runtime.optional>
-            </properties>
-        </profile>
-        <profile>
-            <id>natives-bundle-linux-aarch64</id>
-            <activation>
-                <property>
-                    <name>natives.platform</name>
-                    <value>linux-aarch64</value>
-                </property>
-            </activation>
-            <properties>
-                <lwjgl.natives>natives-linux-arm64</lwjgl.natives>
-                <skiko.runtime.artifact>skiko-awt-runtime-linux-arm64</skiko.runtime.artifact>
-                <natives.classifier>natives-linux-arm64</natives.classifier>
-                <natives.bundle.skip>false</natives.bundle.skip>
-                <skiko.runtime.optional>false</skiko.runtime.optional>
-            </properties>
-        </profile>
-        <profile>
-            <id>natives-bundle-macos-x86_64</id>
-            <activation>
-                <property>
-                    <name>natives.platform</name>
-                    <value>macos-x86_64</value>
-                </property>
-            </activation>
-            <properties>
-                <lwjgl.natives>natives-macos</lwjgl.natives>
-                <skiko.runtime.artifact>skiko-awt-runtime-macos-x64</skiko.runtime.artifact>
-                <natives.classifier>natives-macos</natives.classifier>
-                <natives.bundle.skip>false</natives.bundle.skip>
-                <skiko.runtime.optional>false</skiko.runtime.optional>
-            </properties>
-        </profile>
-        <profile>
-            <id>natives-bundle-macos-aarch64</id>
-            <activation>
-                <property>
-                    <name>natives.platform</name>
-                    <value>macos-aarch64</value>
-                </property>
-            </activation>
-            <properties>
-                <lwjgl.natives>natives-macos-arm64</lwjgl.natives>
-                <skiko.runtime.artifact>skiko-awt-runtime-macos-arm64</skiko.runtime.artifact>
-                <natives.classifier>natives-macos-arm64</natives.classifier>
-                <natives.bundle.skip>false</natives.bundle.skip>
-                <skiko.runtime.optional>false</skiko.runtime.optional>
-            </properties>
-        </profile>
-        <profile>
-            <id>natives-bundle-windows-amd64</id>
-            <activation>
-                <property>
-                    <name>natives.platform</name>
-                    <value>windows-amd64</value>
-                </property>
-            </activation>
-            <properties>
-                <lwjgl.natives>natives-windows</lwjgl.natives>
-                <skiko.runtime.artifact>skiko-awt-runtime-windows-x64</skiko.runtime.artifact>
-                <natives.classifier>natives-windows</natives.classifier>
-                <natives.bundle.skip>false</natives.bundle.skip>
-                <skiko.runtime.optional>false</skiko.runtime.optional>
-            </properties>
-        </profile>
-        <profile>
-            <id>natives-bundle-windows-aarch64</id>
-            <activation>
-                <property>
-                    <name>natives.platform</name>
-                    <value>windows-aarch64</value>
-                </property>
-            </activation>
-            <properties>
-                <lwjgl.natives>natives-windows-arm64</lwjgl.natives>
-                <skiko.runtime.artifact>skiko-awt-runtime-windows-arm64</skiko.runtime.artifact>
-                <natives.classifier>natives-windows-arm64</natives.classifier>
-                <natives.bundle.skip>false</natives.bundle.skip>
-                <skiko.runtime.optional>false</skiko.runtime.optional>
-            </properties>
-        </profile>
-
-        <!--
           Publishing to Maven Central. Not part of a normal build. The sources and Javadoc jars
           that Central requires are already built by every module (see the build below). This
           profile adds the other requirement, GPG signatures, and uploads the bundle:
@@ -587,82 +368,6 @@
     </dependencies>
 
     <build>
-        <pluginManagement>
-            <plugins>
-                <!--
-                  The release natives bundle. A module that owns natives declares this plugin and the
-                  "natives-bundle" execution with an artifactSet listing exactly those natives, e.g.
-                    <include>org.lwjgl:lwjgl-openal:*:${lwjgl.natives}</include>
-                  Without a natives-bundle-* profile the execution is skipped.
-                -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-shade-plugin</artifactId>
-                    <version>${maven-shade-plugin.version}</version>
-                    <executions>
-                        <execution>
-                            <id>natives-bundle</id>
-                            <phase>package</phase>
-                            <goals><goal>shade</goal></goals>
-                            <configuration>
-                                <skip>${natives.bundle.skip}</skip>
-                                <shadedArtifactAttached>true</shadedArtifactAttached>
-                                <shadedClassifierName>${natives.classifier}</shadedClassifierName>
-                                <createDependencyReducedPom>false</createDependencyReducedPom>
-                                <filters>
-                                    <filter>
-                                        <artifact>io.github.piitex:*</artifact>
-                                        <excludes>
-                                            <exclude>**</exclude>
-                                        </excludes>
-                                    </filter>
-                                    <filter>
-                                        <artifact>*:*</artifact>
-                                        <excludes>
-                                            <exclude>META-INF/*.SF</exclude>
-                                            <exclude>META-INF/*.DSA</exclude>
-                                            <exclude>META-INF/*.RSA</exclude>
-                                            <exclude>META-INF/MANIFEST.MF</exclude>
-                                            <exclude>META-INF/INDEX.LIST</exclude>
-                                            <exclude>META-INF/versions/**</exclude>
-                                            <exclude>module-info.class</exclude>
-                                        </excludes>
-                                    </filter>
-                                </filters>
-                            </configuration>
-                        </execution>
-                    </executions>
-                </plugin>
-                <!--
-                  Puts the licenses of the native libraries (licenses/natives) into every natives-<platform> jar, under
-                  META-INF/licenses/rengl, because the BSD and MIT licenses require the notice to travel with the binaries.
-                  A module that owns natives lists this plugin in its natives-bundle-all profile, after the unpack execution
-                  (both run in prepare-package, in the order they are declared, and the jar is built in package).
-                -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-antrun-plugin</artifactId>
-                    <version>3.1.0</version>
-                    <executions>
-                        <execution>
-                            <id>natives-licenses</id>
-                            <phase>prepare-package</phase>
-                            <goals><goal>run</goal></goals>
-                            <configuration>
-                                <target>
-                                    <copy todir="${project.build.directory}/natives/natives-linux/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
-                                    <copy todir="${project.build.directory}/natives/natives-linux-arm64/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
-                                    <copy todir="${project.build.directory}/natives/natives-macos/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
-                                    <copy todir="${project.build.directory}/natives/natives-macos-arm64/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
-                                    <copy todir="${project.build.directory}/natives/natives-windows/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
-                                    <copy todir="${project.build.directory}/natives/natives-windows-arm64/META-INF/licenses/rengl"><fileset dir="${maven.multiModuleProjectDirectory}/licenses/natives"/></copy>
-                                </target>
-                            </configuration>
-                        </execution>
-                    </executions>
-                </plugin>
-            </plugins>
-        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

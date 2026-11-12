@@ -35,8 +35,8 @@ powershell -ExecutionPolicy Bypass -File rengl-packager\install-natives.ps1
 ```
 
 The first command builds the engine and the packager into your local Maven repository (`~/.m2`) and takes a while. The
-second adds the Linux, macOS and Windows natives (LWJGL's and Skiko's native libraries) that your other platforms'
-images need. Repeat both when you update the engine.
+second adds the `rengl-natives-<platform>` artifacts (Skiko's runtime, with LWJGL's natives as their dependencies) that
+your other platforms' images need. Repeat both when you update the engine.
 
 **2. Once per project: create its settings.** In your project's folder (the one with `pom.xml`), run the RenGL folder's
 `package-app.ps1` with `-Init`:
@@ -160,18 +160,15 @@ Copy-Item target\myapp.jar target\input\
 Use your project's own Maven (`mvn` if you have it installed; the RenGL folder only ships `mvnw`). Add
 `-DincludeScope=runtime` if test libraries end up in the folder.
 
-The folder also needs **the natives jar of every platform you build for**. These hold LWJGL's and Skiko's native
-libraries, and a platform's image starts and then fails to find them if its jar is missing. The packager picks them by
-file name (`natives-windows`, `natives-linux-arm64`, `natives-macos-arm64`, ...) and gives each image only its own.
-Your build brings only the jar of the computer it runs on. Step 1 of the quick start put all of them in your Maven
-repository, so copy them in:
+The folder also needs **the natives of every platform you build for**. These are Skiko's runtime
+(`rengl-natives-<platform>`) and LWJGL's native libraries (`lwjgl-*-natives-<platform>`), and a platform's image starts
+and then fails to find them if its jars are missing. The packager picks them by file name (`natives-windows`,
+`natives-linux-arm64`, `natives-macos-arm64`, ...) and gives each image only its own. Your build brings only the jars of
+the computer it runs on; `package-app.ps1` fetches the rest. Doing it by hand, from a pom that depends on the
+`rengl-natives-<platform>` artifact of each other platform (a throwaway pom in a scratch folder will do), run Maven's
+`dependency:copy-dependencies` for it with `-DoutputDirectory` set to your `target\input`.
 
-```powershell
-Copy-Item "$env:USERPROFILE\.m2\repository\io\github\piitex\RenGL\0.1.0\RenGL-0.1.0-natives-*.jar" target\input\
-```
-
-`0.1.0` is the engine's version in its `pom.xml`. With the RenGL [modules](../modules.md) rather than the one
-`RenGL` jar, copy the `natives-<platform>` jar of each module that has them.
+`0.1.0` is the engine's version in its `pom.xml`.
 
 ### Running it
 
@@ -409,7 +406,7 @@ lists no dependencies beyond rpm itself, like the `.deb`.
 | `The windows-x64 natives are missing` (or another platform) | Run `install-natives.ps1` from step 1 |
 | `running scripts is disabled on this system` | Run `package.cmd`, which starts the script with the policy bypassed, or start the script as `powershell -ExecutionPolicy Bypass -File ...`, as in the quick start |
 | `Could not set the icon: Could not open ...\MyApp.exe` | The output path is too long for Windows (over about 260 characters). Build into a short folder such as `C:\dist` |
-| The app starts and then cannot find its native libraries | That platform's natives jar was not in the input folder |
+| The app starts and then cannot find its native libraries | That platform's natives jars (`rengl-natives-<platform>` and LWJGL's) were not in the input folder |
 | The app crashes at start for a missing Java class | `jdeps` did not find a module the app loads by reflection. Add it with `--add-modules` |
 | Warnings about "restricted method" while packaging | Start Java with `--enable-native-access=ALL-UNNAMED`, as the commands above do |
 | The setup or uninstaller reports files in use | The app is running. Close it and run the setup or uninstaller again |
@@ -477,7 +474,7 @@ and build the app again. Only the `--installer-ui` code path in `setup.c` (unpac
 
 `jpackage`, which ships with the JDK, builds a native app with its own Java runtime: an `.app` or `.dmg` on macOS, an
 `.exe` or `.msi` on Windows, a `.deb`, `.rpm` or app folder on Linux. It has to be run on the platform it builds for.
-Give it the [input folder](#the-input-folder), with the natives jar of **that** platform.
+Give it the [input folder](#the-input-folder), with the natives jars of **that** platform.
 
 What was checked while writing this: a RenGL app built as a macOS `app-image` with a `.zip` file association, launched
 with `open -a`, received the file through [`Engine.onOpenFiles`](../core/engine.md#files-the-os-asks-the-app-to-open),

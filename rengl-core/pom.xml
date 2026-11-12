@@ -52,10 +52,11 @@
             <!-- Skiko's Java API (org.jetbrains.skia.*) is bundled into the rengl-core jar, so consumers do not need the
                  Compose dev repository it is published to. The dependency below is optional, which Maven does not pass
                  on, and the published pom stays as it is (a dependency-reduced pom would bake in the build machine's
-                 platform profiles). The platform natives are in the natives-* jars (see the release profiles). -->
+                 platform profiles). The platform natives are in the rengl-natives-<platform> artifacts (see rengl-natives). -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven-shade-plugin.version}</version>
                 <executions>
                     <execution>
                         <id>bundle-skiko</id>
@@ -80,18 +81,6 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                        </configuration>
-                    </execution>
-                    <!-- Release only: the natives this module owns, per platform (parent pom, natives-bundle-* profiles). -->
-                    <execution>
-                        <id>natives-bundle</id>
-                        <configuration>
-                            <artifactSet>
-                                <includes>
-                                    <include>org.lwjgl:*:*:${lwjgl.natives}</include>
-                                    <include>org.jetbrains.skiko:${skiko.runtime.artifact}</include>
-                                </includes>
-                            </artifactSet>
                         </configuration>
                     </execution>
                 </executions>
@@ -123,12 +112,12 @@
             <!-- Optional: it is shaded into the RenGL jar (bundle-skiko below), so consumers must not resolve it. -->
             <optional>true</optional>
         </dependency>
-        <!-- The Skiko native library for the platform being built. Optional so consumers never resolve it; a release build makes it normal so the natives bundle can include it. -->
+        <!-- The Skiko native library for the platform being built, for running the demos and tests from the repository. Optional so consumers never resolve it: they get it from the rengl-natives-<platform> artifact (see rengl-natives). -->
         <dependency>
             <groupId>org.jetbrains.skiko</groupId>
             <artifactId>${skiko.runtime.artifact}</artifactId>
             <version>${skiko.version}</version>
-            <optional>${skiko.runtime.optional}</optional>
+            <optional>true</optional>
         </dependency>
         <!-- What skiko-awt needs at runtime. Optional dependencies bring no transitive ones, so they are declared here. -->
         <dependency>
@@ -194,290 +183,4 @@
             <classifier>${lwjgl.natives}</classifier>
         </dependency>
     </dependencies>
-
-
-    <profiles>
-        <!-- All six platforms in one build (-Pnatives-bundle-all): every platform's natives, one natives-<platform> jar each. -->
-        <profile>
-            <id>natives-bundle-all</id>
-            <activation>
-                <property>
-                    <name>natives.platform</name>
-                    <value>all</value>
-                </property>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-dependency-plugin</artifactId>
-                        <version>3.8.1</version>
-                        <executions>
-                            <execution>
-                                <id>unpack-natives</id>
-                                <phase>prepare-package</phase>
-                                <goals><goal>unpack</goal></goals>
-                                <configuration>
-                                    <excludes>META-INF/*.SF,META-INF/*.DSA,META-INF/*.RSA,META-INF/MANIFEST.MF,META-INF/INDEX.LIST,META-INF/versions/**,module-info.class</excludes>
-                                    <artifactItems>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-glfw</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-glfw</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-glfw</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-glfw</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-glfw</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-glfw</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-nfd</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-nfd</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-nfd</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-nfd</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-nfd</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-nfd</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-opengl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-opengl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-opengl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-opengl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-opengl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-opengl</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-stb</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-stb</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-linux-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-stb</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-stb</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-macos-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-stb</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.lwjgl</groupId>
-                                    <artifactId>lwjgl-stb</artifactId>
-                                    <version>${lwjgl.version}</version>
-                                    <classifier>natives-windows-arm64</classifier>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.jetbrains.skiko</groupId>
-                                    <artifactId>skiko-awt-runtime-linux-x64</artifactId>
-                                    <version>${skiko.version}</version>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.jetbrains.skiko</groupId>
-                                    <artifactId>skiko-awt-runtime-linux-arm64</artifactId>
-                                    <version>${skiko.version}</version>
-                                    <outputDirectory>${project.build.directory}/natives/natives-linux-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.jetbrains.skiko</groupId>
-                                    <artifactId>skiko-awt-runtime-macos-x64</artifactId>
-                                    <version>${skiko.version}</version>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.jetbrains.skiko</groupId>
-                                    <artifactId>skiko-awt-runtime-macos-arm64</artifactId>
-                                    <version>${skiko.version}</version>
-                                    <outputDirectory>${project.build.directory}/natives/natives-macos-arm64</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.jetbrains.skiko</groupId>
-                                    <artifactId>skiko-awt-runtime-windows-x64</artifactId>
-                                    <version>${skiko.version}</version>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows</outputDirectory>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.jetbrains.skiko</groupId>
-                                    <artifactId>skiko-awt-runtime-windows-arm64</artifactId>
-                                    <version>${skiko.version}</version>
-                                    <outputDirectory>${project.build.directory}/natives/natives-windows-arm64</outputDirectory>
-                                </artifactItem>
-                                    </artifactItems>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <!-- The native libraries' license texts go into every natives jar (parent pom, natives-licenses). Must stay after the unpack execution. -->
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-antrun-plugin</artifactId>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>

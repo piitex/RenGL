@@ -21,8 +21,8 @@ RenGL is a set of Maven modules. Start with `rengl-core` and add the others when
 </dependency>
 ```
 
-That is the Java side. The native libraries (LWJGL's and Skiko's) are separate jars per platform, so a project also
-needs the natives of the platform it runs on. [Setting up a Maven project](#setting-up-a-maven-project) shows how.
+That is the Java side. The native libraries (LWJGL's and Skiko's) are a separate artifact per platform,
+`rengl-natives-<platform>`, so a project also needs the one for the platform it runs on. [Setting up a Maven project](#setting-up-a-maven-project) shows how.
 
 ## Setting up a Maven project
 
@@ -37,27 +37,24 @@ Once, in the folder you cloned RenGL into (`mvnw.cmd` on Windows):
 ./mvnw install -DskipTests
 ```
 
-This installs every module into `~/.m2`, but not the natives jars. Those are built separately, one platform per
-command. Each command repackages the published LWJGL and Skiko natives of one platform, so it needs the internet but no
-other operating system. Run it for the platform you are on, and for any other platform you build or package for:
+This installs every module into `~/.m2`. The native libraries of the six platforms come as separate artifacts,
+`rengl-natives-<platform>`, which are not part of that command. Install them with:
 
 ```bash
-./mvnw -q -pl rengl-all -DskipTests -Dmaven.javadoc.skip=true -DskipAutoNatives -Dnatives.platform=linux-amd64 install
+./mvnw -q -f rengl-natives/pom.xml -DskipTests -Dmaven.javadoc.skip=true install
 ```
 
-The platforms are `windows-amd64`, `windows-aarch64`, `linux-amd64`, `linux-aarch64`, `macos-x86_64` and
-`macos-aarch64`. On Windows, `rengl-packager\install-natives.ps1` runs five of them for you (everything except
-`windows-aarch64`). Repeat all of it when you update the engine.
-
-`-pl rengl-all` makes the natives jar of the `RenGL` artifact, which holds the natives of every module. If you depend
-on individual modules instead (see [Taking only some modules](#taking-only-some-modules)), leave `-pl rengl-all` out so
-that each module that has natives gets its own jar.
+Each one holds the Skiko runtime of its platform and depends on LWJGL's natives for it, which Maven downloads from
+Maven Central, so this needs the internet but no other operating system. The platforms are `windows`, `windows-arm64`,
+`linux`, `linux-arm64`, `macos` and `macos-arm64`. On Windows, `rengl-packager\install-natives.ps1` runs the same
+command for you. (`./mvnw install -DskipTests -Dnatives.platform=all` installs the engine and the natives artifacts in one
+go.) Repeat all of it when you update the engine.
 
 ### 2. Write the pom
 
-A project depends on the engine twice: the engine jars, and the same artifact again with a `natives-<platform>`
-classifier, which holds only the native libraries. The classifier comes from a property that one profile per platform
-sets, so the same `pom.xml` builds on Windows, Linux and macOS:
+A project depends on the engine twice: the engine jars, and the `rengl-natives-<platform>` artifact, which brings the
+native libraries. The platform comes from a property that one profile per platform sets, so the same `pom.xml` builds
+on Windows, Linux and macOS:
 
 ```xml
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -87,9 +84,8 @@ sets, so the same `pom.xml` builds on Windows, Linux and macOS:
         <!-- The native libraries (LWJGL and Skiko) of the platform the profiles below pick. -->
         <dependency>
             <groupId>io.github.piitex</groupId>
-            <artifactId>RenGL</artifactId>
+            <artifactId>rengl-natives-${rengl.natives}</artifactId>
             <version>${rengl.version}</version>
-            <classifier>${rengl.natives}</classifier>
         </dependency>
     </dependencies>
 
@@ -97,28 +93,28 @@ sets, so the same `pom.xml` builds on Windows, Linux and macOS:
         <profile>
             <id>rengl-windows-x64</id>
             <activation><os><family>windows</family><arch>amd64</arch></os></activation>
-            <properties><rengl.natives>natives-windows</rengl.natives></properties>
+            <properties><rengl.natives>windows</rengl.natives></properties>
         </profile>
         <profile>
             <id>rengl-windows-arm64</id>
             <activation><os><family>windows</family><arch>aarch64</arch></os></activation>
-            <properties><rengl.natives>natives-windows-arm64</rengl.natives></properties>
+            <properties><rengl.natives>windows-arm64</rengl.natives></properties>
         </profile>
         <profile>
             <id>rengl-linux-x64</id>
             <activation><os><family>unix</family><name>linux</name><arch>amd64</arch></os></activation>
-            <properties><rengl.natives>natives-linux</rengl.natives></properties>
+            <properties><rengl.natives>linux</rengl.natives></properties>
         </profile>
         <profile>
             <id>rengl-linux-arm64</id>
             <activation><os><family>unix</family><name>linux</name><arch>aarch64</arch></os></activation>
-            <properties><rengl.natives>natives-linux-arm64</rengl.natives></properties>
+            <properties><rengl.natives>linux-arm64</rengl.natives></properties>
         </profile>
         <profile>
             <id>rengl-macos-x64</id>
             <activation><os><family>mac</family><arch>x86_64</arch></os></activation>
             <properties>
-                <rengl.natives>natives-macos</rengl.natives>
+                <rengl.natives>macos</rengl.natives>
                 <rengl.jvmargs>-XstartOnFirstThread --enable-native-access=ALL-UNNAMED</rengl.jvmargs>
             </properties>
         </profile>
@@ -126,7 +122,7 @@ sets, so the same `pom.xml` builds on Windows, Linux and macOS:
             <id>rengl-macos-arm64</id>
             <activation><os><family>mac</family><arch>aarch64</arch></os></activation>
             <properties>
-                <rengl.natives>natives-macos-arm64</rengl.natives>
+                <rengl.natives>macos-arm64</rengl.natives>
                 <rengl.jvmargs>-XstartOnFirstThread --enable-native-access=ALL-UNNAMED</rengl.jvmargs>
             </properties>
         </profile>
@@ -156,28 +152,30 @@ sets, so the same `pom.xml` builds on Windows, Linux and macOS:
 
 Maven picks the profile that matches the computer it runs on:
 
-| Computer | Profile | Natives classifier |
-|---|---|---|
-| Windows, x86-64 | `rengl-windows-x64` | `natives-windows` |
-| Windows, arm64 | `rengl-windows-arm64` | `natives-windows-arm64` |
-| Linux, x86-64 | `rengl-linux-x64` | `natives-linux` |
-| Linux, arm64 | `rengl-linux-arm64` | `natives-linux-arm64` |
-| macOS, Intel | `rengl-macos-x64` | `natives-macos` |
-| macOS, Apple silicon | `rengl-macos-arm64` | `natives-macos-arm64` |
+| Computer | Profile | `rengl.natives` | Artifact |
+|---|---|---|---|
+| Windows, x86-64 | `rengl-windows-x64` | `windows` | `rengl-natives-windows` |
+| Windows, arm64 | `rengl-windows-arm64` | `windows-arm64` | `rengl-natives-windows-arm64` |
+| Linux, x86-64 | `rengl-linux-x64` | `linux` | `rengl-natives-linux` |
+| Linux, arm64 | `rengl-linux-arm64` | `linux-arm64` | `rengl-natives-linux-arm64` |
+| macOS, Intel | `rengl-macos-x64` | `macos` | `rengl-natives-macos` |
+| macOS, Apple silicon | `rengl-macos-arm64` | `macos-arm64` | `rengl-natives-macos-arm64` |
 
-The names are LWJGL's, so `natives-macos` is the Intel Mac, and `natives-linux` and `natives-windows` are x86-64. The
-Skiko runtime is inside the natives jar, so a program cannot start without it, even on its own platform.
+The names are LWJGL's, so `macos` is the Intel Mac, and `linux` and `windows` are x86-64. The Skiko runtime is inside the
+natives artifact's jar, so a program cannot start without it, even on its own platform. The artifact's pom pulls in the
+LWJGL natives the engine's modules use (GLFW, OpenGL, stb, OpenAL, Opus, assimp, shaderc and the rest), whichever modules
+you take.
 
-To build for a platform other than the one you are on, name the classifier yourself instead of letting a profile pick
-it: `mvn -Drengl.natives=natives-linux package`. That platform's jar has to be in your local repository (step 1).
+To build for a platform other than the one you are on, name it yourself instead of letting a profile pick it:
+`mvn -Drengl.natives=linux package`. That platform's artifact has to be in your local repository (step 1).
 
 Run `mvn help:active-profiles` to see which profile Maven picked. If the build says it cannot find
-`RenGL:jar:natives-...`, that platform's natives jar was not installed.
+`rengl-natives-...`, that platform's natives artifact was not installed.
 
 ### Taking only some modules
 
-A project that depends on individual modules adds the classifier to each module that owns natives. Import the
-[BOM](modules.md#using-them) so the versions agree:
+A project that depends on individual modules adds the same single natives artifact; it does not depend on which modules
+you take. Import the [BOM](modules.md#using-them) so the versions agree:
 
 ```xml
 <dependencyManagement>
@@ -199,25 +197,17 @@ A project that depends on individual modules adds the classifier to each module 
     </dependency>
     <dependency>
         <groupId>io.github.piitex</groupId>
-        <artifactId>rengl-core</artifactId>
-        <classifier>${rengl.natives}</classifier>
-    </dependency>
-    <dependency>
-        <groupId>io.github.piitex</groupId>
         <artifactId>rengl-audio</artifactId>
     </dependency>
     <dependency>
         <groupId>io.github.piitex</groupId>
-        <artifactId>rengl-audio</artifactId>
-        <classifier>${rengl.natives}</classifier>
+        <artifactId>rengl-natives-${rengl.natives}</artifactId>
     </dependency>
 </dependencies>
 ```
 
-`rengl-core`, `rengl-audio`, `rengl-3d` and `rengl-tilemap` have a natives jar on every platform. `rengl-vulkan` has one
-for macOS only (MoltenVK), so on Windows and Linux there is no `natives-windows` jar to ask for. The other modules have
-no natives. [Modules](modules.md#native-libraries) has the list. The natives jar of `RenGL` holds the natives of all
-of them, which is why the pom above needs only one.
+`rengl-vulkan` needs nothing extra on Windows and Linux (they use the system's Vulkan driver); on macOS the natives
+artifact carries MoltenVK. [Modules](modules.md#native-libraries) has the list of what each module needs.
 
 ## Building the engine from source
 
@@ -230,12 +220,11 @@ mvn compile
 The native libraries (LWJGL and Skiko) are picked automatically by OS and architecture through Maven
 profiles (`lwjgl-natives-<os>-<arch>`). Supported: Linux, macOS and Windows, each on x86-64 and arm64.
 
-To publish jars that other apps can depend on, the `natives.platform` property builds one small "natives" jar per
-platform for every module that has natives. `-Dnatives.platform=all` (or the `natives-bundle-all` profile) builds all six in
-one run; a single platform takes one invocation:
+To publish, `-Dnatives.platform=all` (or the `natives-bundle-all` profile) also builds the `rengl-natives-<platform>`
+artifacts, six small jars that need the Skiko runtime of every platform:
 
 ```bash
-mvn -DskipAutoNatives -Dnatives.platform=macos-aarch64 package
+./mvnw -DskipTests -Dnatives.platform=all package
 ```
 
 ## Running

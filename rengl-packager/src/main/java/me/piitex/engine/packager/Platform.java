@@ -16,6 +16,8 @@ public enum Platform {
 
     /** LWJGL and RenGL name their natives jars {@code natives-windows}, {@code natives-linux-arm64}, ... */
     private static final Pattern NATIVES_JAR = Pattern.compile("natives-([a-z0-9]+)(-[a-z0-9]+)?\\.jar$");
+    /** RenGL's own natives artifacts: {@code rengl-natives-windows-0.1.0.jar}, {@code rengl-natives-linux-arm64-0.1.0.jar}, ... */
+    private static final Pattern RENGL_NATIVES_JAR = Pattern.compile("^rengl-natives-(windows|linux|macos)(-arm64)?-\\d");
     /** Skiko names its runtime jars {@code skiko-awt-runtime-windows-x64-<version>.jar}. */
     private static final Pattern SKIKO_JAR = Pattern.compile("-runtime-(windows|linux|macos)-(x64|arm64)-");
 
@@ -95,6 +97,9 @@ public enum Platform {
         String name = jarName.toLowerCase(Locale.ROOT);
         Matcher skiko = SKIKO_JAR.matcher(name);
         if (skiko.find()) return only(skiko.group(1), skiko.group(2));
+
+        Matcher renglNatives = RENGL_NATIVES_JAR.matcher(name);
+        if (renglNatives.find()) return only(renglNatives.group(1), renglNatives.group(2) == null ? "x64" : "arm64");
 
         Matcher natives = NATIVES_JAR.matcher(name);
         if (natives.find()) {
