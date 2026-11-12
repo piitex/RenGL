@@ -34,6 +34,21 @@ class WindowsSpeakerTest {
     }
 
     @Test
+    void warmingUpStartsTheHelperBeforeAnythingIsSaid() throws Exception {
+        assumeTrue(System.getProperty("os.name", "").toLowerCase().contains("win"));
+        WindowsSpeaker speaker = new WindowsSpeaker(true);
+        try {
+            speaker.warmUp();
+            String ready = speaker.replies().poll(30, TimeUnit.SECONDS);
+            assumeTrue(ready != null && ready.startsWith("ready"), "the speech synthesizer did not start: " + ready);
+            speaker.speak("First word", true); // the helper is already up: this only has to be answered
+            assertEquals("ok", speaker.replies().poll(10, TimeUnit.SECONDS));
+        } finally {
+            speaker.close();
+        }
+    }
+
+    @Test
     void speakingAfterCloseDoesNothing() {
         WindowsSpeaker speaker = new WindowsSpeaker(true);
         speaker.close();

@@ -65,6 +65,26 @@ public final class WindowsSpeaker implements Speaker {
         send((interrupt ? "I" : "Q") + oneLine(text));
     }
 
+    /**
+     * Starts the PowerShell helper now, on another thread, so loading the voice (a second or more, longer when a virus
+     * scanner looks at powershell.exe) is over by the time the first word is wanted.
+     */
+    @Override
+    public void warmUp() {
+        Thread starter = new Thread(() -> {
+            synchronized (this) {
+                if (process != null || failed || closed) return;
+                try {
+                    start();
+                } catch (IOException e) {
+                    fail(e);
+                }
+            }
+        }, "RenGL speech start-up");
+        starter.setDaemon(true);
+        starter.start();
+    }
+
     @Override
     public synchronized void stop() {
         if (process != null) send("X");

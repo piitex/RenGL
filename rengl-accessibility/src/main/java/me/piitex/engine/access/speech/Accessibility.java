@@ -46,8 +46,10 @@ public final class Accessibility {
         if (UiaHost.isSupported()) {
             speech.muteWhile(UiaHost::screenReaderRunning);
             window.setAccessibilityHost(new HostGroup(speech, new UiaHost(window)));
+            if (!UiaHost.screenReaderRunning()) speaker.warmUp(); // a screen reader means this voice stays quiet
         } else {
             window.setAccessibilityHost(speech);
+            speaker.warmUp();
         }
         return speech;
     }

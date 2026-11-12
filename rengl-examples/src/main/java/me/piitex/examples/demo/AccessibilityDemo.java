@@ -39,7 +39,7 @@ public class AccessibilityDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
-        Window window = new Window(new WindowOptions("Accessibility Demo").setDimensions(640, 480));
+        Window window = new Window(new WindowOptions("Accessibility Demo").setDimensions(640, 480).setSplashEnabled(false));
 
         Container root = new Container(640, 480);
         window.addContainer(root);

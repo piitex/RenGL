@@ -15,6 +15,13 @@ public interface Speaker extends AutoCloseable {
     void speak(String text, boolean interrupt);
 
     /**
+     * Gets ready to speak without saying anything, so the first word is not held up by start-up work. Returns at once;
+     * the default does nothing, for a speaker with nothing to start.
+     */
+    default void warmUp() {
+    }
+
+    /**
      * Stops what is being said and drops anything waiting.
      */
     void stop();
