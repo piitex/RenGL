@@ -37,7 +37,40 @@ public final class TextShaping {
         }
     };
 
+    private static final ThreadLocal<Boolean> FORCED = ThreadLocal.withInitial(() -> false);
+
     private TextShaping() {
+    }
+
+    /**
+     * Makes every measure and draw on this thread go through the shaper until the returned scope is closed, even for
+     * Latin-only text.
+     * <p>
+     * Shaped text is a little narrower than the same text measured and drawn plainly, because the shaper uses
+     * unrounded advances. A line that needs shaping is measured whole, so anything that then draws pieces of that line
+     * has to shape the pieces too, or the pieces add up wider than the line was measured to be. Use it as
+     * {@code try (var scope = TextShaping.shapeAll()) { ... }}.
+     */
+    public static Scope shapeAll() {
+        boolean previous = FORCED.get();
+        FORCED.set(true);
+        return new Scope(previous);
+    }
+
+    /**
+     * What {@link #shapeAll()} returns. Closing it puts the previous mode back, so scopes can nest.
+     */
+    public static final class Scope implements AutoCloseable {
+        private final boolean previous;
+
+        private Scope(boolean previous) {
+            this.previous = previous;
+        }
+
+        @Override
+        public void close() {
+            FORCED.set(previous);
+        }
     }
 
     /**
@@ -46,6 +79,7 @@ public final class TextShaping {
      */
     public static boolean needsShaping(CharSequence text) {
         if (text == null) return false;
+        if (FORCED.get()) return true;
         for (int i = 0; i < text.length(); i++) {
             if (text.charAt(i) >= 0x0300) return true;
         }
