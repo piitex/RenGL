@@ -11,6 +11,8 @@ import me.piitex.engine.ui.containers.ListBox;
 import me.piitex.engine.ui.containers.TabContainer;
 import me.piitex.engine.ui.containers.TableView;
 import me.piitex.engine.ui.containers.TreeView;
+import me.piitex.engine.ui.color.Color;
+import me.piitex.engine.ui.overlays.ColorPickerOverlay;
 import me.piitex.engine.ui.overlays.GaugeOverlay;
 import me.piitex.engine.ui.overlays.KnobOverlay;
 import me.piitex.engine.ui.overlays.RangeSliderOverlay;
@@ -29,6 +31,7 @@ import java.util.List;
  *   <li><b>List, tree, table.</b> Up and Down move the row; Right and Left open and close tree items.</li>
  *   <li><b>Tabs.</b> Left and Right change tab.</li>
  *   <li><b>Accordion.</b> Up and Down move between sections, Enter opens or closes one.</li>
+ *   <li><b>Colour picker.</b> Left and right change the colour, Up and Down pick hue, saturation, brightness or opacity, Page Up and Down pick a preset, Enter opens the panel with the cursor in the hex field and Escape closes it.</li>
  *   <li><b>Gauge.</b> Read as a meter; it moves by itself so a screen reader can be heard following it.</li>
  * </ul>
  * Each change is also written to the console.
@@ -69,6 +72,13 @@ public class AccessibilityControlsDemo {
         heat.setPosition(30, 285);
         heat.setLabelledBy(gaugeLabel);
         root.addElement(heat);
+
+        TextOverlay colorLabel = label(root, "Accent colour", 30, 395);
+        ColorPickerOverlay accent = new ColorPickerOverlay(140, 32, Color.BLUE);
+        accent.setPosition(30, 420);
+        accent.setLabelledBy(colorLabel);
+        accent.onChange(c -> System.out.println("[demo] Accent colour " + accent.getAccessibleValue()));
+        root.addElement(accent);
 
         // Middle column: list, tree, table
         TextOverlay listLabel = label(root, "Inventory", 330, 60);

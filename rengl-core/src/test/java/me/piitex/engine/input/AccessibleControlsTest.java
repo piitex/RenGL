@@ -13,6 +13,7 @@ import me.piitex.engine.ui.containers.ListBox;
 import me.piitex.engine.ui.containers.TabContainer;
 import me.piitex.engine.ui.containers.TableView;
 import me.piitex.engine.ui.containers.TreeView;
+import me.piitex.engine.ui.overlays.ColorPickerOverlay;
 import me.piitex.engine.ui.overlays.GaugeOverlay;
 import me.piitex.engine.ui.overlays.KnobOverlay;
 import me.piitex.engine.ui.overlays.RangeSliderOverlay;
@@ -65,9 +66,13 @@ class AccessibleControlsTest {
     }
 
     private void key(int key) {
-        window.getInputManager().onKey(0, key, 0, GLFW.GLFW_PRESS, 0);
+        key(key, 0);
+    }
+
+    private void key(int key, int mods) {
+        window.getInputManager().onKey(0, key, 0, GLFW.GLFW_PRESS, mods);
         processor.processEvents(window);
-        window.getInputManager().onKey(0, key, 0, GLFW.GLFW_RELEASE, 0);
+        window.getInputManager().onKey(0, key, 0, GLFW.GLFW_RELEASE, mods);
         processor.processEvents(window);
     }
 
@@ -167,6 +172,48 @@ class AccessibleControlsTest {
         gauge.setValue(42);
         assertEquals(AccessibleRole.PROGRESS_BAR, gauge.getAccessibleRole());
         assertEquals("42", gauge.getAccessibleValue());
+    }
+
+    @Test
+    void aColorPickerIsChangedChannelByChannelAndSaysTheColorsName() {
+        ColorPickerOverlay picker = put(new ColorPickerOverlay(120, 30, me.piitex.engine.ui.color.Color.BLUE), 10, 10);
+        window.requestFocus(picker);
+        assertFalse(picker.grabsKeyboard(), "a game keeps its keys when the picker was only clicked");
+        assertEquals("#0000FF, blue", picker.getAccessibleValue());
+        assertNotNull(picker.getAccessibleDescription());
+        key(GLFW.GLFW_KEY_LEFT); // hue 240 -> 230
+        key(GLFW.GLFW_KEY_DOWN); // to saturation
+        key(GLFW.GLFW_KEY_LEFT, GLFW.GLFW_MOD_SHIFT); // 100% -> 80%
+        key(GLFW.GLFW_KEY_HOME); // no colour left: white
+        key(GLFW.GLFW_KEY_HOME); // already there: nothing to say
+        assertEquals(4, heard.size(), heard.toString());
+        assertTrue(heard.get(0).startsWith("BUTTON #00") && heard.get(0).endsWith(", blue"), heard.get(0));
+        assertEquals("announce Saturation, 100 percent", heard.get(1));
+        assertTrue(heard.get(2).endsWith(", blue") || heard.get(2).endsWith(", pale blue"), heard.get(2));
+        assertEquals("BUTTON #FFFFFF, white", heard.get(3));
+    }
+
+    @Test
+    void aColorPickerStepsThroughItsPresets() {
+        ColorPickerOverlay picker = put(new ColorPickerOverlay(120, 30), 10, 10);
+        window.requestFocus(picker);
+        key(GLFW.GLFW_KEY_PAGE_DOWN);
+        key(GLFW.GLFW_KEY_PAGE_DOWN);
+        key(GLFW.GLFW_KEY_PAGE_UP);
+        assertEquals(List.of("BUTTON #E53935, red", "BUTTON #FB8C00, orange", "BUTTON #E53935, red"), heard);
+    }
+
+    @Test
+    void aColorPickersPanelTakesTheKeyboardForTheHexCodeAndGivesItBack() {
+        ColorPickerOverlay picker = put(new ColorPickerOverlay(120, 30), 10, 10);
+        window.requestFocus(picker);
+        key(GLFW.GLFW_KEY_ENTER);
+        assertTrue(picker.isOpen(), "Enter opens the panel");
+        assertNotSame(picker, window.getFocusedElement(), "the cursor is in the hex field");
+        assertNotNull(window.getFocusedElement());
+        key(GLFW.GLFW_KEY_ESCAPE);
+        assertFalse(picker.isOpen(), "Escape closes it");
+        assertSame(picker, window.getFocusedElement(), "and the picker has the keyboard again");
     }
 
     private static AccessibleNode find(List<AccessibleNode> nodes, AccessibleRole role) {

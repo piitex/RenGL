@@ -119,7 +119,39 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
      */
     @Override
     public String getAccessibleValue() {
-        return getHex();
+        return getHex() + ", " + colorName();
+    }
+
+    /**
+     * How to use the picker without seeing it, read once after the name and role unless a description was set.
+     */
+    @Override
+    public String getAccessibleDescription() {
+        String description = super.getAccessibleDescription();
+        if (description != null) return description;
+        return "Left and right change the colour. Up and down choose hue, saturation, brightness or opacity. "
+                + "Page up and page down choose a preset. Enter opens a panel to type a hex code.";
+    }
+
+    /**
+     * A rough name for the color, such as "dark green" or "pale blue", for someone who cannot see the swatch.
+     */
+    String colorName() {
+        String name;
+        if (alphaEnabled && alpha < 0.05f) return "transparent";
+        if (val < 0.15f) {
+            name = "black";
+        } else if (sat < 0.12f) {
+            name = val > 0.9f ? "white" : val > 0.6f ? "light grey" : val > 0.3f ? "grey" : "dark grey";
+        } else {
+            float h = ((hue % 360f) + 360f) % 360f;
+            String base = h < 15f ? "red" : h < 45f ? "orange" : h < 70f ? "yellow" : h < 160f ? "green"
+                    : h < 200f ? "cyan" : h < 255f ? "blue" : h < 290f ? "purple" : h < 335f ? "pink" : "red";
+            String shade = val < 0.5f ? "dark " : sat < 0.4f && val > 0.8f ? "pale " : "";
+            name = shade + base;
+        }
+        if (alphaEnabled && alpha < 0.999f) name += ", " + Math.round(alpha * 100f) + " percent opaque";
+        return name;
     }
 
     /**
@@ -197,7 +229,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         p.setPosition(at[0], at[1]);
         popup = p;
         host.showPopup(p, this, () -> {
-            if (host.getFocusedElement() == p.hexField) host.requestFocus(null); // it is about to be disposed
+            if (host.getFocusedElement() == p.hexField) host.requestFocus(ColorPickerOverlay.this); // it is about to be disposed
             p.dispose();
             if (popup == p) popup = null;
         });
@@ -412,8 +444,142 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
 
     @Override
     public void onKeyPressed(int key, int action, int mods) {
-        if (action != GLFW.GLFW_PRESS) return;
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER || key == GLFW.GLFW_KEY_SPACE) toggleOpen();
+        if (action == GLFW.GLFW_RELEASE) return;
+        boolean press = action == GLFW.GLFW_PRESS;
+        switch (key) {
+            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+                if (!press) return;
+                if (isOpen()) close();
+                else openByKeyboard();
+            }
+            case GLFW.GLFW_KEY_LEFT -> adjust(-1, mods);
+            case GLFW.GLFW_KEY_RIGHT -> adjust(1, mods);
+            case GLFW.GLFW_KEY_HOME -> setChannel(0f);
+            case GLFW.GLFW_KEY_END -> setChannel(1f);
+            case GLFW.GLFW_KEY_UP -> {
+                if (press) moveChannel(-1);
+            }
+            case GLFW.GLFW_KEY_DOWN -> {
+                if (press) moveChannel(1);
+            }
+            case GLFW.GLFW_KEY_PAGE_UP -> {
+                if (press) stepPreset(-1);
+            }
+            case GLFW.GLFW_KEY_PAGE_DOWN -> {
+                if (press) stepPreset(1);
+            }
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * Like a slider, a Tab stop that leaves the other keys to the game on a click.
+     */
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        return switch (key) {
+            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_HOME,
+                 GLFW.GLFW_KEY_END, GLFW.GLFW_KEY_PAGE_UP, GLFW.GLFW_KEY_PAGE_DOWN, GLFW.GLFW_KEY_ENTER,
+                 GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> true;
+            default -> false;
+        };
+    }
+
+    /* Keyboard adjustment: one channel at a time, like the thumbs of a range slider. */
+
+    private enum Channel {
+        HUE("Hue"), SATURATION("Saturation"), BRIGHTNESS("Brightness"), OPACITY("Opacity");
+
+        final String label;
+
+        Channel(String label) {
+            this.label = label;
+        }
+    }
+
+    private Channel channel = Channel.HUE;
+    private int presetIndex = -1;
+
+    private Channel[] channels() {
+        return alphaEnabled ? Channel.values() : new Channel[]{Channel.HUE, Channel.SATURATION, Channel.BRIGHTNESS};
+    }
+
+    private float channelFraction() {
+        return switch (channel) {
+            case HUE -> hue / 360f;
+            case SATURATION -> sat;
+            case BRIGHTNESS -> val;
+            case OPACITY -> alpha;
+        };
+    }
+
+    private String channelText() {
+        int amount = Math.round(channelFraction() * (channel == Channel.HUE ? 360f : 100f));
+        return channel.label + ", " + amount + (channel == Channel.HUE ? " degrees" : " percent");
+    }
+
+    private void moveChannel(int direction) {
+        Channel[] all = channels();
+        int at = 0;
+        for (int i = 0; i < all.length; i++) if (all[i] == channel) at = i;
+        channel = all[(at + direction + all.length) % all.length];
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.announce(channelText());
+    }
+
+    private void adjust(int direction, int mods) {
+        boolean big = (mods & GLFW.GLFW_MOD_SHIFT) != 0;
+        float unit = channel == Channel.HUE ? (big ? 30f : 10f) / 360f : (big ? 0.2f : 0.05f);
+        setChannel(channelFraction() + direction * unit);
+    }
+
+    /**
+     * Moves the chosen channel to {@code fraction} (0..1) and, if that changed the color, tells the listener and the
+     * screen reader.
+     */
+    private void setChannel(float fraction) {
+        float before = channelFraction();
+        float f = Math.max(0f, Math.min(1f, fraction));
+        switch (channel) {
+            case HUE -> hue = f * 360f;
+            case SATURATION -> sat = f;
+            case BRIGHTNESS -> val = f;
+            case OPACITY -> alpha = f;
+        }
+        presetIndex = -1;
+        if (f == before) return;
+        afterKeyboardChange();
+    }
+
+    private void stepPreset(int direction) {
+        if (presets.length == 0) return;
+        presetIndex = presetIndex < 0 ? (direction > 0 ? 0 : presets.length - 1)
+                : (presetIndex + direction + presets.length) % presets.length;
+        int chosen = presetIndex;
+        setFromColor(presets[chosen]);
+        presetIndex = chosen;
+        afterKeyboardChange();
+    }
+
+    private void afterKeyboardChange() {
+        if (popup != null) popup.syncHex();
+        changedByUser();
+        notifyAccessibleChange();
+    }
+
+    /**
+     * Opens the panel with the cursor in its hex field, so a keyboard user can type a code and press Escape to leave.
+     */
+    private void openByKeyboard() {
+        open();
+        PopupHost host = getPopupHost();
+        if (popup != null && host != null) host.requestFocus(popup.hexField);
     }
 
     /**
