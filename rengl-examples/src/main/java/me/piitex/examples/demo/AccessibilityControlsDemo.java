@@ -32,7 +32,7 @@ import java.util.List;
  *   <li><b>Tabs.</b> Left and Right change tab.</li>
  *   <li><b>Accordion.</b> Up and Down move between sections, Enter opens or closes one.</li>
  *   <li><b>Colour picker.</b> Left and right change the colour, Up and Down pick hue, saturation, brightness or opacity, Page Up and Down pick a preset, Enter opens the panel with the cursor in the hex field and Escape closes it.</li>
- *   <li><b>Gauge.</b> Read as a meter; it moves by itself so a screen reader can be heard following it.</li>
+ *   <li><b>Gauge.</b> A Tab stop read as a meter. It moves by itself, and once you Tab onto it each new reading is spoken until you Tab away.</li>
  * </ul>
  * Each change is also written to the console.
  */

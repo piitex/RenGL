@@ -172,6 +172,20 @@ class AccessibleControlsTest {
         gauge.setValue(42);
         assertEquals(AccessibleRole.PROGRESS_BAR, gauge.getAccessibleRole());
         assertEquals("42", gauge.getAccessibleValue());
+        assertEquals(List.of(), heard, "nobody is listening to it yet, so a change says nothing");
+    }
+
+    @Test
+    void aGaugeIsATabStopThatKeepsTheListenerUpToDate() {
+        GaugeOverlay gauge = put(new GaugeOverlay(80, 0, 100), 10, 10);
+        key(GLFW.GLFW_KEY_TAB);
+        assertSame(gauge, window.getFocusedElement());
+        assertFalse(gauge.grabsKeyboard());
+        assertFalse(gauge.handlesKey(GLFW.GLFW_KEY_W, 0), "WASD still belongs to the game");
+        gauge.setValue(30);
+        gauge.setValue(30); // the same again: nothing new to say
+        gauge.setValue(40);
+        assertEquals(List.of("PROGRESS_BAR 30", "PROGRESS_BAR 40"), heard);
     }
 
     @Test

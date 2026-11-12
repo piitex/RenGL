@@ -39,7 +39,7 @@ import java.util.function.Function;
  * Colors come from the theme: the groove from {@link Theme#getScrollTrack()}, the arc and needle from {@link
  * Theme#getAccent()}, the text from {@link Theme#getText()}. A zone has its own color. It takes no input.
  */
-public class GaugeOverlay extends Overlay implements Themeable, FontScalable {
+public class GaugeOverlay extends Overlay implements Themeable, FontScalable, me.piitex.engine.ui.Focusable {
     public enum Style {
         /** The value is an arc along the rim, in the color of the zone it is in. */
         ARC,
@@ -93,6 +93,7 @@ public class GaugeOverlay extends Overlay implements Themeable, FontScalable {
         getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
         getStyling().applyThemeHoverColor(Color.TRANSPARENT);
         getStyling().applyThemeBorderThickness(0f);
+        setFocusTraversable(true); // a Tab stop, so a keyboard user can land on it and hear the reading
         ThemeManager.register(this);
     }
 
@@ -124,8 +125,11 @@ public class GaugeOverlay extends Overlay implements Themeable, FontScalable {
      * Sets the value, clamped to the range. The displayed value eases to it over {@link #setSmoothing the smoothing time}.
      */
     public void setValue(double value) {
+        double before = target;
         this.target = clamp(value);
         if (smoothing <= 0) shown = target;
+        // Only while it is the thing being listened to: a gauge that spoke every change would talk over everything else.
+        if (focused && target != before) notifyAccessibleChange();
     }
 
     /**
@@ -263,6 +267,38 @@ public class GaugeOverlay extends Overlay implements Themeable, FontScalable {
      */
     public void setLabelFormatter(Function<Double, String> labelFormatter) {
         this.labelFormatter = labelFormatter == null ? v -> String.valueOf(v) : labelFormatter;
+    }
+
+    // --- Keyboard focus: nothing to press, but Tab can land here and the reading is spoken, then kept up to date ---
+
+    private boolean focused;
+
+    @Override
+    public void onFocusGained() {
+        focused = true;
+    }
+
+    @Override
+    public void onFocusLost() {
+        focused = false;
+    }
+
+    @Override
+    public void onCharTyped(int codepoint) {
+    }
+
+    @Override
+    public void onKeyPressed(int key, int action, int mods) {
+    }
+
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        return false; // every key still reaches the game
     }
 
     // --- Accessibility ---
