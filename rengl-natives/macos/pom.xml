@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.piitex</groupId>
+        <artifactId>rengl-natives</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>rengl-natives-macos</artifactId>
+    <name>RenGL natives (macOS Intel)</name>
+    <description>The native libraries RenGL needs on macOS Intel: the Skiko runtime, and LWJGL's natives as dependencies.</description>
+
+    <properties>
+        <rengl.natives.classifier>natives-macos</rengl.natives.classifier>
+        <rengl.natives.skiko>skiko-awt-runtime-macos-x64</rengl.natives.skiko>
+    </properties>
+
+    <dependencies>
+        <!-- MoltenVK, the Vulkan layer that rengl-vulkan needs on macOS. LWJGL publishes natives for lwjgl-vulkan on macOS only. -->
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-vulkan</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

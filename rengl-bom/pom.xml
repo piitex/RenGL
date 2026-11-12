@@ -120,6 +120,36 @@
                 <artifactId>RenGL</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.github.piitex</groupId>
+                <artifactId>rengl-natives-windows</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.piitex</groupId>
+                <artifactId>rengl-natives-windows-arm64</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.piitex</groupId>
+                <artifactId>rengl-natives-linux</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.piitex</groupId>
+                <artifactId>rengl-natives-linux-arm64</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.piitex</groupId>
+                <artifactId>rengl-natives-macos</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.piitex</groupId>
+                <artifactId>rengl-natives-macos-arm64</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

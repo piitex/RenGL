@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.piitex</groupId>
+        <artifactId>rengl-parent</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <!--
+      The native libraries of one platform, as a dependency: rengl-natives-windows, rengl-natives-windows-arm64,
+      rengl-natives-linux, rengl-natives-linux-arm64, rengl-natives-macos and rengl-natives-macos-arm64 (LWJGL's names, so
+      "macos" is the Intel Mac and "linux" and "windows" are x86-64). An app adds the one for each platform it runs on.
+
+      What is in each artifact:
+        - its jar holds the Skiko runtime of the platform (the library and icudtl.dat), the one piece that is not on
+          Maven Central, so RenGL has to carry it;
+        - its pom depends on LWJGL's own natives for the platform, which LWJGL publishes on Maven Central. They used
+          to be copied into RenGL's own natives jars, which made the upload several times too large.
+
+      This module only builds with -Dnatives.platform=all (see the root pom), because it needs the Skiko runtime of all
+      six platforms. Each child sets rengl.natives.classifier (LWJGL's classifier) and rengl.natives.skiko (Skiko's artifact).
+    -->
+    <artifactId>rengl-natives</artifactId>
+    <packaging>pom</packaging>
+    <name>RenGL natives</name>
+    <description>Parent of the per-platform natives artifacts (rengl-natives-windows and so on).</description>
+
+    <modules>
+        <module>windows</module>
+        <module>windows-arm64</module>
+        <module>linux</module>
+        <module>linux-arm64</module>
+        <module>macos</module>
+        <module>macos-arm64</module>
+    </modules>
+
+    <properties>
+        <!-- Defaults so this pom resolves on its own; every child sets both. -->
+        <rengl.natives.classifier>natives-windows</rengl.natives.classifier>
+        <rengl.natives.skiko>skiko-awt-runtime-windows-x64</rengl.natives.skiko>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-glfw</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-nfd</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opengl</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-stb</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-openal</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opus</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-assimp</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-shaderc</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-spvc</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-vma</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-zstd</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <!-- A marker file, so the sources jar that Central asks for is not empty. -->
+            <resource>
+                <directory>${maven.multiModuleProjectDirectory}/rengl-natives/src/shared</directory>
+            </resource>
+            <!-- The licenses of what the jar carries: Skiko, Skia, ICU data. -->
+            <resource>
+                <directory>${maven.multiModuleProjectDirectory}/licenses/natives</directory>
+                <targetPath>META-INF/licenses/rengl</targetPath>
+                <includes>
+                    <include>Apache-2.0.txt</include>
+                    <include>Skia-BSD-3-Clause.txt</include>
+                    <include>Unicode-License-V3-ICU-data.txt</include>
+                </includes>
+            </resource>
+        </resources>
+        <pluginManagement>
+            <plugins>
+                <!-- Puts the Skiko runtime of the child's platform into the jar. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>3.8.1</version>
+                    <executions>
+                        <execution>
+                            <id>unpack-skiko</id>
+                            <phase>process-resources</phase>
+                            <goals><goal>unpack</goal></goals>
+                            <configuration>
+                                <excludes>META-INF/*.SF,META-INF/*.DSA,META-INF/*.RSA,META-INF/MANIFEST.MF,META-INF/INDEX.LIST,META-INF/versions/**,module-info.class</excludes>
+                                <artifactItems>
+                                    <artifactItem>
+                                        <groupId>org.jetbrains.skiko</groupId>
+                                        <artifactId>${rengl.natives.skiko}</artifactId>
+                                        <version>${skiko.version}</version>
+                                        <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                                    </artifactItem>
+                                </artifactItems>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.4.2</version>
+                    <configuration>
+                        <archive>
+                            <addMavenDescriptor>false</addMavenDescriptor>
+                        </archive>
+                    </configuration>
+                    <executions>
+                        <!-- No Java code, so the Javadoc plugin makes no jar, and Maven Central refuses an upload without one. -->
+                        <execution>
+                            <id>javadoc-placeholder</id>
+                            <phase>package</phase>
+                            <goals><goal>jar</goal></goals>
+                            <configuration>
+                                <classifier>javadoc</classifier>
+                                <classesDirectory>${maven.multiModuleProjectDirectory}/rengl-natives/src/javadoc</classesDirectory>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

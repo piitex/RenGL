@@ -1,0 +1,5 @@
+RenGL natives
+=============
+
+This jar carries the Skiko runtime (the native library and icudtl.dat) of one platform. Its pom depends on
+LWJGL's natives for the same platform. See https://github.com/piitex/RenGL/blob/main/docs/modules.md#native-libraries

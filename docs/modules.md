@@ -98,49 +98,47 @@ Some things the split changes at run time:
 
 ## Native libraries
 
-Native code is the biggest part of the weight, and each module brings only its own.
+Native code is the biggest part of the weight, and RenGL keeps it out of its own jars. It comes in two kinds:
+
+- **LWJGL's libraries** (GLFW, OpenGL, stb, OpenAL, Opus, assimp, shaderc, SPIRV-Cross, VMA, Zstandard, file dialogs,
+  MoltenVK on macOS) are published by LWJGL on Maven Central as `org.lwjgl:*:natives-<platform>`. RenGL does not copy
+  them.
+- **The Skiko runtime** (the library that draws the UI, plus its ICU data) is not on Maven Central, so RenGL carries it,
+  one jar per platform.
 
 **While developing**, the natives for the machine that builds are picked automatically (the `lwjgl-natives-<os>-<arch>`
 profiles in the parent pom), and the `rengl-core` Skiko runtime is `optional`: an app declares the one it needs, or uses
-the natives jar below.
+the natives artifact below.
 
-**For another platform**, each module that has natives publishes a small jar with the classifier `natives-<platform>`
-(`natives-windows`, `natives-linux`, `natives-macos`, `natives-macos-arm64`, ...) holding only those files. Depend on
-it for each module you use that has natives. `RenGL` has one too, holding the natives of every module:
+**For an app**, depend on `rengl-natives-<platform>` for each platform it runs on (`rengl-natives-windows`,
+`rengl-natives-windows-arm64`, `rengl-natives-linux`, `rengl-natives-linux-arm64`, `rengl-natives-macos`,
+`rengl-natives-macos-arm64`). Its jar holds the Skiko runtime, and its pom depends on LWJGL's natives for the platform:
 
 ```xml
 <dependency>
     <groupId>io.github.piitex</groupId>
-    <artifactId>RenGL</artifactId>
+    <artifactId>rengl-natives-windows</artifactId>
     <version>0.1.0</version>
-    <classifier>natives-windows</classifier>
 </dependency>
 ```
 
-`rengl-core`'s natives jar includes the Skiko runtime, so it is the one every program needs.
+It does not depend on which RenGL modules you use; a program that skips `rengl-3d` still receives assimp and shaderc for
+its platform, since they are LWJGL's jars and not part of RenGL's upload. To take less, list the LWJGL natives you want
+yourself and leave this artifact out, adding only the Skiko runtime (`org.jetbrains.skiko:skiko-awt-runtime-<platform>`,
+from the Compose dev repository).
 
-### Building the natives jars
+### Building the natives artifacts
 
-All six platforms in one build (no other platform profile may be active with it; in IntelliJ tick only `natives-bundle-all`
-in the Maven tool window, then run `package` or `install`):
+The six `rengl-natives-<platform>` modules are only part of the build with `-Dnatives.platform=all`, because they need
+the Skiko runtime of every platform:
 
 ```bash
 ./mvnw -DskipTests -Dnatives.platform=all package
 ```
 
-Or one platform per command. `-DskipAutoNatives` stops the host's own platform from also being selected, and the
-platform goes in `natives.platform`:
+To build only these six (the parent pom already installed): `./mvnw -f rengl-natives/pom.xml install`.
 
-```bash
-./mvnw -DskipAutoNatives -Dnatives.platform=windows-amd64 package
-```
-
-The values are `linux-amd64`, `linux-aarch64`, `macos-x86_64`, `macos-aarch64`, `windows-amd64` and `windows-aarch64`.
-This only repackages already-published native artifacts, so all six can be built from one machine.
-
-On Windows `rengl-core`'s jar holds 6 DLLs (one of them Skiko), `rengl-audio`'s 2, `rengl-3d`'s 5 and `rengl-tilemap`'s
-1; the `RenGL` jar holds all 14. (Before the split the one jar held far more, most of them for libraries the engine
-never used.)
+Each jar is 6.5 to 8.5 MB; together with the rest of the engine's jars the whole upload to Maven Central is about 60 MB.
 
 ## Running the examples
 

@@ -24,6 +24,7 @@
     Before the first run, in the RenGL folder (once, and again after updating the engine):
         .\mvnw.cmd install -DskipTests
         powershell -ExecutionPolicy Bypass -File rengl-packager\install-natives.ps1
+    (the second adds the rengl-natives-<platform> artifacts of all six platforms)
 
     It needs JDK 25 and, the first time a platform is built, the internet.
 
@@ -122,13 +123,13 @@ $bound = $PSBoundParameters
 $RenglRoot = Split-Path $PSScriptRoot -Parent
 $Repository = Join-Path $env:USERPROFILE '.m2\repository\io\github\piitex'
 $ConfigName = 'rengl-package.properties'
-# The engine's natives jar for each platform: LWJGL's and Skiko's native libraries.
+# The engine's natives artifact for each platform: its jar holds Skiko's runtime and its pom brings LWJGL's natives.
 $Natives = [ordered]@{
-    'windows-x64' = 'natives-windows'
-    'linux-x64'   = 'natives-linux'
-    'linux-arm64' = 'natives-linux-arm64'
-    'macos-x64'   = 'natives-macos'
-    'macos-arm64' = 'natives-macos-arm64'
+    'windows-x64' = 'rengl-natives-windows'
+    'linux-x64'   = 'rengl-natives-linux'
+    'linux-arm64' = 'rengl-natives-linux-arm64'
+    'macos-x64'   = 'rengl-natives-macos'
+    'macos-arm64' = 'rengl-natives-macos-arm64'
 }
 # The settings file's keys (lower case) and the parameters they stand for.
 $Settings = [ordered]@{
@@ -324,13 +325,16 @@ if ($engine) {
 }
 
 # The build brings the natives of the computer it runs on. The packager picks natives by file name and gives each image
-# only its own platform's, so the other platforms' jars just have to be in the folder.
-foreach ($p in $platforms) {
-    $classifier = $Natives[$p]
-    if (Get-ChildItem target\input -Filter "$EngineId-*-$classifier.jar") { continue }
-    $source = "$Repository\$EngineId\$RenglVersion\$EngineId-$RenglVersion-$classifier.jar"
-    if (-not (Test-Path $source)) { Fail "The $p natives are missing ($source). In the RenGL folder run: powershell -ExecutionPolicy Bypass -File rengl-packager\install-natives.ps1" }
-    Copy-Item $source target\input\
+# only its own platform's, so the other platforms' jars just have to be in the folder. They are fetched with Maven from a
+# throwaway pom that depends on each missing platform's rengl-natives artifact, which brings LWJGL's natives along.
+$missing = @($platforms | Where-Object { -not (Get-ChildItem target\input -Filter "$($Natives[$_])-$RenglVersion.jar") })
+if ($missing) {
+    $dependencies = ($missing | ForEach-Object { "<dependency><groupId>io.github.piitex</groupId><artifactId>$($Natives[$_])</artifactId><version>$RenglVersion</version></dependency>" }) -join ''
+    $nativesPom = Join-Path (Resolve-Path target) 'natives-pom.xml'
+    Set-Content -Path $nativesPom -Encoding UTF8 -Value ('<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>local</groupId><artifactId>natives</artifactId><version>1</version><dependencies>' + $dependencies + '</dependencies></project>')
+    Write-Host "==> Natives for $($missing -join ', ')"
+    & $mvn -q -f $nativesPom dependency:copy-dependencies '-DincludeScope=runtime' '-DoutputDirectory=target/input'
+    if ($LASTEXITCODE -ne 0) { Fail "The $($missing -join ', ') natives could not be fetched. In the RenGL folder run: powershell -ExecutionPolicy Bypass -File rengl-packager\install-natives.ps1" }
 }
 
 $Packager = if ($env:RENGL_PACKAGER) { $env:RENGL_PACKAGER } else { "$Repository\rengl-packager\$RenglVersion\rengl-packager-$RenglVersion.jar" }
