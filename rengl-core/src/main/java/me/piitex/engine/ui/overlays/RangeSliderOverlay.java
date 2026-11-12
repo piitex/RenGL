@@ -385,20 +385,66 @@ public class RangeSliderOverlay extends Overlay implements Themeable, Draggable,
         double unit = step > 0 ? step : (max - min) / 100.0;
         if ((mods & GLFW.GLFW_MOD_SHIFT) != 0) unit *= 10;
         double current = active == Thumb.LOW ? low : high;
+        double lowBefore = low, highBefore = high;
         switch (key) {
             case GLFW.GLFW_KEY_LEFT -> setThumb(active, current - unit);
             case GLFW.GLFW_KEY_RIGHT -> setThumb(active, current + unit);
             case GLFW.GLFW_KEY_HOME -> setThumb(active, min);
             case GLFW.GLFW_KEY_END -> setThumb(active, max);
-            case GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN -> {
-                if (action == GLFW.GLFW_PRESS) active = active == Thumb.LOW ? Thumb.HIGH : Thumb.LOW;
-            }
-            case GLFW.GLFW_KEY_SPACE -> {
-                if (action == GLFW.GLFW_PRESS) active = active == Thumb.LOW ? Thumb.HIGH : Thumb.LOW;
+            case GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_SPACE -> {
+                if (action == GLFW.GLFW_PRESS) {
+                    active = active == Thumb.LOW ? Thumb.HIGH : Thumb.LOW;
+                    me.piitex.engine.Window window = getWindow();
+                    if (window != null) window.announce(active == Thumb.LOW ? "Adjusting the lower value" : "Adjusting the upper value");
+                }
             }
             default -> {
             }
         }
+        if (low != lowBefore || high != highBefore) notifyAccessibleChange();
+    }
+
+    /**
+     * Like a slider, a Tab stop that does not take the keyboard from a game on a click, and keeps only the keys it
+     * moves with.
+     */
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        return switch (key) {
+            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN,
+                 GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_END, GLFW.GLFW_KEY_SPACE -> true;
+            default -> false;
+        };
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.SLIDER;
+    }
+
+    /**
+     * Both ends, such as "50 to 200", through the label formatter when there is one.
+     */
+    @Override
+    public String getAccessibleValue() {
+        return accessibleText(low) + " to " + accessibleText(high);
+    }
+
+    private String accessibleText(double v) {
+        if (labelFormatter != null) return labelFormatter.apply(v);
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
     }
 
     /* Value <-> pixel */

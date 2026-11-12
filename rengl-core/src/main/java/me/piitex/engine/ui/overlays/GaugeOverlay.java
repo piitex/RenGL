@@ -265,6 +265,21 @@ public class GaugeOverlay extends Overlay implements Themeable, FontScalable {
         this.labelFormatter = labelFormatter == null ? v -> String.valueOf(v) : labelFormatter;
     }
 
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.PROGRESS_BAR;
+    }
+
+    /**
+     * The target value (not the one the dial is still counting toward), through the label formatter.
+     */
+    @Override
+    public String getAccessibleValue() {
+        return labelFormatter.apply(getValue());
+    }
+
     public float getValueFontSize() {
         return valueFontSize;
     }

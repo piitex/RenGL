@@ -560,6 +560,29 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
     private void notifySelection(T leadBefore) {
         if (onSelect != null && !Objects.equals(selected, leadBefore)) onSelect.accept(selected);
         if (onSelectionChange != null) onSelectionChange.accept(getSelectedItems());
+        notifyAccessibleChange();
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.TREE;
+    }
+
+    /**
+     * The lead item's label with whether it is open or closed (when it has children) and checked (when the tree has
+     * check boxes), so an arrow key says where it went and what the item is.
+     */
+    @Override
+    public String getAccessibleValue() {
+        Row<T> row = findRow(selected);
+        if (row == null) return "";
+        StringBuilder out = new StringBuilder(labelProvider.apply(row.item));
+        if (row.hasChildren) out.append(expanded.contains(row.item) ? ", expanded" : ", collapsed");
+        if (checkBoxes) out.append(checked.contains(row.item) ? ", checked" : ", not checked");
+        if (selection.size() > 1) out.append(", ").append(selection.size()).append(" selected");
+        return out.toString();
     }
 
     /**
@@ -977,6 +1000,7 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
                 if (row == null) return;
                 if (row.hasChildren && expanded.contains(row.item)) {
                     collapse(row.item);
+                    notifyAccessibleChange();
                     return;
                 }
                 if (row.parent == null) return;
@@ -986,12 +1010,16 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
                 if (row == null || !row.hasChildren) return;
                 if (!expanded.contains(row.item)) {
                     expand(row.item);
+                    notifyAccessibleChange();
                     return;
                 }
                 index++; // its first child
             }
             case GLFW.GLFW_KEY_SPACE -> {
-                if (row != null && checkBoxes && action == GLFW.GLFW_PRESS) toggleCheck(row.item);
+                if (row != null && checkBoxes && action == GLFW.GLFW_PRESS) {
+                    toggleCheck(row.item);
+                    notifyAccessibleChange();
+                }
                 return;
             }
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {

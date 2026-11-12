@@ -849,6 +849,34 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
     private void notifySelection(T leadBefore) {
         if (onSelect != null && !Objects.equals(selected, leadBefore)) onSelect.accept(selected);
         if (onSelectionChange != null) onSelectionChange.accept(getSelectedItems());
+        notifyAccessibleChange();
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.TABLE;
+    }
+
+    /**
+     * The lead row read as "Name: Sword, Price: 40", each cell after its column title, with whether it is checked when the
+     * table has check boxes.
+     */
+    @Override
+    public String getAccessibleValue() {
+        if (selected == null || !items.contains(selected)) return "";
+        StringBuilder out = new StringBuilder();
+        for (Column<T> column : columns) {
+            String cell = column.text.apply(selected);
+            if (cell == null || cell.isBlank()) continue;
+            if (!out.isEmpty()) out.append(", ");
+            if (column.title != null && !column.title.isBlank()) out.append(column.title).append(": ");
+            out.append(cell);
+        }
+        if (checkBoxes) out.append(checked.contains(selected) ? ", checked" : ", not checked");
+        if (selection.size() > 1) out.append(", ").append(selection.size()).append(" rows selected");
+        return out.toString();
     }
 
     private void pruneSelection() {
@@ -933,7 +961,10 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
                 return;
             }
             case GLFW.GLFW_KEY_SPACE -> {
-                if (index >= 0 && checkBoxes && action == GLFW.GLFW_PRESS) toggleCheck(items.get(index));
+                if (index >= 0 && checkBoxes && action == GLFW.GLFW_PRESS) {
+                    toggleCheck(items.get(index));
+                    notifyAccessibleChange();
+                }
                 return;
             }
             case GLFW.GLFW_KEY_F2 -> {

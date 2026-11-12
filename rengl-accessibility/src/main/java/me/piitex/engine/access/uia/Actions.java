@@ -35,5 +35,6 @@ final class Actions {
 
     static void setNumber(Element element, double value) {
         if (element instanceof SliderOverlay slider) slider.setValueByUser(value);
+        else if (element instanceof me.piitex.engine.ui.overlays.KnobOverlay knob) knob.setValueByUser(value);
     }
 }

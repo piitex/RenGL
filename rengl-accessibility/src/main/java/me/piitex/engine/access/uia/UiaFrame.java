@@ -121,6 +121,12 @@ final class UiaFrame {
             max = slider.getMax();
             current = slider.getValue();
             step = slider.getStep();
+        } else if (element instanceof me.piitex.engine.ui.overlays.KnobOverlay knob) {
+            ranged = true;
+            min = knob.getMin();
+            max = knob.getMax();
+            current = knob.getValue();
+            step = knob.getStep();
         } else if (element instanceof ProgressBarOverlay progress) {
             ranged = true;
             max = 100;

@@ -528,7 +528,28 @@ public class TabContainer extends Layout {
             getStyling().applyThemeHoverColor(Color.TRANSPARENT);
             getStyling().applyThemeBorderThickness(0f);
             setFocusTraversable(true);
-            onMouseClick(this::handleClick);
+            onMouseClick(event -> {
+                Tab before = selected;
+                handleClick(event);
+                if (selected != before) notifyAccessibleChange();
+            });
+        }
+
+        // --- Accessibility ---
+
+        @Override
+        protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+            return me.piitex.engine.access.AccessibleRole.TAB_LIST;
+        }
+
+        /**
+         * The chosen tab and its place, such as "Graphics, tab 2 of 4", so an arrow key says where it went.
+         */
+        @Override
+        public String getAccessibleValue() {
+            if (selected == null) return "";
+            String title = selected.title == null ? "" : selected.title;
+            return title + ", tab " + (tabs.indexOf(selected) + 1) + " of " + tabs.size();
         }
 
         // ----- geometry --------------------------------------------------------------------------
@@ -720,6 +741,7 @@ public class TabContainer extends Layout {
 
         @Override
         public void onKeyPressed(int key, int action, int mods) {
+            Tab before = selected;
             switch (key) {
                 case GLFW.GLFW_KEY_LEFT -> selectRelative(-1);
                 case GLFW.GLFW_KEY_RIGHT -> selectRelative(1);
@@ -728,6 +750,7 @@ public class TabContainer extends Layout {
                 default -> {
                 }
             }
+            if (selected != before) notifyAccessibleChange();
         }
 
         @Override

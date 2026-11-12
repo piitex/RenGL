@@ -347,6 +347,7 @@ public class KnobOverlay extends Overlay implements Themeable, Draggable, Focusa
     @Override
     public void onKeyPressed(int key, int action, int mods) {
         if (action == GLFW.GLFW_RELEASE) return;
+        double before = value;
         double unit = unit() * ((mods & GLFW.GLFW_MOD_SHIFT) != 0 ? 10 : 1);
         switch (key) {
             case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP -> change(value + unit);
@@ -356,6 +357,54 @@ public class KnobOverlay extends Overlay implements Themeable, Draggable, Focusa
             default -> {
             }
         }
+        if (value != before) notifyAccessibleChange();
+    }
+
+    /**
+     * Like a slider, a knob is a Tab stop that does not take the keyboard from a game on a click, and keeps only the
+     * keys it moves with.
+     */
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        return switch (key) {
+            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN,
+                 GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_END -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Sets the value the way the user would have: as {@link #setValue}, then fires {@link #onValueChange} and tells an
+     * accessibility host. For an assistive technology, whose "set value" stands in for turning the knob.
+     */
+    public void setValueByUser(double value) {
+        double before = this.value;
+        change(value);
+        if (this.value != before) notifyAccessibleChange();
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.SLIDER;
+    }
+
+    @Override
+    public String getAccessibleValue() {
+        String text = labelFormatter.apply(value);
+        // The default label is a rounded double; "one point zero" is not what anyone means by 1.
+        return text.endsWith(".0") ? text.substring(0, text.length() - 2) : text;
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
     }
 
     /* Theme */

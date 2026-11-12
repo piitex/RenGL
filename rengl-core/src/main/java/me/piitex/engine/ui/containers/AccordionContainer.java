@@ -201,6 +201,26 @@ public class AccordionContainer extends Container implements Focusable, FontScal
     private void toggleByUser(Section section) {
         apply(section, !section.expanded);
         if (onToggle != null) onToggle.accept(section, section.expanded);
+        notifyAccessibleChange();
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.GROUP;
+    }
+
+    /**
+     * The section the keyboard is on, with whether it is open and where it sits, such as "Graphics, expanded, section 1
+     * of 3".
+     */
+    @Override
+    public String getAccessibleValue() {
+        if (sections.isEmpty()) return "";
+        int index = Math.max(0, Math.min(focusedIndex, sections.size() - 1));
+        Section section = sections.get(index);
+        return section.title + ", " + (section.expanded ? "expanded" : "collapsed") + ", section " + (index + 1) + " of " + sections.size();
     }
 
     private void apply(Section section, boolean expanded) {
@@ -419,6 +439,7 @@ public class AccordionContainer extends Container implements Focusable, FontScal
     public void onKeyPressed(int key, int action, int mods) {
         if (action == GLFW.GLFW_RELEASE || sections.isEmpty()) return;
         focusedIndex = Math.max(0, Math.min(focusedIndex, sections.size() - 1));
+        int before = focusedIndex;
         switch (key) {
             case GLFW.GLFW_KEY_UP -> focusedIndex = Math.max(0, focusedIndex - 1);
             case GLFW.GLFW_KEY_DOWN -> focusedIndex = Math.min(sections.size() - 1, focusedIndex + 1);
@@ -430,6 +451,7 @@ public class AccordionContainer extends Container implements Focusable, FontScal
             default -> {
             }
         }
+        if (focusedIndex != before) notifyAccessibleChange();
     }
 
     /* Rendering */

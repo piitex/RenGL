@@ -107,6 +107,21 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         return toHex(getColor(), alphaEnabled);
     }
 
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.BUTTON;
+    }
+
+    /**
+     * The color as its hex code, since a swatch alone says nothing to someone who cannot see it.
+     */
+    @Override
+    public String getAccessibleValue() {
+        return getHex();
+    }
+
     /**
      * Whether the panel offers an opacity bar and accepts 8-digit hex codes. Default true.
      */

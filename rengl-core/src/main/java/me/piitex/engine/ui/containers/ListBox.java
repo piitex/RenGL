@@ -399,6 +399,25 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
     private void notifySelection(T leadBefore) {
         if (onSelect != null && !Objects.equals(selected, leadBefore)) onSelect.accept(selected);
         if (onSelectionChange != null) onSelectionChange.accept(getSelectedItems());
+        notifyAccessibleChange();
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.LIST;
+    }
+
+    /**
+     * The chosen row's label, or how many rows are chosen when several are, so an arrow key or a click says where the
+     * choice went.
+     */
+    @Override
+    public String getAccessibleValue() {
+        if (selection.isEmpty() || selected == null) return "";
+        if (selection.size() > 1) return selection.size() + " selected, " + labelProvider.apply(selected);
+        return labelProvider.apply(selected);
     }
 
     private void pruneSelection() {

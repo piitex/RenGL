@@ -618,11 +618,17 @@ final class UiaCom {
         }
     }
 
+    /** Whether a screen reader may set this range, as against one it can only read (a progress bar). */
+    private static boolean settableRange(me.piitex.engine.ui.Element element) {
+        return element instanceof me.piitex.engine.ui.overlays.SliderOverlay
+                || element instanceof me.piitex.engine.ui.overlays.KnobOverlay;
+    }
+
     private static int setRange(MemorySegment self, double value) {
         try {
             Obj object = from(self);
             UiaFrame.Item item = object == null ? null : object.item();
-            if (item != null && !(item.element() instanceof me.piitex.engine.ui.overlays.SliderOverlay)) return Uia.UIA_E_NOTSUPPORTED;
+            if (item != null && !settableRange(item.element())) return Uia.UIA_E_NOTSUPPORTED;
             return act(self, element -> Actions.setNumber(element, value));
         } catch (Throwable t) {
             return fail(t);
@@ -674,8 +680,7 @@ final class UiaCom {
             Obj object = from(self);
             UiaFrame.Item item = object == null ? null : object.item();
             if (item == null) return Uia.UIA_E_ELEMENTNOTAVAILABLE;
-            boolean slider = item.element() instanceof me.piitex.engine.ui.overlays.SliderOverlay;
-            result.reinterpret(4).set(JAVA_INT, 0, slider ? 0 : -1);
+            result.reinterpret(4).set(JAVA_INT, 0, settableRange(item.element()) ? 0 : -1);
             return Uia.S_OK;
         } catch (Throwable t) {
             return fail(t);
