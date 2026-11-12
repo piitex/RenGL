@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-RenGL is at version 0.1.0. Only the latest release gets security fixes.
+RenGL is at version 0.1.1. Only the latest release gets security fixes.
 
 ## Reporting a vulnerability
 

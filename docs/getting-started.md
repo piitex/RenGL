@@ -17,7 +17,7 @@ RenGL is a set of Maven modules. Start with `rengl-core` and add the others when
 <dependency>
     <groupId>io.github.piitex</groupId>
     <artifactId>rengl-core</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 
@@ -70,7 +70,7 @@ on Windows, Linux and macOS:
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <rengl.version>0.1.0</rengl.version>
+        <rengl.version>0.1.1</rengl.version>
         <!-- JVM flags for running the app. The macOS profiles below add -XstartOnFirstThread. -->
         <rengl.jvmargs>--enable-native-access=ALL-UNNAMED</rengl.jvmargs>
     </properties>

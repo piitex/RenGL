@@ -168,14 +168,14 @@ the computer it runs on; `package-app.ps1` fetches the rest. Doing it by hand, f
 `rengl-natives-<platform>` artifact of each other platform (a throwaway pom in a scratch folder will do), run Maven's
 `dependency:copy-dependencies` for it with `-DoutputDirectory` set to your `target\input`.
 
-`0.1.0` is the engine's version in its `pom.xml`.
+`0.1.1` is the engine's version in its `pom.xml`.
 
 ### Running it
 
 The packager is the jar that step 1 installed, with a version in its name. Run it with Java 25:
 
 ```powershell
-$packager = "$env:USERPROFILE\.m2\repository\io\github\piitex\rengl-packager\0.1.0\rengl-packager-0.1.0.jar"
+$packager = "$env:USERPROFILE\.m2\repository\io\github\piitex\rengl-packager\0.1.1\rengl-packager-0.1.1.jar"
 
 java --enable-native-access=ALL-UNNAMED -jar $packager `
   --name MyApp --app-version 1.0.0 `

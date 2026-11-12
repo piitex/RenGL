@@ -7,7 +7,7 @@
 
     <groupId>io.github.piitex</groupId>
     <artifactId>rengl-parent</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <packaging>pom</packaging>
 
     <name>RenGL parent</name>
@@ -287,7 +287,7 @@
           It needs your GPG key (set up with gpg or the key's passphrase in an agent) and a
           Central Portal user token saved under the id "central" in ~/.m2/settings.xml. The
           upload stops at "validated"; the release is published by hand from the Central
-          Portal once you have looked at it. Version 0.1.0 can be published once, ever.
+          Portal once you have looked at it. Version 0.1.1 can be published once, ever.
         -->
         <profile>
             <id>release</id>
