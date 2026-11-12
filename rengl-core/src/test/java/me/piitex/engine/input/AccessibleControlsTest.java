@@ -194,6 +194,23 @@ class AccessibleControlsTest {
     }
 
     @Test
+    void aColorPickerIsReachedWithTabAndChangesWithTheArrowKeys() {
+        ColorPickerOverlay picker = put(new ColorPickerOverlay(120, 30), 10, 10);
+        key(GLFW.GLFW_KEY_TAB);
+        assertSame(picker, window.getFocusedElement());
+        key(GLFW.GLFW_KEY_RIGHT);
+        assertEquals(1, heard.size(), heard.toString());
+    }
+
+    @Test
+    void aColorPickerOpenedWithTheMouseSaysSo() {
+        ColorPickerOverlay picker = put(new ColorPickerOverlay(120, 30, me.piitex.engine.ui.color.Color.BLUE), 10, 10);
+        picker.toggleOpen();
+        picker.toggleOpen();
+        assertEquals(List.of("announce Colour panel open, #0000FF, blue", "announce Colour panel closed"), heard);
+    }
+
+    @Test
     void aColorPickerStepsThroughItsPresets() {
         ColorPickerOverlay picker = put(new ColorPickerOverlay(120, 30), 10, 10);
         window.requestFocus(picker);

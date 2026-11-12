@@ -215,8 +215,14 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
     }
 
     public void toggleOpen() {
-        if (isOpen()) close();
+        boolean wasOpen = isOpen();
+        if (wasOpen) close();
         else open();
+        if (isOpen() == wasOpen) return;
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) {
+            window.announce(wasOpen ? "Colour panel closed" : "Colour panel open, " + getAccessibleValue());
+        }
     }
 
     public void open() {
@@ -630,6 +636,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
                 if (parsed == null) return;
                 owner.setFromColor(parsed);
                 owner.changedByUser();
+                owner.notifyAccessibleChange();
             });
             addElement(hexField);
             syncHex();
@@ -641,6 +648,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
                     owner.setFromColor(owner.presets[index]);
                     syncHex();
                     owner.changedByUser();
+                    owner.notifyAccessibleChange();
                 }
             });
         }
@@ -692,6 +700,7 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
 
         @Override
         public void onDragEnd(double x, double y) {
+            if (dragRegion != NONE) ColorPickerOverlay.this.notifyAccessibleChange(); // once, where the drag stopped, not on every pixel
             dragRegion = NONE;
         }
 
