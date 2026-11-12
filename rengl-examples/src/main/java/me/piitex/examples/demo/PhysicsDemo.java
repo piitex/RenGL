@@ -195,6 +195,11 @@ public class PhysicsDemo {
             scene.add(colliders.getNode());
             scene.setUpdateHandler((s, dt) -> updateStats());
 
+            if (PhysX.isAvailable()) {
+                PhysX.install();
+                world.setBackend(new PhysXBackend());
+            }
+
             Node3D floorNode = new Node3D("floor", Mesh.plane(40, 40), new Material(
                     TextureData.checker(256, 20, new float[]{0.55f, 0.55f, 0.55f}, new float[]{0.32f, 0.32f, 0.35f})).setSpecular(0.05f));
             scene.add(floorNode);
@@ -245,7 +250,7 @@ public class PhysicsDemo {
 
         void shoot(Ray ray) {
             Vec3 direction = ray.direction().normalized();
-            ball(ray.origin().add(direction.mul(1f)), direction.mul(28f));
+            ball(ray.origin().add(direction.mul(1f)), direction.mul(100f));
         }
 
         void hover(Ray ray) {
