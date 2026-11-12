@@ -160,6 +160,16 @@ public class Window implements Themeable, PopupHost {
     }
 
     /**
+     * Runs {@code task} on the main thread (the one that pumps the operating system's window messages), on its next
+     * pass. Safe from any thread. For code that has to touch the native window, such as hooking its message handler.
+     * Does nothing before the window has opened; the task is dropped if the window is destroyed first.
+     */
+    public void runOnMainThread(Runnable task) {
+        GLFWindow g = glfWindow;
+        if (g != null) g.runOnMainThread(task);
+    }
+
+    /**
      * Changes the window's frame while the app is running, for example {@link WindowStyle#BORDERLESS} for a splash
      * screen and {@link WindowStyle#STANDARD} once the main UI is ready. Safe from any thread. Before
      * {@link Engine#start} it just records the style for the window to be created with.

@@ -30,7 +30,7 @@ import java.util.function.Consumer;
  * This overlay toggles on a click with a handler of its own, kept apart from {@link #onMouseClick}:
  * yours runs after it and does not replace it. Use {@link #onToggle} to react to changes, as with {@link CheckBoxOverlay}.
  */
-public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable {
+public class ToggleSwitchOverlay extends Overlay implements Themeable, me.piitex.engine.ui.Activatable {
     private static final float ANIMATION_SECONDS = 0.16f;
 
     private boolean on;
@@ -189,16 +189,13 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
         focused = false;
     }
 
+    /**
+     * Tab reaches the switch, and Space or Enter flips it. Like a button it takes no focus from a click and leaves the
+     * rest of the keyboard to the game.
+     */
     @Override
-    public void onCharTyped(int codepoint) {
-    }
-
-    @Override
-    public void onKeyPressed(int key, int action, int mods) {
-        if (action != GLFW.GLFW_PRESS) return;
-        if (key == GLFW.GLFW_KEY_SPACE || key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
-            toggle();
-        }
+    public void activate() {
+        toggle();
     }
 
     // --- Accessibility ---

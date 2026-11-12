@@ -712,6 +712,18 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         cursorIndex = index;
     }
 
+    /**
+     * Replaces the contents the way typing would have: as {@link #setText}, then fires {@link #onTextChanged} and tells
+     * an accessibility host. For an assistive technology such as a screen reader, whose "set value" stands in for typing.
+     * Nothing happens on a {@link #isReadOnly() read-only} field.
+     */
+    public void setTextByUser(String newText) {
+        if (isReadOnly()) return;
+        setText(newText);
+        fireTextChanged();
+        notifyAccessibleChange();
+    }
+
     private void fireTextChanged() {
         if (onTextChangedConsumer != null) {
             onTextChangedConsumer.accept(text.toString());

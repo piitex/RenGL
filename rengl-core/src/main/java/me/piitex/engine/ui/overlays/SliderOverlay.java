@@ -178,6 +178,18 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
     }
 
     /**
+     * Sets the value the way the user would have: as {@link #setValue}, then fires {@link #onValueChange} and tells an
+     * accessibility host. For an assistive technology such as a screen reader, whose "set value" stands in for dragging.
+     */
+    public void setValueByUser(double value) {
+        double newValue = clampAndSnap(value);
+        if (newValue == this.value) return;
+        this.value = newValue;
+        if (onValueChange != null) onValueChange.accept(newValue);
+        notifyAccessibleChange();
+    }
+
+    /**
      * {@code (value - min) / (max - min)}, in [0, 1], or 0 if {@code max <= min}.
      */
     public double getPercentage() {

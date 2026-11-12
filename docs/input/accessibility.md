@@ -11,9 +11,12 @@ What RenGL does today for someone who cannot use a mouse, or cannot see the scre
 - **Self-voicing.** With the `rengl-accessibility` module on the classpath, the window speaks: each control as Tab lands
   on it, new values as the arrows change them, toasts, and anything you pass to `window.announce(...)`.
 
-What it does not do yet: **connect to a screen reader such as NVDA, JAWS, Narrator or VoiceOver.** Those read the
-operating system's accessibility tree, and RenGL draws everything itself, so as far as they can tell the window is one
-blank rectangle. Self-voicing works without them. See [What is missing](#what-is-missing).
+- **Screen readers (Windows).** NVDA, JAWS and Narrator read the window through UI Automation: its controls, names,
+  roles and values, where focus is, and what changes. They can press, toggle, select, and set sliders and text. See
+  [Screen readers](#screen-readers).
+
+On macOS and Linux there is no screen reader connection yet, so a window is one blank rectangle to VoiceOver or Orca;
+self-voicing is what works there. See [What is missing](#what-is-missing).
 
 ## Turning on speech
 
@@ -36,6 +39,26 @@ Accessibility.disable(window);                // remove it and release the voice
 The voice is SAPI on Windows (through a PowerShell process kept running, started on the first word), `say` on macOS,
 and `spd-say`, `espeak-ng` or `espeak` on Linux. Pass your own `Speaker` to `Accessibility.enable(window, speaker)` to
 use a recorded voice or a cloud service instead.
+
+## Screen readers
+
+`Accessibility.enable(window)` also connects the window to Windows' accessibility system (`UiaHost`, UI Automation).
+Nothing is done until a screen reader asks; then the tree is copied every quarter of a second, and at once when focus or
+a value changes. Self-voicing stays quiet while a screen reader is running, so nothing is said twice.
+
+```java
+Accessibility.enable(window);              // both
+Accessibility.enableScreenReader(window);  // only the screen reader connection (null off Windows)
+```
+
+A screen reader's press, toggle, select and set-value act as the user's own would: the control's change listeners run
+(`onAction`, `onToggle`, `onValueChange`, `onTextChanged`). `window.announce(...)` and toasts reach it as notifications.
+The window's controls report these UI Automation patterns: Invoke (buttons, links), Toggle (check boxes, switches),
+Value (text fields and areas, drop-downs), RangeValue (sliders, progress bars) and SelectionItem (radio buttons).
+
+How it was checked: a Windows UI Automation client (the interface NVDA and Narrator are built on) walked the tree, used
+each pattern, and received the focus, value and notification events. NVDA, JAWS and Narrator themselves have not been run
+against it, so expect rough edges in how they phrase things.
 
 ## Saying things
 
@@ -101,9 +124,11 @@ accessibility API would be another.
 
 ## What is missing
 
-- **A connection to screen readers.** The plan is UI Automation on Windows, NSAccessibility on macOS and AT-SPI on
-  Linux, or AccessKit to cover all three. The tree and the host interface above are what it would be built on. Until
-  then, someone who uses NVDA or VoiceOver hears nothing from a RenGL window unless speech is turned on.
+- **A connection to screen readers on macOS and Linux.** NSAccessibility and AT-SPI, or AccessKit to cover all three.
+  The tree and the host interface above are what it would be built on. Until then, someone who uses VoiceOver or Orca
+  hears nothing from a RenGL window unless speech is turned on. On Windows the connection exists but was checked with
+  UI Automation client code, not with the screen readers themselves, and it does not describe the rows of lists, trees
+  and tables yet.
 - **Controls that are not reachable by keyboard yet.** The accessible roles and names cover text, buttons, links, check
   boxes, radio buttons, switches, sliders, text fields and areas, drop-downs, combo boxes, spinners, progress bars and
   images. The containers that hold lists (`ListBox`, `TreeView`, `TableView`, `TabContainer`, `AccordionContainer`) already

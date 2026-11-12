@@ -4,6 +4,8 @@ import me.piitex.engine.Window;
 import me.piitex.engine.access.AccessibilityHost;
 import me.piitex.engine.ui.Element;
 
+import java.util.function.BooleanSupplier;
+
 /**
  * Speaks a window's accessibility events: each time the keyboard focus lands on something it says what that is, and
  * {@link Window#announce} says whatever the game asks. This is self-voicing, the game talking for itself, not a
@@ -16,6 +18,7 @@ public final class SpeechHost implements AccessibilityHost {
     private final Speaker speaker;
     private final Narrator narrator;
     private volatile boolean enabled = true;
+    private volatile BooleanSupplier muted = () -> false;
 
     public SpeechHost(Speaker speaker, Narrator narrator) {
         this.speaker = speaker;
@@ -45,9 +48,21 @@ public final class SpeechHost implements AccessibilityHost {
         return enabled;
     }
 
+    /**
+     * Stays quiet whenever {@code condition} is true, such as while a screen reader is reading the window itself. It is
+     * asked each time there is something to say.
+     */
+    public void muteWhile(BooleanSupplier condition) {
+        this.muted = condition == null ? () -> false : condition;
+    }
+
+    private boolean speaking() {
+        return enabled && !muted.getAsBoolean();
+    }
+
     @Override
     public void focusChanged(Window window, Element previous, Element now, boolean byKeyboard) {
-        if (!enabled) return;
+        if (!speaking()) return;
         if (now == null) {
             speaker.stop(); // focus left everything: whatever was being read is no longer where the user is
             return;
@@ -58,14 +73,14 @@ public final class SpeechHost implements AccessibilityHost {
 
     @Override
     public void valueChanged(Window window, Element element) {
-        if (!enabled) return;
+        if (!speaking()) return;
         String text = narrator.describeChange(element);
         if (!text.isEmpty()) speaker.speak(text, true);
     }
 
     @Override
     public void announce(Window window, String text, boolean urgent) {
-        if (enabled) speaker.speak(text, urgent);
+        if (speaking()) speaker.speak(text, urgent);
     }
 
     @Override
