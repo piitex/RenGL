@@ -51,7 +51,10 @@ public class CheckBoxOverlay extends Overlay implements Themeable, me.piitex.eng
         setWidth(size);
         setHeight(size);
         setCursorMode(CursorMode.POINTER);
-        setBuiltInClickListener(event -> toggle());
+        setBuiltInClickListener(event -> {
+            toggle();
+            notifyAccessibleChange(); // a click is as much a change as Space is: say it
+        });
         setClickOnRelease(true);
         setFocusTraversable(true);
         ThemeManager.register(this);

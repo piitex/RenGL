@@ -66,7 +66,10 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, me.piitex
         getStyling().applyThemeBackgroundColor(Color.TRANSPARENT);
         getStyling().applyThemeHoverColor(Color.TRANSPARENT);
         getStyling().applyThemeBorderThickness(0f);
-        setBuiltInClickListener(event -> toggle());
+        setBuiltInClickListener(event -> {
+            toggle();
+            notifyAccessibleChange(); // a click is as much a change as Space is: say it
+        });
         setClickOnRelease(true);
         ThemeManager.register(this);
     }

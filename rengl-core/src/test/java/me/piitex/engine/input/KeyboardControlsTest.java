@@ -204,6 +204,40 @@ class KeyboardControlsTest {
     }
 
     @Test
+    void theHostHearsAToggleChangeFromTheKeyboardAndFromAClick() {
+        me.piitex.engine.ui.overlays.ToggleSwitchOverlay toggle = new me.piitex.engine.ui.overlays.ToggleSwitchOverlay();
+        toggle.setPosition(100, 60);
+        ((Container) window.getContainers().firstEntry().getValue()).addElement(toggle);
+        List<String> heard = new ArrayList<>();
+        window.setAccessibilityHost(new AccessibilityHost() {
+            @Override
+            public void valueChanged(Window w, Element element) {
+                heard.add(element.getAccessibleRole() + " " + element.getAccessibleChecked());
+            }
+
+            @Override
+            public void focusChanged(Window w, Element previous, Element now, boolean byKeyboard) {
+            }
+
+            @Override
+            public void announce(Window w, String text, boolean urgent) {
+            }
+
+            @Override
+            public void close() {
+            }
+        });
+        key(GLFW.GLFW_KEY_TAB);   // button
+        key(GLFW.GLFW_KEY_TAB);   // box
+        key(GLFW.GLFW_KEY_SPACE); // box on, by key
+        click(15, 70);            // box off, by click
+        click(110, 70);           // switch on, by click
+        window.requestFocus(toggle);
+        key(GLFW.GLFW_KEY_ENTER); // switch off, by key
+        assertEquals(List.of("CHECK_BOX true", "CHECK_BOX false", "SWITCH true", "SWITCH false"), heard);
+    }
+
+    @Test
     void theTreeNamesWhatAPersonWouldMeet() {
         TextOverlay label = new TextOverlay("Music volume", 14f, me.piitex.engine.ui.color.Color.BLACK);
         slider.setLabelledBy(label);

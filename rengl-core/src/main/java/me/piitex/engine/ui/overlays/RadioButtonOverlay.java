@@ -52,7 +52,10 @@ public class RadioButtonOverlay extends Overlay implements Themeable, me.piitex.
         // is for the square controls that use it: ButtonOverlay, TextFieldOverlay, and
         // a themed Container.
         getStyling().applyThemeCornerRadius((float) (size / 2));
-        setBuiltInClickListener(event -> select());
+        setBuiltInClickListener(event -> {
+            select();
+            notifyAccessibleChange(); // a click is as much a change as Space is: say it
+        });
         setClickOnRelease(true);
         setFocusTraversable(true);
         ThemeManager.register(this);
