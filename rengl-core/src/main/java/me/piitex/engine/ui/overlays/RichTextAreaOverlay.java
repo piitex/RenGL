@@ -454,6 +454,16 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
             cachedSpans = sorted;
         }
 
+        // A line with anything that needs shaping was measured whole by the shaper, which comes out narrower than plain
+        // text. Drawn in plain pieces, the Latin ones would add up wider than that and run past the edge, so every
+        // piece is shaped too and put where the whole line has it. Right to left lines keep going piece by piece.
+        boolean shapedLine = TextShaping.needsShaping(lineText) && !TextShaping.isRightToLeft(lineText);
+        try (TextShaping.Scope ignored = shapedLine ? TextShaping.shapeAll() : null) {
+            drawRuns(renderer, lineText, lineStart, x, y, font, shapedLine);
+        }
+    }
+
+    private void drawRuns(Renderer renderer, String lineText, int lineStart, float x, float y, org.jetbrains.skia.Font font, boolean shapedLine) {
         int lineEnd = lineStart + lineText.length();
         Paint defaultColor = resolveTextColor(getTextColor());
         float cursorX = x;
@@ -467,25 +477,28 @@ public class RichTextAreaOverlay extends TextAreaOverlay {
             if (start >= end) continue;
 
             if (start > pos) {
-                cursorX = drawRun(renderer, lineText.substring(pos - lineStart, start - lineStart), cursorX, y, font, defaultColor);
+                cursorX = drawRun(renderer, lineText, pos - lineStart, start - lineStart, x, cursorX, y, font, defaultColor, shapedLine);
             }
 
             Paint color = span.color() != null ? span.color() : defaultColor;
-            cursorX = drawRun(renderer, lineText.substring(start - lineStart, end - lineStart), cursorX, y, font, color);
+            cursorX = drawRun(renderer, lineText, start - lineStart, end - lineStart, x, cursorX, y, font, color, shapedLine);
             pos = end;
         }
 
         if (pos < lineEnd) {
-            drawRun(renderer, lineText.substring(pos - lineStart), cursorX, y, font, defaultColor);
+            drawRun(renderer, lineText, pos - lineStart, lineText.length(), x, cursorX, y, font, defaultColor, shapedLine);
         }
     }
 
     /**
      * Draws {@code run} at {@code x} (a no-op if empty or {@code color} is null, matching every other draw-if-non-null convention in this engine) and returns the x position right after it, for the next run to continue from.
      */
-    private float drawRun(Renderer renderer, String run, float x, float y, org.jetbrains.skia.Font font, Paint color) {
-        if (run.isEmpty() || color == null) return x;
-        renderer.drawText(run, x, y, font, color);
-        return x + TextShaping.width(font, run);
+    private float drawRun(Renderer renderer, String lineText, int from, int to, float lineX, float x, float y, org.jetbrains.skia.Font font, Paint color, boolean shapedLine) {
+        if (from >= to || color == null) return x;
+        String run = lineText.substring(from, to);
+        // On a shaped line the run starts where the whole line puts that character, so kerning across runs isn't lost.
+        float runX = shapedLine ? lineX + TextShaping.xAt(font, lineText, from) : x;
+        renderer.drawText(run, runX, y, font, color);
+        return runX + TextShaping.width(font, run);
     }
 }
