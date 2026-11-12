@@ -36,7 +36,7 @@ The simplest choice is the whole engine, as before:
 <dependency>
     <groupId>io.github.piitex</groupId>
     <artifactId>RenGL</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 
@@ -48,7 +48,7 @@ To take less, import the BOM once so the modules share a version, then list the 
         <dependency>
             <groupId>io.github.piitex</groupId>
             <artifactId>rengl-bom</artifactId>
-            <version>0.1.0</version>
+            <version>0.1.1</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -118,7 +118,7 @@ the natives artifact below.
 <dependency>
     <groupId>io.github.piitex</groupId>
     <artifactId>rengl-natives-windows</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 
