@@ -20,6 +20,7 @@ All artifacts have the group id `io.github.piitex` and the same version.
 | `rengl-upscale` | Vendor [upscalers and frame generation](3d/upscaling.md) for the 3D layer (AMD FSR and NVIDIA DLSS on Windows, Apple MetalFX on a Mac). Carries no vendor binaries and is left out of `RenGL` | none (needs the vendors' libraries at run time, except MetalFX, which is part of macOS) | none |
 | `rengl-physx` | [NVIDIA PhysX 5](3d/physx.md) as the solver behind the 3D layer's `PhysicsWorld`. Left out of `RenGL` | physx-jni (which carries PhysX) | none of its own: add the `physx-jni` natives jar for each platform |
 | `rengl-spellcheck` | `HunspellChecker` and the en_US dictionary for [spell checking](text/spell-checking.md) | Lucene analysis | none |
+| `rengl-accessibility` | [Self-voicing](input/accessibility.md): speaks the keyboard focus, value changes, toasts and `Window.announce` through the system voice. The accessible names, roles and keyboard use are in `rengl-core` | none | none |
 | `rengl-tilemap` | [Tile maps](graphics/tile-maps.md) | LWJGL zstd | zstd |
 | `rengl-entity` | [Entities and components](game/entities.md) | none | none |
 | `rengl-charts` | [Charts](charts/README.md) | none | none |
@@ -77,6 +78,7 @@ What to add for common programs:
 | A login portal or an embedded browser | `rengl-core`, `rengl-webview` |
 | A 2D game with tile maps and entities | `rengl-core`, `rengl-tilemap`, `rengl-entity` (and `rengl-audio` for sound) |
 | A text editor with spell checking | `rengl-core`, `rengl-spellcheck` |
+| An app that speaks its interface aloud | `rengl-core`, `rengl-accessibility` |
 | A 3D program | `rengl-core`, `rengl-3d` (it brings `rengl-vulkan`) |
 | A 3D game on PhysX | `rengl-core`, `rengl-3d`, `rengl-physx` and the `physx-jni` natives |
 | A program on Vulkan, without 3D | `rengl-core`, `rengl-vulkan` |

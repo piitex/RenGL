@@ -634,6 +634,146 @@ public class Element {
         this.tabIndex = tabIndex;
     }
 
+    // --- Accessibility --------------------------------------------------------------------------------------------
+
+    private me.piitex.engine.access.AccessibleRole accessibleRole;
+    private String accessibleName, accessibleDescription;
+    private Element labelledBy;
+    private boolean accessibleHidden;
+    private boolean focusRingVisible;
+
+    /**
+     * What this Element is to someone who cannot see it: a button, a slider, a check box. Each built-in control reports
+     * its own; {@link #setAccessibleRole} overrides it, such as for a {@link me.piitex.engine.ui.containers.Container}
+     * that is a labelled group. {@link me.piitex.engine.access.AccessibleRole#NONE} for an Element that adds nothing.
+     * Read by {@link me.piitex.engine.access.AccessibilityTree} and by the accessibility host.
+     */
+    public me.piitex.engine.access.AccessibleRole getAccessibleRole() {
+        return accessibleRole != null ? accessibleRole : defaultAccessibleRole();
+    }
+
+    /**
+     * Overrides {@link #getAccessibleRole()}. Null goes back to the Element's own.
+     */
+    public void setAccessibleRole(me.piitex.engine.access.AccessibleRole role) {
+        this.accessibleRole = role;
+    }
+
+    /**
+     * What a subclass is when nothing has been set. {@code NONE} here.
+     */
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.NONE;
+    }
+
+    /**
+     * The name a screen reader gives this Element: "Save" for a save button. It is the first that exists of
+     * {@link #setAccessibleName the name set}, the text of the Element named by {@link #setLabelledBy}, and what the
+     * control knows about itself (a button's label). Null when there is none, which a check box or a slider has
+     * until one is given, since the words beside it are separate Elements.
+     */
+    public String getAccessibleName() {
+        if (accessibleName != null) return accessibleName;
+        if (labelledBy != null) {
+            String name = labelledBy.accessibleName != null ? labelledBy.accessibleName : labelledBy.defaultAccessibleName();
+            if (name != null) return name;
+        }
+        return defaultAccessibleName();
+    }
+
+    public void setAccessibleName(String name) {
+        this.accessibleName = name;
+    }
+
+    /**
+     * What a subclass calls itself when no name has been set, such as a button's text. Null here.
+     */
+    protected String defaultAccessibleName() {
+        return null;
+    }
+
+    /**
+     * Takes this Element's name from {@code label}, usually the text beside a check box or slider, so the two are read
+     * together and the words are written once. Null clears it.
+     */
+    public void setLabelledBy(Element label) {
+        this.labelledBy = label == this ? null : label;
+    }
+
+    /**
+     * Longer help read after the name and role, such as what a setting does. Null by default.
+     */
+    public String getAccessibleDescription() {
+        return accessibleDescription;
+    }
+
+    public void setAccessibleDescription(String description) {
+        this.accessibleDescription = description;
+    }
+
+    /**
+     * The current value as words: a slider's "40", a field's text, a drop-down's chosen item. Null for an Element with
+     * none. A subclass that has one overrides this.
+     */
+    public String getAccessibleValue() {
+        return null;
+    }
+
+    /**
+     * Whether this is checked or on, for a check box, radio button or switch; null for anything that cannot be.
+     */
+    public Boolean getAccessibleChecked() {
+        return null;
+    }
+
+    /**
+     * Whether the accessibility tree leaves this Element, and everything in it, out. For decoration that would only add
+     * noise: a divider, a background image.
+     */
+    public boolean isAccessibleHidden() {
+        return accessibleHidden;
+    }
+
+    public void setAccessibleHidden(boolean hidden) {
+        this.accessibleHidden = hidden;
+    }
+
+    /**
+     * Whether this Element draws a ring around itself while the keyboard focus is on it, for a control that has no
+     * focus look of its own, such as a button. A text field draws its own and leaves this false.
+     */
+    protected boolean usesFocusRing() {
+        return false;
+    }
+
+    /**
+     * Called by the {@link me.piitex.engine.Window} as focus arrives or leaves. The ring shows only when Tab or a key
+     * brought focus here, not when a click did, as a browser's does.
+     */
+    public void setFocusRingVisible(boolean visible) {
+        this.focusRingVisible = visible;
+    }
+
+    public boolean isFocusRingVisible() {
+        return focusRingVisible;
+    }
+
+    /**
+     * Tells the window's accessibility host that this Element's value or state just changed on its own, so a screen
+     * reader can say the new one. The built-in controls call it when the keyboard changes them; a custom control that
+     * does the same should too. A no-op with no host, or before the Element is on a window.
+     */
+    public void notifyAccessibleChange() {
+        me.piitex.engine.Window window = getWindow();
+        if (window != null) window.notifyAccessibleChange(this);
+    }
+
+    private void drawFocusRing(Renderer renderer) {
+        float pad = 2f;
+        renderer.drawBorder((float) x - pad, (float) y - pad, (float) width + 2 * pad, (float) height + 2 * pad,
+                me.piitex.engine.ui.theme.ThemeManager.getCurrent().getAccent(), 2f, getStyling().getCornerRadius() + pad);
+    }
+
     /**
      * The Window this Element is (transitively) part of, or null if it hasn't been added
      * to a Container on a Window yet. Needed by Elements that open floating UI, e.g.
@@ -1006,6 +1146,7 @@ public class Element {
             } else {
                 renderWithEffect(renderer);
             }
+            if (focusRingVisible && usesFocusRing()) drawFocusRing(renderer);
             if (scaled) renderer.popScale();
         }
         if (disabled) setHovered(hoveredBefore);

@@ -464,4 +464,16 @@ public class TextOverlay extends Overlay implements Themeable, FontScalable {
         super.followTheme();
         textColor.clearExplicit();
     }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.TEXT;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return getText();
+    }
 }

@@ -197,7 +197,8 @@ public interface Focusable {
 }
 ```
 
-- **Clicking** a `Focusable` gives it focus. Clicking anything else, including empty space, clears focus. The
+- **Clicking** a `Focusable` gives it focus, unless it is one that does not [take the keyboard](#controls-that-leave-the-keyboard-to-the-game)
+  (a button, check box, radio button, link or slider). Clicking anything else, including empty space, clears focus. The
   exception is a click listener (or a menu item it runs) that gives focus to something itself, such as a Rename item
   that opens a field to type in: that focus stays.
 - While focused, it receives every char and key event except Tab, which moves focus (unless `wantsTab()` is
@@ -246,7 +247,7 @@ public class KeyLogger extends Overlay implements Focusable {
 tab stop if it is **enabled**, `isFocusTraversable()` is true, **and** it implements `Focusable`.
 
 ```java
-element.setFocusTraversable(true); // text fields, areas and dropdowns already do this
+element.setFocusTraversable(true); // text fields, areas, dropdowns, buttons, check boxes, radio buttons, links and sliders already do this
 element.setTabIndex(0); // explicit order; -1 (default) = natural order
 ```
 
@@ -256,6 +257,23 @@ element.setTabIndex(0); // explicit order; -1 (default) = natural order
   followed by all natural-order elements. This is the same convention as HTML's `tabindex`.
 - With a [modal](../containers/modal-container.md) open, Tab is trapped inside the modal.
 - A mouse click grants focus regardless of `focusTraversable`, which only gates Tab.
+
+### Controls that leave the keyboard to the game
+
+A text field takes every key while it has focus, which is right for typing and wrong for a button in a game's HUD:
+clicking it would stop WASD working. `ButtonOverlay`, `CheckBoxOverlay`, `RadioButtonOverlay`, `LinkOverlay` and
+`SliderOverlay` are `Focusable` and Tab stops, but they:
+
+- **do not take focus from a click**, so a mouse user never notices them;
+- **use only a few keys while Tab has focused them**: Space and Enter (a gamepad's A button is Enter) for the first
+  four, the arrows, Home and End for a slider (Shift moves ten steps). Every other key goes to the game as if
+  nothing had focus;
+- **draw a focus ring** around themselves, only when Tab or a key brought focus there, as a browser does.
+
+Your own control does the same by implementing `Activatable` (one `activate()` method, for a thing that does one
+action), or by implementing `Focusable` and overriding `grabsKeyboard()` to return false and `handlesKey(key, mods)` to
+name the keys it uses. Override `usesFocusRing()` on the element to get the ring. For screen readers and spoken
+output, see [Accessibility](accessibility.md).
 
 ### Reserved keys
 

@@ -286,4 +286,11 @@ public class ImageOverlay extends Overlay {
             renderer.drawImage(shown, (float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(), getStyling().getCornerRadius(), opacity, tint);
         }
     }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.IMAGE;
+    }
 }

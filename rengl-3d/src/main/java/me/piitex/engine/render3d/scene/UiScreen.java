@@ -340,9 +340,9 @@ public final class UiScreen implements AutoCloseable, PopupHost {
         // A field takes the keyboard when pressed; anything else lets it go. A click listener that moved the focus
         // itself keeps it there.
         if (focused == focusBefore || focused == null) {
-            focus(hit instanceof Focusable ? hit : null);
+            focus(hit instanceof Focusable f && f.grabsKeyboard() ? hit : null); // a button does not take the keyboard
         }
-        if (hit instanceof Focusable) taken = true;
+        if (hit instanceof Focusable f && f.grabsKeyboard()) taken = true;
         if (!left) return taken;
 
         // The press goes to the nearest Draggable at or above the hit element. A container that does not want the drag and a
@@ -486,7 +486,7 @@ public final class UiScreen implements AutoCloseable, PopupHost {
      * @return whether something had the keyboard to take it
      */
     public boolean typeChar(int codepoint) {
-        if (focused() instanceof Focusable field) {
+        if (focused() instanceof Focusable field && field.grabsKeyboard()) {
             field.onCharTyped(codepoint);
             return true;
         }
@@ -530,6 +530,7 @@ public final class UiScreen implements AutoCloseable, PopupHost {
             clearFocus();
             return true;
         }
+        if (!field.grabsKeyboard() && !field.handlesKey(key, mods)) return false; // a focused button leaves the other keys to the game
         field.onKeyPressed(key, action, mods);
         return !released;
     }

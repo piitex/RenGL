@@ -236,6 +236,7 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
     private void choose(int index) {
         selectedIndex = index;
         if (onSelect != null) onSelect.accept(getSelected());
+        notifyAccessibleChange();
     }
 
     @Override
@@ -522,5 +523,18 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
 
             renderer.drawBorder(x, y, w, h, border, owner.getStyling().getBorderThickness(), radius);
         }
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.COMBO_BOX;
+    }
+
+    @Override
+    public String getAccessibleValue() {
+        T chosen = getSelected();
+        return chosen == null ? null : String.valueOf(chosen);
     }
 }

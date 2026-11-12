@@ -591,7 +591,7 @@ class UiScreenTest {
             screen.focus(form.second);
             assertSame(form.second, screen.focused());
             assertTrue(form.second.isFocused());
-            screen.focus(new ButtonOverlay("Go", 10, 10));
+            screen.focus(new me.piitex.engine.ui.overlays.TextOverlay("Go", 14f, Color.BLACK));
             assertFalse(screen.hasFocus(), "something that cannot take keys clears the focus");
             assertFalse(form.second.isFocused());
             screen.focus(form.first);
@@ -602,10 +602,27 @@ class UiScreenTest {
 
     @Test
     void aScreenWithNoFieldHasNowhereToTab() {
-        try (UiScreen screen = new UiScreen(new Panel().root)) {
+        Container plain = new Container(100, 60);
+        plain.addElement(new me.piitex.engine.ui.overlays.TextOverlay("Hello", 14f, Color.BLACK));
+        try (UiScreen screen = new UiScreen(plain)) {
             screen.focusNext();
             screen.focusPrevious();
             assertFalse(screen.hasFocus());
+        }
+    }
+
+    @Test
+    void aButtonIsATabStopThatLeavesOtherKeysToTheGame() {
+        Panel panel = new Panel();
+        AtomicInteger pressed = new AtomicInteger();
+        panel.button.onAction(pressed::incrementAndGet);
+        try (UiScreen screen = new UiScreen(panel.root)) {
+            screen.focusNext();
+            assertSame(panel.button, screen.focused());
+            assertFalse(screen.key(GLFW.GLFW_KEY_W, GLFW.GLFW_PRESS, 0), "W is the game's while a button has focus");
+            assertFalse(screen.typeChar('w'));
+            assertTrue(screen.key(GLFW.GLFW_KEY_ENTER, GLFW.GLFW_PRESS, 0));
+            assertEquals(1, pressed.get());
         }
     }
 

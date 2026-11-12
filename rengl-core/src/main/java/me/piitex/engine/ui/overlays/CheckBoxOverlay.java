@@ -23,7 +23,7 @@ import java.util.function.Consumer;
  * This class toggles on a click with a handler of its own, kept apart from
  * {@link #onMouseClick}: yours runs after it and does not replace it. Use {@link #onToggle} to react to state changes.
  */
-public class CheckBoxOverlay extends Overlay implements Themeable {
+public class CheckBoxOverlay extends Overlay implements Themeable, me.piitex.engine.ui.Activatable {
     private boolean checked;
     private float checkThickness = 2.5f;
     private final Overridable<Paint> checkColor = new Overridable<>(Color.BLACK);
@@ -53,6 +53,7 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
         setCursorMode(CursorMode.POINTER);
         setBuiltInClickListener(event -> toggle());
         setClickOnRelease(true);
+        setFocusTraversable(true);
         ThemeManager.register(this);
     }
 
@@ -167,5 +168,30 @@ public class CheckBoxOverlay extends Overlay implements Themeable {
 
         renderer.drawLine(x1, y1, x2, y2, color, checkThickness);
         renderer.drawLine(x2, y2, x3, y3, color, checkThickness);
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.CHECK_BOX;
+    }
+
+    @Override
+    public Boolean getAccessibleChecked() {
+        return checked;
+    }
+
+    /**
+     * Toggles the box from the keyboard: Tab to it, then Space or Enter.
+     */
+    @Override
+    public void activate() {
+        toggle();
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
     }
 }

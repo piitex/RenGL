@@ -16,7 +16,7 @@ import me.piitex.engine.utils.Browser;
  * The overlay registers its own {@link #onMouseClick} handler, so calling {@code onMouseClick(...)}
  * afterward replaces it and the link stops opening, the same trade-off {@link ButtonOverlay} makes.
  */
-public class LinkOverlay extends TextOverlay {
+public class LinkOverlay extends TextOverlay implements me.piitex.engine.ui.Activatable {
     private String url;
 
     /**
@@ -36,6 +36,7 @@ public class LinkOverlay extends TextOverlay {
         setCursorMode(CursorMode.POINTER);
         setBuiltInClickListener(event -> open());
         setClickOnRelease(true);
+        setFocusTraversable(true);
     }
 
     public String getUrl() {
@@ -74,5 +75,22 @@ public class LinkOverlay extends TextOverlay {
         float baseline = y - m.getAscent();
         float thickness = Math.max(1f, getFontSize() / 14f);
         renderer.drawLine(x, baseline + thickness * 1.5f, x + textWidth, baseline + thickness * 1.5f, color, thickness);
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.LINK;
+    }
+
+    @Override
+    public void activate() {
+        open();
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
     }
 }

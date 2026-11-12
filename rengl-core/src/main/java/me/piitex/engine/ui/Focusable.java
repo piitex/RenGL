@@ -73,4 +73,21 @@ public interface Focusable {
     default boolean wantsTab() {
         return false;
     }
+
+    /**
+     * Whether this Element, once it has focus, takes the keyboard away from the game, which is what a text field does
+     * and the default. A push button returns false: a click does not focus it, so it never keeps WASD from the game,
+     * and when Tab does focus it only the keys {@link #handlesKey} names reach it. Typed characters go to the game.
+     */
+    default boolean grabsKeyboard() {
+        return true;
+    }
+
+    /**
+     * For an Element that does not {@link #grabsKeyboard() grab the keyboard}: whether {@code key} is one it uses
+     * while focused. Any other key falls through to the game or the shortcuts, as if nothing had focus.
+     */
+    default boolean handlesKey(int key, int mods) {
+        return true;
+    }
 }

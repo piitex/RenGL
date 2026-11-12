@@ -2381,4 +2381,21 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             skiaFont = null;
         }
     }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.TEXT_AREA;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return getPlaceholder() == null || getPlaceholder().isEmpty() ? null : getPlaceholder();
+    }
+
+    @Override
+    public String getAccessibleValue() {
+        return getText();
+    }
 }

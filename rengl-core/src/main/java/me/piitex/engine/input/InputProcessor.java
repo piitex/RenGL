@@ -423,9 +423,9 @@ public class InputProcessor {
         // such as a menu item that opens a field to type in, keeps it there.
         Element focusNow = window.getFocusedElement();
         if (focusNow == focusBefore || focusNow == null) {
-            window.requestFocus(hitElement instanceof Focusable ? hitElement : null);
+            window.requestFocus(takesClickFocus(hitElement) ? hitElement : null);
         }
-        if (hitElement instanceof Focusable) taken = true;
+        if (takesClickFocus(hitElement)) taken = true;
 
         // Only the left button drags; a right-click opens a context menu and must not start a drag or a text selection.
         if (event.buttonOrKey != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
@@ -462,6 +462,14 @@ public class InputProcessor {
             taken = true;
         }
         if (!taken) input.mousePressed(event.buttonOrKey, event.mods);
+    }
+
+    /**
+     * Whether pressing on {@code hit} gives it the keyboard: it is {@link Focusable} and takes the keyboard from the
+     * game. A button does not, so clicking one never keeps WASD from the game.
+     */
+    private static boolean takesClickFocus(Element hit) {
+        return hit instanceof Focusable focusable && focusable.grabsKeyboard();
     }
 
     private static int pointerBit(int button) {
@@ -626,7 +634,8 @@ public class InputProcessor {
             return;
         }
 
-        if (usableFocus(window) instanceof Focusable focusable) {
+        if (usableFocus(window) instanceof Focusable focusable
+                && (focusable.grabsKeyboard() || focusable.handlesKey(event.buttonOrKey, event.mods))) {
             focusable.onKeyPressed(event.buttonOrKey, event.action, event.mods);
             return;
         }
@@ -693,7 +702,7 @@ public class InputProcessor {
 
     private void handleChar(Window window, InputEvent event) {
         if (window.getInput().swallowsChars()) return; // the key that typed it was just bound in a controls menu
-        if (usableFocus(window) instanceof Focusable focusable) {
+        if (usableFocus(window) instanceof Focusable focusable && focusable.grabsKeyboard()) {
             focusable.onCharTyped(event.buttonOrKey);
         } else {
             window.getInput().charTyped(event.buttonOrKey);

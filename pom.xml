@@ -56,6 +56,7 @@
         <module>rengl-upscale</module>
         <module>rengl-physx</module>
         <module>rengl-spellcheck</module>
+        <module>rengl-accessibility</module>
         <module>rengl-tilemap</module>
         <module>rengl-entity</module>
         <module>rengl-charts</module>

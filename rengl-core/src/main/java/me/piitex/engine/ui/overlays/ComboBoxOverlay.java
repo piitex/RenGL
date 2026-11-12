@@ -461,4 +461,11 @@ public class ComboBoxOverlay<T> extends TextFieldOverlay {
             renderer.drawBorder(x, y, w, h, owner.getStyling().getBorderColor(), owner.getStyling().getBorderThickness(), radius);
         }
     }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.COMBO_BOX;
+    }
 }

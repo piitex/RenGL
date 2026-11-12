@@ -205,6 +205,22 @@ public class ScrollContainer extends Container implements Scrollable {
         if (verticalScrollEnabled) setScrollOffsetY(y);
     }
 
+    /**
+     * Scrolls just far enough that {@code child}, which is inside this container, is fully in view; if it is larger than
+     * the view, its top-left corner is. A no-op if it is already visible. The window does this when the keyboard moves
+     * focus to something in here, so Tab never lands on a control that is scrolled out of sight.
+     */
+    public void scrollIntoView(Element child) {
+        double dx = 0, dy = 0;
+        double left = child.getAbsoluteX() - getAbsoluteX(), right = left + child.getWidth();
+        double top = child.getAbsoluteY() - getAbsoluteY(), bottom = top + child.getHeight();
+        if (top < 0 || child.getHeight() > getHeight()) dy = top;
+        else if (bottom > getHeight()) dy = bottom - getHeight();
+        if (left < 0 || child.getWidth() > getWidth()) dx = left;
+        else if (right > getWidth()) dx = right - getWidth();
+        if (dx != 0 || dy != 0) scrollBy(dx, dy);
+    }
+
     @Override
     public void onScroll(double deltaX, double deltaY) {
         // GLFW reports a positive yoffset for scrolling up, away from the user. Content

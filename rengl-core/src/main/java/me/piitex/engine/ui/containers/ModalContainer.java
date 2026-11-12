@@ -286,4 +286,9 @@ public class ModalContainer extends Container {
     @Override
     public void applyTheme(Theme theme) {
     }
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.DIALOG;
+    }
 }

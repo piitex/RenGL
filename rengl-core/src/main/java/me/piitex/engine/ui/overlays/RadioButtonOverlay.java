@@ -27,7 +27,7 @@ import me.piitex.engine.ui.theme.Themeable;
  * {@link #onMouseClick}: yours runs after it and does not replace it. Use {@link RadioGroup#onChange} to react to
  * selection changes.
  */
-public class RadioButtonOverlay extends Overlay implements Themeable {
+public class RadioButtonOverlay extends Overlay implements Themeable, me.piitex.engine.ui.Activatable {
     private boolean selected;
     private RadioGroup group;
     private final Overridable<Paint> dotColor = new Overridable<>(Color.BLACK);
@@ -54,6 +54,7 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
         getStyling().applyThemeCornerRadius((float) (size / 2));
         setBuiltInClickListener(event -> select());
         setClickOnRelease(true);
+        setFocusTraversable(true);
         ThemeManager.register(this);
     }
 
@@ -170,5 +171,30 @@ public class RadioButtonOverlay extends Overlay implements Themeable {
             float radius = (float) (Math.min(getWidth(), getHeight()) / 2.0) * 0.45f;
             renderer.drawCircle(centerX, centerY, radius, dotColor.get());
         }
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.RADIO_BUTTON;
+    }
+
+    @Override
+    public Boolean getAccessibleChecked() {
+        return selected;
+    }
+
+    /**
+     * Selects the button from the keyboard: Tab to it, then Space or Enter.
+     */
+    @Override
+    public void activate() {
+        select();
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
     }
 }

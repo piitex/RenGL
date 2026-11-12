@@ -110,6 +110,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | **[Input](input/README.md)** | Clicks, drags, scrolling, focus, cursors, tooltips, menus, game controls |
 | [Input and focus](input/input-and-focus.md) | Clicks, drags, scrolling, keyboard focus, cursors, clipboard |
 | [Game input](input/game-input.md) | Polled keys and mouse, named actions and contexts, rebinding, saved key bindings |
+| [Accessibility](input/accessibility.md) | Keyboard-only use, names and roles for each control, spoken output with `rengl-accessibility` |
 | [Gamepads](input/gamepad.md) | Controllers as bindings or polled, dead zones, one pad per player, rebinding |
 | [Tooltips](input/tooltips.md) | Hover bubbles |
 | [File dialogs](input/file-dialogs.md) | Native open, save and choose-folder dialogs |

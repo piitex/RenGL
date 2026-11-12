@@ -288,4 +288,16 @@ public class ProgressBarOverlay extends Overlay implements Themeable {
         }
         renderer.popClip();
     }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.PROGRESS_BAR;
+    }
+
+    @Override
+    public String getAccessibleValue() {
+        return isIndeterminate() ? null : Math.round(getProgress() * 100) + " percent";
+    }
 }

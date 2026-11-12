@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.piitex</groupId>
+        <artifactId>rengl-parent</artifactId>
+        <version>0.1.1</version>
+    </parent>
+
+    <artifactId>rengl-accessibility</artifactId>
+    <name>RenGL accessibility</name>
+    <description>Self-voicing for RenGL windows: speaks the keyboard focus, value changes and announcements through the system's text-to-speech.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.piitex</groupId>
+            <artifactId>rengl-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+          The tests build real controls, which load Skia. It is shaded into the rengl-core jar and the natives come with
+          the rengl-natives-<platform> artifact, so neither is a dependency of the module itself.
+        -->
+        <dependency>
+            <groupId>org.jetbrains.skiko</groupId>
+            <artifactId>skiko-awt</artifactId>
+            <version>${skiko.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.skiko</groupId>
+            <artifactId>${skiko.runtime.artifact}</artifactId>
+            <version>${skiko.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

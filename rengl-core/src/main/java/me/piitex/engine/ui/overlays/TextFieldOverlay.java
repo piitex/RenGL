@@ -1112,4 +1112,24 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
             skiaFont = null;
         }
     }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.TEXT_FIELD;
+    }
+
+    @Override
+    protected String defaultAccessibleName() {
+        return getPlaceholder() == null || getPlaceholder().isEmpty() ? null : getPlaceholder();
+    }
+
+    /**
+     * The text, except for a password field, which says nothing about what was typed.
+     */
+    @Override
+    public String getAccessibleValue() {
+        return isPassword() ? null : getText();
+    }
 }

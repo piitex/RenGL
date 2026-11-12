@@ -48,7 +48,7 @@ import java.util.function.Function;
  * use {@link Theme#getAccent()}. The label uses
  * {@link Theme#getText()}, the same as every other themed label in this engine.
  */
-public class SliderOverlay extends Overlay implements Themeable, Draggable, FontScalable {
+public class SliderOverlay extends Overlay implements Themeable, Draggable, FontScalable, me.piitex.engine.ui.Focusable {
     private double min;
     private double max;
     private double value;
@@ -124,6 +124,7 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         setWidth(width);
         setHeight(height);
         setCursorMode(CursorMode.POINTER);
+        setFocusTraversable(true);
         setValue(initialValue);
 
         // Seeded as a baseline, not pinned. See Overridable. This Element draws its
@@ -707,6 +708,80 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         if (tickLabelSkiaFont != null) {
             tickLabelSkiaFont.close();
             tickLabelSkiaFont = null;
+        }
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.SLIDER;
+    }
+
+    @Override
+    public String getAccessibleValue() {
+        if (labelFormatter != null) return labelFormatter.apply(value);
+        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
+    }
+
+    // --- Keyboard ---
+
+    @Override
+    public void onFocusGained() {
+    }
+
+    @Override
+    public void onFocusLost() {
+    }
+
+    @Override
+    public void onCharTyped(int codepoint) {
+    }
+
+    @Override
+    public boolean grabsKeyboard() {
+        return false;
+    }
+
+    @Override
+    public boolean handlesKey(int key, int mods) {
+        return switch (key) {
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT, org.lwjgl.glfw.GLFW.GLFW_KEY_UP, org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN,
+                 org.lwjgl.glfw.GLFW.GLFW_KEY_HOME, org.lwjgl.glfw.GLFW.GLFW_KEY_END -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Moves the thumb from the keyboard once Tab has focused the slider: the arrows by {@link #getStep()} (a hundredth
+     * of the range when continuous), ten times that with Shift, and Home and End to the ends. Fires
+     * {@link #onValueChange} as dragging does.
+     */
+    @Override
+    public void onKeyPressed(int key, int action, int mods) {
+        if (action == org.lwjgl.glfw.GLFW.GLFW_RELEASE) return;
+        double unit = step > 0 ? step : (max - min) / 100.0;
+        if ((mods & org.lwjgl.glfw.GLFW.GLFW_MOD_SHIFT) != 0) unit *= 10;
+        double target;
+        switch (key) {
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT, org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN -> target = value - unit;
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT, org.lwjgl.glfw.GLFW.GLFW_KEY_UP -> target = value + unit;
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_HOME -> target = min;
+            case org.lwjgl.glfw.GLFW.GLFW_KEY_END -> target = max;
+            default -> {
+                return;
+            }
+        }
+        double newValue = clampAndSnap(target);
+        if (newValue != value) {
+            value = newValue;
+            if (onValueChange != null) onValueChange.accept(value);
+            notifyAccessibleChange();
         }
     }
 }

@@ -200,4 +200,16 @@ public class ToggleSwitchOverlay extends Overlay implements Themeable, Focusable
             toggle();
         }
     }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.SWITCH;
+    }
+
+    @Override
+    public Boolean getAccessibleChecked() {
+        return isOn();
+    }
 }

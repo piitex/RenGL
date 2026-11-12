@@ -57,6 +57,7 @@ public class Window implements Themeable, PopupHost {
     private final Loading loading = new Loading();
     private volatile GLFWindow glfWindow;
     private Element focusedElement;
+    private volatile me.piitex.engine.access.AccessibilityHost accessibilityHost;
     private final java.util.concurrent.CopyOnWriteArrayList<me.piitex.engine.input.ShortcutHandler> shortcutHandlers = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Overridable<Paint> backgroundColor = new Overridable<>(Color.WHITE);
     private final Overridable<Background> background = new Overridable<>(null);
@@ -721,6 +722,7 @@ public class Window implements Themeable, PopupHost {
      * Called by the engine once, after the loop has ended.
      */
     void notifyClosing() {
+        setAccessibilityHost(null);
         Runnable listener = closeListener;
         if (listener == null) return;
         try {
@@ -1274,15 +1276,92 @@ public class Window implements Themeable, PopupHost {
      * if {@code element} already holds focus.
      */
     public void requestFocus(Element element) {
+        requestFocus(element, false);
+    }
+
+    private void requestFocus(Element element, boolean byKeyboard) {
         if (element != null && element.isEffectivelyDisabled()) element = null; // a disabled Element cannot take the keyboard
         if (focusedElement == element) return;
 
+        Element previous = focusedElement;
+        if (previous != null) previous.setFocusRingVisible(false);
         if (focusedElement instanceof Focusable focusable) {
             focusable.onFocusLost();
         }
         focusedElement = element;
+        if (element != null) element.setFocusRingVisible(byKeyboard);
+        if (byKeyboard && element != null) { // Tab never lands on something scrolled out of sight
+            for (Container c = element.owner; c != null; c = c.owner) {
+                if (c instanceof me.piitex.engine.ui.scroll.ScrollContainer scroll) scroll.scrollIntoView(element);
+            }
+        }
         if (focusedElement instanceof Focusable focusable) {
             focusable.onFocusGained();
+        }
+        me.piitex.engine.access.AccessibilityHost host = accessibilityHost;
+        if (host != null) {
+            try {
+                host.focusChanged(this, previous, element, byKeyboard);
+            } catch (Throwable t) {
+                LogManager.getLogger("Engine").error("Accessibility host threw", t);
+            }
+        }
+    }
+
+    /**
+     * Installs what hears this window's accessibility events: where the keyboard focus goes, and what {@link #announce}
+     * is asked to say. {@code rengl-accessibility} provides one that speaks them. Null removes it. The one it replaces
+     * is {@link me.piitex.engine.access.AccessibilityHost#close() closed}, and so is the current one when the window closes.
+     */
+    public void setAccessibilityHost(me.piitex.engine.access.AccessibilityHost host) {
+        me.piitex.engine.access.AccessibilityHost old = accessibilityHost;
+        accessibilityHost = host;
+        if (old != null && old != host) {
+            try {
+                old.close();
+            } catch (Throwable t) {
+                LogManager.getLogger("Engine").error("Accessibility host threw on close", t);
+            }
+        }
+    }
+
+    public me.piitex.engine.access.AccessibilityHost getAccessibilityHost() {
+        return accessibilityHost;
+    }
+
+    /**
+     * Tells the accessibility host that {@code element}'s value or state just changed. See
+     * {@link Element#notifyAccessibleChange()}.
+     */
+    public void notifyAccessibleChange(Element element) {
+        me.piitex.engine.access.AccessibilityHost host = accessibilityHost;
+        if (host == null) return;
+        try {
+            host.valueChanged(this, element);
+        } catch (Throwable t) {
+            LogManager.getLogger("Engine").error("Accessibility host threw", t);
+        }
+    }
+
+    /**
+     * Has the accessibility host say {@code text} to someone who cannot see the screen, after what it is already
+     * saying. A no-op with no host. Use it for what shows up without being asked for: a toast, a score, "Game saved".
+     * Safe from any thread.
+     */
+    public void announce(String text) {
+        announce(text, false);
+    }
+
+    /**
+     * As {@link #announce(String)}; {@code urgent} cuts off what is being said first, for a warning.
+     */
+    public void announce(String text, boolean urgent) {
+        me.piitex.engine.access.AccessibilityHost host = accessibilityHost;
+        if (host == null || text == null || text.isBlank()) return;
+        try {
+            host.announce(this, text, urgent);
+        } catch (Throwable t) {
+            LogManager.getLogger("Engine").error("Accessibility host threw", t);
         }
     }
 
@@ -1314,7 +1393,7 @@ public class Window implements Themeable, PopupHost {
         int nextIndex = currentIndex < 0
                 ? (direction > 0 ? 0 : stops.size() - 1)
                 : Math.floorMod(currentIndex + direction, stops.size());
-        requestFocus(stops.get(nextIndex));
+        requestFocus(stops.get(nextIndex), true);
     }
 
     /**

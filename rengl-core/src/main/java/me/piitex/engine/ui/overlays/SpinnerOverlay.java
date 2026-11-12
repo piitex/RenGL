@@ -78,6 +78,8 @@ public class SpinnerOverlay extends HorizontalLayout implements Scrollable {
 
         double buttonWidth = Math.max(16, height * 0.8);
         field = new SpinnerField(width - buttonWidth, height);
+        field.setAccessibleRole(me.piitex.engine.access.AccessibleRole.SPIN_BUTTON);
+        field.setLabelledBy(this); // the field is what takes focus, so it speaks with the spinner's name
         field.setRightAligned(true); // with setLabel: label far left, value far right
         upButton = new ArrowButton(buttonWidth, height / 2, true);
         downButton = new ArrowButton(buttonWidth, height / 2, false);

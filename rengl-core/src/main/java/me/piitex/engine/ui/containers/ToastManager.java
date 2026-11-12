@@ -227,6 +227,11 @@ public class ToastManager extends Container {
         toast.closing = -1f;
         toast.dismissed = false;
         toasts.add(toast);
+        Window window = getWindow();
+        if (window != null) { // a screen reader or self-voicing host says it too; with none this does nothing
+            String spoken = toast.getTitle() == null || toast.getTitle().isBlank() ? toast.getMessage() : toast.getTitle() + ". " + toast.getMessage();
+            window.announce(spoken, toast.getLevel() == Level.ERROR);
+        }
         return toast;
     }
 

@@ -30,7 +30,7 @@ import java.io.File;
  * A click fires {@link #onAction} through a handler of the button's own, kept apart from
  * {@link #onMouseClick}: a listener set there runs after it and does not replace it.
  */
-public class ButtonOverlay extends TextOverlay implements Themeable {
+public class ButtonOverlay extends TextOverlay implements Themeable, me.piitex.engine.ui.Activatable {
     /**
      * Room kept clear at each side of the label when it is shortened with {@link #setEllipsize}.
      */
@@ -67,6 +67,7 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
         setCursorMode(CursorMode.POINTER);
         setBuiltInClickListener(event -> fireAction());
         setClickOnRelease(true);
+        setFocusTraversable(true);
         ThemeManager.register(this);
     }
 
@@ -80,6 +81,7 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
         setCursorMode(CursorMode.POINTER);
         setBuiltInClickListener(event -> fireAction());
         setClickOnRelease(true);
+        setFocusTraversable(true);
         ThemeManager.register(this);
     }
 
@@ -234,5 +236,25 @@ public class ButtonOverlay extends TextOverlay implements Themeable {
             float drawY = (float) getY() + ((float) getHeight() - textHeight) * textAlignV(0.5f);
             renderer.drawText(shown, textX, drawY, font, resolveTextColor(getTextColor()));
         }
+    }
+
+    // --- Accessibility ---
+
+    @Override
+    protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
+        return me.piitex.engine.access.AccessibleRole.BUTTON;
+    }
+
+    /**
+     * Presses the button from the keyboard: Tab to it, then Space or Enter, as a click does.
+     */
+    @Override
+    public void activate() {
+        fireAction();
+    }
+
+    @Override
+    protected boolean usesFocusRing() {
+        return true;
     }
 }
