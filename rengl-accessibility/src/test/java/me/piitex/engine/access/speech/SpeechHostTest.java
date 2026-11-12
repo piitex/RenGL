@@ -202,4 +202,26 @@ class SpeechHostTest {
         ToastManager.of(window).error("Upload failed");
         assertEquals(List.of("Saved. Slot 1 written", "Autosave on", "!Upload failed"), voice.said);
     }
+
+    @Test
+    void aMeterThatKeepsMovingWaitsItsTurnInsteadOfCuttingItselfOff() throws Exception {
+        SpeechHost host = new SpeechHost(voice, narrator);
+        host.setLiveInterval(150);
+        window.setAccessibilityHost(host);
+        Container panel = new Container(0, 0, 400, 400);
+        window.addContainer(panel);
+        me.piitex.engine.ui.overlays.GaugeOverlay gauge = new me.piitex.engine.ui.overlays.GaugeOverlay(80, 0, 100);
+        gauge.setAccessibleName("Engine heat");
+        panel.addElement(gauge);
+        key(GLFW.GLFW_KEY_TAB);
+        assertEquals(1, voice.said.size(), "the sentence for landing on it");
+        gauge.setValue(10);
+        gauge.setValue(20);
+        gauge.setValue(30); // the user is still hearing the sentence: only the newest is kept
+        assertEquals(1, voice.said.size(), voice.said.toString());
+        Thread.sleep(400);
+        assertEquals(2, voice.said.size(), voice.said.toString());
+        assertEquals("30", voice.said.get(1), "newest reading, and it does not interrupt");
+        host.close();
+    }
 }
