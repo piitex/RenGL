@@ -246,8 +246,13 @@ abstract class BackendContractTest {
     @Test
     void hoverWheelAndRightClickReachThePage() throws Exception {
         loadPage();
-        backend.pointerMove(350, 70, 0, 0);
+        // input sent before the page has been drawn lands on nothing and is not sent again, so wait for the
+        // picture, and send each kind of input again until the page shows it arrived
+        until(() -> frames.stream().anyMatch(WebViewBackend.Frame::crisp), "the page was shown before it was used");
+        backend.setFocused(true);
         until(() -> {
+            backend.pointerMove(500, 300, 0, 0); // off the box and back on, so the page sees the pointer arrive
+            backend.pointerMove(350, 70, 0, 0);
             try {
                 return "true".equals(eval("!!window.hovered"));
             } catch (Exception e) {
@@ -256,8 +261,8 @@ abstract class BackendContractTest {
         }, "hover with no button held");
         until(() -> cursors.contains(CursorMode.POINTER), "the cursor the page asked for");
 
-        backend.pointerScroll(300, 200, 0, -3, 0);
         until(() -> {
+            backend.pointerScroll(300, 200, 0, -3, 0);
             try {
                 return Double.parseDouble(eval("window.scrollY")) > 100;
             } catch (Exception e) {
@@ -265,11 +270,11 @@ abstract class BackendContractTest {
             }
         }, "the wheel scrolled the page down");
 
-        backend.pointerButton(350, 70, 1, true, 0);
-        backend.pointerButton(350, 70, 1, false, 0);
         until(() -> {
+            backend.pointerButton(350, 70, 1, true, 0);
+            backend.pointerButton(350, 70, 1, false, 0);
             try {
-                return "1".equals(eval("window.rights"));
+                return Double.parseDouble(eval("window.rights")) >= 1;
             } catch (Exception e) {
                 return false;
             }
