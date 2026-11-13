@@ -220,8 +220,15 @@ abstract class BackendContractTest {
             }
         }, "the button heard one click");
 
-        backend.pointerButton(100, 35, 0, true, 0);
-        backend.pointerButton(100, 35, 0, false, 0);
+        until(() -> {
+            backend.pointerButton(100, 35, 0, true, 0);
+            backend.pointerButton(100, 35, 0, false, 0);
+            try {
+                return "true".equals(eval("document.activeElement.id=='f'"));
+            } catch (Exception e) {
+                return false;
+            }
+        }, "the click focused the field");
         backend.key(GLFW.GLFW_KEY_H, GLFW.GLFW_PRESS, 0);
         backend.text('h');
         backend.key(GLFW.GLFW_KEY_H, GLFW.GLFW_RELEASE, 0);
@@ -272,9 +279,19 @@ abstract class BackendContractTest {
     @Test
     void editingCommandsRunOnThePageSelection() throws Exception {
         loadPage();
+        // a click on a page that has not been drawn yet lands on nothing, and text typed before the field has
+        // focus is thrown away, so wait for the picture, then click until the page says the field has focus
+        until(() -> frames.stream().anyMatch(WebViewBackend.Frame::crisp), "the page was shown before it was clicked");
         backend.setFocused(true);
-        backend.pointerButton(100, 35, 0, true, 0);
-        backend.pointerButton(100, 35, 0, false, 0);
+        until(() -> {
+            backend.pointerButton(100, 35, 0, true, 0);
+            backend.pointerButton(100, 35, 0, false, 0);
+            try {
+                return "true".equals(eval("document.activeElement.id=='f'"));
+            } catch (Exception e) {
+                return false;
+            }
+        }, "the click focused the field");
         for (char c : "hello".toCharArray()) backend.text(c);
         until(() -> {
             try {
