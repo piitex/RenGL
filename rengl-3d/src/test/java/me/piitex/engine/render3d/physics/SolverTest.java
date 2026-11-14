@@ -193,6 +193,26 @@ class SolverTest {
     }
 
     @Test
+    void stackOfBouncyBoxesStaysUp() {
+        // The weight a contact carries is not an impact: boxes that bounce when dropped must still rest in a stack.
+        PhysicsWorld world = withFloor().setSleeping(false);
+        List<RigidBody> stack = stack(world, 8);
+        for (RigidBody crate : stack) crate.setMass(10f).setMaterial(PhysicsMaterial.WOOD);
+        run(world, 2f);
+        float fastest = 0f;
+        for (int step = 0; step < 1200; step++) {
+            world.step(DT);
+            for (RigidBody crate : stack) fastest = Math.max(fastest, crate.getVelocity().length());
+        }
+        for (int i = 0; i < 8; i++) {
+            Vec3 p = stack.get(i).getPosition();
+            assertEquals(0f, Math.hypot(p.x(), p.z()), 0.1f, "box " + i);
+            assertEquals(0.5f + i, p.y(), 0.05f, "box " + i);
+        }
+        assertTrue(fastest < 0.05f, "fastest wobble " + fastest + " m/s");
+    }
+
+    @Test
     void tallerStackHoldsWithMoreIterations() {
         PhysicsWorld world = withFloor().setVelocityIterations(20);
         List<RigidBody> stack = stack(world, 15);

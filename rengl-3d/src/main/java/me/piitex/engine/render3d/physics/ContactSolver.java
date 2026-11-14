@@ -61,8 +61,8 @@ final class ContactSolver {
     }
 
     /**
-     * Works out what each point needs (lever arms, how hard it is to move the bodies there, friction directions), then
-     * applies last step's impulses as a head start.
+     * Works out what each point needs (lever arms, how hard it is to move the bodies there, friction directions, how
+     * fast the bodies meet there), then applies last step's impulses as a head start.
      */
     static void prepare(List<Contact> contacts, float dt) {
         for (Contact c : contacts) {
@@ -101,7 +101,17 @@ final class ContactSolver {
                 p.maxNormalImpulse = 0f;
                 p.pseudoImpulse = 0f;
                 p.bounced = false;
-
+            }
+        }
+        // The head start comes only after every point has its meeting speed. Applied as it went, the floor's push on
+        // the bottom box of a stack (the weight of the whole stack) came before the next contact up was measured, so
+        // that contact saw the bottom box rushing up at the one above it, took the stack's weight for an impact and
+        // bounced it: every step, at every level, which shook a stack of bouncy boxes until it fell.
+        for (Contact c : contacts) {
+            RigidBody a = c.getBodyA(), b = c.getBodyB();
+            float nx = c.normal.x(), ny = c.normal.y(), nz = c.normal.z();
+            for (int i = 0; i < c.count; i++) {
+                Contact.Point p = c.points[i];
                 // Last step's friction, turned onto this step's friction directions.
                 float wx = p.warmTangent.x(), wy = p.warmTangent.y(), wz = p.warmTangent.z();
                 p.tangentImpulse1 = wx * c.t1x + wy * c.t1y + wz * c.t1z;
