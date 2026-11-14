@@ -100,6 +100,10 @@ public final class PhysicsWorld {
      * How slow a body has to be, in metres (and radians) per second, and for how long, before it may sleep.
      */
     static final float SLEEP_SPEED = 0.05f, SLEEP_ANGULAR_SPEED = 0.05f, TIME_TO_SLEEP = 0.5f;
+    /**
+     * How slow, in metres (and radians) per second, bodies that nothing holds have to be before they may sleep.
+     */
+    static final float FREE_SLEEP_SPEED = 0.001f;
     private Vec3 gravity = new Vec3(0f, -9.81f, 0f);
     private float fixedStep = 1f / 60f;
     private int maxSteps = 8;
@@ -756,12 +760,19 @@ public final class PhysicsWorld {
         jointTree.build(holding);
         for (Joint joint : holding) joint.prepare(dt);
         jointTree.prepare();
-        for (int i = 0; i < velocityIterations; i++) {
+        for (int i = 0; i < velocityIterations * ContactSolver.MOST_PASSES; i++) {
             for (Joint joint : holding) joint.solveVelocity();
             jointTree.solveVelocity();
-            ContactSolver.solveVelocities(solving, dt, i % 2 == 1);
+            float unsettled = ContactSolver.solveVelocities(solving, dt, i % 2 == 1, (float) i / velocityIterations);
+            if (unsettled <= ContactSolver.SETTLED && i >= velocityIterations - 1) break;
         }
-        ContactSolver.applyRestitution(solving, dt);
+        if (ContactSolver.markBounces(solving)) {
+            for (int i = 0; i < velocityIterations; i++) {
+                for (Joint joint : holding) joint.solveVelocity();
+                jointTree.solveVelocity();
+                ContactSolver.solveVelocities(solving, dt, i % 2 == 1, 0f);
+            }
+        }
         for (int i = 0; i < positionIterations; i++) ContactSolver.solvePositions(solving, dt, i % 2 == 1);
     }
 
@@ -1101,17 +1112,34 @@ public final class PhysicsWorld {
             RigidBody body = bodies.get(i);
             if (body.isAwakeDynamic() && body.sleepTime < TIME_TO_SLEEP) awake[find(i)] = true;
         }
+        // Slow is only still for what rests on something. Bodies that nothing holds keep whatever speed they have, so
+        // one drifting slowly through space is on its way somewhere and would stop dead if it slept.
+        boolean[] held = new boolean[n];
         for (Contact c : contacts) {
             if (c.isTrigger()) continue;
             RigidBody a = c.getBodyA(), b = c.getBodyB();
             if (a.isDynamic() && b.getType() == BodyType.KINEMATIC && b.isMoving()) awake[find(a.islandIndex)] = true;
             if (b.isDynamic() && a.getType() == BodyType.KINEMATIC && a.isMoving()) awake[find(b.islandIndex)] = true;
+            if (!c.isTouching()) continue;
+            if (a.isDynamic() && !b.isDynamic()) held[find(a.islandIndex)] = true;
+            if (b.isDynamic() && !a.isDynamic()) held[find(b.islandIndex)] = true;
         }
         for (Joint joint : joints) {
             RigidBody a = joint.getBodyA(), b = joint.getBodyB();
-            if (b == null) continue;
+            if (b == null) {
+                if (a.isDynamic()) held[find(a.islandIndex)] = true;
+                continue;
+            }
             if (a.isDynamic() && b.getType() == BodyType.KINEMATIC && b.isMoving()) awake[find(a.islandIndex)] = true;
             if (b.isDynamic() && a.getType() == BodyType.KINEMATIC && a.isMoving()) awake[find(b.islandIndex)] = true;
+            if (a.isDynamic() && !b.isDynamic()) held[find(a.islandIndex)] = true;
+            if (b.isDynamic() && !a.isDynamic()) held[find(b.islandIndex)] = true;
+        }
+        for (int i = 0; i < n; i++) {
+            RigidBody body = bodies.get(i);
+            if (!body.isAwakeDynamic() || held[find(i)]) continue;
+            if (body.vx * body.vx + body.vy * body.vy + body.vz * body.vz >= FREE_SLEEP_SPEED * FREE_SLEEP_SPEED
+                    || body.wx * body.wx + body.wy * body.wy + body.wz * body.wz >= FREE_SLEEP_SPEED * FREE_SLEEP_SPEED) awake[find(i)] = true;
         }
         for (int i = 0; i < n; i++) {
             RigidBody body = bodies.get(i);

@@ -827,6 +827,13 @@ public final class RigidBody {
         return thin;
     }
 
+    /**
+     * Half of the narrowest the body is (see {@link #sweeps}); infinite for a plane or a mesh.
+     */
+    float halfThickness() {
+        return thickness;
+    }
+
     List<BodyShape> placedShapes() {
         return scaledShapes;
     }

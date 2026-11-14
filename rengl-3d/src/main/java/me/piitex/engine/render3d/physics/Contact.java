@@ -19,6 +19,8 @@ public final class Contact {
     private boolean reported; // made by a backend, which decides what touches
 
     float friction, restitution;
+    float invThickness; // one over half the narrowest either body is
+    float patience; // how many times the velocity passes asked for this contact may take to settle
     // The two directions friction acts along, across the normal.
     float t1x, t1y, t1z, t2x, t2y, t2z;
 
@@ -34,7 +36,8 @@ public final class Contact {
         float normalImpulse, tangentImpulse1, tangentImpulse2, maxNormalImpulse, pseudoImpulse;
         Vec3 warmTangent = Vec3.ZERO; // last step's friction impulse, carried over in world space
         float relativeVelocity; // how fast the bodies met along the normal, before solving
-        boolean bounced;
+        boolean bounces; // hit hard enough to bounce this step
+        boolean bounced; // and was still apart when the step began
     }
 
     private static final float MATCH_DISTANCE_SQUARED = 0.05f * 0.05f;

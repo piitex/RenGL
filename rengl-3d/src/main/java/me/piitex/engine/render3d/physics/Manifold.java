@@ -66,6 +66,8 @@ final class Manifold {
         }
         count = kept;
         if (count <= MAX_POINTS) return;
+        dropShadowed();
+        if (count <= MAX_POINTS) return;
 
         Vec3 middle = Vec3.ZERO;
         for (int i = 0; i < count; i++) middle = middle.add(points[i]);
@@ -101,6 +103,33 @@ final class Manifold {
             depths[i] = keptDepths[i];
         }
         count = n;
+    }
+
+    /**
+     * Drops the points that have a deeper point closer to them sideways than it is deeper: they sit above that point,
+     * not beside it, and would reach the other shape only after it. A box thinner than the margin has its top corners
+     * within reach of the floor too; kept for being far from a bottom corner, one of them would take the place of a
+     * bottom corner and leave the box standing on three.
+     */
+    private void dropShadowed() {
+        boolean[] shadowed = new boolean[count];
+        for (int i = 0; i < count; i++) {
+            for (int j = 0; j < count && !shadowed[i]; j++) {
+                float deeper = depths[j] - depths[i];
+                if (deeper <= 0f) continue;
+                Vec3 d = points[j].sub(points[i]);
+                float along = d.dot(normal);
+                shadowed[i] = d.lengthSquared() - along * along < deeper * deeper;
+            }
+        }
+        int kept = 0;
+        for (int i = 0; i < count; i++) {
+            if (shadowed[i]) continue;
+            points[kept] = points[i];
+            depths[kept] = depths[i];
+            kept++;
+        }
+        count = kept;
     }
 
     private int deepest(Vec3 middle) {

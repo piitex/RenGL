@@ -193,6 +193,65 @@ class SolverTest {
     }
 
     @Test
+    void boxDroppedFlatBouncesFlat() {
+        // Every corner has to get its share of the bounce: handed out one corner after another, the first took it all
+        // and the box left the floor spinning, a third short of its height.
+        for (float e : new float[]{0.2f, 0.5f, 0.8f}) {
+            PhysicsWorld world = withFloor();
+            world.bodies().getFirst().setRestitution(e);
+            RigidBody crate = box(1f, 0, 2.5f, 0).setRestitution(e);
+            world.add(crate);
+            boolean hit = false;
+            float peak = 0f, spin = 0f;
+            for (int i = 0; i < 120; i++) {
+                world.step(DT);
+                if (crate.getVelocity().y() > 0f) hit = true;
+                if (hit) peak = Math.max(peak, crate.getPosition().y() - 0.5f);
+                spin = Math.max(spin, crate.getAngularVelocity().length());
+                if (hit && crate.getVelocity().y() < -0.5f) break;
+            }
+            assertEquals(e * e * 2f, peak, 0.15f * e * e * 2f, "restitution " + e);
+            assertTrue(spin < 0.05f, "restitution " + e + ": spin " + spin + " rad/s");
+        }
+    }
+
+    @Test
+    void boxThinnerThanTheMarginStandsOnFourCorners() {
+        // Its top corners are within reach of the floor too, and one of them must not take a bottom corner's place.
+        PhysicsWorld world = withFloor().setSleeping(false);
+        RigidBody die = box(0.02f, 0, 0.01f, 0);
+        world.add(die);
+        run(world, 5f);
+        assertEquals(0.01f, die.getPosition().y(), 0.001f);
+        assertEquals(1f, Math.abs(die.getRotation().w()), 1e-4f, "still flat");
+        assertEquals(0f, Math.hypot(die.getPosition().x(), die.getPosition().z()), 0.001f);
+    }
+
+    @Test
+    void stacksOfSmallBoxesStayUp() {
+        // What the passes leave undone is the same whatever the size, and far more of a small box: small ones get more.
+        for (float size : new float[]{0.1f, 0.05f, 0.03f, 0.02f}) {
+            for (int height : new int[]{5, 8}) {
+                if (height == 8 && size < 0.05f) continue; // still beyond it
+                PhysicsWorld world = withFloor();
+                List<RigidBody> stack = new ArrayList<>();
+                for (int i = 0; i < height; i++) {
+                    RigidBody crate = box(size, 0, size * (0.5f + i), 0).setMass(500f * size * size * size);
+                    stack.add(crate);
+                    world.add(crate);
+                }
+                run(world, 20f);
+                for (int i = 0; i < height; i++) {
+                    Vec3 p = stack.get(i).getPosition();
+                    String which = height + " boxes of " + size + " m, box " + i;
+                    assertEquals(0f, Math.hypot(p.x(), p.z()), 0.15f * size, which);
+                    assertEquals(size * (0.5f + i), p.y(), 0.1f * size, which);
+                }
+            }
+        }
+    }
+
+    @Test
     void stackOfBouncyBoxesStaysUp() {
         // The weight a contact carries is not an impact: boxes that bounce when dropped must still rest in a stack.
         PhysicsWorld world = withFloor().setSleeping(false);

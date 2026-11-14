@@ -387,4 +387,20 @@ class DynamicsTest {
         assertThrows(IllegalArgumentException.class, () -> new PhysicsWorld().setFixedStep(0f));
         assertThrows(IllegalStateException.class, () -> new RigidBody(BodyType.DYNAMIC).setDensity(1f));
     }
+
+    @Test
+    void slowBodyThatNothingHoldsKeepsGoing() {
+        // Slow enough to sleep on the floor, but on its way somewhere out here.
+        PhysicsWorld world = new PhysicsWorld().setGravity(Vec3.ZERO);
+        RigidBody drifter = new RigidBody(BodyType.DYNAMIC).addShape(BoxShape.ofSize(1, 1, 1)).setVelocity(0.02f, 0, 0);
+        RigidBody tumbler = new RigidBody(BodyType.DYNAMIC).addShape(BoxShape.ofSize(1, 1, 1)).setPosition(0, 5, 0)
+                .setAngularDamping(0f).setAngularVelocity(new Vec3(0, 0.02f, 0));
+        RigidBody parked = new RigidBody(BodyType.DYNAMIC).addShape(BoxShape.ofSize(1, 1, 1)).setPosition(0, 10, 0);
+        world.add(drifter).add(tumbler).add(parked);
+        for (int i = 0; i < 600; i++) world.step(DT);
+        assertEquals(0.2f, drifter.getPosition().x(), 0.005f);
+        assertFalse(drifter.isSleeping());
+        assertEquals(0.02f, tumbler.getAngularVelocity().y(), 1e-4f);
+        assertTrue(parked.isSleeping(), "a body with no speed at all still sleeps");
+    }
 }

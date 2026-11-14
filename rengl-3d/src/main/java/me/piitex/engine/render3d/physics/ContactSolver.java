@@ -21,6 +21,22 @@ final class ContactSolver {
      */
     static final float SLOP = 0.002f;
     /**
+     * The velocity passes go on past their count while the last one still changed some point's speed by more than
+     * this share of its body's half thickness per step. What a pass leaves undone is the same few millimetres per
+     * second whatever the size of the bodies: nothing to a crate, but it tips a box five centimetres wide a degree a
+     * step, and a stack of those leans over and falls before the passes of later steps have caught up.
+     */
+    static final float SETTLED = 0.0001f;
+    /**
+     * Half the thickness, in metres, below which a body gets more passes than were asked for: twice as many at half
+     * of this, and so on up to {@link #MOST_PASSES} times. Bodies thicker than this are solved as they always were.
+     */
+    static final float SMALL = 0.25f;
+    /**
+     * How many times the velocity passes asked for the contacts of the smallest bodies may get.
+     */
+    static final int MOST_PASSES = 8;
+    /**
      * The share of the overlap fixed each step.
      */
     static final float CORRECTION = 0.2f;
@@ -33,14 +49,17 @@ final class ContactSolver {
     }
 
     /**
-     * The whole contact solve for contacts that share no body with any joint: prepare, the velocity passes, bounce and
+     * The whole contact solve for contacts that share no body with any joint: prepare, the velocity passes (more of
+     * them for small bodies that haven't settled, see {@link #SETTLED}), bounce and
      * the position passes. Contacts of separate islands touch separate bodies (static and kinematic ones are only read),
      * so separate islands can run this at the same time and get exactly what one thread would.
      */
     static void solveIslands(List<Contact> contacts, float dt, int velocityIterations, int positionIterations) {
         prepare(contacts, dt);
-        for (int i = 0; i < velocityIterations; i++) solveVelocities(contacts, dt, i % 2 == 1);
-        applyRestitution(contacts, dt);
+        for (int i = 0; i < velocityIterations * MOST_PASSES; i++) {
+            if (solveVelocities(contacts, dt, i % 2 == 1, (float) i / velocityIterations) <= SETTLED && i >= velocityIterations - 1) break;
+        }
+        if (markBounces(contacts)) for (int i = 0; i < velocityIterations; i++) solveVelocities(contacts, dt, i % 2 == 1, 0f);
         for (int i = 0; i < positionIterations; i++) solvePositions(contacts, dt, i % 2 == 1);
     }
 
@@ -69,6 +88,9 @@ final class ContactSolver {
             RigidBody a = c.getBodyA(), b = c.getBodyB();
             c.friction = PhysicsMaterial.combineFriction(a.getMaterial(), b.getMaterial());
             c.restitution = PhysicsMaterial.combineRestitution(a.getMaterial(), b.getMaterial());
+            float thin = Math.min(a.isDynamic() ? a.halfThickness() : Float.POSITIVE_INFINITY, b.isDynamic() ? b.halfThickness() : Float.POSITIVE_INFINITY);
+            c.invThickness = thin > 0f ? 1f / thin : 0f;
+            c.patience = Math.clamp(SMALL * c.invThickness, 1f, MOST_PASSES);
             float nx = c.normal.x(), ny = c.normal.y(), nz = c.normal.z();
             // Any two directions across the normal; the same normal always gives the same pair.
             if (Math.abs(nx) >= 0.57735f) {
@@ -100,6 +122,7 @@ final class ContactSolver {
                 p.relativeVelocity = relativeVelocity(a, b, p, nx, ny, nz);
                 p.maxNormalImpulse = 0f;
                 p.pseudoImpulse = 0f;
+                p.bounces = false;
                 p.bounced = false;
             }
         }
@@ -128,12 +151,17 @@ final class ContactSolver {
      * One pass over every point: friction first, then the push along the normal. Passes alternate direction: always
      * going the same way favours the points solved first, which tips each box in a stack a little the same way until
      * the stack leans.
+     *
+     * @param progress how many times the passes asked for have been done; a contact is left out once this reaches its
+     *                 patience
+     * @return the most any point's speed changed, as its travel in a step over half its body's thickness
      */
-    static void solveVelocities(List<Contact> contacts, float dt, boolean backward) {
-        float invDt = 1f / dt;
+    static float solveVelocities(List<Contact> contacts, float dt, boolean backward, float progress) {
+        float invDt = 1f / dt, unsettled = 0f;
         int size = contacts.size();
         for (int k = 0; k < size; k++) {
             Contact c = contacts.get(backward ? size - 1 - k : k);
+            if (progress >= c.patience) continue;
             RigidBody a = c.getBodyA(), b = c.getBodyB();
             float nx = c.normal.x(), ny = c.normal.y(), nz = c.normal.z();
 
@@ -160,39 +188,43 @@ final class ContactSolver {
                 Contact.Point p = c.points[backward ? c.count - 1 - j : j];
                 float vn = relativeVelocity(a, b, p, nx, ny, nz);
                 float separation = -p.depth;
-                // Apart: they may close the gap this step but no more. Touching: they mustn't move further in.
-                float target = separation > 0f ? -separation * invDt : 0f;
+                // Bouncing: they leave at the restitution times the speed they met at. Apart: they may close the gap
+                // this step but no more. Touching: they mustn't move further in.
+                float target = p.bounces ? -c.restitution * p.relativeVelocity : separation > 0f ? -separation * invDt : 0f;
                 float impulse = Math.max(p.normalImpulse - p.normalMass * (vn - target), 0f);
                 float d = impulse - p.normalImpulse;
                 p.normalImpulse = impulse;
                 p.maxNormalImpulse = Math.max(p.maxNormalImpulse, impulse);
                 apply(a, b, p, nx * d, ny * d, nz * d);
+                if (p.normalMass > 0f) unsettled = Math.max(unsettled, Math.abs(d) / p.normalMass * dt * c.invThickness);
             }
         }
+        return unsettled;
     }
 
     /**
-     * After the pushes have settled, points that were hit hard enough get their bounce: the bodies leave at the
-     * restitution times the speed they met at.
+     * After the pushes have settled, marks the points that were hit hard enough to bounce. The velocity passes run
+     * again after this, and those points then leave at the restitution times the speed they met at. One pass over the
+     * points is not enough: the first corner of a box landing flat would take the whole bounce and the box would leave
+     * the floor spinning.
+     *
+     * @return whether any point bounces
      */
-    static void applyRestitution(List<Contact> contacts, float dt) {
+    static boolean markBounces(List<Contact> contacts) {
+        boolean any = false;
         for (Contact c : contacts) {
             if (c.restitution == 0f) continue;
-            RigidBody a = c.getBodyA(), b = c.getBodyB();
-            float nx = c.normal.x(), ny = c.normal.y(), nz = c.normal.z();
             for (int i = 0; i < c.count; i++) {
                 Contact.Point p = c.points[i];
                 if (p.relativeVelocity > -RESTITUTION_THRESHOLD || p.maxNormalImpulse == 0f) continue;
-                float vn = relativeVelocity(a, b, p, nx, ny, nz);
-                float impulse = Math.max(p.normalImpulse - p.normalMass * (vn + c.restitution * p.relativeVelocity), 0f);
-                float d = impulse - p.normalImpulse;
-                p.normalImpulse = impulse;
-                apply(a, b, p, nx * d, ny * d, nz * d);
+                p.bounces = true;
                 // A point still apart at the start of the step would bounce off thin air; its bounce is moved to the
                 // surface by the position pass.
                 p.bounced = -p.depth > 0f;
+                any = true;
             }
         }
+        return any;
     }
 
     /**
