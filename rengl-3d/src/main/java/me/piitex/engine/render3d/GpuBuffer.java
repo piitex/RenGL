@@ -17,6 +17,15 @@ public interface GpuBuffer extends AutoCloseable {
      */
     void update(ByteBuffer data);
 
+    /**
+     * Copies what the GPU last wrote into a buffer made with {@link GpuDevice#createReadbackBuffer}, {@code into.remaining()}
+     * bytes from the start, into {@code into} (from its position, which is left where it was). The buffer keeps one copy per
+     * frame in flight: what this returns was written that many frames ago, by commands the GPU has finished.
+     */
+    default void read(ByteBuffer into) {
+        throw new UnsupportedOperationException("Only a readback buffer can be read");
+    }
+
     @Override
     void close();
 }

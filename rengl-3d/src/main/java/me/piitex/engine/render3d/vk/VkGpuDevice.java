@@ -87,6 +87,8 @@ public final class VkGpuDevice implements GpuDevice {
     private final VulkanContext context;
     private final boolean rayTracing;
     private final boolean softRays;
+    /** Whether compute work and indirect draws with a count are on: see {@link #supportsVirtualGeometry()}. */
+    private final boolean virtualGeometry;
     private VkRay ray;
     private VkSoftRay softRay;
     private final String name;
@@ -155,6 +157,7 @@ public final class VkGpuDevice implements GpuDevice {
             vkGetPhysicalDeviceFeatures(physical, features);
             // The window's context turns on every feature the GPU has, so reported support is enabled support.
             float limit = features.samplerAnisotropy() ? properties.limits().maxSamplerAnisotropy() : 1f;
+            virtualGeometry = wantsVirtualGeometry(stack, features, context.apiVersion());
             maxAnisotropy = (int) Math.max(1f, Math.min(limit, Integer.getInteger("rengl.3d.anisotropy", 8)));
 
             VmaVulkanFunctions functions = VmaVulkanFunctions.calloc(stack).set(context.vkInstance(), device);
@@ -207,7 +210,8 @@ public final class VkGpuDevice implements GpuDevice {
                 .apply(0, s -> s.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(SETS_PER_POOL * BUFFERS_PER_SET))
                 .apply(1, s -> s.type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(SETS_PER_POOL * SAMPLERS_PER_SET))
                 // The software ray tracer reads the scene and its triangles from two storage buffers.
-                .apply(2, s -> s.type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).descriptorCount(SETS_PER_POOL * 2));
+                // and the compute work that picks the clusters of virtual geometry binds a few more.
+                .apply(2, s -> s.type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).descriptorCount(SETS_PER_POOL * 6));
         if (rayTracing) sizes.apply(3, s -> s.type(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR).descriptorCount(SETS_PER_POOL));
         VkDescriptorPoolCreateInfo pool = VkDescriptorPoolCreateInfo.calloc(stack).sType$Default()
                 .maxSets(SETS_PER_POOL)
@@ -379,6 +383,50 @@ public final class VkGpuDevice implements GpuDevice {
         if (VK_API_VERSION_MAJOR(apiVersion) == 1 && VK_API_VERSION_MINOR(apiVersion) < 2) return false;
         if ("true".equalsIgnoreCase(setting)) return true;
         return !rayQueries && !"false".equalsIgnoreCase(System.getProperty("rengl.3d.raytracing"));
+    }
+
+    /**
+     * Compute work and indirect draws with a count: Vulkan 1.2's {@code drawIndirectCount}, which
+     * {@link VirtualGeometryExtensions} asks the window's device for, with multi-draw indirect and a first instance in an
+     * indirect command (Vulkan 1.0 features the window's device has on wherever the GPU has them).
+     */
+    private boolean wantsVirtualGeometry(MemoryStack stack, VkPhysicalDeviceFeatures features, int apiVersion) {
+        if (!VirtualGeometryExtensions.wanted()) return false;
+        if (VK_API_VERSION_MAJOR(apiVersion) == 1 && VK_API_VERSION_MINOR(apiVersion) < 2) return false;
+        if (!features.multiDrawIndirect() || !features.drawIndirectFirstInstance()) return false;
+        VkPhysicalDeviceVulkan12Features core = VkPhysicalDeviceVulkan12Features.calloc(stack).sType$Default();
+        org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceFeatures2(physical, VkPhysicalDeviceFeatures2.calloc(stack).sType$Default().pNext(core.address()));
+        return core.drawIndirectCount();
+    }
+
+    @Override
+    public boolean supportsVirtualGeometry() {
+        return virtualGeometry;
+    }
+
+    @Override
+    public GpuBuffer createStorageBuffer(long size) {
+        if (!virtualGeometry) GpuDevice.super.createStorageBuffer(size);
+        return new VkBuf(this, BufferType.STORAGE, size, null, VkBuf.Kind.GPU);
+    }
+
+    @Override
+    public GpuBuffer createReadbackBuffer(long size) {
+        if (!virtualGeometry) GpuDevice.super.createReadbackBuffer(size);
+        return new VkBuf(this, BufferType.STORAGE, size, null, VkBuf.Kind.READBACK);
+    }
+
+    @Override
+    public ComputePipeline createComputePipeline(String source) {
+        if (!virtualGeometry) GpuDevice.super.createComputePipeline(source);
+        return new VkCompute(this, source);
+    }
+
+    @Override
+    public ComputePass beginCompute() {
+        if (!virtualGeometry) GpuDevice.super.beginCompute();
+        if (!frameActive) throw new IllegalStateException("Call beginFrame() before beginCompute()");
+        return new VkComputePass(this);
     }
 
     @Override

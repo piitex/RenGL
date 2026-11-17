@@ -38,6 +38,10 @@ public final class Node3D {
     private boolean frustumCulled = true;
     private boolean occluder;
     private boolean sortTriangles;
+    private float lodBias;
+    private int forcedLod = -1;
+    private float cullScreenSize;
+    private boolean virtualGeometry = true;
     private Instances instances;
     private Skin skin;
     private MorphState morph;
@@ -256,6 +260,62 @@ public final class Node3D {
         return this;
     }
 
+    public float getLodBias() {
+        return lodBias;
+    }
+
+    /**
+     * Makes this node take simpler or more detailed {@linkplain Mesh#addLod levels of detail} than the scene would pick: each
+     * 1 doubles the error it allows on screen (simpler sooner), each -1 halves it. 0 by default. Added to the scene's own
+     * {@link Scene3D#setLodBias}. The hero of the game might have -1, a heap of rubble 1.
+     */
+    public Node3D setLodBias(float bias) {
+        this.lodBias = Float.isFinite(bias) ? bias : 0f;
+        return this;
+    }
+
+    public int getForcedLod() {
+        return forcedLod;
+    }
+
+    /**
+     * Always draws this {@linkplain Mesh#addLod level of detail} of the mesh, whatever the distance: 0 is the mesh itself, a
+     * number past the last level is the last. -1, the default, lets the scene pick.
+     */
+    public Node3D setForcedLod(int level) {
+        this.forcedLod = Math.max(-1, level);
+        return this;
+    }
+
+    public float getCullScreenSize() {
+        return cullScreenSize;
+    }
+
+    /**
+     * Stops drawing this node, or each of its instances, once it is smaller on screen than this share of the picture's height:
+     * 0.01 drops a pebble once it is less than a hundredth of the screen tall. Its shadow goes with it. 0, the default, draws it
+     * however small it gets. Its size is that of the box around its mesh.
+     */
+    public Node3D setCullScreenSize(float share) {
+        this.cullScreenSize = Float.isFinite(share) ? Math.max(0f, share) : 0f;
+        return this;
+    }
+
+    public boolean isVirtualGeometry() {
+        return virtualGeometry;
+    }
+
+    /**
+     * Whether this node may be drawn from its mesh's {@linkplain Mesh#buildClusters clusters} when the scene has
+     * {@linkplain Scene3D#setVirtualGeometry virtual geometry} on (true by default). False draws the mesh's classic levels
+     * of detail instead, or the mesh itself where it has none, for a node that must look the same on every backend or that
+     * is cheaper drawn whole.
+     */
+    public Node3D setVirtualGeometry(boolean virtualGeometry) {
+        this.virtualGeometry = virtualGeometry;
+        return this;
+    }
+
     public boolean isReceiveShadow() {
         return receiveShadow;
     }
@@ -456,6 +516,11 @@ public final class Node3D {
         c.receiveShadow = receiveShadow;
         c.frustumCulled = frustumCulled;
         c.sortTriangles = sortTriangles;
+        c.occluder = occluder;
+        c.lodBias = lodBias;
+        c.forcedLod = forcedLod;
+        c.cullScreenSize = cullScreenSize;
+        c.virtualGeometry = virtualGeometry;
         c.instances = instances == null ? null : instances.copy();
         c.skin = skin;
         if (morph != null) {

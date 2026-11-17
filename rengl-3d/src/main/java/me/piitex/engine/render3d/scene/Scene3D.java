@@ -557,12 +557,212 @@ public class Scene3D implements Viewport3D.Content {
      * @param clusteredLights point and spot lights sorted into the grid this frame, 0 when the scene shades its lights directly
      * @param occluded  nodes (or instances) left out because an occluder hid them; counted in {@code culled} too, not in {@code nodes}
      * @param glowLights lights made this frame from glowing surfaces ({@link Material#setGlow})
+     * @param triangles triangles drawn in the main pass (records times the triangles of the level each one drew)
+     * @param levelRecords records drawn at each {@linkplain Mesh#addLod level of detail}, level 0 (the mesh itself, and every
+     *                     mesh without levels) first; the last entry counts that level and any past it. Read it with
+     *                     {@link #recordsAtLevel}
      */
     public record Stats(int nodes, int culled, int instances, int drawCalls, int shadowViews, int shadowAtlasWidth, int shadowAtlasHeight,
-                        int clusteredLights, int occluded, int glowLights) {
+                        int clusteredLights, int occluded, int glowLights, long triangles, int[] levelRecords) {
+        /** How many entries {@link #levelRecords} has. */
+        public static final int LEVELS = 8;
+
+        public Stats {
+            levelRecords = levelRecords == null ? new int[LEVELS] : levelRecords.clone();
+        }
+
         public Stats(int nodes, int culled, int instances, int drawCalls, int shadowViews, int shadowAtlasWidth, int shadowAtlasHeight) {
             this(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight, 0, 0, 0);
         }
+
+        public Stats(int nodes, int culled, int instances, int drawCalls, int shadowViews, int shadowAtlasWidth, int shadowAtlasHeight,
+                     int clusteredLights, int occluded, int glowLights) {
+            this(nodes, culled, instances, drawCalls, shadowViews, shadowAtlasWidth, shadowAtlasHeight, clusteredLights, occluded, glowLights, 0L, null);
+        }
+
+        @Override
+        public int[] levelRecords() {
+            return levelRecords.clone();
+        }
+
+        /** Records drawn at this level of detail; the last of the {@link #LEVELS} counts it and any past it. */
+        public int recordsAtLevel(int level) {
+            return level < 0 ? 0 : levelRecords[Math.min(level, LEVELS - 1)];
+        }
+    }
+
+    private boolean lodEnabled = true;
+    private float lodPixelError = 1f;
+    private float lodBias;
+    private boolean lodDebugColors;
+    private LodTransition lodTransition = LodTransition.DITHER;
+    private float lodFadeTime = 0.25f;
+    private int shadowLodBias = 1;
+    private int rayTracingLodBias;
+    private boolean virtualGeometry;
+    private volatile boolean usingVirtualGeometry;
+
+    public boolean isVirtualGeometry() {
+        return virtualGeometry;
+    }
+
+    /**
+     * Draws meshes split into {@linkplain Mesh#buildClusters clusters} as virtual geometry: every frame the GPU picks, for each
+     * instance, the clusters whose error is under {@link #setLodPixelError} pixels and whose coarser replacement's is not, and
+     * draws them from the list it made. A big mesh is then fine near the camera and coarse far off within one instance, with
+     * no cracks between and no change of level to fade. Shadows get their own pick, {@link #setShadowLodBias} levels coarser
+     * (each level doubles the error allowed). The scene and node biases count as for the classic levels.
+     * <p>
+     * Off by default. Needs Vulkan on a GPU with multi-draw indirect and draw indirect count (any desktop GPU of the last
+     * decade); elsewhere, and for a skinned, morphed or see-through node, the classic levels of detail are drawn.
+     * {@link #isUsingVirtualGeometry()} says whether the last frame drew any.
+     */
+    public Scene3D setVirtualGeometry(boolean on) {
+        this.virtualGeometry = on;
+        return this;
+    }
+
+    private boolean virtualGeometryOcclusion;
+
+    public boolean isVirtualGeometryOcclusion() {
+        return virtualGeometryOcclusion;
+    }
+
+    /**
+     * Leaves out the clusters of virtual geometry that something in front hides, as Nanite does, in two steps: each cluster is
+     * tested against a pyramid of last frame's depth, the scene's solid things and the clusters that passed are drawn into a
+     * depth picture, and what failed is tested again against that, so what the camera moved to see is found the same frame.
+     * It costs a depth pass of what is in view, so it pays where much is hidden (a city, a forest seen from inside it, a
+     * room's walls) and costs where little is. Off by default. Needs a GPU whose depth can be read back, which desktop GPUs
+     * can.
+     */
+    public Scene3D setVirtualGeometryOcclusion(boolean on) {
+        this.virtualGeometryOcclusion = on;
+        return this;
+    }
+
+    /** Whether the last frame drew a node as virtual geometry. */
+    public boolean isUsingVirtualGeometry() {
+        return usingVirtualGeometry;
+    }
+
+    void setUsingVirtualGeometry(boolean using) {
+        this.usingVirtualGeometry = using;
+    }
+
+    /**
+     * How a node changes from one level of detail to the next.
+     */
+    public enum LodTransition {
+        /** At once: cheapest, but the change can be seen as a pop. */
+        NONE,
+        /**
+         * Over {@link #setLodFadeTime a moment}, both levels drawn, each in a scattered half of the pixels that shifts from the
+         * old level to the new: no pop and no see-through, as the two together always cover the surface once. With a temporal
+         * upscaler the pattern changes every frame and blends into a smooth fade.
+         */
+        DITHER
+    }
+
+    public LodTransition getLodTransition() {
+        return lodTransition;
+    }
+
+    /** How nodes change level ({@link LodTransition#DITHER} by default). */
+    public Scene3D setLodTransition(LodTransition transition) {
+        this.lodTransition = transition == null ? LodTransition.DITHER : transition;
+        return this;
+    }
+
+    public float getLodFadeTime() {
+        return lodFadeTime;
+    }
+
+    /** How long, in seconds, a {@link LodTransition#DITHER dithered} change of level takes: 0.25 by default. */
+    public Scene3D setLodFadeTime(float seconds) {
+        this.lodFadeTime = Float.isFinite(seconds) ? Math.max(0f, seconds) : 0.25f;
+        return this;
+    }
+
+    public int getShadowLodBias() {
+        return shadowLodBias;
+    }
+
+    /**
+     * How many levels of detail simpler than what the camera sees a node's shadow is drawn with: 1 by default, as a shadow
+     * shows its outline only, and blurred. 0 draws shadows with the same level as the picture.
+     */
+    public Scene3D setShadowLodBias(int levels) {
+        this.shadowLodBias = Math.max(0, levels);
+        return this;
+    }
+
+    public int getRayTracingLodBias() {
+        return rayTracingLodBias;
+    }
+
+    /**
+     * How many levels of detail simpler than what the camera sees rays hit, for traced shadows, reflections, occlusion and
+     * bounced light: 0 by default, so traced shadows fit the shapes on screen. Raise it in a big scene to build and trace less.
+     */
+    public Scene3D setRayTracingLodBias(int levels) {
+        this.rayTracingLodBias = Math.max(0, levels);
+        return this;
+    }
+
+    public boolean isLodEnabled() {
+        return lodEnabled;
+    }
+
+    /**
+     * Whether meshes with {@linkplain Mesh#addLod levels of detail} draw a simpler level when they are small on screen (true by
+     * default). Off, every node draws its mesh itself, apart from those with {@link Node3D#setForcedLod}. Meshes without levels
+     * are drawn the same either way.
+     */
+    public Scene3D setLodEnabled(boolean enabled) {
+        this.lodEnabled = enabled;
+        return this;
+    }
+
+    public float getLodPixelError() {
+        return lodPixelError;
+    }
+
+    /**
+     * How far, in pixels of the picture, a simpler level of detail may be from the mesh itself before a more detailed level is
+     * drawn: 1 by default, where the change is hard to see. Raise it to draw fewer triangles (2 to 4 still looks right in a busy
+     * scene), lower it for stills.
+     */
+    public Scene3D setLodPixelError(float pixels) {
+        if (!(pixels > 0f) || Float.isInfinite(pixels)) throw new IllegalArgumentException("The pixel error must be above 0, not " + pixels);
+        this.lodPixelError = pixels;
+        return this;
+    }
+
+    public float getLodBias() {
+        return lodBias;
+    }
+
+    /**
+     * Makes every node take simpler (above 0) or more detailed (below 0) levels of detail: each 1 doubles the error allowed on
+     * screen. 0 by default. Each node adds its own {@link Node3D#setLodBias}.
+     */
+    public Scene3D setLodBias(float bias) {
+        this.lodBias = Float.isFinite(bias) ? bias : 0f;
+        return this;
+    }
+
+    public boolean isLodDebugColors() {
+        return lodDebugColors;
+    }
+
+    /**
+     * Colours each node by the level of detail it draws in place of its material's colour, to see where levels change: the
+     * mesh itself is white, then green, yellow, orange, red, magenta, blue and cyan. Off by default.
+     */
+    public Scene3D setLodDebugColors(boolean on) {
+        this.lodDebugColors = on;
+        return this;
     }
 
     /**
@@ -1056,7 +1256,13 @@ public class Scene3D implements Viewport3D.Content {
         Map<Object, Boolean> seen = new IdentityHashMap<>();
         List<Object> items = new ArrayList<>();
         root.traverse(node -> {
-            if (node.getMesh() != null && seen.put(node.getMesh(), true) == null) items.add(node.getMesh());
+            if (node.getMesh() != null && seen.put(node.getMesh(), true) == null) {
+                items.add(node.getMesh());
+                LodChain lods = node.getMesh().getLods();
+                if (lods != null) {
+                    for (int i = 1; i < lods.size(); i++) if (seen.put(lods.level(i).mesh(), true) == null) items.add(lods.level(i).mesh());
+                }
+            }
             Material m = node.getMaterial();
             if (m == null) return;
             for (TextureData t : new TextureData[]{m.getTexture(), m.getNormalTexture(), m.getMetallicRoughnessTexture(),

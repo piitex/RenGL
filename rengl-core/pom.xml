@@ -39,6 +39,7 @@
                                         <exclude>org.lwjgl:lwjgl-shaderc</exclude>
                                         <exclude>org.lwjgl:lwjgl-spvc</exclude>
                                         <exclude>org.lwjgl:lwjgl-vma</exclude>
+                                        <exclude>org.lwjgl:lwjgl-meshoptimizer</exclude>
                                         <exclude>org.lwjgl:lwjgl-zstd</exclude>
                                         <exclude>org.apache.lucene:*</exclude>
                                     </excludes>

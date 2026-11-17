@@ -112,14 +112,103 @@ public final class Model {
      * @throws IOException when the file can't be read or isn't a model Assimp understands
      */
     public static Model load(Path file) throws IOException {
+        return load(file, null);
+    }
+
+    /**
+     * Loads a model file and makes levels of detail for every mesh in it ({@link Mesh#generateLods(LodSettings)}), with the
+     * full meshes reordered to draw faster too when the settings {@linkplain LodSettings#optimize optimize}. With
+     * {@code lods} null it is {@link #load(Path)}.
+     * <p>
+     * Levels the file has made by hand are used either way, in place of the made level with the same number: nodes named
+     * like {@code rock_LOD0}, {@code rock_LOD1} (the Unity and Unreal way; the first becomes {@code rock} and the others are
+     * taken out of the tree), and glTF's {@code MSFT_lod} extension, whose {@code MSFT_screencoverage} gives the size on a
+     * 1080 pixel high screen at which each level starts, and the smallest size ({@link Node3D#setCullScreenSize}).
+     */
+    public static Model load(Path file, LodSettings lods) throws IOException {
         if (!Files.isRegularFile(file)) throw new IOException("No model file at " + file);
-        // From the path, not from memory, so Assimp's own file access finds the .mtl, .bin and texture files beside it.
-        AIScene scene = aiImportFile(file.toAbsolutePath().toString(), IMPORT_FLAGS);
         String lower = file.getFileName().toString().toLowerCase(Locale.ROOT);
         boolean gltf = lower.endsWith(".gltf") || lower.endsWith(".glb");
         byte[] bytes = gltf ? Files.readAllBytes(file) : null;
+        // A glTF file whose levels of detail are nodes outside its scene is read with them added to it, or Assimp skips them.
+        byte[] withLevels = gltf ? GltfLods.withLevelsInScene(bytes) : null;
+        // From the path, not from memory, so Assimp's own file access finds the .mtl, .bin and texture files beside it.
+        AIScene scene = withLevels == null ? aiImportFile(file.toAbsolutePath().toString(), IMPORT_FLAGS) : importReplacing(file.toAbsolutePath(), withLevels);
         return convert(scene, file.getFileName().toString(), file.toAbsolutePath().getParent(),
-                gltf ? GltfTextureInfo.read(bytes) : List.of(), gltf ? GltfAnimations.read(bytes, file.toAbsolutePath().getParent()) : List.of());
+                gltf ? GltfTextureInfo.read(bytes) : List.of(), gltf ? GltfAnimations.read(bytes, file.toAbsolutePath().getParent()) : List.of(),
+                gltf ? GltfLods.read(withLevels != null ? withLevels : bytes) : List.of(), lods);
+    }
+
+    /**
+     * Imports {@code file} through Assimp's own file access, with {@code content} read in place of the file itself; every
+     * other file it opens (buffers, textures) is read from the disk as usual.
+     */
+    private static AIScene importReplacing(Path file, byte[] content) {
+        Map<Long, ByteBuffer> open = new HashMap<>();
+        AIFileReadProc read = AIFileReadProc.create((pFile, pBuffer, size, count) -> {
+            ByteBuffer data = open.get(pFile);
+            if (data == null || size <= 0) return 0;
+            long items = Math.min(count, data.remaining() / size);
+            int bytes = (int) (items * size);
+            MemoryUtil.memCopy(MemoryUtil.memAddress(data), pBuffer, bytes);
+            data.position(data.position() + bytes);
+            return items;
+        });
+        AIFileWriteProc write = AIFileWriteProc.create((pFile, pBuffer, size, count) -> 0);
+        AIFileTellProc tell = AIFileTellProc.create(pFile -> open.containsKey(pFile) ? open.get(pFile).position() : 0);
+        AIFileTellProc length = AIFileTellProc.create(pFile -> open.containsKey(pFile) ? open.get(pFile).limit() : 0);
+        AIFileSeek seek = AIFileSeek.create((pFile, offset, origin) -> {
+            ByteBuffer data = open.get(pFile);
+            if (data == null) return aiReturn_FAILURE;
+            long to = switch (origin) {
+                case aiOrigin_CUR -> data.position() + offset;
+                case aiOrigin_END -> data.limit() + offset;
+                default -> offset;
+            };
+            if (to < 0 || to > data.limit()) return aiReturn_FAILURE;
+            data.position((int) to);
+            return aiReturn_SUCCESS;
+        });
+        AIFileFlushProc flush = AIFileFlushProc.create(pFile -> {
+        });
+        AIFileOpenProc openProc = AIFileOpenProc.create((pFileIO, fileName, openMode) -> {
+            Path path = Path.of(MemoryUtil.memUTF8(fileName));
+            if (!path.isAbsolute()) path = file.getParent().resolve(path);
+            byte[] bytes;
+            try {
+                bytes = path.toAbsolutePath().normalize().equals(file.normalize()) ? content : Files.readAllBytes(path);
+            } catch (IOException | RuntimeException e) {
+                return 0L;
+            }
+            ByteBuffer data = MemoryUtil.memAlloc(Math.max(1, bytes.length));
+            data.put(bytes).flip();
+            AIFile handle = AIFile.calloc().ReadProc(read).WriteProc(write).TellProc(tell).FileSizeProc(length).SeekProc(seek).FlushProc(flush);
+            open.put(handle.address(), data);
+            return handle.address();
+        });
+        AIFileCloseProc closeProc = AIFileCloseProc.create((pFileIO, pFile) -> {
+            ByteBuffer data = open.remove(pFile);
+            if (data != null) MemoryUtil.memFree(data);
+            AIFile.create(pFile).free();
+        });
+        AIFileIO io = AIFileIO.calloc().OpenProc(openProc).CloseProc(closeProc);
+        try {
+            return aiImportFileEx(file.toString(), IMPORT_FLAGS, io);
+        } finally {
+            io.free();
+            for (Map.Entry<Long, ByteBuffer> left : open.entrySet()) {
+                MemoryUtil.memFree(left.getValue());
+                AIFile.create(left.getKey()).free();
+            }
+            read.free();
+            write.free();
+            tell.free();
+            length.free();
+            seek.free();
+            flush.free();
+            openProc.free();
+            closeProc.free();
+        }
     }
 
     /**
@@ -129,18 +218,41 @@ public final class Model {
      * @param name the file name, whose ending tells Assimp the format, such as {@code "ship.glb"}
      */
     public static Model load(String name, byte[] data) throws IOException {
+        return load(name, data, null);
+    }
+
+    /**
+     * Loads a model from memory and makes levels of detail for its meshes, as {@link #load(Path, LodSettings)} does.
+     */
+    public static Model load(String name, byte[] data, LodSettings lods) throws IOException {
         String ext = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT) : "";
-        ByteBuffer buffer = MemoryUtil.memAlloc(data.length);
+        String lower = name.toLowerCase(Locale.ROOT);
+        boolean gltf = lower.endsWith(".gltf") || lower.endsWith(".glb");
+        byte[] withLevels = gltf ? GltfLods.withLevelsInScene(data) : null;
+        byte[] imported = withLevels != null ? withLevels : data;
+        ByteBuffer buffer = MemoryUtil.memAlloc(imported.length);
         AIScene scene;
         try {
-            buffer.put(data).flip();
+            buffer.put(imported).flip();
             scene = aiImportFileFromMemory(buffer, IMPORT_FLAGS, ext);
         } finally {
             MemoryUtil.memFree(buffer);
         }
-        String lower = name.toLowerCase(Locale.ROOT);
-        boolean gltf = lower.endsWith(".gltf") || lower.endsWith(".glb");
-        return convert(scene, name, null, gltf ? GltfTextureInfo.read(data) : List.of(), gltf ? GltfAnimations.read(data, null) : List.of());
+        return convert(scene, name, null, gltf ? GltfTextureInfo.read(data) : List.of(), gltf ? GltfAnimations.read(data, null) : List.of(),
+                gltf ? GltfLods.read(imported) : List.of(), lods);
+    }
+
+    /**
+     * Makes levels of detail for every mesh of the model, as {@link Mesh#generateLods(LodSettings)} does; levels from the
+     * file are kept. Like loading, it touches nothing but the model, so it can run on a worker.
+     */
+    public Model generateLods(LodSettings settings) {
+        for (Mesh mesh : meshes) {
+            if (mesh.isLines()) continue;
+            mesh.generateLods(settings);
+            if (settings.clusters() && !mesh.isSkinned() && !mesh.isMorphed()) mesh.buildClusters();
+        }
+        return this;
     }
 
     private static final int IMPORT_FLAGS = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenSmoothNormals
@@ -149,13 +261,13 @@ public final class Model {
             | aiProcess_FlipUVs;
 
     private static Model convert(AIScene scene, String name, Path directory, List<GltfTextureInfo.Material> placing,
-                                 List<List<GltfAnimations.Channel>> exact) throws IOException {
+                                 List<List<GltfAnimations.Channel>> exact, List<GltfLods.Lod> fileLods, LodSettings lods) throws IOException {
         if (scene == null || scene.mRootNode() == null) {
             throw new IOException("Could not load the model " + name + ": " + aiGetErrorString());
         }
         String lower = name.toLowerCase(Locale.ROOT);
         try {
-            return new Converter(scene, name, directory, lower.endsWith(".gltf") || lower.endsWith(".glb"), placing, exact).convert();
+            return new Converter(scene, name, directory, lower.endsWith(".gltf") || lower.endsWith(".glb"), placing, exact, fileLods, lods).convert();
         } finally {
             aiReleaseImport(scene);
         }
@@ -168,6 +280,12 @@ public final class Model {
         final boolean linearColors;
         final List<GltfTextureInfo.Material> placing;
         final List<List<GltfAnimations.Channel>> exactChannels;
+        final List<GltfLods.Lod> fileLods;
+        final LodSettings lods;
+        /** Meshes that became a level of detail of another, which the model doesn't list as meshes of its own. */
+        final java.util.Set<Mesh> levelMeshes = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        /** The number of the Assimp mesh each node that draws one draws. */
+        final Map<Node3D, Integer> meshIndexOf = new java.util.IdentityHashMap<>();
         final Map<String, TextureData> textures = new HashMap<>();
         final List<Mesh> meshes = new ArrayList<>();
         final List<Material> materials = new ArrayList<>();
@@ -178,7 +296,9 @@ public final class Model {
         final List<Object[]> meshNodes = new ArrayList<>();
 
         Converter(AIScene scene, String name, Path directory, boolean linearColors, List<GltfTextureInfo.Material> placing,
-                  List<List<GltfAnimations.Channel>> exactChannels) {
+                  List<List<GltfAnimations.Channel>> exactChannels, List<GltfLods.Lod> fileLods, LodSettings lods) {
+            this.fileLods = fileLods;
+            this.lods = lods;
             this.placing = placing;
             this.exactChannels = exactChannels;
             this.scene = scene;
@@ -202,11 +322,169 @@ public final class Model {
             PointerBuffer meshPointers = scene.mMeshes();
             for (int i = 0; i < meshCount; i++) {
                 meshByIndex[i] = convertMesh(AIMesh.create(meshPointers.get(i)));
+                if (meshByIndex[i] != null && lods != null && lods.optimize()) meshByIndex[i] = LodGenerator.optimize(meshByIndex[i]);
                 if (meshByIndex[i] != null) meshes.add(meshByIndex[i]);
             }
             Node3D root = convertNode(scene.mRootNode());
             attachSkins(root);
+            namedLevels(root);
+            fileLevels(root);
+            meshes.removeIf(levelMeshes::contains);
+            if (lods != null) {
+                for (Mesh mesh : meshes) {
+                    mesh.generateLods(lods);
+                    if (lods.clusters() && !mesh.isLines() && !mesh.isSkinned() && !mesh.isMorphed()) mesh.buildClusters();
+                }
+            }
             return new Model(root, meshes, materials, convertAnimations());
+        }
+
+        private static final java.util.regex.Pattern LOD_NAME = java.util.regex.Pattern.compile("^(.*)_LOD(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+        /**
+         * Levels of detail made by hand and named the Unity and Unreal way: nodes beside each other called {@code rock_LOD0},
+         * {@code rock_LOD1} and so on. Each part of a simpler level becomes a level of the same part of the first, which is
+         * renamed {@code rock}; the others leave the tree.
+         */
+        void namedLevels(Node3D root) {
+            Map<Node3D, Map<String, java.util.TreeMap<Integer, Node3D>>> groups = new java.util.LinkedHashMap<>();
+            root.traverse(node -> {
+                if (node.getParent() == null || node.getName() == null) return;
+                java.util.regex.Matcher m = LOD_NAME.matcher(node.getName());
+                if (!m.matches()) return;
+                groups.computeIfAbsent(node.getParent(), p -> new java.util.LinkedHashMap<>())
+                        .computeIfAbsent(m.group(1), b -> new java.util.TreeMap<>())
+                        .putIfAbsent(Integer.parseInt(m.group(2)), node);
+            });
+            for (Map<String, java.util.TreeMap<Integer, Node3D>> byBase : groups.values()) {
+                for (Map.Entry<String, java.util.TreeMap<Integer, Node3D>> group : byBase.entrySet()) {
+                    java.util.TreeMap<Integer, Node3D> levels = group.getValue();
+                    Node3D full = levels.get(0);
+                    if (full == null || levels.size() < 2) continue;
+                    List<Node3D> base = parts(full);
+                    for (Map.Entry<Integer, Node3D> level : levels.tailMap(1).entrySet()) {
+                        Node3D node = level.getValue();
+                        List<Node3D> parts = parts(node);
+                        if (parts.size() != base.size()) {
+                            log.warn("{}: {} has {} parts and {} has {}; it is not used as a level of detail.", name, node.getName(), parts.size(), full.getName(), base.size());
+                            continue;
+                        }
+                        if (!samePlace(node, full)) {
+                            log.warn("{}: {} is not placed where {} is; it is not used as a level of detail.", name, node.getName(), full.getName());
+                            continue;
+                        }
+                        for (int j = 0; j < base.size(); j++) addLevel(base.get(j), parts.get(j), level.getKey(), -1f);
+                        node.getParent().remove(node);
+                    }
+                    String old = full.getName();
+                    for (Node3D part : base) {
+                        if (part != full && part.getName().startsWith(old)) part.setName(group.getKey() + part.getName().substring(old.length()));
+                    }
+                    full.setName(group.getKey());
+                }
+            }
+        }
+
+        /**
+         * Levels of detail from glTF's {@code MSFT_lod}: the simpler levels' meshes join the chain of the node's own, and their
+         * nodes, if Assimp put them in the tree, leave it.
+         */
+        void fileLevels(Node3D root) {
+            for (GltfLods.Lod lod : fileLods) {
+                Node3D full = nodesByName.get(lod.node());
+                if (full == null) continue;
+                List<Node3D> base = parts(full);
+                float[] coverage = lod.coverage();
+                for (int k = 0; k < lod.levels().size(); k++) {
+                    // The file was read with every level's node in its scene ({@link GltfLods#withLevelsInScene}), named.
+                    Node3D node = nodesByName.get(lod.levels().get(k));
+                    List<Node3D> parts = node == null || node == full ? List.of() : parts(node);
+                    if (parts.size() != base.size()) {
+                        log.warn("{}: level {} of {} has {} parts where the node has {}; it and those after it are not used.", name, k + 1, full.getName(), parts.size(), base.size());
+                        break;
+                    }
+                    for (int j = 0; j < base.size(); j++) {
+                        float error = k < coverage.length && coverage[k] > 0f ? errorForCoverage(base.get(j).getMesh(), coverage[k]) : -1f;
+                        addLevel(base.get(j), parts.get(j), k + 1, error);
+                    }
+                    if (node.getParent() != null && isUnder(node, root)) node.getParent().remove(node);
+                }
+                // One value more than there are levels: below it nothing is drawn.
+                if (coverage.length == lod.levels().size() + 1 && coverage[coverage.length - 1] > 0f) {
+                    for (Node3D part : base) part.setCullScreenSize((float) Math.sqrt(coverage[coverage.length - 1]));
+                }
+            }
+        }
+
+        /**
+         * The error at which a level is drawn from the screen coverage a file gives (a share of the screen's area), taking a
+         * screen 1080 pixels high and an error of a pixel: the level starts once the mesh is that share of the screen's height.
+         */
+        static float errorForCoverage(Mesh mesh, float coverage) {
+            float height = (float) Math.sqrt(Math.min(1f, coverage));
+            return 2f * mesh.bounds().radius() / (height * 1080f);
+        }
+
+        private static boolean isUnder(Node3D node, Node3D root) {
+            for (Node3D n = node; n != null; n = n.getParent()) if (n == root) return true;
+            return false;
+        }
+
+        /** The nodes that draw a level's meshes: the node and the parts Assimp split from it, or else its children that draw. */
+        private static List<Node3D> parts(Node3D node) {
+            List<Node3D> parts = new ArrayList<>();
+            if (node.getMesh() != null) parts.add(node);
+            for (Node3D child : node.getChildren()) {
+                if (child.getMesh() != null && child.getName().startsWith(node.getName() + "#")) parts.add(child);
+            }
+            if (parts.isEmpty()) {
+                for (Node3D child : node.getChildren()) if (child.getMesh() != null) parts.add(child);
+            }
+            return parts;
+        }
+
+        private static boolean samePlace(Node3D a, Node3D b) {
+            float[] x = a.localMatrix().toArray(), y = b.localMatrix().toArray();
+            for (int i = 0; i < 16; i++) if (Math.abs(x[i] - y[i]) > 1e-4f * (1f + Math.abs(y[i]))) return false;
+            return true;
+        }
+
+        /**
+         * Makes {@code level}'s mesh level {@code number} of {@code full}'s, measuring its error when {@code error} is below 0.
+         * A skinned level has its joints renumbered to the full mesh's bones, which Assimp lists in each mesh's own order.
+         */
+        void addLevel(Node3D full, Node3D level, int number, float error) {
+            Mesh base = full.getMesh(), mesh = level.getMesh();
+            if (base == null || mesh == null || base == mesh || base.isLines() != mesh.isLines()) return;
+            if (base.isSkinned() && (!mesh.isSkinned() || !renumberJoints(full, level, mesh))) {
+                log.warn("{}: {} has no bones that match {}'s; it is not used as a level of detail.", name, level.getName(), full.getName());
+                return;
+            }
+            base.setLodLevel(number, mesh, error >= 0f ? error : LodGenerator.measureError(base, mesh));
+            levelMeshes.add(mesh);
+        }
+
+        private boolean renumberJoints(Node3D full, Node3D level, Mesh mesh) {
+            Integer fullIndex = meshIndexOf.get(full), levelIndex = meshIndexOf.get(level);
+            if (fullIndex == null || levelIndex == null) return false;
+            List<String> fullBones = boneNames(fullIndex), levelBones = boneNames(levelIndex);
+            int[] to = new int[levelBones.size()];
+            for (int b = 0; b < to.length; b++) {
+                to[b] = fullBones.indexOf(levelBones.get(b));
+                if (to[b] < 0) return false;
+            }
+            int[] joints = mesh.skinJoints().clone();
+            for (int i = 0; i < joints.length; i++) joints[i] = joints[i] < to.length ? to[joints[i]] : 0;
+            mesh.setSkinning(joints, mesh.skinWeights());
+            return true;
+        }
+
+        private List<String> boneNames(int meshIndex) {
+            AIMesh source = AIMesh.create(scene.mMeshes().get(meshIndex));
+            List<String> names = new ArrayList<>();
+            PointerBuffer bones = source.mBones();
+            for (int b = 0; b < source.mNumBones(); b++) names.add(AIBone.create(bones.get(b)).mName().dataString());
+            return names;
         }
 
         /**
@@ -374,11 +652,13 @@ public final class Model {
                 if (first) {
                     node.setMesh(mesh).setMaterial(material);
                     meshNodes.add(new Object[]{node, meshIndex});
+                    meshIndexOf.put(node, meshIndex);
                     first = false;
                 } else {
                     Node3D extra = new Node3D(node.getName() + "#" + i, mesh, material);
                     node.add(extra);
                     meshNodes.add(new Object[]{extra, meshIndex});
+                    meshIndexOf.put(extra, meshIndex);
                 }
             }
             // The parts of one mesh (a glTF mesh with a primitive per material) blend together, and an animation of the

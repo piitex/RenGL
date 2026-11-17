@@ -77,24 +77,40 @@ final class RayWorld {
      * reflections and occlusion; without, only the ones that cast shadows. {@code textures} places each one's material in the
      * data a ray reads where it hits it.
      */
-    void collect(Node3D root, List<RayInstance> into, boolean everything, Textures textures) {
+    void collect(Node3D root, List<RayInstance> into, boolean everything, Textures textures, Levels levels) {
         frame++;
-        collect(root, Mat4.identity(), into, everything, textures);
+        collect(root, Mat4.identity(), into, everything, textures, levels);
     }
 
-    private void collect(Node3D node, Mat4 parentWorld, List<RayInstance> into, boolean everything, Textures textures) {
+    /**
+     * Which of a mesh's levels of detail rays hit for a node, or for one of its instances.
+     */
+    interface Levels {
+        /** The mesh itself, always. */
+        Levels NONE = (node, base, model, instance) -> base;
+
+        /**
+         * @param model    the node's (or the instance's) transform in the scene
+         * @param instance the instance, or -1 for a node without
+         */
+        Mesh mesh(Node3D node, Mesh base, float[] model, int instance);
+    }
+
+    private void collect(Node3D node, Mat4 parentWorld, List<RayInstance> into, boolean everything, Textures textures, Levels levels) {
         if (!node.isVisible()) return;
         Mat4 world = parentWorld.mul(node.localMatrix());
         Mesh mesh = node.getMesh();
         if (mesh != null && solid(node, mesh, everything)) {
-            RayGeometry geometry = geometry(mesh);
-            if (geometry != null) {
+            RayGeometry base = geometry(mesh);
+            if (base != null) {
+                boolean lods = mesh.getLods() != null || mesh.hasClusters();
                 Instances instances = node.getInstances();
                 Material material = node.getMaterial() == null ? DEFAULT_MATERIAL : node.getMaterial();
                 int mask = SEEN | (node.isCastShadow() ? SHADOWS : 0);
                 int slot = textures.slot(material), glowSlot = textures.glowSlot(material);
                 float[] w = world.toArray();
                 if (instances == null) {
+                    RayGeometry geometry = lods ? level(levels.mesh(node, mesh, w, -1), base) : base;
                     into.add(new RayInstance(geometry, w, mask, record(material, slot, glowSlot, 1f, 1f, 1f, 1f)));
                 } else {
                     float[] data = instances.matrixData();
@@ -102,13 +118,22 @@ final class RayWorld {
                     for (int i = 0; i < instances.size(); i++) {
                         float[] model = new float[16];
                         multiply(w, data, i * 16, model);
+                        RayGeometry geometry = lods ? level(levels.mesh(node, mesh, model, i), base) : base;
                         into.add(new RayInstance(geometry, model, mask, tints == null ? record(material, slot, glowSlot, 1f, 1f, 1f, 1f)
                                 : record(material, slot, glowSlot, tints[i * 4], tints[i * 4 + 1], tints[i * 4 + 2], tints[i * 4 + 3])));
                     }
                 }
             }
         }
-        for (Node3D child : node.getChildren()) collect(child, world, into, everything, textures);
+        for (Node3D child : node.getChildren()) collect(child, world, into, everything, textures, levels);
+    }
+
+    /**
+     * The geometry of a level of detail, or of the mesh itself when the level can't be built.
+     */
+    private RayGeometry level(Mesh level, RayGeometry base) {
+        RayGeometry geometry = geometry(level);
+        return geometry != null ? geometry : base;
     }
 
     private static boolean solid(Node3D node, Mesh mesh, boolean everything) {

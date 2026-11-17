@@ -61,7 +61,9 @@ final class SceneRenderer {
     /** The environment kind takes three bits, from {@link #KEY_ENV_SHIFT}. */
     private static final int KEY_ENV_MASK = 7;
     /** The custom filters and falloffs a program holds ({@link #variants} index) sit above the environment bits and the UV2 and line bits. */
-    private static final int KEY_VARIANT_SHIFT = 20;
+    private static final int KEY_VARIANT_SHIFT = 21;
+    /** The program draws a picture card ({@link Mesh#setImpostor}) in place of the mesh. Only the main pass draws cards. */
+    private static final int KEY_IMPOSTOR = 1 << 20;
     /** The program writes one of the pictures a denoiser is guided by ({@code SceneShaders.GUIDE_*}) in place of shading; two bits. */
     private static final int KEY_GUIDE_SHIFT = 18, KEY_GUIDE_MASK = 3;
     /** The program also shades the lights listed in the cluster grid for the pixel's cell. */
@@ -200,6 +202,36 @@ final class SceneRenderer {
     }
 
     /**
+     * The pictures of one mesh drawn with one material, for its picture card ({@link ImpostorShaders}): the colour atlas, the
+     * surface atlas and the card's block. {@code texture} is the colour texture they were taken with, to take them again when
+     * the material's changes.
+     */
+    private static final class ImpostorAtlas {
+        final RenderTarget color, surface;
+        final GpuBuffer block, bakeBlock;
+        final TextureData texture;
+        long lastUsed;
+
+        ImpostorAtlas(RenderTarget color, RenderTarget surface, GpuBuffer block, GpuBuffer bakeBlock, TextureData texture) {
+            this.color = color;
+            this.surface = surface;
+            this.block = block;
+            this.bakeBlock = bakeBlock;
+            this.texture = texture;
+        }
+
+        void close() {
+            color.close();
+            surface.close();
+            block.close();
+            bakeBlock.close();
+        }
+    }
+
+    /** Pixels along each side of a card's two atlases; each of its views has an eighth of that. */
+    static final int IMPOSTOR_SIZE = 1024;
+
+    /**
      * The buffers one render call fills.
      */
     private static final class Resources {
@@ -221,6 +253,8 @@ final class SceneRenderer {
         RayScene rayScene;
         /** Where a reflection ray finds what it hit: the scene's table of instances, and the reflection settings. */
         GpuBuffer rayBlock;
+        /** The draw lists of virtual geometry the GPU writes for this render call. */
+        final VirtualGeometry.Frame clusterLists = new VirtualGeometry.Frame();
 
         Resources(GpuDevice device) {
             frame = device.createDynamicBuffer(BufferType.UNIFORM, FRAME_BLOCK_SIZE);
@@ -243,6 +277,7 @@ final class SceneRenderer {
             if (cluster != null) cluster.close();
             if (rayScene != null) rayScene.close();
             if (rayBlock != null) rayBlock.close();
+            clusterLists.close();
         }
     }
 
@@ -284,7 +319,54 @@ final class SceneRenderer {
         int[] order;
         int visible; // how many of the first of order are in view
         boolean sortTriangles; // draw the mesh's triangles far to near, from the node's own index buffer
+        int level; // the level of detail mesh is of the node's own mesh, 0 for the mesh itself
+        int fade; // the change of level the records are in (see fadeCode), 0 for none
+        boolean impostor; // drawn as the node's mesh's picture card; mesh is then the simplest level, for the other passes
+        int[] fades; // per record, in step with order, in place of fade; null for fade alone
+        ClusterDag clusters; // drawn as virtual geometry from these clusters, or null
+        ClusterDag clusterSource; // the node's clusters where it may be drawn from them, whichever level it draws now
+
+        /** A copy with the same node, material and placement, and no instances picked yet. */
+        Draw copy() {
+            Draw d = new Draw();
+            d.node = node;
+            d.mesh = mesh;
+            d.material = material;
+            d.world = world;
+            d.mirrored = mirrored;
+            d.distance = distance;
+            d.cast = cast;
+            d.receive = receive;
+            d.sphere = sphere;
+            d.unbounded = unbounded;
+            d.morph = morph;
+            d.key = key;
+            d.level = level;
+            d.impostor = impostor;
+            d.clusters = clusters;
+            d.clusterSource = clusterSource;
+            return d;
+        }
     }
+
+    /**
+     * The level of detail a node drew last, and each of its instances, so a node at the border between two keeps its level
+     * (see {@link LodChain#HYSTERESIS}). -1 for none yet.
+     */
+    private static final class LodMemory {
+        int level = -1;
+        byte[] instances;
+        /** The level a node is fading from, -1 for none, and when it started; the same for each instance. */
+        int from = -1;
+        double fadeStart;
+        byte[] instanceFrom;
+        double[] instanceStart;
+    }
+
+    /** The colours {@link Scene3D#setLodDebugColors} gives each level. */
+    private static final float[][] LOD_COLORS = {
+            {1f, 1f, 1f}, {0.2f, 0.9f, 0.2f}, {1f, 0.9f, 0.1f}, {1f, 0.55f, 0.1f},
+            {1f, 0.15f, 0.15f}, {0.95f, 0.2f, 0.95f}, {0.25f, 0.4f, 1f}, {0.1f, 0.95f, 0.95f}};
 
     /**
      * One instanced call: {@code count} consecutive records starting at {@code first}.
@@ -305,6 +387,11 @@ final class SceneRenderer {
         int joints = -1; // index into the render call's joint buffers, for a skinned group
         int morph = -1; // index into the render call's morph blocks, for a group blended on the GPU
         GpuTexture morphTexture;
+        int level; // as for Draw
+        ImpostorAtlas impostor; // the card the main pass draws in place of mesh, or null
+        ClusterDag clusters; // drawn as virtual geometry: the GPU's lists of clusters in place of the mesh's triangles
+        float clusterBias; // the node's level of detail bias, which every record of a group of clusters shares
+        VirtualGeometry.Lists lists; // where this frame's lists are, once the clusters were picked
     }
 
     private final GpuDevice device;
@@ -340,6 +427,27 @@ final class SceneRenderer {
     private final Map<Mesh, float[]> centroids = new IdentityHashMap<>();
     private final Map<Resources, Integer> sortedCounter = new IdentityHashMap<>();
     private Vec3 eye = Vec3.ZERO;
+    private final Map<Node3D, LodMemory> lodMemory = new java.util.WeakHashMap<>();
+    /** The GPU half of virtual geometry, made the first time a scene asks for it on a device that has it. */
+    private VirtualGeometry virtualGeometry;
+    private boolean clustersOn, virtualBroken, occlusionBroken;
+    /** While the depth of occluders is drawn: the bits of a group's key that its depth keeps, so it is culled as in the picture. */
+    private int occluderBits;
+    /** This frame's level of detail settings: whether the scene picks levels, pixels one unit covers at distance 1, the error allowed, the scene's bias, and tan(fovY / 2). */
+    private boolean lodOn, lodDebug, lodFade;
+    private float lodPixels = 1f, lodMaxPixels = 1f, lodSceneBias, lodTan = 1f, lodFadeTime = 0.25f;
+    /** The clock changes of level fade by, in seconds, and the frame's place in the dither pattern's cycle of 8 (0 without a temporal upscaler). */
+    private double lodNow;
+    private int lodFrameBits, shadowLodBias, rayLodBias;
+    private final RayWorld.Levels rayLevels = this::rayLevel;
+    /** The picture cards' pictures, by mesh and material; the quad every card is drawn with; the programs and views that take them. */
+    private final Map<Mesh, Map<Material, ImpostorAtlas>> impostors = new IdentityHashMap<>();
+    private final Mesh impostorQuad = new Mesh(new float[]{-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0}, new float[]{0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1},
+            new float[]{0, 1, 1, 1, 1, 0, 0, 0}, new int[]{0, 1, 2, 0, 2, 3});
+    private Pipeline bakeColor, bakeSurface;
+    private GpuBuffer bakeViews;
+    /** A picture card's shader did not compile, or its pictures could not be taken: every card is drawn as its simplest mesh. */
+    private boolean impostorBroken;
     private final OcclusionBuffer occlusionBuffer = new OcclusionBuffer();
     /** The depth picture of this frame's occluders, or null when the scene has none or does not use occlusion culling. */
     private OcclusionBuffer occlusion;
@@ -402,8 +510,16 @@ final class SceneRenderer {
         List<VertexLayout> extra = new ArrayList<>(List.of(instanceLayout));
         if (skinned) extra.add(skinLayout);
         PipelineDesc desc;
-        if ((key & KEY_SHADOW) != 0) {
-            desc = new PipelineDesc(shadowVertex(skinned, morph), SHADOW_FRAGMENT, meshLayout, true, false, false, false, extra);
+        if ((key & KEY_IMPOSTOR) != 0) {
+            // A card: the quad and the instance stream only, both sides drawn (it always faces the camera anyway).
+            desc = new PipelineDesc(impostorVertex(), fragment((key >> KEY_ENV_SHIFT) & KEY_ENV_MASK, variants.get(key >> KEY_VARIANT_SHIFT).filters(),
+                    variants.get(key >> KEY_VARIANT_SHIFT).falloffs(), (key & KEY_CLUSTER) != 0, (key & KEY_RAY) != 0, (key & KEY_REFLECT) != 0,
+                    (key & KEY_GI) != 0 ? GI_APPLY : GI_NONE, GUIDE_NONE, device.softwareRayTracing(), true),
+                    meshLayout, true, false, false, false, List.of(instanceLayout), false, true);
+        } else if ((key & KEY_SHADOW) != 0) {
+            // Culled and turned as the picture is only for the depth of occluders (the shadow pass keys carry neither bit).
+            desc = new PipelineDesc(shadowVertex(skinned, morph), SHADOW_FRAGMENT, meshLayout, true, (key & KEY_CULL) != 0, false,
+                    (key & KEY_MIRRORED) != 0, extra);
         } else {
             boolean blend = (key & KEY_BLEND) != 0;
             if (uv2) extra.add(uv2Layout);
@@ -473,6 +589,21 @@ final class SceneRenderer {
         float[] planes = frustumPlanes(viewProj);
         int[] counts = {0, 0, 0};
         eye = camera.getPosition();
+        // Levels of detail are picked for the picture as it is shown, not as it is drawn: an upscaled frame keeps them.
+        lodOn = scene.isLodEnabled();
+        lodDebug = scene.isLodDebugColors();
+        lodTan = (float) Math.tan(Math.toRadians(camera.getFovYDegrees()) * 0.5);
+        lodPixels = Math.max(1, target.height()) * 0.5f / lodTan;
+        lodMaxPixels = scene.getLodPixelError();
+        lodSceneBias = scene.getLodBias();
+        lodFadeTime = scene.getLodFadeTime();
+        lodFade = scene.getLodTransition() == Scene3D.LodTransition.DITHER && lodFadeTime > 0f;
+        // Wall-clock time, so a scene shown by two viewports fades at the same pace.
+        lodNow = System.nanoTime() * 1e-9;
+        lodFrameBits = temporal ? (int) (frame & 7) : 0;
+        shadowLodBias = scene.getShadowLodBias();
+        rayLodBias = scene.getRayTracingLodBias();
+        clustersOn = scene.isVirtualGeometry() && device.supportsVirtualGeometry() && !virtualBroken;
         occlusion = null;
         if (scene.isOcclusionCulling()) {
             occlusionBuffer.begin(viewProj.toArray());
@@ -490,6 +621,12 @@ final class SceneRenderer {
         List<Group> opaqueGroups = build(opaque, res, cursor);
         List<Group> blendedGroups = build(blended, res, cursor);
         uploadInstances(res, cursor[0]);
+        boolean occludeClusters = clustersOn && scene.isVirtualGeometryOcclusion() && !occlusionBroken;
+        boolean clustersDrawn = cutClusters(res, opaqueGroups, planes, occludeClusters);
+        if (clustersDrawn && occludeClusters) {
+            occlusionPass(res, opaqueGroups, drawViewProj, camera, upFrame != null ? upFrame.renderWidth() : target.width(),
+                    upFrame != null ? upFrame.renderHeight() : target.height());
+        }
 
         Skybox sky = scene.getSkybox();
         int env = environmentKind(scene, sky);
@@ -537,6 +674,8 @@ final class SceneRenderer {
 
         Color bg = scene.getBackground();
         int drawCalls = 0, drawnRecords = 0;
+        long triangles = 0;
+        int[] levelRecords = new int[Scene3D.Stats.LEVELS];
         // With bloom, occlusion or the look the scene goes into a target of its own first, in linear light, and the
         // viewport's target gets it tone mapped, with the effects.
         RenderTarget drawTarget = target;
@@ -583,6 +722,10 @@ final class SceneRenderer {
                     drawGroup(pass, res, group, state, lastMaterial, false, indirect != null && list == opaqueGroups ? fragmentBits | KEY_GI : fragmentBits, null);
                     drawCalls++;
                     drawnRecords += group.viewCount;
+                    if (group.lists == null && !group.mesh.isLines()) {
+                        triangles += (long) (group.impostor != null ? 2 : group.mesh.indexCount() / 3) * group.viewCount;
+                    }
+                    levelRecords[Math.min(group.level, Scene3D.Stats.LEVELS - 1)] += group.viewCount;
                 }
             }
         }
@@ -598,10 +741,14 @@ final class SceneRenderer {
         scene.setUsingRayTracedGlobalIllumination(indirect != null && !rays.path());
         scene.setUsingPathTracing(indirect != null && rays.path());
         scene.setUsingRayReconstruction(guides != null);
+        scene.setUsingVirtualGeometry(clustersDrawn);
+        // The GPU counts the triangles of clusters; what it counted a few frames ago is the best there is now.
+        if (clustersDrawn) triangles += res.clusterLists.triangles;
         if (temporal) res.post.temporal().endFrame(viewProj.toArray());
         writingTemporal = null;
         scene.setStats(new Scene3D.Stats(counts[0], counts[1], drawnRecords, drawCalls,
-                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight(), clusters == null ? 0 : split.local().size(), counts[2], glowCount));
+                shadowFrame.viewCount(), shadowFrame.atlasWidth(), shadowFrame.atlasHeight(), clusters == null ? 0 : split.local().size(), counts[2], glowCount,
+                triangles, levelRecords));
         if (frame % SWEEP_EVERY == 0) sweep();
     }
 
@@ -637,7 +784,13 @@ final class SceneRenderer {
      * @param viewOnly with {@code shadowPass}, draw only the records that are in view, not all of them: for a picture from the camera
      */
     private void drawGroup(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, boolean shadowPass, int fragmentBits, GpuBuffer shadowView, boolean viewOnly) {
-        int key = shadowPass ? (group.key & (KEY_SKINNED | KEY_MORPH)) | KEY_SHADOW : group.key | fragmentBits;
+        // A card only in the picture itself: the shadow, depth, bounced light and guide passes draw its simplest mesh.
+        boolean card = group.impostor != null && !shadowPass && (fragmentBits & (KEY_GI_TRACE | (KEY_GUIDE_MASK << KEY_GUIDE_SHIFT))) == 0;
+        if (card) {
+            drawCard(pass, res, group, state, lastMaterial, fragmentBits);
+            return;
+        }
+        int key = shadowPass ? (group.key & (KEY_SKINNED | KEY_MORPH | occluderBits)) | KEY_SHADOW : group.key | fragmentBits;
         GpuMesh mesh = gpuMesh(group.mesh);
         if (key != state[0]) {
             pass.bindPipeline(pipeline(key));
@@ -667,8 +820,110 @@ final class SceneRenderer {
         int next = 2;
         if (mesh.skin != null && (key & KEY_SKINNED) != 0) pass.bindVertexBuffer(next++, mesh.skin);
         if (mesh.uv2 != null && (key & KEY_UV2) != 0 && !shadowPass) pass.bindVertexBuffer(next, mesh.uv2);
+        if (group.lists != null) {
+            virtualGeometry.draw(pass, res.clusterLists, group.lists, shadowPass && !viewOnly);
+            return;
+        }
         pass.bindIndexBuffer(group.indices != null ? group.indices : mesh.indices);
         pass.drawIndexed(mesh.indexCount, shadowPass && !viewOnly ? group.count : group.viewCount, group.first);
+    }
+
+    /**
+     * Draws a group of picture cards: the quad, once per record, with the card's pictures in place of the material's colour
+     * and normal textures.
+     */
+    private void drawCard(RenderPass pass, Resources res, Group group, int[] state, Material[] lastMaterial, int fragmentBits) {
+        int key = KEY_IMPOSTOR | fragmentBits;
+        GpuMesh quad = gpuMesh(impostorQuad);
+        if (key != state[0]) {
+            pass.bindPipeline(pipeline(key));
+            pass.bindUniformBuffer(0, res.frame);
+            state[0] = key;
+        }
+        ImpostorAtlas atlas = group.impostor;
+        atlas.lastUsed = frame;
+        pass.bindUniformBuffer(ImpostorShaders.BLOCK_BINDING, atlas.block);
+        pass.bindTexture(2, atlas.color.texture());
+        pass.bindTexture(3, atlas.surface.texture());
+        // The material's other maps can't be read on a card (its coordinates are the card's): its plain values stand.
+        pass.bindTexture(4, whiteTexture);
+        pass.bindTexture(5, whiteTexture);
+        pass.bindTexture(6, whiteTexture);
+        pass.bindTexture(HEIGHT_BINDING, whiteTexture);
+        // The next group of this material binds its own textures again.
+        lastMaterial[0] = null;
+        pass.bindVertexBuffer(0, quad.vertices);
+        pass.bindVertexBuffer(1, res.instances);
+        pass.bindIndexBuffer(quad.indices);
+        pass.drawIndexed(quad.indexCount, group.viewCount, group.first);
+    }
+
+    // ---- virtual geometry ------------------------------------------------------------------------------------------
+
+    /**
+     * Has the GPU pick the clusters of every group drawn as virtual geometry, for the camera and for the shadows, into the
+     * render call's lists (see {@link VirtualGeometry}). A group's error allowed is the scene's pixel error doubled for each
+     * step of the scene's and the node's bias; its shadow's is doubled again for each step of the shadow bias.
+     *
+     * @return whether any group is drawn from clusters this frame
+     */
+    private boolean cutClusters(Resources res, List<Group> groups, float[] planes, boolean occlusion) {
+        if (!clustersOn) return false;
+        List<VirtualGeometry.Job> jobs = new ArrayList<>();
+        for (Group group : groups) {
+            if (group.clusters == null) continue;
+            float maxPixels = lodMaxPixels * (float) Math.pow(2, lodSceneBias + group.clusterBias);
+            float shadowPixels = group.cast ? maxPixels * (float) Math.pow(2, shadowLodBias) : Float.NaN;
+            group.lists = new VirtualGeometry.Lists();
+            jobs.add(new VirtualGeometry.Job(group.clusters, group.first, group.count, group.inView ? group.viewCount : 0,
+                    maxPixels, shadowPixels, group.lists));
+        }
+        if (jobs.isEmpty()) return false;
+        try {
+            if (virtualGeometry == null) virtualGeometry = new VirtualGeometry(device);
+            virtualGeometry.cut(res.clusterLists, jobs, planes, eye, lodPixels, res.instances, frame, occlusion);
+            return true;
+        } catch (RuntimeException e) {
+            // From the next frame on these meshes are drawn as plain meshes; this frame draws them whole.
+            virtualBroken = true;
+            log.error("Virtual geometry does not work on this GPU; meshes are drawn with their classic levels of detail instead.", e);
+            for (Group group : groups) group.lists = null;
+            return false;
+        }
+    }
+
+    /**
+     * The second step of the camera's list of clusters: the scene's solid things in view, and the clusters the first step drew,
+     * are drawn into a depth picture from the camera as the picture will be drawn (jitter and all, so its pixels are the
+     * picture's), and the clusters the first step left as maybes are tested against it (see {@link VirtualGeometry}). See-through
+     * things, lines and picture cards hide nothing.
+     */
+    private void occlusionPass(Resources res, List<Group> groups, Mat4 drawViewProj, Camera camera, int width, int height) {
+        scratch.clear();
+        drawViewProj.put(scratch);
+        scratch.putFloat(1f).putFloat(camera.getNear()).putFloat(camera.getFar()).putFloat(0f);
+        scratch.flip();
+        try {
+            RenderTarget depth = virtualGeometry.occlusionTarget(res.clusterLists, width, height, scratch, SHADOW_BLOCK_SIZE);
+            try (RenderPass pass = device.beginPass(depth, 1f, 1f, 1f, 1f)) {
+                int[] state = {-1, 0};
+                Material[] lastMaterial = {null};
+                occluderBits = KEY_CULL | KEY_MIRRORED;
+                try {
+                    for (Group group : groups) {
+                        if (!group.inView || group.viewCount == 0 || (group.key & KEY_LINES) != 0 || group.impostor != null) continue;
+                        drawGroup(pass, res, group, state, lastMaterial, true, 0, res.clusterLists.depthView, true);
+                    }
+                } finally {
+                    occluderBits = 0;
+                }
+            }
+            virtualGeometry.retest(res.clusterLists, res.instances, drawViewProj.toArray());
+        } catch (UnsupportedOperationException e) {
+            // A GPU that can not read its depth back: the first step's list stands, and later frames skip the test.
+            occlusionBroken = true;
+            log.warn("Virtual geometry can not test what is hidden on this GPU ({}); clusters are culled by the view alone.", e.getMessage());
+        }
     }
 
     // ---- collecting and building the instance stream -----------------------------------------------------------
@@ -686,6 +941,9 @@ final class SceneRenderer {
         if (node.isOccluder() && mesh != null && !mesh.isLines() && node.getSkin() == null && node.activeMorph() == null) {
             Material material = node.getMaterial() != null ? node.getMaterial() : DEFAULT_MATERIAL;
             if (!material.isBlend() && material.getAlphaCutoff() <= 0f) {
+                // The simplest level of detail is near enough for a picture this coarse, and cheaper to draw.
+                LodChain chain = mesh.getLods();
+                if (chain != null) mesh = chain.coarsest();
                 Instances instances = node.getInstances();
                 if (instances == null) {
                     drawOccluder(mesh, world.toArray());
@@ -741,23 +999,72 @@ final class SceneRenderer {
             draw.cast = node.isCastShadow() && !draw.material.isBlend() && !lines;
             draw.receive = node.isReceiveShadow();
             draw.morph = node.activeMorph();
-            boolean gpuMorph = draw.morph != null && gpuMorph(mesh, draw.morph) != null;
             boolean skinned = node.getSkin() != null && mesh.isSkinned();
             if (node.getSkin() != null && !mesh.isSkinned()) {
                 log.warn("The node {} has a skin but its mesh has no skinning data; drawing it unskinned.", node.getName());
             }
-            draw.key = (draw.material.isDoubleSided() ? 0 : KEY_CULL) | (draw.material.isBlend() ? KEY_BLEND : 0) | (draw.material.isAdditive() ? KEY_ADDITIVE : 0)
-                    | (draw.mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0) | (mesh.hasUvs2() && usesSecondUvs(draw.material) ? KEY_UV2 : 0) | (lines ? KEY_LINES : 0) | (gpuMorph ? KEY_MORPH : 0);
             // A skinned mesh is placed by its joints, so it is bounded by them, not by its node.
             float[] skinSphere = skinned ? skinSphere(node, mesh) : null;
             Instances instances = skinned ? null : node.getInstances();
+            // Drawn from clusters, the GPU picks the detail of every part. A level of the chain is still picked: the clusters are
+            // drawn while it is the full mesh, and the chain's simpler levels (and card) once the node is smaller than that.
+            ClusterDag dag = clustersOn && node.isVirtualGeometry() && !skinned && draw.morph == null && !lines && !draw.material.isBlend() ? mesh.clusters() : null;
+            draw.clusters = dag;
+            draw.clusterSource = dag;
+            LodChain chain = lines || (!lodOn && node.getForcedLod() < 0) ? null : mesh.getLods();
+            int lastLevel = chain == null ? 0 : lastUsable(chain, skinned, draw.morph != null);
+            // The picture card comes after the simplest mesh, and only for a node it can stand for.
+            int lastPick = chain != null && lastLevel == chain.size() - 1 && impostorAllowed(chain, draw.material, skinned, draw.morph) ? chain.size() : lastLevel;
+            if (lastPick == 0) chain = null;
+            float cullSize = node.getCullScreenSize();
+            // An instanced node with levels, or a smallest size, is looked at one instance at a time, out of view or not.
+            boolean perInstance = instances != null && instances.size() > 1 && (chain != null || cullSize > 0f);
+            // A node fading from its last level draws that one too, in the other pixels; one whose shadow is simpler draws its
+            // shadow apart. Not for one blended on the CPU, which holds a single set of vertices for one mesh.
+            int ghostLevel = -1, ghostFade = 0, shadowLevel = -1;
+            boolean twoMeshes = draw.morph == null;
+            if (!perInstance && (chain != null || cullSize > 0f)) {
+                float[] s = skinned ? skinSphere : worldSphere(world, mesh, instances);
+                if (s != null) {
+                    float dx = s[0] - eye.x(), dy = s[1] - eye.y(), dz = s[2] - eye.z();
+                    float d = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (tooSmall(s[3], d, cullSize)) {
+                        counts[1]++;
+                        for (Node3D child : node.getChildren()) collect(child, world, eye, planes, counts, opaque, blended);
+                        return;
+                    }
+                    if (chain != null) {
+                        // The model's scale is in the sphere already: the error grows with it as the radius does.
+                        float scale = s[3] / Math.max(1e-12f, mesh.bounds().radius());
+                        LodMemory memory = lodMemory(node);
+                        int before = memory.level;
+                        memory.level = pickLevel(node, chain, lastPick, d - s[3], scale, before);
+                        toLevel(draw, chain, memory.level, skinned);
+                        if (lodFade && twoMeshes && before >= 0 && before != memory.level) {
+                            memory.from = before;
+                            memory.fadeStart = lodNow;
+                        }
+                        float t = memory.from < 0 ? 1f : (float) ((lodNow - memory.fadeStart) / lodFadeTime);
+                        if (t >= 1f || memory.from == memory.level || memory.from > lastPick) {
+                            memory.from = -1;
+                        } else {
+                            ghostLevel = memory.from;
+                            ghostFade = fadeCode(t, true);
+                            draw.fade = fadeCode(t, false);
+                        }
+                        // Clusters pick their shadow's detail themselves.
+                        if (draw.cast && twoMeshes && draw.clusters == null) shadowLevel = Math.min(draw.level + shadowLodBias, lastLevel);
+                    }
+                }
+            }
+            if (!draw.impostor) draw.key = drawKey(draw.material, draw.mesh, draw.mirrored, skinned, draw.morph);
             draw.sortTriangles = node.isSortTriangles() && draw.material.isBlend() && !skinned && instances == null && draw.morph == null;
             if (draw.cast) {
                 draw.sphere = skinned ? skinSphere : worldSphere(world, mesh, instances);
                 draw.unbounded = draw.sphere == null || draw.morph != null || !node.isFrustumCulled();
             }
             boolean culls = node.isFrustumCulled();
-            boolean outOfView = culls && (skinned
+            boolean outOfView = culls && !perInstance && (skinned
                     ? skinSphere != null && !ShadowPlanner.intersects(planes, skinSphere[0], skinSphere[1], skinSphere[2], skinSphere[3])
                     : !inFrustum(planes, world, mesh, instances));
             // Behind an occluder counts the same, apart from the tally: the node is not drawn but may still cast its shadow.
@@ -774,16 +1081,273 @@ final class SceneRenderer {
                 if (draw.cast) {
                     // Out of view, but its shadow may fall into it.
                     draw.inView = false;
+                    draw.fade = 0;
+                    if (shadowLevel >= 0) toLevel(draw, chain, shadowLevel, skinned);
                     opaque.add(draw);
                 }
-            } else if (instances != null && culls && instances.size() > 1) {
-                addInstanced(draw, world, mesh, instances, planes, eye, counts, opaque, blended);
+            } else if (perInstance || (instances != null && culls && instances.size() > 1)) {
+                addInstanced(draw, world, mesh, instances, planes, eye, counts, opaque, blended, culls, chain, lastLevel, lastPick);
             } else {
                 counts[0]++;
-                (draw.material.isBlend() ? blended : opaque).add(draw);
+                List<Draw> into = draw.material.isBlend() ? blended : opaque;
+                into.add(draw);
+                if (ghostLevel >= 0) {
+                    Draw ghost = draw.copy();
+                    toLevel(ghost, chain, ghostLevel, skinned);
+                    ghost.fade = ghostFade;
+                    ghost.cast = false;
+                    ghost.sortTriangles = draw.sortTriangles;
+                    into.add(ghost);
+                }
+                if (shadowLevel >= 0 && shadowLevel != draw.level) {
+                    // The picture's level casts nothing; a draw of the simpler level casts the shadow and is not seen.
+                    Draw shadow = draw.copy();
+                    toLevel(shadow, chain, shadowLevel, skinned);
+                    shadow.inView = false;
+                    draw.cast = false;
+                    opaque.add(shadow);
+                }
             }
         }
         for (Node3D child : node.getChildren()) collect(child, world, eye, planes, counts, opaque, blended);
+    }
+
+    /**
+     * The pipeline bits a draw of {@code mesh} (the node's own or one of its levels of detail) with this material needs.
+     */
+    private int drawKey(Material material, Mesh mesh, boolean mirrored, boolean skinned, float[] morph) {
+        boolean gpuMorph = morph != null && gpuMorph(mesh, morph) != null;
+        return (material.isDoubleSided() ? 0 : KEY_CULL) | (material.isBlend() ? KEY_BLEND : 0) | (material.isAdditive() ? KEY_ADDITIVE : 0)
+                | (mirrored && !skinned ? KEY_MIRRORED : 0) | (skinned ? KEY_SKINNED : 0) | (mesh.hasUvs2() && usesSecondUvs(material) ? KEY_UV2 : 0)
+                | (mesh.isLines() ? KEY_LINES : 0) | (gpuMorph ? KEY_MORPH : 0);
+    }
+
+    // ---- levels of detail ----------------------------------------------------------------------------------------
+
+    /**
+     * The last level of the chain a node may draw: a level without skinning can't follow a skinned node's joints, and one
+     * without the same blend shapes can't take a morphed node's weights, so neither it nor any past it is used.
+     */
+    static int lastUsable(LodChain chain, boolean skinned, boolean morphed) {
+        Mesh base = chain.base();
+        int last = 0;
+        for (int i = 1; i < chain.size(); i++) {
+            Mesh m = chain.level(i).mesh();
+            if (skinned && !m.isSkinned()) break;
+            if (morphed && m.morphTargets().size() != base.morphTargets().size()) break;
+            last = i;
+        }
+        return last;
+    }
+
+    /**
+     * The level a node (or one instance) draws: the one it is forced to, the mesh itself when the scene picks no levels, else
+     * the simplest whose error is small enough on screen.
+     *
+     * @param nearest  how far the nearest point of its bounding sphere is from the camera
+     * @param scale    how much its transform enlarges the mesh
+     * @param previous what it drew last, or -1
+     */
+    private int pickLevel(Node3D node, LodChain chain, int last, float nearest, float scale, int previous) {
+        int forced = node.getForcedLod();
+        if (forced >= 0) return Math.min(forced, last);
+        if (!lodOn) return 0;
+        float maxPixels = lodMaxPixels * (float) Math.pow(2.0, lodSceneBias + node.getLodBias());
+        // Inside its own sphere the camera may be touching the surface: the full mesh.
+        float pixelsPerUnit = nearest <= 1e-4f ? Float.MAX_VALUE : lodPixels / nearest * scale;
+        return chain.select(pixelsPerUnit, maxPixels, previous, last);
+    }
+
+    /** Makes a draw one of the levels of detail of its node's mesh. */
+    private void toLevel(Draw draw, LodChain chain, int level, boolean skinned) {
+        if (draw.clusterSource != null && level == 0) {
+            // The clusters index the mesh's own vertices: the draw is of the mesh itself, at level 0.
+            draw.level = 0;
+            draw.impostor = false;
+            draw.mesh = chain.base();
+            draw.clusters = draw.clusterSource;
+        } else {
+            draw.level = level;
+            // The card's number is one past the simplest mesh, which stands in for it outside the main pass.
+            draw.impostor = level >= chain.size();
+            draw.mesh = draw.impostor ? chain.coarsest() : chain.level(level).mesh();
+            draw.clusters = null;
+        }
+        draw.key = drawKey(draw.material, draw.mesh, draw.mirrored, skinned, draw.morph);
+    }
+
+
+    /**
+     * What a record of a node changing level carries to the shader (see its {@code lodFade}): which of the two levels it is,
+     * the frame's place in the pattern's cycle, and how far the change has come, in 255ths. Never 0, which is no change.
+     */
+    private int fadeCode(float t, boolean old) {
+        int share = Math.max(1, Math.min(254, Math.round(t * 255f)));
+        return (old ? 1 : 0) | (lodFrameBits << 1) | (share << 4);
+    }
+
+    /**
+     * Whether a sphere of this radius, this far from the camera, is shorter on screen than {@code share} of the picture's height.
+     */
+    private boolean tooSmall(float radius, float distance, float share) {
+        if (share <= 0f || distance <= radius) return false;
+        // The height a sphere covers, as a share of the picture's: its diameter over the height the view spans at that distance.
+        return radius / (distance * lodTan) < share;
+    }
+
+    private LodMemory lodMemory(Node3D node) {
+        return lodMemory.computeIfAbsent(node, n -> new LodMemory());
+    }
+
+    /**
+     * The mesh rays hit for a node, or one of its instances ({@code instance} -1 for a node without): the level the camera picks
+     * for it, so a traced shadow has the shape the picture has. The level the node drew last is kept without being changed.
+     */
+    private Mesh rayLevel(Node3D node, Mesh base, float[] model, int instance) {
+        LodChain chain = base.getLods();
+        ClusterDag dag = chain == null && clustersOn && node.isVirtualGeometry() ? base.clusters() : null;
+        if (chain == null && dag == null) return base;
+        Vec3 c = base.bounds().center();
+        float x = model[0] * c.x() + model[4] * c.y() + model[8] * c.z() + model[12] - eye.x();
+        float y = model[1] * c.x() + model[5] * c.y() + model[9] * c.z() + model[13] - eye.y();
+        float z = model[2] * c.x() + model[6] * c.y() + model[10] * c.z() + model[14] - eye.z();
+        float scale = maxColumn(model, 0);
+        float nearest = (float) Math.sqrt(x * x + y * y + z * z) - base.bounds().radius() * scale;
+        if (dag != null) {
+            // Drawn from clusters with no levels of its own: rays hit the mesh cut evenly at the error its nearest point
+            // allows, so it is nowhere coarser than the picture's clusters (which are finest there), and simpler for the bias.
+            if (nearest <= 1e-4f) return base;
+            float maxPixels = lodMaxPixels * (float) Math.pow(2.0, lodSceneBias + node.getLodBias() + rayLodBias);
+            return dag.flat(dag.flatFor(maxPixels * nearest / (lodPixels * scale)));
+        }
+        int last = lastUsable(chain, false, false);
+        LodMemory memory = lodMemory.get(node);
+        int previous = memory == null ? -1 : instance < 0 ? memory.level
+                : memory.instances != null && instance < memory.instances.length ? memory.instances[instance] : -1;
+        int level = pickLevel(node, chain, last, nearest, scale, previous);
+        return chain.level(Math.min(last, level + rayLodBias)).mesh();
+    }
+
+    // ---- picture cards ------------------------------------------------------------------------------------------
+
+    /**
+     * Whether a node may be drawn as its mesh's picture card: a card holds the mesh at rest, solid, in one material.
+     */
+    private boolean impostorAllowed(LodChain chain, Material material, boolean skinned, float[] morph) {
+        return chain != null && chain.hasImpostor() && !impostorBroken && !skinned && morph == null && !material.isBlend() && !material.isAdditive();
+    }
+
+    /**
+     * The pictures of {@code base} drawn with {@code material}, taken now if they have not been, or null if they can't be.
+     */
+    private ImpostorAtlas impostorFor(Mesh base, Material material) {
+        if (impostorBroken) return null;
+        Map<Material, ImpostorAtlas> byMaterial = impostors.computeIfAbsent(base, m -> new IdentityHashMap<>());
+        ImpostorAtlas atlas = byMaterial.get(material);
+        if (atlas != null && atlas.texture != material.getTexture()) {
+            atlas.close();
+            byMaterial.remove(material);
+            atlas = null;
+        }
+        if (atlas == null) {
+            try {
+                atlas = bakeImpostor(base, material);
+            } catch (RuntimeException e) {
+                impostorBroken = true;
+                log.error("A picture card could not be made on this GPU; meshes are drawn with their simplest level instead.", e);
+                return null;
+            }
+            byMaterial.put(material, atlas);
+        }
+        atlas.lastUsed = frame;
+        return atlas;
+    }
+
+    /**
+     * Takes the pictures of a card: each of the {@link ImpostorShaders#GRID} squared views drawn into its own tile, once for
+     * the colour and once for the surface.
+     */
+    private ImpostorAtlas bakeImpostor(Mesh base, Material material) {
+        int grid = ImpostorShaders.GRID, tile = IMPOSTOR_SIZE / grid;
+        if (bakeColor == null) {
+            VertexLayout views = VertexLayout.of(3, VertexLayout.Rate.INSTANCE, VertexFormat.FLOAT4);
+            bakeColor = device.createPipeline(new PipelineDesc(ImpostorShaders.BAKE_VERTEX, ImpostorShaders.BAKE_COLOR, meshLayout, true, false, false, false, List.of(views)));
+            bakeSurface = device.createPipeline(new PipelineDesc(ImpostorShaders.BAKE_VERTEX, ImpostorShaders.BAKE_SURFACE, meshLayout, true, false, false, false, List.of(views)));
+            ByteBuffer dirs = MemoryUtil.memAlloc(grid * grid * 16).order(ByteOrder.nativeOrder());
+            try {
+                for (int j = 0; j < grid; j++) {
+                    for (int i = 0; i < grid; i++) {
+                        float[] d = octDecode((float) i / (grid - 1), (float) j / (grid - 1));
+                        dirs.putFloat(d[0]).putFloat(d[1]).putFloat(d[2]).putFloat(0f);
+                    }
+                }
+                dirs.flip();
+                bakeViews = device.createBuffer(BufferType.VERTEX, dirs);
+            } finally {
+                MemoryUtil.memFree(dirs);
+            }
+        }
+        Vec3 c = base.bounds().center();
+        float radius = Math.max(1e-6f, base.bounds().radius());
+        ByteBuffer data = MemoryUtil.memAlloc(48).order(ByteOrder.nativeOrder());
+        GpuBuffer bakeBlock, block;
+        try {
+            data.putFloat(c.x()).putFloat(c.y()).putFloat(c.z()).putFloat(radius);
+            data.putFloat(material.getUvOffsetU()).putFloat(material.getUvOffsetV()).putFloat(material.getUvScaleU()).putFloat(material.getUvScaleV());
+            data.putFloat((float) Math.cos(material.getUvRotation())).putFloat((float) Math.sin(material.getUvRotation())).putFloat(material.getAlphaCutoff()).putFloat(0f);
+            data.flip();
+            bakeBlock = device.createBuffer(BufferType.UNIFORM, data);
+        } finally {
+            MemoryUtil.memFree(data);
+        }
+        RenderTarget color = device.createSampledTarget(IMPOSTOR_SIZE, IMPOSTOR_SIZE, true, true);
+        RenderTarget surface = device.createSampledTarget(IMPOSTOR_SIZE, IMPOSTOR_SIZE, true, true);
+        GpuMesh mesh = gpuMesh(base);
+        GpuTexture texture = material.getTexture() == null ? whiteTexture : gpuImage(material.getTexture());
+        for (int pass = 0; pass < 2; pass++) {
+            RenderTarget target = pass == 0 ? color : surface;
+            try (RenderPass rp = pass == 0 ? device.beginPass(target, 0f, 0f, 0f, 0f) : device.beginPass(target, 0.5f, 0.5f, 1f, 1f)) {
+                rp.bindPipeline(pass == 0 ? bakeColor : bakeSurface);
+                rp.bindUniformBuffer(0, bakeBlock);
+                rp.bindTexture(2, texture);
+                rp.bindVertexBuffer(0, mesh.vertices);
+                rp.bindVertexBuffer(1, bakeViews);
+                rp.bindIndexBuffer(mesh.indices);
+                for (int view = 0; view < grid * grid; view++) {
+                    rp.setViewport((view % grid) * tile, (view / grid) * tile, tile, tile);
+                    rp.drawIndexed(mesh.indexCount, 1, view);
+                }
+            }
+        }
+        data = MemoryUtil.memAlloc(32).order(ByteOrder.nativeOrder());
+        try {
+            // GL keeps a picture's rows bottom first, so the atlas is upside down to the shader there.
+            data.putFloat(c.x()).putFloat(c.y()).putFloat(c.z()).putFloat(radius);
+            data.putFloat(grid).putFloat(color.isBottomLeftOrigin() ? 1f : 0f).putFloat(0f).putFloat(0f);
+            data.flip();
+            block = device.createBuffer(BufferType.UNIFORM, data);
+        } finally {
+            MemoryUtil.memFree(data);
+        }
+        IMPOSTORS_BAKED.incrementAndGet();
+        return new ImpostorAtlas(color, surface, block, bakeBlock, material.getTexture());
+    }
+
+    /** How many cards' pictures were taken, for tests. */
+    static final java.util.concurrent.atomic.AtomicInteger IMPOSTORS_BAKED = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** The direction of the octahedral map at (u, v) in 0..1, as the card shaders' {@code impostorDecode}. */
+    static float[] octDecode(float u, float v) {
+        float px = u * 2f - 1f, pz = v * 2f - 1f;
+        float x = px, y = 1f - Math.abs(px) - Math.abs(pz), z = pz;
+        if (y < 0f) {
+            float nx = (1f - Math.abs(z)) * (x >= 0f ? 1f : -1f);
+            float nz = (1f - Math.abs(x)) * (z >= 0f ? 1f : -1f);
+            x = nx;
+            z = nz;
+        }
+        float len = (float) Math.sqrt(x * x + y * y + z * z);
+        return new float[]{x / len, y / len, z / len};
     }
 
     /**
@@ -816,7 +1380,7 @@ final class SceneRenderer {
      * themselves, far to near, instead of the whole node sorting by one point.
      */
     private void addInstanced(Draw draw, Mat4 world, Mesh mesh, Instances instances, float[] planes, Vec3 eye, int[] counts,
-                              List<Draw> opaque, List<Draw> blended) {
+                              List<Draw> opaque, List<Draw> blended, boolean cullView, LodChain chain, int lastLevel, int lastPick) {
         int n = instances.size();
         float[] data = instances.matrixData();
         float[] w = world.toArray();
@@ -826,22 +1390,83 @@ final class SceneRenderer {
         int[] seen = new int[n];
         int visible = 0;
         float[] distance = draw.material.isBlend() ? new float[n] : null;
+        Node3D node = draw.node;
+        float cullSize = node.getCullScreenSize();
+        // The level each instance draws, -1 for one too small to draw at all; null when they all draw the mesh itself.
+        byte[] levels = chain != null || cullSize > 0f ? new byte[n] : null;
+        byte[] previous = null;
+        // For each instance fading from its last level: that level (-1 for none) and how far it has come.
+        byte[] ghosts = null, from = null;
+        float[] fadeT = null;
+        double[] start = null;
+        if (chain != null) {
+            LodMemory memory = lodMemory(node);
+            if (memory.instances == null || memory.instances.length != n) {
+                memory.instances = new byte[n];
+                java.util.Arrays.fill(memory.instances, (byte) -1);
+                memory.instanceFrom = null;
+            }
+            previous = memory.instances;
+            if (lodFade && draw.morph == null) {
+                if (memory.instanceFrom == null) {
+                    memory.instanceFrom = new byte[n];
+                    java.util.Arrays.fill(memory.instanceFrom, (byte) -1);
+                    memory.instanceStart = new double[n];
+                }
+                from = memory.instanceFrom;
+                start = memory.instanceStart;
+                ghosts = new byte[n];
+                fadeT = new float[n];
+            } else {
+                memory.instanceFrom = null;
+            }
+        }
         for (int i = 0; i < n; i++) {
             multiply(w, data, i * 16, model);
             float x = model[0] * c.x() + model[4] * c.y() + model[8] * c.z() + model[12];
             float y = model[1] * c.x() + model[5] * c.y() + model[9] * c.z() + model[13];
             float z = model[2] * c.x() + model[6] * c.y() + model[10] * c.z() + model[14];
-            if (ShadowPlanner.intersects(planes, x, y, z, radius * maxColumn(model, 0))) {
-                if (occlusion != null && occlusion.hides(OcclusionBuffer.corners(mesh.bounds(), model))) {
+            float scale = maxColumn(model, 0), r = radius * scale;
+            float d = 0f;
+            if (levels != null || distance != null) {
+                float dx = x - eye.x(), dy = y - eye.y(), dz = z - eye.z();
+                d = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+            if (levels != null) {
+                if (tooSmall(r, d, cullSize)) {
+                    levels[i] = -1;
+                    continue;
+                }
+                if (chain != null) {
+                    // Out of view too, as its shadow is drawn with the level it would have.
+                    int before = previous[i];
+                    int level = pickLevel(node, chain, lastPick, d - r, scale, before);
+                    previous[i] = (byte) level;
+                    levels[i] = (byte) level;
+                    if (ghosts != null) {
+                        if (before >= 0 && before != level) {
+                            from[i] = (byte) before;
+                            start[i] = lodNow;
+                        }
+                        float t = from[i] < 0 ? 1f : (float) ((lodNow - start[i]) / lodFadeTime);
+                        if (t >= 1f || from[i] == level || from[i] > lastPick) from[i] = -1;
+                        ghosts[i] = from[i];
+                        fadeT[i] = t;
+                    }
+                }
+            }
+            if (!cullView || ShadowPlanner.intersects(planes, x, y, z, r)) {
+                if (cullView && occlusion != null && occlusion.hides(OcclusionBuffer.corners(mesh.bounds(), model))) {
                     counts[2]++;
                     continue;
                 }
                 seen[visible++] = i;
-                if (distance != null) {
-                    float dx = x - eye.x(), dy = y - eye.y(), dz = z - eye.z();
-                    distance[i] = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-                }
+                if (distance != null) distance[i] = d;
             }
+        }
+        if (levels != null) {
+            addLevels(draw, chain, lastLevel, levels, ghosts, fadeT, seen, visible, distance, counts, opaque, blended);
+            return;
         }
         if (visible == 0) {
             counts[1]++;
@@ -884,6 +1509,141 @@ final class SceneRenderer {
             draw.visible = visible;
         }
         (draw.material.isBlend() ? blended : opaque).add(draw);
+    }
+
+    /**
+     * The instances of a node with levels of detail or a smallest size, split by level: a draw for each level holding the
+     * instances in view, then (for a shadow caster) those out of view, so each level is one call. See-through instances are a
+     * draw each, as without levels. Instances too small to draw ({@code levels} -1) are left out of both.
+     * <p>
+     * Instances fading from their last level ({@code ghosts}) draw that one too, in a draw of its own that casts nothing. With
+     * a {@linkplain Scene3D#setShadowLodBias shadow bias} the shadows are draws of their own, of the simpler level, not seen.
+     */
+    private void addLevels(Draw draw, LodChain chain, int lastLevel, byte[] levels, byte[] ghosts, float[] fadeT, int[] seen, int visible,
+                           float[] distance, int[] counts, List<Draw> opaque, List<Draw> blended) {
+        int n = levels.length;
+        int levelCount = chain == null ? 1 : chain.size() + (chain.hasImpostor() ? 1 : 0);
+        counts[visible == 0 ? 1 : 0]++;
+        if (distance != null && n <= MAX_SORTED_INSTANCES) {
+            for (int k = 0; k < visible; k++) {
+                int i = seen[k];
+                Draw each = levelDraw(draw, chain, levels[i]);
+                each.order = new int[]{i};
+                each.visible = 1;
+                each.distance = distance[i];
+                if (ghosts != null && ghosts[i] >= 0) {
+                    each.fade = fadeCode(fadeT[i], false);
+                    Draw ghost = levelDraw(draw, chain, ghosts[i]);
+                    ghost.order = new int[]{i};
+                    ghost.visible = 1;
+                    ghost.distance = distance[i];
+                    ghost.fade = fadeCode(fadeT[i], true);
+                    ghost.cast = false;
+                    blended.add(ghost);
+                }
+                blended.add(each);
+            }
+            return;
+        }
+        boolean[] in = new boolean[n];
+        for (int k = 0; k < visible; k++) in[seen[k]] = true;
+        boolean split = draw.cast && chain != null && shadowLodBias > 0 && draw.morph == null;
+        // In view at each level; fading out of each level; casting a shadow at each level apart from the picture's draw.
+        int[] viewCount = new int[levelCount], ghostCount = new int[levelCount], shadowCount = new int[levelCount];
+        for (int k = 0; k < visible; k++) {
+            int i = seen[k];
+            viewCount[levels[i]]++;
+            if (ghosts != null && ghosts[i] >= 0) ghostCount[ghosts[i]]++;
+            if (split) shadowCount[shadowOf(levels[i], lastLevel)]++;
+        }
+        if (draw.cast) {
+            for (int i = 0; i < n; i++) {
+                if (!in[i] && levels[i] >= 0) shadowCount[split ? shadowOf(levels[i], lastLevel) : levels[i]]++;
+            }
+        }
+        int[][] view = new int[levelCount][], ghost = new int[levelCount][], shadow = new int[levelCount][];
+        for (int l = 0; l < levelCount; l++) {
+            view[l] = new int[viewCount[l]];
+            ghost[l] = new int[ghostCount[l]];
+            shadow[l] = new int[shadowCount[l]];
+        }
+        int[] vf = new int[levelCount], gf = new int[levelCount], sf = new int[levelCount];
+        for (int k = 0; k < visible; k++) {
+            int i = seen[k], l = levels[i];
+            view[l][vf[l]++] = i;
+            if (ghosts != null && ghosts[i] >= 0) ghost[ghosts[i]][gf[ghosts[i]]++] = i;
+            if (split) {
+                int s = shadowOf(l, lastLevel);
+                shadow[s][sf[s]++] = i;
+            }
+        }
+        if (draw.cast) {
+            for (int i = 0; i < n; i++) {
+                if (in[i] || levels[i] < 0) continue;
+                int s = split ? shadowOf(levels[i], lastLevel) : levels[i];
+                shadow[s][sf[s]++] = i;
+            }
+        }
+        List<Draw> into = draw.material.isBlend() ? blended : opaque;
+        for (int l = 0; l < levelCount; l++) {
+            int[] seenHere = view[l], castHere = split ? new int[0] : shadow[l];
+            if (seenHere.length + castHere.length > 0) {
+                // Those in view first, then those only the shadow views draw.
+                Draw d = levelDraw(draw, chain, l);
+                int[] order = new int[seenHere.length + castHere.length];
+                System.arraycopy(seenHere, 0, order, 0, seenHere.length);
+                System.arraycopy(castHere, 0, order, seenHere.length, castHere.length);
+                d.order = order;
+                d.visible = seenHere.length;
+                d.inView = seenHere.length > 0;
+                d.cast = draw.cast && !split;
+                if (ghosts != null) d.fades = fades(order, seenHere.length, ghosts, fadeT, false);
+                (d.inView ? into : opaque).add(d);
+            }
+            if (split && shadow[l].length > 0) {
+                Draw s = levelDraw(draw, chain, l);
+                s.order = shadow[l];
+                s.visible = 0;
+                s.inView = false;
+                opaque.add(s);
+            }
+            if (ghost[l].length > 0) {
+                Draw g = levelDraw(draw, chain, l);
+                g.order = ghost[l];
+                g.visible = ghost[l].length;
+                g.cast = false;
+                g.fades = fades(ghost[l], ghost[l].length, ghosts, fadeT, true);
+                into.add(g);
+            }
+        }
+    }
+
+    private int shadowOf(int level, int lastLevel) {
+        return Math.min(lastLevel, level + shadowLodBias);
+    }
+
+    /**
+     * The fade code of each record of a draw: for the first {@code seenCount}, those fading in to (or, with {@code old}, out
+     * of) the level; 0 for the rest. Null when none of them is fading.
+     */
+    private int[] fades(int[] order, int seenCount, byte[] ghosts, float[] fadeT, boolean old) {
+        int[] codes = null;
+        for (int k = 0; k < seenCount; k++) {
+            int i = order[k];
+            if (ghosts[i] < 0) continue;
+            if (codes == null) codes = new int[order.length];
+            codes[k] = fadeCode(fadeT[i], old);
+        }
+        return codes;
+    }
+
+    /**
+     * A copy of an instanced node's draw for one of its levels of detail.
+     */
+    private Draw levelDraw(Draw draw, LodChain chain, int level) {
+        Draw d = draw.copy();
+        if (chain != null && level > 0) toLevel(d, chain, level, false);
+        return d;
     }
 
     /**
@@ -1000,15 +1760,20 @@ final class SceneRenderer {
             boolean hidden = draw.order != null && draw.visible < draw.order.length;
 
             boolean merge = last != null && !skinned && last.joints < 0 && last.vertices == null && draw.morph == null && !last.isolated && !hidden && !draw.sortTriangles && last.indices == null
-                    && last.mesh == draw.mesh && last.material == draw.material
-                    && last.key == draw.key && last.cast == draw.cast && last.inView == draw.inView;
+                    && last.mesh == draw.mesh && last.material == draw.material && last.level == draw.level && (last.impostor != null) == draw.impostor
+                    && last.key == draw.key && last.cast == draw.cast && last.inView == draw.inView
+                    && last.clusters == draw.clusters && (draw.clusters == null || last.clusterBias == draw.node.getLodBias());
             if (!merge) {
                 last = new Group();
                 last.mesh = draw.mesh;
+                last.level = draw.level;
+                if (draw.impostor) last.impostor = impostorFor(draw.node.getMesh(), draw.material);
                 last.material = draw.material;
                 last.key = draw.key;
                 last.cast = draw.cast;
                 last.inView = draw.inView;
+                last.clusters = draw.clusters;
+                if (draw.clusters != null) last.clusterBias = draw.node.getLodBias();
                 last.sphere = draw.sphere;
                 last.unbounded = draw.unbounded;
                 last.first = cursor[0];
@@ -1180,6 +1945,9 @@ final class SceneRenderer {
         int flags = (m.getNormalTexture() != null ? FLAG_NORMAL_MAP : 0) | (draw.receive ? FLAG_RECEIVE_SHADOW : 0) | (m.texCoordBits() << FLAG_UV1_SHIFT);
         // A height map is on when the depth, in thousandths of a unit, is above 0 in the bits over the flags.
         if (m.getHeightTexture() != null) flags |= Math.round(m.getHeightScale() * FLAG_HEIGHT_UNITS) << FLAG_HEIGHT_SHIFT;
+        // A card's pictures already hold the surface: no normal or height map, and its own outline in place of a cut-out.
+        if (draw.impostor) flags = draw.receive ? FLAG_RECEIVE_SHADOW : 0;
+        float cutoff = draw.impostor ? 0f : m.getAlphaCutoff();
         int mode = m.isUnlit() || draw.mesh.isLines() ? MODE_UNLIT : m.isPbr() ? MODE_PBR : MODE_CLASSIC;
         float p0 = m.isPbr() ? m.getMetallic() : m.getSpecular();
         float p1 = m.isPbr() ? m.getRoughness() : Math.max(1f, m.getShininess());
@@ -1187,9 +1955,15 @@ final class SceneRenderer {
         float[] model = new float[16];
         ByteBuffer b = instanceScratch;
         int count = instances == null ? 1 : draw.order != null ? draw.order.length : instances.size();
+        float[] debug = lodDebug ? LOD_COLORS[Math.min(draw.level, LOD_COLORS.length - 1)] : null;
         for (int slot = 0; slot < count; slot++) {
             int i = draw.order != null ? draw.order[slot] : slot;
             float tr = m.getRed(), tg = m.getGreen(), tb = m.getBlue(), ta = m.getAlpha();
+            if (debug != null) {
+                tr = debug[0];
+                tg = debug[1];
+                tb = debug[2];
+            }
             if (skinned) {
                 java.util.Arrays.fill(model, 0f);
                 model[0] = model[5] = model[10] = model[15] = 1f;
@@ -1197,7 +1971,7 @@ final class SceneRenderer {
                 System.arraycopy(world, 0, model, 0, 16);
             } else {
                 multiply(world, instances.matrixData(), i * 16, model);
-                if (instances.hasTints()) {
+                if (instances.hasTints() && debug == null) {
                     float[] t = instances.tintData();
                     tr *= t[i * 4];
                     tg *= t[i * 4 + 1];
@@ -1214,9 +1988,11 @@ final class SceneRenderer {
             }
             for (float v : model) b.putFloat(v);
             b.putFloat(tr).putFloat(tg).putFloat(tb).putFloat(ta);
-            b.putFloat(p0).putFloat(p1).putFloat(mode).putFloat(m.getAlphaCutoff());
+            b.putFloat(p0).putFloat(p1).putFloat(mode).putFloat(cutoff);
             b.putFloat(m.getEmissiveRed()).putFloat(m.getEmissiveGreen()).putFloat(m.getEmissiveBlue()).putFloat(flags);
-            b.putFloat(m.getNormalScale()).putFloat(m.isAdditive() ? 1f : 0f).putFloat(rotationCos).putFloat(rotationSin);
+            // The additive bit, and above it the change of level the record is in.
+            int fade = draw.fades != null ? draw.fades[slot] : draw.fade;
+            b.putFloat(m.getNormalScale()).putFloat((m.isAdditive() ? 1f : 0f) + 2f * fade).putFloat(rotationCos).putFloat(rotationSin);
             b.putFloat(m.getUvOffsetU()).putFloat(m.getUvOffsetV()).putFloat(m.getUvScaleU()).putFloat(m.getUvScaleV());
         }
     }
@@ -1340,7 +2116,7 @@ final class SceneRenderer {
                 }
             };
         }
-        rayWorld.collect(scene.root(), placed, reflections || occlusion || gi, rayTextures);
+        rayWorld.collect(scene.root(), placed, reflections || occlusion || gi, rayTextures, rayLevels);
         if (res.rayScene == null || res.rayScene.capacity() < placed.size()) {
             if (res.rayScene != null) res.rayScene.close();
             res.rayScene = device.createRayScene(Math.max(64, nextPowerOfTwo(placed.size())));
@@ -1566,6 +2342,10 @@ final class SceneRenderer {
                     if (mesh.skin != null) pass.bindVertexBuffer(2, mesh.skin);
                 } else {
                     pass.bindVertexBuffer(2, res.prevInstances);
+                }
+                if (group.lists != null) {
+                    virtualGeometry.draw(pass, res.clusterLists, group.lists, false);
+                    continue;
                 }
                 pass.bindIndexBuffer(group.indices != null ? group.indices : mesh.indices);
                 pass.drawIndexed(mesh.indexCount, group.viewCount, group.first);
@@ -2123,6 +2903,7 @@ final class SceneRenderer {
      */
     private void sweep() {
         if (frame - atlasUsed > KEEP_FRAMES) atlas.close();
+        if (virtualGeometry != null) virtualGeometry.sweep(frame);
         if (rayWorld != null) rayWorld.sweep(KEEP_FRAMES);
         for (Iterator<GpuMesh> it = meshes.values().iterator(); it.hasNext(); ) {
             GpuMesh mesh = it.next();
@@ -2156,6 +2937,15 @@ final class SceneRenderer {
             }
         }
         skyLight.values().removeIf(light -> frame - light.lastUsed > KEEP_FRAMES);
+        for (Iterator<Map<Material, ImpostorAtlas>> it = impostors.values().iterator(); it.hasNext(); ) {
+            Map<Material, ImpostorAtlas> byMaterial = it.next();
+            byMaterial.values().removeIf(atlas -> {
+                if (frame - atlas.lastUsed <= KEEP_FRAMES) return false;
+                atlas.close();
+                return true;
+            });
+            if (byMaterial.isEmpty()) it.remove();
+        }
     }
 
     void close() {
@@ -2169,12 +2959,20 @@ final class SceneRenderer {
         MemoryUtil.memFree(morphBlock);
         MemoryUtil.memFree(morphScratch);
         for (Resources r : resourcePool) r.close();
+        if (virtualGeometry != null) virtualGeometry.close();
         for (Pipeline pipeline : pipelines.values()) pipeline.close();
         for (Pipeline pipeline : skyPipelines.values()) pipeline.close();
         for (Pipeline pipeline : velocityPipelines.values()) pipeline.close();
         velocityPipelines.clear();
         if (skyMotionPipeline != null) skyMotionPipeline.close();
         atlas.close();
+        for (Map<Material, ImpostorAtlas> byMaterial : impostors.values()) for (ImpostorAtlas a : byMaterial.values()) a.close();
+        impostors.clear();
+        if (bakeColor != null) {
+            bakeColor.close();
+            bakeSurface.close();
+            bakeViews.close();
+        }
         if (rayWorld != null) rayWorld.close();
         skyTriangle.close();
         whiteTexture.close();

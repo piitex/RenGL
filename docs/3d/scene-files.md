@@ -66,8 +66,11 @@ A `material` has the properties of [`Material`](scenes.md#material): `color`, `t
 `emissiveColor` and `emissiveStrength`.
 A glow that also [lights its surroundings](lighting.md#glowing-surfaces) adds `glowRange` and `glowStrength`. Every node has a
 material of its own. A node can be an `occluder`, and the scene has a `lightMode` (`AUTO`, `DIRECT` or `CLUSTERED`) and
-`occlusionCulling`; see [Many lights](lighting.md#many-lights) and [Occlusion culling](scenes.md#occlusion-culling). All of
-them are left out of the file while they have their default value.
+`occlusionCulling`; see [Many lights](lighting.md#many-lights) and [Occlusion culling](scenes.md#occlusion-culling). For
+[levels of detail](lod.md) a node has `lod` (a forced level, -1 to pick), `lodBias`, `cullSize` and `virtualGeometry` (false to keep it off clusters), a model node has
+`modelLods` (make levels, and the clusters of virtual geometry, when it loads), and the scene has `lodPixelError`, `lodBias`,
+`virtualGeometry` and `virtualGeometryOcclusion`. All of them are left out of the
+file while they have their default value.
 
 `TERRAIN` raises ground from a picture: `heightmap` is a path to an image whose white is high and black is low, `peak` is how
 high white is, `width` and `depth` are its size, and `resolution` is how many points it has along each side (up to 512).

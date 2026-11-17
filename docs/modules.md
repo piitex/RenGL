@@ -16,7 +16,7 @@ All artifacts have the group id `io.github.piitex` and the same version.
 | `rengl-video` | [Video](video/README.md): `VideoOverlay` and the decoders | none (needs `rengl-audio`) | none |
 | `rengl-webview` | [Web views](webview/README.md): `WebViewOverlay`, login-portal helpers; WebView2 on Windows, an installed Chrome/Edge/Chromium on Windows, macOS and Linux; WKWebView (macOS) and WebKitGTK (Linux) opt-in, never run | none (the system's WebView2 runtime, or an installed Chromium-based browser; WKWebView and WebKitGTK need nothing shipped) | none |
 | `rengl-vulkan` | The Vulkan renderer for `RenderAPI.VULKAN` | LWJGL Vulkan | MoltenVK on macOS only |
-| `rengl-3d` | The optional [3D layer](3d/README.md) (needs `rengl-vulkan`) | LWJGL assimp, shaderc, spvc, VMA | those four |
+| `rengl-3d` | The optional [3D layer](3d/README.md) (needs `rengl-vulkan`) | LWJGL assimp, shaderc, spvc, VMA, meshoptimizer | those five |
 | `rengl-upscale` | Vendor [upscalers and frame generation](3d/upscaling.md) for the 3D layer (AMD FSR and NVIDIA DLSS on Windows, Apple MetalFX on a Mac). Carries no vendor binaries and is left out of `RenGL` | none (needs the vendors' libraries at run time, except MetalFX, which is part of macOS) | none |
 | `rengl-physx` | [NVIDIA PhysX 5](3d/physx.md) as the solver behind the 3D layer's `PhysicsWorld`. Left out of `RenGL` | physx-jni (which carries PhysX) | none of its own: add the `physx-jni` natives jar for each platform |
 | `rengl-spellcheck` | `HunspellChecker` and the en_US dictionary for [spell checking](text/spell-checking.md) | Lucene analysis | none |

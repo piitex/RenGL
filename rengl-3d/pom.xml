@@ -65,6 +65,11 @@
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-vma</artifactId>
         </dependency>
+        <!-- Simplifies meshes into levels of detail (LodGenerator). -->
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-meshoptimizer</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-assimp</artifactId>
@@ -83,6 +88,11 @@
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-vma</artifactId>
+            <classifier>${lwjgl.natives}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-meshoptimizer</artifactId>
             <classifier>${lwjgl.natives}</classifier>
         </dependency>
     </dependencies>

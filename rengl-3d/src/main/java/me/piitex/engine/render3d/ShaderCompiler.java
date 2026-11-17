@@ -103,6 +103,28 @@ public final class ShaderCompiler {
     }
 
     /**
+     * A compute shader as SPIR-V (in memory the caller frees with {@link #free}) and the resources it uses.
+     */
+    public record ComputeCompiled(ByteBuffer spirv, List<Binding> bindings) {
+    }
+
+    /**
+     * Compiles a compute shader, for Vulkan only. Throws {@link IllegalArgumentException} with the compiler's message when the
+     * GLSL is wrong.
+     */
+    public static ComputeCompiled compileCompute(String source) {
+        ByteBuffer spirv = toSpirv(source, shaderc_compute_shader, "compute");
+        try {
+            TreeMap<Integer, Binding> merged = new TreeMap<>();
+            for (Binding binding : reflect(spirv)) merged.put(binding.binding(), binding);
+            return new ComputeCompiled(spirv, List.copyOf(merged.values()));
+        } catch (RuntimeException e) {
+            free(spirv);
+            throw e;
+        }
+    }
+
+    /**
      * Compiled SPIR-V, in malloc'd memory the caller frees (see {@link #free}).
      */
     private static ByteBuffer toSpirv(String source, int kind, String stage) {

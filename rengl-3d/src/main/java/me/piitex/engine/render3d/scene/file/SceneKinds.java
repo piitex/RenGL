@@ -214,6 +214,10 @@ public final class SceneKinds {
         prop(NODE, "prefab", "Scene File", String.class, shape, n -> info(n).prefab, (n, x, b) -> SceneMeta.setPrefab(n, s(x), b))
                 .omitWhen("").hint(Hint.SCENE).when(n -> shapeIs(n, Shape.PREFAB))
                 .tip("Another scene file in the project, whose nodes appear here. Its lights and sky are left out");
+        // Before the model itself, so a scene file loads the model once, with its levels.
+        prop(NODE, "modelLods", "Detail Levels", Boolean.class, shape, n -> info(n).modelLods, (n, x, b) -> SceneMeta.setModelLods(n, (Boolean) x, b))
+                .omitWhen(false).when(n -> shapeIs(n, Shape.MODEL))
+                .tip("Makes simpler versions of the model's meshes when it loads, drawn when it is far away. Levels the file has (named _LOD1, _LOD2 or MSFT_lod) are used either way");
         prop(NODE, "model", "Model", String.class, shape, n -> info(n).model, (n, x, b) -> SceneMeta.setModel(n, s(x), b))
                 .omitWhen("").hint(Hint.MODEL).when(n -> shapeIs(n, Shape.MODEL))
                 .tip("A glTF, GLB, OBJ, FBX or Collada file in the project");
@@ -241,6 +245,18 @@ public final class SceneKinds {
                 .omitWhen(true);
         prop(NODE, "occluder", "Occluder", Boolean.class, rendering, Node3D::isOccluder, (n, x, b) -> n.setOccluder((Boolean) x))
                 .omitWhen(false).tip("Hides what is behind it when the scene has occlusion culling on. Mark solid things with few triangles, such as walls, floors and buildings");
+        prop(NODE, "lod", "Detail Level", Integer.class, rendering, Node3D::getForcedLod, (n, x, b) -> n.setForcedLod(((Number) x).intValue()))
+                .omitWhen(-1).range(-1, 16).when(n -> SceneMeta.drawsMesh(info(n).shape))
+                .tip("Always draws this level of detail of its mesh: 0 is the full mesh, 1 the first simpler one. -1 lets the scene pick by distance");
+        prop(NODE, "lodBias", "Detail Bias", Float.class, rendering, Node3D::getLodBias, (n, x, b) -> n.setLodBias(f(x)))
+                .omitWhen(0f).range(-4, 4).step(0.25).when(n -> SceneMeta.drawsMesh(info(n).shape))
+                .tip("Above 0 switches to simpler levels of detail sooner, below 0 later. Each 1 doubles the difference allowed on screen");
+        prop(NODE, "cullSize", "Smallest Size", Float.class, rendering, Node3D::getCullScreenSize, (n, x, b) -> n.setCullScreenSize(f(x)))
+                .omitWhen(0f).range(0, 1).step(0.005).when(n -> SceneMeta.drawsMesh(info(n).shape))
+                .tip("Stops drawing it, and its shadow, once it is shorter than this share of the screen's height: 0.01 is a hundredth. 0 always draws it");
+        prop(NODE, "virtualGeometry", "Virtual Geometry", Boolean.class, rendering, Node3D::isVirtualGeometry, (n, x, b) -> n.setVirtualGeometry((Boolean) x))
+                .omitWhen(true).when(n -> SceneMeta.drawsMesh(info(n).shape))
+                .tip("With the world's virtual geometry on, draws this from its mesh's clusters. Off draws its detail levels instead");
     }
 
     // --- Materials -------------------------------------------------------------------------------------------------
@@ -559,6 +575,18 @@ public final class SceneKinds {
                         + "more than 64, which lets a scene hold about two thousand; the picture is the same either way");
         prop(WORLD, "occlusionCulling", "Occlusion Culling", Boolean.class, gLight, Scene3D::isOcclusionCulling, (s, x, b) -> s.setOcclusionCulling((Boolean) x))
                 .omitWhen(false).tip("Leaves out what is hidden behind the nodes marked as occluders. A hidden node still casts its shadow");
+        prop(WORLD, "lodPixelError", "Detail Error", Float.class, gLight, Scene3D::getLodPixelError, (s, x, b) -> s.setLodPixelError(Math.max(0.05f, f(x))))
+                .omitWhen(1f).range(0.05, 16).step(0.25)
+                .tip("How many pixels a simpler level of detail may be off from the full mesh before a more detailed one is drawn. Higher draws fewer triangles");
+        prop(WORLD, "lodBias", "Detail Bias", Float.class, gLight, Scene3D::getLodBias, (s, x, b) -> s.setLodBias(f(x)))
+                .omitWhen(0f).range(-4, 4).step(0.25).tip("Above 0 switches every mesh to simpler levels of detail sooner, below 0 later");
+        prop(WORLD, "virtualGeometry", "Virtual Geometry", Boolean.class, gLight, Scene3D::isVirtualGeometry, (s, x, b) -> s.setVirtualGeometry((Boolean) x))
+                .omitWhen(false).tip("Draws models loaded with detail levels as clusters the GPU picks every frame: a big mesh fine where it is near "
+                        + "and coarse where it is far. Vulkan only; elsewhere the detail levels are drawn");
+        prop(WORLD, "virtualGeometryOcclusion", "Hide Hidden Clusters", Boolean.class, gLight, Scene3D::isVirtualGeometryOcclusion,
+                (s, x, b) -> s.setVirtualGeometryOcclusion((Boolean) x))
+                .omitWhen(false).tip("With virtual geometry, leaves out the clusters that something in front hides. It costs a depth pass, so it pays "
+                        + "where much is hidden");
         prop(WORLD, "ambientOcclusion", "Ambient Occlusion", Float.class, gLight, Scene3D::getAmbientOcclusion, (s, x, b) -> s.setAmbientOcclusion(f(x)))
                 .omitWhen(0f).range(0, 4).step(0.05).tip("Darkens creases, corners and the gaps under things. 0 turns it off. "
                         + "It draws the solid objects a second time, so it costs more than bloom");

@@ -26,6 +26,7 @@ Draco (draco library next to Assimp)     Apache-2.0               Apache-2.0.txt
 shaderc                                  Apache-2.0               Apache-2.0.txt
 SPIRV-Cross                              Apache-2.0               Apache-2.0.txt
 Vulkan Memory Allocator                  MIT                      VulkanMemoryAllocator-MIT.txt
+meshoptimizer                            MIT                      meshoptimizer-MIT.txt
 Zstandard                                BSD-3-Clause             Zstandard-BSD-3-Clause.txt
 MoltenVK (macOS)                         Apache-2.0               Apache-2.0.txt
 Skiko (skiko-*)                          Apache-2.0               Apache-2.0.txt

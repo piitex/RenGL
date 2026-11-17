@@ -113,6 +113,12 @@
         </dependency>
         <dependency>
             <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-meshoptimizer</artifactId>
+            <version>${lwjgl.version}</version>
+            <classifier>${rengl.natives.classifier}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-zstd</artifactId>
             <version>${lwjgl.version}</version>
             <classifier>${rengl.natives.classifier}</classifier>

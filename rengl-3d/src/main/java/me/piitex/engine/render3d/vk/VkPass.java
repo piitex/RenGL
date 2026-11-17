@@ -22,6 +22,7 @@ final class VkPass implements RenderPass {
     private final Map<Integer, VkSoftRay.Scene> softScenes = new HashMap<>();
     private final Map<Integer, VkSoftRay.Scene> softGeometry = new HashMap<>();
     private final Map<Integer, VkTex[]> textureArrays = new HashMap<>();
+    private final Map<Integer, VkBuf> storageBuffers = new HashMap<>();
     private final long renderPass;
     private VkPipe pipeline;
     private boolean descriptorsDirty;
@@ -139,15 +140,19 @@ final class VkPass implements RenderPass {
                         .dstSet(set.get(0)).dstBinding(binding.binding()).descriptorCount(1);
                 if (binding.storage()) {
                     VkSoftRay.Scene scene = softScenes.get(binding.binding());
+                    VkBuf storage = storageBuffers.get(binding.binding());
                     long handle, size;
-                    if (scene != null) {
+                    if (storage != null) {
+                        handle = storage.handle();
+                        size = storage.size();
+                    } else if (scene != null) {
                         handle = scene.buffer();
                         size = scene.bufferSize();
                     } else if ((scene = softGeometry.get(binding.binding())) != null) {
                         handle = scene.geometryBuffer();
                         size = scene.geometryBufferSize();
                     } else {
-                        throw new IllegalStateException("No ray storage bound at binding " + binding.binding());
+                        throw new IllegalStateException("No storage buffer bound at binding " + binding.binding());
                     }
                     write.descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
                             .pBufferInfo(VkDescriptorBufferInfo.calloc(1, stack).buffer(handle).offset(0).range(size));
@@ -186,6 +191,18 @@ final class VkPass implements RenderPass {
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, set, null);
         }
         descriptorsDirty = false;
+    }
+
+    @Override
+    public void bindStorageBuffer(int binding, GpuBuffer buffer) {
+        if (storageBuffers.put(binding, (VkBuf) buffer) != buffer) descriptorsDirty = true;
+    }
+
+    @Override
+    public void drawIndexedIndirectCount(GpuBuffer commands, long offset, GpuBuffer count, long countOffset, int maxDraws) {
+        if (maxDraws <= 0) return;
+        flushDescriptors();
+        org.lwjgl.vulkan.VK12.vkCmdDrawIndexedIndirectCount(cmd, ((VkBuf) commands).handle(), offset, ((VkBuf) count).handle(), countOffset, maxDraws, 20);
     }
 
     @Override

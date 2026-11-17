@@ -6,6 +6,7 @@ import me.piitex.engine.render3d.scene.Instances;
 import me.piitex.engine.render3d.scene.Light;
 import me.piitex.engine.render3d.scene.Material;
 import me.piitex.engine.render3d.scene.Mesh;
+import me.piitex.engine.render3d.scene.LodSettings;
 import me.piitex.engine.render3d.scene.Model;
 import me.piitex.engine.render3d.scene.Node3D;
 import me.piitex.engine.render3d.scene.Scene3D;
@@ -52,6 +53,7 @@ final class SceneMeta {
         Vec3 euler; // the angles last given, which a rotation can be read back as without drifting
         Node3D modelRoot; // the child that holds a model's own nodes
         Model loaded;
+        boolean modelLods; // the model's meshes get levels of detail made when it is loaded
         String problem; // why the model isn't there
         final Map<String, Model> models = new HashMap<>(); // loaded before, so switching back is quick
     }
@@ -307,6 +309,13 @@ final class SceneMeta {
         if (info.shape == Shape.MODEL) loadModel(node, info, base);
     }
 
+    static void setModelLods(Node3D node, boolean lods, Path base) {
+        NodeInfo info = node(node);
+        if (info.modelLods == lods) return;
+        info.modelLods = lods;
+        if (info.shape == Shape.MODEL && !info.model.isEmpty()) loadModel(node, info, base);
+    }
+
     private static void removeModel(Node3D node, NodeInfo info) {
         if (info.modelRoot != null) node.remove(info.modelRoot);
         info.modelRoot = null;
@@ -354,12 +363,15 @@ final class SceneMeta {
         Path file = base.resolve(info.model).toAbsolutePath().normalize();
         try {
             String key = modelKey(file);
-            Model model = info.models.get(key);
+            String ownKey = info.modelLods ? key + "#lods" : key;
+            Model model = info.models.get(ownKey);
             if (model == null) {
                 model = takePreloaded(key);
-                if (model == null) model = Model.load(file);
+                // Detail levels come with the clusters of virtual geometry, which a scene draws where it has that on.
+                if (model == null) model = Model.load(file, info.modelLods ? new LodSettings().clusters(true) : null);
+                else if (info.modelLods) model.generateLods(new LodSettings().clusters(true));
                 info.models.clear(); // only the last is worth keeping: a model can be big
-                info.models.put(key, model);
+                info.models.put(ownKey, model);
             }
             node.add(model.root());
             info.modelRoot = model.root();

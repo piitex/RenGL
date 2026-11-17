@@ -451,6 +451,36 @@ final class SceneShaders {
      */
     static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi,
                            int guide, boolean soft) {
+        return fragment(env, filters, falloffs, clustered, rayTraced, reflections, gi, guide, soft, false);
+    }
+
+    /** The scene's vertex shader for a picture card ({@link ImpostorShaders}). */
+    static String impostorVertex() {
+        return ImpostorShaders.vertex(INPUTS, UV_TRANSFORM, FRAME_BLOCK);
+    }
+
+    /**
+     * The same, and with {@code impostor} for a picture card: the surface the card's pictures hold, at the depth they hold,
+     * in place of the mesh's own ({@link ImpostorShaders}).
+     */
+    static String fragment(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi,
+                           int guide, boolean soft, boolean impostor) {
+        String source = fragmentSource(env, filters, falloffs, clustered, rayTraced, reflections, gi, guide, soft);
+        if (!impostor) return source.replace("//@IMPOSTOR_SURFACE", "");
+        String[][] swaps = {
+                {"layout(location = 0) in vec3 vWorldPos;", "layout(location = 0) in vec3 vCardWorld;"},
+                {"layout(location = 1) in vec3 vNormal;", "layout(location = 1) in vec3 vCardFacing;\n" + ImpostorShaders.FRAGMENT_DECLARATIONS},
+                {"int mode = int(vParams.z + 0.5);", "vWorldPos = vCardWorld;\nvNormal = vCardFacing;\nint mode = int(vParams.z + 0.5);"},
+                {"//@IMPOSTOR_SURFACE", ImpostorShaders.FRAGMENT_SURFACE}};
+        for (String[] swap : swaps) {
+            if (!source.contains(swap[0])) throw new IllegalStateException("The scene shader has changed: no " + swap[0].lines().findFirst().orElse(""));
+            source = source.replace(swap[0], swap[1]);
+        }
+        return source;
+    }
+
+    private static String fragmentSource(int env, List<CustomShadowFilter> filters, List<CustomLightFalloff> falloffs, boolean clustered, boolean rayTraced, boolean reflections, int gi,
+                                         int guide, boolean soft) {
         boolean tracingGi = gi == GI_TRACE || gi == GI_PATH;
         reflections |= tracingGi;
         StringBuilder filterFunctions = new StringBuilder(), filterCases = new StringBuilder();
@@ -1268,6 +1298,15 @@ final class SceneShaders {
                 vec3 albedo = pow(tex.rgb * vTint.rgb, vec3(2.2));
                 float alpha = tex.a * vTint.a;
                 if (alpha < vParams.w) discard;
+                // A node changing level of detail draws both levels for a moment, each in the pixels the other leaves.
+                int lodFade = int(vExtra2.y + 0.5) >> 1;
+                if (lodFade != 0) {
+                    float share = float((lodFade >> 4) & 255) / 255.0;
+                    vec2 cell = gl_FragCoord.xy + float((lodFade >> 1) & 7) * vec2(5.588238, 3.149);
+                    float h = fract(52.9829189 * fract(dot(cell, vec2(0.06711056, 0.00583715))));
+                    if ((lodFade & 1) != 0 ? h < share : h >= share) discard;
+                }
+                //@IMPOSTOR_SURFACE
 
                 //@GI_UNLIT
                 //@GUIDE_UNLIT
@@ -1357,7 +1396,7 @@ final class SceneShaders {
                     float height = 0.5 * (cameraPos.y + vWorldPos.y);
                     float k = dist * fog.a * exp(-fogParams.x * max(height, 0.0));
                     float amount = 1.0 - exp(-k * k);
-                    lit = vExtra2.y > 0.5 ? lit * (1.0 - amount) : mix(lit, fog.rgb, amount);
+                    lit = (int(vExtra2.y + 0.5) & 1) != 0 ? lit * (1.0 - amount) : mix(lit, fog.rgb, amount);
                 }
                 vec3 exposed = lit * fogParams.y;
                 // Bloom keeps the light as it is (fogParams.w is 1) and tone maps the whole picture afterwards.

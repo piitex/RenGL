@@ -18,7 +18,7 @@ first time something draws 3D, and closed with the window.
   `new WindowOptions(...).setRenderer(RenderAPI.VULKAN)`: Metal can't share its GPU with the 3D layer, so a 3D element
   on a Metal window logs one warning and draws nothing. Vulkan also needs a Skiko with Vulkan support, see
   [Rendering APIs](../core/rendering-apis.md#getting-vulkan-working).
-- Nothing else. The shader compiler, the model loader and the memory allocator are LWJGL libraries the project already depends on.
+- Nothing else. The shader compiler, the model loader, the memory allocator and the mesh simplifier are LWJGL libraries the project already depends on.
 
 ## The pieces
 
@@ -34,6 +34,7 @@ first time something draws 3D, and closed with the window.
 | [Physics](physics.md) | Rigid bodies: gravity, velocity, mass and inertia, forces, collisions with friction and bounce, sleeping, raycasts and trigger zones, mesh and hull colliders, joints, a character controller |
 | [PhysX](physx.md) | The same physics world stepped by NVIDIA PhysX 5, from the separate `rengl-physx` module |
 | [Instancing](instancing.md) | Thousands of copies of one mesh in a single draw |
+| [Levels of detail](lod.md) | Simpler meshes for far-off things, made with meshoptimizer or by hand, picked by their error on screen, faded without a pop, picture cards for the far distance, and virtual geometry (clusters picked on the GPU) on Vulkan |
 | [Upscaling](upscaling.md) | Drawing a scene smaller and enlarging it: render scale, the built-in temporal upscaler, and the `Upscaler` interface for FSR, DLSS and XeSS modules |
 | [Ray tracing](ray-tracing.md) | Shadows, reflections, ambient occlusion, global illumination and path tracing (with their denoiser) traced with rays through the scene (DLSS Ray Reconstruction as the denoiser where there is one), with ray queries on Vulkan GPUs that have them and in shader code on any other (a Mac included), and the structures behind them |
 | [Custom rendering](custom-rendering.md) | Drawing your own 3D with `GpuDevice`, pipelines and one GLSL shader that runs on both APIs |

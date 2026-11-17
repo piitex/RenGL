@@ -31,6 +31,7 @@ final class GlBuffer implements GpuBuffer {
             case VERTEX -> GL_ARRAY_BUFFER;
             case INDEX -> GL_ELEMENT_ARRAY_BUFFER;
             case UNIFORM -> GL_UNIFORM_BUFFER;
+            case STORAGE -> throw new UnsupportedOperationException("OpenGL 3.3 has no storage buffers");
         };
     }
 

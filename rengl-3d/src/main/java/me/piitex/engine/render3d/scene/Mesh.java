@@ -30,6 +30,8 @@ public final class Mesh {
     private List<MorphTarget> morphTargets = List.of();
     private float[] morphDefaults = new float[0];
     private volatile Bvh bvh;
+    private volatile LodChain lods;
+    private volatile ClusterDag clusters;
 
     /**
      * @param positions x, y, z per vertex
@@ -275,6 +277,149 @@ public final class Mesh {
      */
     public float[] skinWeights() {
         return skinWeights;
+    }
+
+    /**
+     * Adds a simpler version of this mesh to draw when it is small on screen, a level of detail ({@link LodChain}). The scene
+     * draws it once {@code error}, seen from the camera, is under {@link Scene3D#setLodPixelError} pixels; levels are kept in
+     * order of their error, so they can be added in any order.
+     * <pre>
+     * Mesh tree = Model.load(Path.of("tree.glb")).root().find("tree").getMesh();
+     * tree.addLod(treeMedium, 0.02f).addLod(treeLow, 0.1f);
+     * </pre>
+     * A level should have the same parts as the mesh: skinning for a skinned mesh (with the same joints), the same blend
+     * shapes for a morphed one and a second set of texture coordinates if the mesh's material reads them. A node whose mesh
+     * has parts a level lacks draws the levels before it only. Picking, physics and the occlusion of other nodes still use
+     * the mesh itself.
+     *
+     * @param level a simpler mesh in the same place and size
+     * @param error the farthest, in this mesh's own units, any point of the level's surface is from this mesh's: 0.01 on a
+     *              mesh a unit across is a level that is off by a hundredth of its size
+     */
+    public Mesh addLod(Mesh level, float error) {
+        LodChain chain = lods;
+        lods = (chain == null ? LodChain.of(this) : chain).with(new LodChain.Level(level, error, true));
+        return this;
+    }
+
+    /**
+     * Adds a simpler version of this mesh made by hand, like {@link #addLod(Mesh, float)}, measuring its error: the farthest
+     * a sample of either mesh's vertices is from the other's surface. Measuring takes a moment for a big mesh, so it is best
+     * done while loading, off the render thread.
+     */
+    public Mesh addLod(Mesh level) {
+        return addLod(level, LodGenerator.measureError(this, level));
+    }
+
+    /**
+     * Makes this mesh's levels of detail with the default {@link LodSettings}: simpler versions with a half, a quarter, an
+     * eighth and a sixteenth of the triangles, as far as the shape allows. See {@link #generateLods(LodSettings)}.
+     */
+    public Mesh generateLods() {
+        return generateLods(new LodSettings());
+    }
+
+    /**
+     * Makes this mesh's levels of detail by simplifying it (with meshoptimizer), each with the error the simplifier measured, so
+     * they switch at the distance where the change is about a pixel ({@link Scene3D#setLodPixelError}). Levels already made by
+     * hand ({@link #addLod}) are kept and take the place of the made level at the same number. Skinning, blend shapes and
+     * second texture coordinates come along. A mesh with fewer than twice {@link LodSettings#minTriangles} triangles gets none.
+     * <p>
+     * It takes a few milliseconds per hundred thousand triangles and touches nothing but the mesh, so run it while loading, on
+     * any thread. A {@link Model} can do it for every mesh it loads ({@link Model#load(java.nio.file.Path, LodSettings)}).
+     */
+    public Mesh generateLods(LodSettings settings) {
+        if (lines) throw new IllegalStateException("A mesh of lines has no levels of detail");
+        LodChain made = LodGenerator.generate(this, settings);
+        LodChain old = lods;
+        if (old != null) {
+            for (int i = 1; i < old.size(); i++) {
+                if (old.level(i).handMade()) made = made.replace(i, old.level(i));
+            }
+        }
+        made = made.withImpostor(settings.impostor() || (old != null && old.hasImpostor()));
+        lods = made.size() < 2 && !made.hasImpostor() ? null : made;
+        return this;
+    }
+
+    /**
+     * Puts a level made by hand at {@code index} (1 or more) of the chain, in place of what was there.
+     */
+    void setLodLevel(int index, Mesh level, float error) {
+        LodChain chain = lods;
+        lods = (chain == null ? LodChain.of(this) : chain).replace(index, new LodChain.Level(level, error, true));
+    }
+
+    /**
+     * The mesh's levels of detail, the mesh itself first, or null when it has none.
+     */
+    public LodChain getLods() {
+        return lods;
+    }
+
+    /**
+     * Gives the mesh these levels (the chain's {@link LodChain#base} must be this mesh), or takes them away with null.
+     */
+    public Mesh setLods(LodChain chain) {
+        if (chain != null && chain.base() != this) throw new IllegalArgumentException("The chain belongs to another mesh");
+        lods = chain == null || (chain.size() < 2 && !chain.hasImpostor()) ? null : chain;
+        return this;
+    }
+
+    /**
+     * Ends the mesh's levels of detail with a picture card (an "impostor"): pictures of the mesh taken from 64 directions all
+     * round, drawn on a flat card that faces the camera once the mesh is so small on screen (a few dozen pixels across) that
+     * even its simplest level wastes triangles. A forest of thousands of trees then costs two triangles a tree in the
+     * distance. The card keeps its shading: it holds the colour, the direction the surface faces and its depth, so lights and
+     * shadows fall on it as on the mesh, and it hides and is hidden by what is in front.
+     * <p>
+     * The pictures are taken on the GPU the first time a card is needed, once for each material the mesh is drawn with, and
+     * hold 8 MB. A card is not drawn for a skinned or morphed node, a see-through material or lines; its shadow and its part
+     * in ray tracing are the simplest level's. Off by default.
+     */
+    public Mesh setImpostor(boolean impostor) {
+        if (lines && impostor) throw new IllegalStateException("A mesh of lines has no picture card");
+        LodChain chain = lods;
+        LodChain next = (chain == null ? LodChain.of(this) : chain).withImpostor(impostor);
+        lods = next.size() < 2 && !next.hasImpostor() ? null : next;
+        return this;
+    }
+
+    public boolean hasImpostor() {
+        LodChain chain = lods;
+        return chain != null && chain.hasImpostor();
+    }
+
+    /**
+     * Splits the mesh into clusters of up to 124 triangles at many levels of detail at once, for virtual geometry
+     * ({@link Scene3D#setVirtualGeometry}): each part of the mesh is then drawn at the level its own distance asks for, a big
+     * mesh fine where it is near and coarse where it is far, with no cracks and no change of level to see. The clusters index
+     * the mesh's own vertices, so they cost about twice the mesh's indices and nothing else.
+     * <p>
+     * A few milliseconds per ten thousand triangles; it touches nothing but the mesh, so run it while loading, on any thread.
+     * Where virtual geometry is off or the GPU can not do it, the mesh draws as ever, with its classic levels if it has them.
+     * A mesh of lines, or with skinning or blend shapes, has none (those nodes would not use them).
+     */
+    public Mesh buildClusters() {
+        if (lines) throw new IllegalStateException("A mesh of lines has no clusters");
+        if (isSkinned() || isMorphed()) throw new IllegalStateException("A skinned or morphing mesh has no clusters");
+        clusters = ClusterDag.build(this);
+        return this;
+    }
+
+    /** Takes the clusters away again. */
+    public Mesh clearClusters() {
+        clusters = null;
+        return this;
+    }
+
+    /** Whether {@link #buildClusters()} was run. */
+    public boolean hasClusters() {
+        return clusters != null;
+    }
+
+    ClusterDag clusters() {
+        return clusters;
     }
 
     /**

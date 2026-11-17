@@ -174,6 +174,49 @@ public interface GpuDevice extends AutoCloseable {
     }
 
     /**
+     * Whether this device runs compute shaders and draws from commands the GPU wrote itself: storage buffers
+     * ({@link BufferType#STORAGE}), {@link #createComputePipeline}, {@link #beginCompute} and
+     * {@link RenderPass#drawIndexedIndirectCount}. Vulkan on a GPU with multi-draw indirect and Vulkan 1.2's draw indirect
+     * count; never OpenGL, whose 3.3 core has none of it. It is what the clusters of virtual geometry are chosen and drawn with.
+     */
+    default boolean supportsVirtualGeometry() {
+        return false;
+    }
+
+    /**
+     * A storage buffer only the GPU writes (with a compute shader or {@link ComputePass#fill}), whose contents start undefined.
+     * It can hold indirect draw commands too. Only where {@link #supportsVirtualGeometry()}.
+     */
+    default GpuBuffer createStorageBuffer(long size) {
+        throw new UnsupportedOperationException("This device has no storage buffers");
+    }
+
+    /**
+     * A small buffer the GPU copies into ({@link ComputePass#copy}) and the CPU reads ({@link GpuBuffer#read}) a few frames
+     * later, without waiting: counts and statistics. Only where {@link #supportsVirtualGeometry()}.
+     */
+    default GpuBuffer createReadbackBuffer(long size) {
+        throw new UnsupportedOperationException("This device can not read buffers back");
+    }
+
+    /**
+     * A compute shader: GLSL 450 with {@code layout(local_size_x = ...) in;}, resources at {@code layout(set = 0, binding = N)}
+     * as in the other shaders, and up to 128 bytes of {@code layout(push_constant) uniform} values. Only where
+     * {@link #supportsVirtualGeometry()}.
+     */
+    default ComputePipeline createComputePipeline(String source) {
+        throw new UnsupportedOperationException("This device has no compute shaders");
+    }
+
+    /**
+     * Starts recording compute work, which runs after the passes made before it and before those made after it, and whose
+     * writes those later passes see. Only where {@link #supportsVirtualGeometry()}.
+     */
+    default ComputePass beginCompute() {
+        throw new UnsupportedOperationException("This device has no compute shaders");
+    }
+
+    /**
      * The most samples a render target can have on this GPU: at least 1, at most 8.
      */
     int maxSamples();

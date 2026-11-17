@@ -12,7 +12,7 @@ These are downloaded by Maven. They are not copied into the RenGL source tree.
 
 | Component | Version | License | Used by |
 |---|---|---|---|
-| [LWJGL 3](https://www.lwjgl.org) (core, GLFW, OpenGL, OpenAL, Opus, STB, NFD, Assimp, Shaderc, SPIRV-Cross, VMA, Vulkan, Zstd) | 3.4.3 | BSD-3-Clause | most modules |
+| [LWJGL 3](https://www.lwjgl.org) (core, GLFW, OpenGL, OpenAL, Opus, STB, NFD, Assimp, Shaderc, SPIRV-Cross, VMA, meshoptimizer, Vulkan, Zstd) | 3.4.3 | BSD-3-Clause | most modules |
 | [Skiko](https://github.com/JetBrains/skiko) (Skia for the JVM) | 0.154.0 | Apache-2.0 | rengl-core and the modules that draw |
 | [Kotlin standard library](https://kotlinlang.org) | 2.3.20 | Apache-2.0 | rengl-core (needed by Skiko) |
 | [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines) | 1.8.0 | Apache-2.0 | rengl-core, at run time |
@@ -55,6 +55,7 @@ ones relevant to RenGL's modules are:
 | Assimp | model loading | BSD-3-Clause (it also bundles some smaller libraries, such as Poly2Tri, under their own licenses) |
 | shaderc | shader compilation | Apache-2.0 |
 | Vulkan Memory Allocator | Vulkan memory | MIT |
+| meshoptimizer | levels of detail (mesh simplification) | MIT |
 | Zstandard | tile map compression | BSD-3-Clause (Zstandard is dual-licensed; LWJGL ships the BSD one) |
 | nativefiledialog-extended | file dialogs | zlib |
 | libffi | LWJGL core, native calls | MIT |

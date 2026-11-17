@@ -67,6 +67,24 @@ public interface RenderPass extends AutoCloseable {
         throw new UnsupportedOperationException("This device can not index arrays of textures");
     }
 
+    /**
+     * Binds a storage buffer ({@link BufferType#STORAGE}) to a {@code buffer Name { ... }} block. Only where
+     * {@link GpuDevice#supportsVirtualGeometry()}.
+     */
+    default void bindStorageBuffer(int binding, GpuBuffer buffer) {
+        throw new UnsupportedOperationException("This device has no storage buffers");
+    }
+
+    /**
+     * Draws the bound vertex and index buffers with commands the GPU wrote: {@code VkDrawIndexedIndirectCommand}s (index count,
+     * instance count, first index, vertex offset, first instance; 20 bytes each) from {@code offset} in {@code commands}, as many
+     * as the 32-bit count at {@code countOffset} in {@code count} says, at most {@code maxDraws}. Only where
+     * {@link GpuDevice#supportsVirtualGeometry()}.
+     */
+    default void drawIndexedIndirectCount(GpuBuffer commands, long offset, GpuBuffer count, long countOffset, int maxDraws) {
+        throw new UnsupportedOperationException("This device can not draw indirectly");
+    }
+
     default void draw(int vertexCount) {
         draw(vertexCount, 1, 0);
     }
