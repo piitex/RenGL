@@ -84,9 +84,22 @@ public class Engine {
     private final FrameLimiter frameLimiter = new FrameLimiter();
 
     /**
-     * With vsync on, a frame faster than this can't have waited on the display (e.g. the window is minimised/occluded and no drawable was available), so the cap is applied as a fallback.
+     * With vsync on, a frame faster than this can't have waited on the display (e.g. the window is minimised/occluded and no drawable was available).
      */
     private static final long IMPLAUSIBLY_FAST_FRAME_NANOS = 2_000_000L;
+
+    /**
+     * How many such frames in a row it takes, with vsync on, before the loop paces itself. One alone happens whenever the
+     * driver had room to queue a frame without waiting.
+     */
+    private static final int FAST_FRAMES_BEFORE_FALLBACK = 8;
+
+    private int fastFrames; // render thread: frames in a row, with vsync on, that did not wait on the display
+
+    /**
+     * The highest refresh rate of the connected displays, 0 if unknown. Read on the main thread, which GLFW requires.
+     */
+    private volatile int fastestDisplayHz;
 
     /**
      * How long the main thread waits for an OS event before it serves its queues anyway.
@@ -261,6 +274,8 @@ public class Engine {
         SystemInfo.collect(gpu).log();
         log.info("VSYNC: {}", window.getWindowOptions().isVsync());
         log.info("Max-FPS: {}", window.getWindowOptions().getMaxFPS());
+        fastestDisplayHz = fastestRefreshRate();
+        glfwSetMonitorCallback((monitor, event) -> fastestDisplayHz = fastestRefreshRate());
 
         Thread renderThread = new Thread(this::renderLoop, "Render-Thread");
         renderThread.start();
@@ -450,6 +465,29 @@ public class Engine {
     public Window getPacingWindow() {
         Host host = pacingHost();
         return host == null ? null : host.window;
+    }
+
+    /**
+     * The rate the loop holds itself to when vsync is on but the display is not pacing it: a quarter faster than the fastest
+     * display, so that wherever vsync does work the display stays the one that paces.
+     */
+    private int vsyncFallbackFps() {
+        int hz = fastestDisplayHz;
+        return hz > 0 ? hz + hz / 4 : 300;
+    }
+
+    /**
+     * MAIN THREAD ONLY. The highest refresh rate of the connected displays, 0 if GLFW knows of none.
+     */
+    private static int fastestRefreshRate() {
+        org.lwjgl.PointerBuffer monitors = glfwGetMonitors();
+        int fastest = 0;
+        if (monitors == null) return 0;
+        for (int i = 0; i < monitors.limit(); i++) {
+            org.lwjgl.glfw.GLFWVidMode mode = glfwGetVideoMode(monitors.get(i));
+            if (mode != null) fastest = Math.max(fastest, mode.refreshRate());
+        }
+        return fastest;
     }
 
     /**
@@ -715,8 +753,15 @@ public class Engine {
                 frameLimiter.limit(MINIMIZED_FPS); // nothing is visible, so don't redraw at full rate
             } else if (pacing != null && pacing.getBackgroundFPS() > 0 && live.stream().noneMatch(h -> h.window.isFocused())) {
                 frameLimiter.limit(pacing.getBackgroundFPS()); // in the background: the display's rate isn't needed
-            } else if (pacing != null && (!pacing.isVsync() || System.nanoTime() - now < IMPLAUSIBLY_FAST_FRAME_NANOS)) {
+            } else if (pacing != null && !pacing.isVsync()) {
+                fastFrames = 0;
                 frameLimiter.limit(pacing.getMaxFPS());
+            } else if (pacing != null) {
+                // Vsync on, but frames keep coming without waiting for the display: pace them so they don't spin. The fallback
+                // is faster than any display, so while vsync does work the display still paces the loop, the frames wait again
+                // and the fallback lets go. At the display's rate or below it would never let go: the frames would never wait.
+                fastFrames = System.nanoTime() - now < IMPLAUSIBLY_FAST_FRAME_NANOS ? fastFrames + 1 : 0;
+                if (fastFrames >= FAST_FRAMES_BEFORE_FALLBACK) frameLimiter.limit(vsyncFallbackFps());
             }
         }
 

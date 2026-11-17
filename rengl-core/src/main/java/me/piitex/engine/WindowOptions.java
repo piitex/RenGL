@@ -177,7 +177,9 @@ public class WindowOptions {
 
     /**
      * Syncs frame presentation to the display's refresh rate (default on). While on, the frame rate follows the
-     * display and {@link #setMaxFPS} is not consulted. While off, the loop runs at {@code maxFPS}.
+     * display and {@link #setMaxFPS} is not consulted. While off, the loop runs at {@code maxFPS}. Where vsync is on but
+     * the display does not make the frames wait (some drivers, with the window covered), the loop holds itself to a
+     * quarter above the fastest display's rate instead of spinning.
      * The render loop picks up a change on the next frame.
      */
     public WindowOptions setVsync(boolean vsync) {
