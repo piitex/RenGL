@@ -310,7 +310,7 @@ Copy-Item "target\$MainJar" target\input\ -Force
 
 # The engine's artifact and version: from the jar the build brought (the whole RenGL engine, or just rengl-core), else the
 # newest RenGL in the local Maven repository. The match ignores case on purpose: file names on Windows don't care either.
-$engineJar = '^(?<id>RenGL|rengl-core)-(?<version>\d.*?)(-natives-.+)?\.jar$'
+$engineJar = '^(?<id>RenGL|rengl-core)-(?<version>\d+(\.\d+)+.*?)(-natives-.+)?\.jar$'
 $engine = Get-ChildItem target\input -Filter '*.jar' | Where-Object { $_.Name -match $engineJar } | Select-Object -First 1
 if ($engine) {
     $found = [regex]::Match($engine.Name, $engineJar, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
