@@ -321,6 +321,10 @@
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>false</autoPublish>
                             <waitUntil>validated</waitUntil>
+                            <!-- Central limits a deployment to 1,000 files. The default ("all") puts
+                                 md5, sha1, sha256 and sha512 beside every file; Central only
+                                 requires md5 and sha1. -->
+                            <checksums>required</checksums>
                             <!-- The demos are not a library. -->
                             <excludeArtifacts>
                                 <artifact>rengl-examples</artifact>
