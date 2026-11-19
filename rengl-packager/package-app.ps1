@@ -333,7 +333,9 @@ if ($missing) {
     $nativesPom = Join-Path (Resolve-Path target) 'natives-pom.xml'
     Set-Content -Path $nativesPom -Encoding UTF8 -Value ('<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>local</groupId><artifactId>natives</artifactId><version>1</version><dependencies>' + $dependencies + '</dependencies></project>')
     Write-Host "==> Natives for $($missing -join ', ')"
-    & $mvn -q -f $nativesPom dependency:copy-dependencies '-DincludeScope=runtime' '-DoutputDirectory=target/input'
+    # An absolute path: a relative one is taken from the throwaway pom's folder (target), not from the project.
+    $inputFolder = (Resolve-Path 'target\input').Path
+    & $mvn -q -f $nativesPom dependency:copy-dependencies '-DincludeScope=runtime' "-DoutputDirectory=$inputFolder"
     if ($LASTEXITCODE -ne 0) { Fail "The $($missing -join ', ') natives could not be fetched. In the RenGL folder run: powershell -ExecutionPolicy Bypass -File rengl-packager\install-natives.ps1" }
 }
 
