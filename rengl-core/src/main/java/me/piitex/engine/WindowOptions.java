@@ -28,6 +28,7 @@ public class WindowOptions {
     private volatile boolean showCursor = true;
     private volatile boolean handleFocus = false;
     private volatile boolean resizable = true;
+    private volatile boolean centered = true;
     private volatile RenderAPI renderer = RenderAPI.AUTO;
     private volatile int maxFPS = 60;
     private volatile int backgroundFPS = 30;
@@ -381,6 +382,20 @@ public class WindowOptions {
         Window w = window;
         if (w != null) w.pushResizable();
         return this;
+    }
+
+    /**
+     * Whether the window opens in the middle of the primary monitor (default on). Turn it off to let the OS place it,
+     * which on Windows is its cascade spot, often well off center. Not live: it is read when the window opens. To move
+     * a running window use {@link Window#center()} or {@link Window#setPosition}.
+     */
+    public WindowOptions setCentered(boolean centered) {
+        this.centered = centered;
+        return this;
+    }
+
+    public boolean isCentered() {
+        return centered;
     }
 
     public String getTitle() {

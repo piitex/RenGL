@@ -338,6 +338,10 @@ public class GLFWindow {
         if (options.isAlwaysOnTop()) {
             glfwSetWindowAttrib(window, GLFW_FLOATING, GLFW_TRUE);
         }
+        // Before fullscreen and maximize, so leaving either puts the window back in the middle of the screen.
+        if (options.isCentered()) {
+            applyCenter();
+        }
         if (options.isFullscreen()) {
             applyFullscreen(true, borderless);
         } else if (options.isMaximized() && options.isResizable()) {
@@ -598,7 +602,8 @@ public class GLFWindow {
     }
 
     /**
-     * MAIN THREAD ONLY. Centers the window in the primary monitor's usable area.
+     * MAIN THREAD ONLY. Centers the window, title bar and borders included, in the primary monitor's usable area (the
+     * screen less the taskbar or Dock). A window bigger than that area keeps its title bar on screen.
      */
     public void applyCenter() {
         long monitor = glfwGetPrimaryMonitor();
@@ -608,7 +613,14 @@ public class GLFWindow {
             glfwGetMonitorWorkarea(monitor, mx, my, mw, mh);
             IntBuffer w = stack.mallocInt(1), h = stack.mallocInt(1);
             glfwGetWindowSize(window, w, h);
-            glfwSetWindowPos(window, mx.get(0) + (mw.get(0) - w.get(0)) / 2, my.get(0) + (mh.get(0) - h.get(0)) / 2);
+            // The frame around the content area: glfwSetWindowPos places the content, not the title bar.
+            IntBuffer left = stack.mallocInt(1), top = stack.mallocInt(1), right = stack.mallocInt(1), bottom = stack.mallocInt(1);
+            glfwGetWindowFrameSize(window, left, top, right, bottom);
+            int outerW = w.get(0) + left.get(0) + right.get(0);
+            int outerH = h.get(0) + top.get(0) + bottom.get(0);
+            int x = mx.get(0) + Math.max(0, (mw.get(0) - outerW) / 2) + left.get(0);
+            int y = my.get(0) + Math.max(0, (mh.get(0) - outerH) / 2) + top.get(0);
+            glfwSetWindowPos(window, x, y);
         }
     }
 
