@@ -45,11 +45,10 @@ The CI build runs `./mvnw verify` on Windows. A pull request needs it to pass be
 
 ## License of your contribution
 
-RenGL is under the [RSGL 1.0 license](LICENSE). By submitting a contribution you agree to
-[section 8 of that license](LICENSE): you keep ownership of what you wrote, and you grant the Licensor (Piitex) a
-perpetual, worldwide, irrevocable, non-exclusive, royalty-free license to use, modify, sublicense and distribute it under
-the license or any other license. You also confirm you have the right to do so, so don't submit code you copied from
-somewhere with an incompatible license, or work your employer owns.
+RenGL is under the [Apache License, Version 2.0](LICENSE). As section 5 of that license says, a contribution you
+submit is licensed under the same Apache-2.0 terms. You keep ownership of what you wrote. You also confirm you have the
+right to submit it, so don't submit code you copied from somewhere with an incompatible license, or work your employer
+owns.
 
 If you add a third-party library or a bundled asset (a font, an image, a sound), say where it came from and under what
 license in the pull request, and add it to [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

@@ -37,8 +37,8 @@
 
     <licenses>
         <license>
-            <name>RenGL Open-Source-Game License 1.0</name>
-            <url>https://github.com/piitex/RenGL/blob/main/LICENSE</url>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
             <distribution>repo</distribution>
         </license>
     </licenses>

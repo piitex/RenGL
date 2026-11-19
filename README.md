@@ -206,17 +206,14 @@ RenGL is a personal project. Issues and pull requests are welcome (see [CONTRIBU
 
 ## License
 
-RenGL is source-available under the [RenGL Open-Source-Game License](LICENSE). In short:
+RenGL is open source under the [Apache License, Version 2.0](LICENSE). You can use it in any game or app, open or
+closed source, commercial or not, and you can modify and redistribute it. When you redistribute RenGL or a modified
+copy, keep the license and the [NOTICE](NOTICE) file with it and mark the files you changed.
 
-- **Free for non-commercial use**, open or closed source.
-- **Free for commercial games and apps whose source code is public.** Sell it, put it on Steam, add ads; just
-  publish the source.
-- **Closed-source commercial products need a Commercial License, and none is on offer yet.** Until that changes they
-  are not permitted. Commercial Licenses may become available once RenGL is more tested; any announcement will be made
-  in this repository.
-- **RenGL itself is not for sale.** No paid forks, paid hosting, or commercial engines and frameworks built on it.
+Releases up to and including 0.1.1 were published under the RenGL Open-Source-Game License 1.0; later releases are under
+Apache-2.0.
 
-This summary is not the license; the [LICENSE](LICENSE) file is.
+The libraries RenGL uses stay under their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## AI transparency
 

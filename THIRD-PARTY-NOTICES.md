@@ -1,8 +1,8 @@
 # Third-party notices
 
-RenGL itself is under the RenGL Open-Source-Game License (RSGL) 1.0, in [LICENSE](LICENSE).
-The components below are not covered by it. Each stays under its own license, as Section 9 of
-the RSGL says, and nothing here changes those licenses.
+RenGL itself is under the Apache License, Version 2.0, in [LICENSE](LICENSE).
+The components below are not covered by it. Each stays under its own license, and nothing
+here changes those licenses.
 
 Versions are the ones the build uses at the time of writing (see the poms).
 
