@@ -26,6 +26,8 @@ import java.util.List;
  *   <li>Click an arrow, double-click a group, or use Left and Right to open and close groups.</li>
  *   <li>Click a header to sort; each group's children are sorted among themselves and stay under it.</li>
  *   <li>Double-click a name to rename it. Tick boxes on the left; ticks inside closed groups are kept.</li>
+ *   <li>Drag a row to move it: onto the top or bottom of a row to put it before or after, onto the middle to put it
+ *   inside. Hold it over a closed group to open it; Escape drops the drag. Ctrl-click to drag several rows.</li>
  * </ul>
  */
 public class TreeTableDemo {
@@ -35,6 +37,7 @@ public class TreeTableDemo {
         boolean visible = true;
         double opacity = 100;
         final List<Entity> children = new ArrayList<>();
+        Entity parent;
 
         Entity(String name, int triangles) {
             this.name = name;
@@ -43,6 +46,7 @@ public class TreeTableDemo {
 
         Entity add(Entity child) {
             children.add(child);
+            child.parent = this;
             return this;
         }
 
@@ -105,6 +109,24 @@ public class TreeTableDemo {
         tree.expand(scene.getFirst());
         tree.onSelect(e -> status.setText(e == null ? "" : "Selected " + e.name + ", depth " + tree.depthOf(e)));
         tree.onCheck((e, on) -> status.setText(tree.getCheckedItems().size() + " ticked"));
+        tree.setMultiSelect(true);
+        tree.setDragEnabled(true);
+        tree.onDrop(drop -> {
+            List<Entity> into = drop.parent() == null ? scene : drop.parent().children;
+            int index = drop.index();
+            for (Entity e : drop.items()) {
+                List<Entity> from = e.parent == null ? scene : e.parent.children;
+                if (from == into && from.indexOf(e) < index) index--;
+                from.remove(e);
+            }
+            for (Entity e : drop.items()) {
+                into.add(index++, e);
+                e.parent = drop.parent();
+            }
+            tree.refresh();
+            String what = drop.items().size() == 1 ? drop.item().name : drop.items().size() + " rows";
+            status.setText("Moved " + what + (drop.parent() == null ? " to the top level" : " into " + drop.parent().name));
+        });
         root.addElement(tree);
 
         new Engine().start(window);
@@ -127,6 +149,6 @@ public class TreeTableDemo {
         for (int i = 1; i <= 30; i++) props.add(new Entity("Crate " + i, 96 + (i * 31) % 200));
         Entity camera = new Entity("Camera", 0);
         Entity sky = new Entity("Sky", 2048);
-        return List.of(level, props, camera, sky);
+        return new ArrayList<>(List.of(level, props, camera, sky));
     }
 }

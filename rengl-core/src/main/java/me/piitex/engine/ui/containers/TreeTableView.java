@@ -3,6 +3,8 @@ package me.piitex.engine.ui.containers;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -29,6 +31,9 @@ import java.util.function.Function;
  * The user opens or closes an item by clicking its arrow, double-clicking its row (see
  * {@link #setToggleOnDoubleClick}), or with the Left and Right keys, which also move to the parent and the first child.
  * {@link #getItems()} is the rows shown now, top to bottom.
+ * <p>
+ * With {@link #setDragEnabled}, rows can be dragged to reorder them or move them under another item; the move is
+ * reported through {@link #onDrop} for the model to make.
  */
 public class TreeTableView<T> extends TableView<T> {
 
@@ -162,5 +167,50 @@ public class TreeTableView<T> extends TableView<T> {
     @Override
     public boolean isToggleOnDoubleClick() {
         return super.isToggleOnDoubleClick();
+    }
+
+    /**
+     * Whether rows can be dragged to move them: before or after another row, or onto one to go inside it. Off by
+     * default. The table does not change the model; it reports the move through {@link #onDrop}.
+     * <p>
+     * While dragging, a line shows where the rows would go and at what depth, or a frame around the row they would go
+     * into; holding them over a closed item opens it, and the table scrolls when the pointer is near its top or bottom
+     * edge. Escape drops the drag. With {@linkplain #setMultiSelect multi-select}, pressing one of several selected rows
+     * drags them all. When a column sorts the rows, each level keeps the sort's order, so a drag can move rows to another
+     * parent but not reorder them among the same siblings.
+     */
+    public void setDragEnabled(boolean dragEnabled) {
+        setRowDragEnabled(dragEnabled);
+    }
+
+    public boolean isDragEnabled() {
+        return isRowDragEnabled();
+    }
+
+    /**
+     * Fired when the user drops dragged rows somewhere new, with where they go: the same {@link TreeView.Drop} a
+     * {@link TreeView} gives, its index counted among the new parent's children as the {@code children} function lists
+     * them. Make the move in the model and call {@link #refresh()}.
+     */
+    @Override
+    public void onDrop(Consumer<TreeView.Drop<T>> onDrop) {
+        super.onDrop(onDrop);
+    }
+
+    /**
+     * Asked with (item, new parent) whether the item may go there; the parent is null for the top level. The table
+     * already refuses dropping an item into itself or its own children.
+     */
+    @Override
+    public void setCanDrop(BiPredicate<T, T> canDrop) {
+        super.setCanDrop(canDrop);
+    }
+
+    /**
+     * Whether the user is dragging a row.
+     */
+    @Override
+    public boolean isDraggingRow() {
+        return super.isDraggingRow();
     }
 }

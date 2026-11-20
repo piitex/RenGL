@@ -253,10 +253,38 @@ cells (a control in the tree column is indented with its row). What is different
   ticks and counts only the rows shown.
 - `depthOf(item)` and `parentOf(item)` describe a row shown now. `setTreeColumn(column)` moves the arrows to another
   column, and `setIndent` sets the step per level (default 16).
-- Rows cannot be dragged to a new parent. For that use [`TreeView`](tree-view.md), which has no columns.
+
+### Dragging rows
+
+`setDragEnabled(true)` lets the user drag rows to reorder them or move them under another item. The table does not
+change the model: it reports the move through `onDrop`, with the same `TreeView.Drop` a [`TreeView`](tree-view.md#dragging-rows)
+gives, and you make it and call `refresh()`.
+
+```java nocompile
+tree.setDragEnabled(true);
+tree.setCanDrop((item, parent) -> parent == null || parent.isGroup()); // parent is null for the top level
+tree.onDrop(drop -> {
+    for (Entity e : drop.items()) scene.move(e, drop.parent(), drop.index());
+    tree.refresh();
+});
+```
+
+- The top quarter of a row puts the rows before it, the bottom quarter after it, and the middle inside it, at the end.
+  Just under an open item's row is its first child. Below the last row is the end of the top level. A line shows where
+  they would go and at what depth, or a frame marks the row they would go into.
+- `drop.index()` is the gap among the new parent's children **as the `children` function lists them**, counting the
+  moved item if it is already there. When you remove the item before inserting it in the same list, take one off the
+  index if it was above the gap.
+- Holding the rows over a closed item opens it after a moment, and the table scrolls when the pointer is near its top or
+  bottom edge. **Escape** drops the drag. A short move is a click.
+- With multi-select, pressing one of several selected rows drags them all (`drop.items()`, top to bottom, leaving out any
+  inside another selected row); released without dragging, it selects just that row.
+- The table refuses dropping an item into itself or its own children, and a drop that would not move anything.
+- While a column sorts the rows, each level keeps the sort's order, so a drag can move rows to another parent but not
+  reorder them among the same siblings.
 
 `me.piitex.examples.demo.TreeTableDemo` is a scene outline of nested buildings, floors and props with a triangle count,
-a visibility switch and an opacity slider in every row, check boxes, and names edited in place.
+a visibility switch and an opacity slider in every row, check boxes, names edited in place, and rows you can drag.
 
 ## Keys and context menu
 

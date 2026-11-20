@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -82,6 +83,13 @@ import java.util.function.Supplier;
 public class TableView<T> extends ScrollContainer implements Focusable, FontScalable {
     private static final long DOUBLE_CLICK_NANOS = 400_000_000L;
     private static final double DRAG_THRESHOLD = 4;
+    private static final double AUTO_SCROLL_EDGE = 24;
+    private static final double AUTO_SCROLL_SPEED = 600; // points per second, with the pointer at the very edge
+    private static final float OPEN_ON_HOVER_SECONDS = 0.7f; // a closed item held over while dragging opens
+    private static final float CARRIED_ALPHA = 0.4f; // rows being dragged, where they still are
+    private static final float PREVIEW_ALPHA = 0.92f;
+    private static final float PREVIEW_OFFSET_X = 14f; // the dragged row's preview, right of the pointer
+    private static final float PREVIEW_MAX_WIDTH = 220f;
     private static final float CELL_PADDING = 8f;
     private static final float SORT_ARROW = 9f;
     private static final double RESIZE_GRAB = 4; // either side of a header's edge
@@ -357,6 +365,8 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
     private record Node(int depth, int parent, boolean hasChildren) {
     }
 
+    private enum DropMode {BEFORE, AFTER, INTO}
+
     private final List<Column<T>> columns = new ArrayList<>();
     private final List<T> items = new ArrayList<>(); // as shown: sorted
     private Collection<? extends T> source = List.of();  // as given; read again by refresh()
@@ -419,6 +429,21 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
     private boolean headerMoved;
     private T lastPressItem;
     private long lastPressNanos;
+
+    // Dragging rows of a tree to move them: a press on a row becomes a drag once the pointer moves far enough.
+    private boolean rowDragEnabled;
+    private Consumer<TreeView.Drop<T>> onDrop;
+    private BiPredicate<T, T> canDrop = (item, parent) -> true;
+    private T pressedItem;
+    private boolean draggingRow;
+    private double rowPressX, rowPressY, dragX, dragY;
+    private T pendingCollapse; // a press on one of several selected rows: it becomes the only one if released without dragging
+    private List<T> dragged = List.of();
+    private Set<T> draggedSet = Set.of();
+    private TreeView.Drop<T> drop;
+    private DropMode dropMode;
+    private int dropRow = -1;
+    private float hoverOpenTime;
 
     /**
      * A table at (0, 0) with no columns. Add them with {@link #addColumn}.
@@ -500,6 +525,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         pruneSelection();
         pruneChecked();
         clampScroll();
+        rowsMovedUnderDrag();
     }
 
     /**
@@ -775,6 +801,172 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         applySort();
         pruneSelection();
         clampScroll();
+        rowsMovedUnderDrag();
+    }
+
+    /* Dragging rows */
+
+    void setRowDragEnabled(boolean enabled) {
+        rowDragEnabled = enabled;
+        if (!enabled) endRowDrag();
+    }
+
+    boolean isRowDragEnabled() {
+        return rowDragEnabled;
+    }
+
+    void onDrop(Consumer<TreeView.Drop<T>> onDrop) {
+        this.onDrop = onDrop;
+    }
+
+    void setCanDrop(BiPredicate<T, T> canDrop) {
+        this.canDrop = canDrop == null ? (item, parent) -> true : canDrop;
+    }
+
+    boolean isDraggingRow() {
+        return draggingRow;
+    }
+
+    @Override
+    public void onDragCancel() {
+        draggingThumb = false;
+        pressedHeader = resizing = null;
+        pendingCollapse = null;
+        endRowDrag();
+    }
+
+    private void endRowDrag() {
+        pressedItem = null;
+        draggingRow = false;
+        dragged = List.of();
+        draggedSet = Set.of();
+        clearDrop();
+    }
+
+    private void clearDrop() {
+        drop = null;
+        dropMode = null;
+        dropRow = -1;
+    }
+
+    private void rowsMovedUnderDrag() {
+        if (pressedItem == null) return;
+        if (indexOf(pressedItem) < 0) endRowDrag();
+        else if (draggingRow) updateDrop();
+    }
+
+    /**
+     * What dragging the pressed row carries: the whole selection if it is one of several, top to bottom, without the
+     * rows inside another selected row, else just itself.
+     */
+    private List<T> carried() {
+        if (!multiSelect || selection.size() < 2 || !selection.contains(pressedItem)) return List.of(pressedItem);
+        List<T> result = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            if (!selection.contains(items.get(i))) continue;
+            boolean inside = false;
+            for (int r = nodes.get(i).parent; r >= 0 && !inside; r = nodes.get(r).parent) inside = selection.contains(items.get(r));
+            if (!inside) result.add(items.get(i));
+        }
+        return result;
+    }
+
+    /**
+     * Works out where the dragged rows would land with the pointer at (dragX, dragY). The top quarter of a row puts
+     * them before it, the bottom quarter after it (or first inside it, when it is open), and the middle inside it, at
+     * the end. Below the last row is the end of the top level, and above the first row the start of it.
+     */
+    private void updateDrop() {
+        DropMode oldMode = dropMode;
+        int oldRow = dropRow;
+        clearDrop();
+        if (!items.isEmpty()) {
+            double contentY = toLocalY(dragY) - getY() - headerHeight + getScrollOffsetY();
+            int index = (int) Math.floor(contentY / rowHeight);
+            if (contentY < 0) {
+                offer(-1, 0, DropMode.BEFORE, 0);
+            } else if (index >= items.size()) {
+                offer(-1, size(source), DropMode.AFTER, items.size() - 1);
+            } else {
+                Node node = nodes.get(index);
+                T item = items.get(index);
+                double within = contentY / rowHeight - index;
+                boolean open = node.hasChildren && expanded.contains(item);
+                if (within < 0.25) offer(node.parent, siblingIndex(index), DropMode.BEFORE, index);
+                else if (within > 0.75 && !open) offer(node.parent, siblingIndex(index) + 1, DropMode.AFTER, index);
+                else if (within > 0.75) offer(index, 0, DropMode.AFTER, index); // just under an open item is its first child
+                else offer(index, size(children.apply(item)), DropMode.INTO, index);
+            }
+        }
+        if (dropMode != oldMode || dropRow != oldRow) hoverOpenTime = 0f;
+    }
+
+    /**
+     * Sets the drop to position {@code index} under the row {@code parentRow} (-1: the top level) if that is allowed and
+     * moves something.
+     */
+    private void offer(int parentRow, int index, DropMode mode, int indicatorRow) {
+        for (int r = parentRow; r >= 0; r = nodes.get(r).parent) {
+            if (draggedSet.contains(items.get(r))) return; // into itself or its own children
+        }
+        T parent = parentRow < 0 ? null : items.get(parentRow);
+        for (T each : dragged) {
+            if (!canDrop.test(each, parent)) return;
+        }
+        if (sortColumn != null) {
+            // sorted, a level's order is the sort's: moving among the same siblings would change nothing on screen
+            boolean same = true;
+            for (T each : dragged) same &= Objects.equals(parentOf(each), parent);
+            if (same) return;
+        } else if (dragged.size() == 1 && Objects.equals(parentOf(pressedItem), parent)) {
+            int old = siblingIndex(indexOf(pressedItem));
+            if (index == old || index == old + 1) return; // the gaps either side of it: no move
+        }
+        drop = new TreeView.Drop<>(pressedItem, parent, index, dragged);
+        dropMode = mode;
+        dropRow = indicatorRow;
+    }
+
+    /**
+     * Where a row's item is among its parent's children as the model lists them, which is not the order shown when
+     * the table is sorted.
+     */
+    private int siblingIndex(int row) {
+        int parent = nodes.get(row).parent;
+        Collection<? extends T> siblings = parent < 0 ? source : children.apply(items.get(parent));
+        T item = items.get(row);
+        int i = 0;
+        for (T sibling : siblings) {
+            if (Objects.equals(sibling, item)) return i;
+            i++;
+        }
+        return -1;
+    }
+
+    private static int size(Collection<?> collection) {
+        return collection == null ? 0 : collection.size();
+    }
+
+    /**
+     * While a row is dragged: scrolls when the pointer is near the top or bottom edge, and opens a closed item it is
+     * held over.
+     */
+    private void updateRowDrag(float delta) {
+        if (!draggingRow) return;
+        double top = getAbsoluteY() + headerHeight, bottom = getAbsoluteY() + getHeight(), push = 0;
+        if (dragY < top + AUTO_SCROLL_EDGE) push = -Math.min(1, (top + AUTO_SCROLL_EDGE - dragY) / AUTO_SCROLL_EDGE);
+        else if (dragY > bottom - AUTO_SCROLL_EDGE) push = Math.min(1, (dragY - (bottom - AUTO_SCROLL_EDGE)) / AUTO_SCROLL_EDGE);
+        if (push != 0) {
+            scrollBy(0, push * AUTO_SCROLL_SPEED * delta);
+            updateDrop();
+        }
+        if (dropMode == DropMode.INTO && nodes.get(dropRow).hasChildren && !expanded.contains(items.get(dropRow))) {
+            hoverOpenTime += delta;
+            if (hoverOpenTime >= OPEN_ON_HOVER_SECONDS) {
+                hoverOpenTime = 0f;
+                setExpanded(items.get(dropRow), true);
+            }
+        }
     }
 
     private boolean isBelow(int row, T ancestor) {
@@ -1275,6 +1467,11 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
     @Override
     public void onKeyPressed(int key, int action, int mods) {
         if (action == GLFW.GLFW_RELEASE) return;
+        if (draggingRow && key == GLFW.GLFW_KEY_ESCAPE) {
+            pendingCollapse = null;
+            endRowDrag();
+            return;
+        }
         if (keyListener != null && keyListener.onKey(key, mods)) return;
         if (items.isEmpty()) return;
         boolean shift = multiSelect && (mods & GLFW.GLFW_MOD_SHIFT) != 0;
@@ -1445,7 +1642,21 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         boolean doubleClick = Objects.equals(item, lastPressItem) && now - lastPressNanos <= DOUBLE_CLICK_NANOS;
         lastPressItem = item;
         lastPressNanos = doubleClick ? 0 : now; // a third press starts a new pair
-        selectByUser(item);
+        boolean dragsRows = rowDragEnabled && children != null;
+        if (dragsRows && multiSelect && selection.size() > 1 && selection.contains(item) && !doubleClick) {
+            pendingCollapse = item;
+            if (!Objects.equals(selected, item)) {
+                selected = item;
+                if (onSelect != null) onSelect.accept(item);
+            }
+        } else {
+            selectByUser(item);
+        }
+        if (dragsRows && !doubleClick) {
+            pressedItem = item;
+            rowPressX = dragX = x;
+            rowPressY = dragY = y;
+        }
         if (doubleClick) {
             Column<T> cell = columnAt(x);
             if (cell != null && cell.onEdit != null) {
@@ -1463,6 +1674,19 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             super.onDragUpdate(x, y);
             return;
         }
+        if (pressedItem != null) {
+            dragX = x;
+            dragY = y;
+            if (!draggingRow) {
+                if (Math.hypot(x - rowPressX, y - rowPressY) < DRAG_THRESHOLD) return;
+                draggingRow = true;
+                dragged = carried();
+                draggedSet = new HashSet<>(dragged);
+                lastPressItem = null; // a drag is not the first half of a double-click
+            }
+            updateDrop();
+            return;
+        }
         if (resizing != null) {
             resizing.setWidth((float) (resizeStartWidth + x - resizeStartX));
             clampScroll();
@@ -1478,6 +1702,13 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             super.onDragEnd(x, y);
             return;
         }
+        boolean wasDragging = draggingRow;
+        TreeView.Drop<T> dropped = wasDragging ? drop : null;
+        endRowDrag();
+        T collapseTo = pendingCollapse;
+        pendingCollapse = null;
+        if (collapseTo != null && !wasDragging) selectByUser(collapseTo);
+        if (dropped != null && onDrop != null) onDrop.accept(dropped);
         Column<T> clicked = pressedHeader;
         pressedHeader = resizing = null;
         if (clicked != null && !headerMoved && clicked == columnAt(x) && headerAt(y)) sortByUser(clicked);
@@ -2003,6 +2234,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
     @Override
     public void update(float delta) {
         super.update(delta);
+        updateRowDrag(delta);
         syncCells();
         if (editField != null) placeEditor();
         AnimatedPaint.advanceIfAnimated(textColor.get(), delta);
@@ -2055,6 +2287,44 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         renderer.popClip();
         renderer.popClip();
         if (isScrollbarVisible()) renderScrollbars(renderer);
+        if (draggingRow && pressedItem != null) renderDragPreview(renderer);
+    }
+
+    /**
+     * The dragged row's tree column beside the pointer, with how many rows go along when it is more than one. It is
+     * not clipped to the table, so it can leave the table's edge.
+     */
+    private void renderDragPreview(Renderer renderer) {
+        Column<T> column = getTreeColumn();
+        if (column == null) return;
+        org.jetbrains.skia.Font f = getFont();
+        float textH = FontMetricsCompat.of(f).getHeight();
+        Paint text = textColor.get();
+        Paint selectionPaint = selectionColor.get();
+        Paint chip = AnimatedPaint.resolve(selectionPaint) instanceof Color c ? c.withAlpha(1f) : selectionPaint;
+        IconAsset icon = column.icon == null ? null : column.icon.apply(pressedItem);
+        String label = TextFit.ellipsize(column.textOf(pressedItem), f, PREVIEW_MAX_WIDTH);
+        String more = dragged.size() > 1 ? "+" + (dragged.size() - 1) : null;
+        float width = CELL_PADDING * 2 + TextShaping.width(f, label);
+        if (icon != null) width += iconSize + 6f;
+        if (more != null) width += 6f + TextShaping.width(f, more);
+        float x = (float) toLocalX(dragX) + PREVIEW_OFFSET_X, y = (float) toLocalY(dragY) + rowHeight / 2f;
+        renderer.pushAlpha(PREVIEW_ALPHA);
+        renderer.drawQuad(x, y, width, rowHeight, chip, rowCornerRadius);
+        renderer.popAlpha();
+        float at = x + CELL_PADDING;
+        if (icon != null) {
+            int size = Math.round(iconSize);
+            Color tint = column.iconColor == null ? null : column.iconColor.apply(pressedItem);
+            renderer.drawImage(IconCache.loadResource(icon.resourcePath(), size, size), at, y + (rowHeight - size) / 2f,
+                    size, size, 0f, 1f, tint == null ? solid(text) : tint);
+            at += iconSize + 6f;
+        }
+        renderer.drawText(label, at, y + (rowHeight - textH) / 2f, f, text);
+        if (more != null) {
+            at += TextShaping.width(f, label) + 6f;
+            renderer.drawText(more, at, y + (rowHeight - textH) / 2f, f, dimTextColor.get());
+        }
     }
 
     private void renderRows(Renderer renderer) {
@@ -2066,10 +2336,12 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         Paint selectionPaint = selectionColor.get();
         Color iconTint = solid(text);
         boolean keyboardHere = focused || cellHasFocus();
+        // the selection is translucent so the row's text shows through; the drop marker wants it solid
+        Paint marker = AnimatedPaint.resolve(selectionPaint) instanceof Color c ? c.withAlpha(1f) : selectionPaint;
 
         int hoverRow = -1;
         double mx = MouseTracker.getX(), my = MouseTracker.getY();
-        if (!draggingThumb && resizing == null && isHovered() && MouseTracker.isInWindow() && contains(mx, my) && !thumbAt(mx, my)) {
+        if (!draggingThumb && !draggingRow && resizing == null && isHovered() && MouseTracker.isInWindow() && contains(mx, my) && !thumbAt(mx, my)) {
             hoverRow = rowAt(my);
         }
 
@@ -2084,6 +2356,8 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
                 renderer.drawQuad(x, rowY, w, rowHeight, text, 0f);
                 renderer.popAlpha();
             }
+            boolean carried = draggingRow && draggedSet.contains(item);
+            if (carried) renderer.pushAlpha(CARRIED_ALPHA); // what is being dragged stays in its place, faded
             if (selection.contains(item)) {
                 if (!keyboardHere) renderer.pushAlpha(0.6f);
                 renderer.drawQuad(x, rowY, w, rowHeight, selectionPaint, rowCornerRadius);
@@ -2092,6 +2366,9 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
                 renderer.pushAlpha(0.07f);
                 renderer.drawQuad(x, rowY, w, rowHeight, text, rowCornerRadius);
                 renderer.popAlpha();
+            }
+            if (i == dropRow && dropMode == DropMode.INTO) {
+                renderer.drawBorder(x + 1, rowY + 1, w - 2, rowHeight - 2, marker, 2f, 3f);
             }
             boolean dim = dimmed.test(item);
             Paint color = dim ? dimTextColor.get() : text;
@@ -2112,6 +2389,16 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
                 if (column.cellFactory != null) continue;
                 drawCell(renderer, column, item, cellX + inset, rowY, Math.max(0f, cellW - inset), textH, f, color, iconTint, dim);
             }
+            if (carried) renderer.popAlpha();
+        }
+        Column<T> tree = getTreeColumn();
+        if ((dropMode == DropMode.BEFORE || dropMode == DropMode.AFTER) && tree != null) {
+            float lineY = y + headerHeight + dropRow * rowHeight - scrollY + (dropMode == DropMode.AFTER ? rowHeight : 0f);
+            lineY = Math.clamp(lineY, y + headerHeight + 1f, y + h - 1f); // at the top or bottom edge, keep the whole line in view
+            int depth = drop.parent() == null ? 0 : depthOf(drop.parent()) + 1;
+            float lineX = Math.max(x, x + leftOf(columns.indexOf(tree)) - scrollX + CELL_PADDING / 2f + depth * indent + indent);
+            renderer.drawLine(lineX, lineY, x + w - CELL_PADDING, lineY, marker, 2f);
+            renderer.drawCircle(lineX, lineY, 3f, marker);
         }
         renderer.popClip();
     }
