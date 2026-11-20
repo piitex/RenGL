@@ -22,8 +22,23 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
 
 - **Where it has been run:** the demos work on macOS on Apple silicon (Vulkan through MoltenVK, OpenGL only in a
   harness), on Windows 11 with an NVIDIA RTX 4090 (Vulkan and OpenGL, both natively) and on Linux (Arch). The detailed
-  checks in the [3D status document](../3d-status.md#verification-so-far) were made on the first two; for Linux the GPU
-  and API used were not recorded. AMD and Intel GPUs on Windows, and arm64 Windows, are untested.
+  checks in the [3D status document](../3d-status.md#verification-so-far) were made on the first two, and the newer
+  features (upscaling, frame generation, ray tracing, virtual geometry, PhysX) were checked on the RTX 4090 only; for
+  Linux the GPU and API used were not recorded. AMD and Intel GPUs on Windows, and arm64 Windows, are untested.
+- **No 3D in a Metal window.** A [`Viewport3D`](../3d/viewport-3d.md) or `Background3D` needs OpenGL or Vulkan to share
+  the GPU with, so on macOS, where the UI draws with Metal by default, pick `RenderAPI.VULKAN` for a window with 3D.
+- **Ray tracing is Vulkan only.** OpenGL has no [ray tracing](../3d/ray-tracing.md). A GPU without ray queries (a Mac
+  through MoltenVK, older GPUs) traces the same effects in shader code, which is slower. Not done: soft shadows from a
+  light with a size, reflections of reflections, rough reflections that blur, skinned, see-through and alpha-cut nodes in
+  the rays, a specular hit distance for DLSS Ray Reconstruction (so a mirror's reflection moves with the mirror), and a
+  denoiser of another vendor (NRD).
+- **Upscalers and frame generation have gaps.** There is no XeSS, and FSR 4 has not been run (it needs an AMD RDNA 4
+  GPU). For a temporal [upscaler](../3d/upscaling.md#limits), skinned and morphed meshes carry only the camera's motion,
+  so a fast character can ghost, and see-through surfaces take the motion of what is behind them. Frame generation is for
+  one window whose 3D view fills it, the UI is interpolated with the scene, and DLSS frame generation needs vsync off.
+  The vendors' libraries are not shipped; the [upscaling page](../3d/upscaling.md) says where each comes from.
+- **Virtual geometry is Vulkan only.** On OpenGL a mesh with [clusters](../3d/lod.md) draws its classic levels or its
+  full mesh.
 - **On Windows,** the 3D and 2D demos, the GPU tests and several apps were run on both APIs with no errors in the logs
   (see the [3D status document](../3d-status.md#verification-so-far)). Only a few of them were looked at by eye, and
   nobody has driven the demos with a real mouse and keyboard there. What is checked is a click, a check box and typing
@@ -31,25 +46,39 @@ optional [3D layer](../3d/README.md); the [3D status document](../3d-status.md) 
   to GLFW.
 - **Light from the sky is an approximation.** [Environment lighting](../3d/lighting.md#light-from-the-sky) lights surfaces
   from nine spherical-harmonic terms and blurs reflections with the sky's mipmaps instead of filtering a real
-  environment map, and the sky pictures are 8-bit, so there is no bright sun in them and a sharp reflection of a small
-  bright thing is out of reach.
-- **Shadows have a soft edge of the same width everywhere** ([`setShadowSoftness`](../3d/lighting.md#shadows) scales
-  it), and every shadow-casting light is a pass over the casters.
+  environment map. Skies other than an [HDR panorama](../3d/lighting.md#hdr-skies) are 8-bit, so a bright sun in them
+  adds no more light than white does, and a sharp reflection of a small bright thing is out of reach without ray tracing.
+- **Shadow maps have a soft edge of the same width everywhere** ([`setShadowSoftness`](../3d/lighting.md#shadows) scales
+  it), at most 8 lights cast them at a time, and every shadow-casting light is a pass over the casters. Ray-traced
+  shadows are hard.
 - **A node with more than 16 blend shapes switched on at once is blended on the CPU,** as is a mesh with more than about
   two million shape-vertices, so those cost frame time when their weights change every frame
   ([details](../3d/animation.md#morph-targets)).
 - **Frustum culling is by spheres** (a node, each copy of an [instanced](../3d/instancing.md) node, a skinned mesh's joints),
   so something just outside the view can still be drawn. [Occlusion culling](../3d/scenes.md#occlusion-culling) is
-  opt-in and only knows the nodes you mark as occluders, so other hidden things are still drawn.
+  opt-in and only knows the nodes you mark as occluders, so other hidden things are still drawn. Only
+  [virtual geometry](../3d/lod.md)'s clusters (Vulkan) are culled against depth on the GPU.
 - **Skinned and morphed meshes are picked by posing them on the CPU,** once per pose (the result is kept while nothing moves),
   which follows the animation but costs a pass over the vertices when it changes.
 - **Blended surfaces are sorted per node (and per copy of an instanced node), by the centre of its mesh,** so overlapping
   see-through objects can still draw in the wrong order where they interpenetrate or one is much bigger than the other.
   Split a large see-through surface into pieces if that shows; a single mesh that folds over itself is fixed with
   `Node3D.setSortTriangles(true)`.
-- **A [`Background3D`](../3d/background-3d.md) sees game input only** (by design: the UI has priority).** A container with a click listener, or a draggable
-  or scrollable element under the mouse, takes the event first and the 3D never sees it. Using it as an `Element`
-  background (3D behind one panel) is untested.
+- **A [`Background3D`](../3d/background-3d.md) sees game input only** (by design: the UI has priority). A container
+  with a click listener, or a draggable or scrollable element under the mouse, takes the event first and the 3D never
+  sees it. As an `Element`'s background (3D behind one panel) its input is checked only without a window.
+
+## Physics
+
+The [built-in solver](../3d/physics.md#limits) and the [PhysX backend](../3d/physx.md#differences-to-know-about) list
+their own limits; these are the ones most likely to matter.
+
+- **The built-in solver runs on one thread,** and leaves out gyroscopic effects.
+- **Fast bodies are swept only against what stands still.** Two fast bodies meeting each other, or one meeting a moving
+  kinematic platform, are left to the contacts.
+- **A mesh can't be on a moving body.** A concave moving body is cut into hulls with `ConvexDecomposition`, which cuts
+  only along the X, Y and Z axes.
+- **PhysX has no natives for Windows or Linux on arm64** (the built-in solver is used there) and no GPU PhysX.
 
 ## File dialogs
 
