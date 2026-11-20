@@ -56,6 +56,11 @@ public class InputProcessor {
      */
     private Element pendingDrag;
     private double pendingDragX, pendingDragY;
+    /**
+     * The Element the last left press landed on, whose ancestors hear of the release through
+     * {@link Container#onDescendantReleased}, or null between presses.
+     */
+    private Element pressedElement;
     private static final double DRAG_THRESHOLD = 4.0;
 
     /**
@@ -310,6 +315,11 @@ public class InputProcessor {
             }
             // Only the button that began a drag (always the left one) ends it; releasing a right-click mid-drag must not.
             if (event.buttonOrKey != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
+            Element released = pressedElement;
+            pressedElement = null;
+            if (released != null) {
+                for (Container c = released.owner; c != null; c = c.owner) c.onDescendantReleased(released, event.buttonOrKey);
+            }
             if (dragTarget instanceof Draggable draggable) {
                 draggable.onDragEnd(absoluteMouseX, absoluteMouseY);
             }
@@ -335,6 +345,7 @@ public class InputProcessor {
             clickTargets.clear();
             disabledTarget = null;
             pendingDrag = null;
+            pressedElement = null;
         }
 
         if (input.captureMouse(event.buttonOrKey, event.mods)) return; // a controls menu waiting for a binding
@@ -373,6 +384,10 @@ public class InputProcessor {
                 if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) disabledTarget = disabler;
                 return;
             }
+            // The containers around the hit Element hear of the press first, so a table can select the row of the
+            // slider or button that was pressed even though the press itself goes to that control.
+            if (event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT) pressedElement = hitElement;
+            for (Container c = hitElement.owner; c != null; c = c.owner) c.onDescendantPressed(hitElement, event.buttonOrKey);
             // The click goes to the nearest Element at or above the hit one that listens for it, so pressing on the
             // label or icon inside a clickable row or button counts as pressing the row or button.
             boolean left = event.buttonOrKey == GLFW.GLFW_MOUSE_BUTTON_LEFT;
@@ -632,6 +647,15 @@ public class InputProcessor {
         if (event.action == GLFW.GLFW_PRESS && window.getModal() == null && !editingKey(window, event)
                 && window.dispatchShortcut(event.buttonOrKey, event.mods)) {
             return;
+        }
+
+        // The containers around the focused Element may take a key first, as a table takes Escape back from a control in
+        // one of its cells.
+        Element focus = usableFocus(window);
+        if (focus != null && window.getModal() == null) {
+            for (Container c = focus.owner; c != null; c = c.owner) {
+                if (c.onDescendantKey(focus, event.buttonOrKey, event.action, event.mods)) return;
+            }
         }
 
         if (usableFocus(window) instanceof Focusable focusable

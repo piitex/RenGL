@@ -28,6 +28,8 @@ the OS, shows it in Finder, and lists whatever folder is [dropped on the window]
 `me.piitex.examples.demo.TableEditDemo` is an order sheet: a check box for each row (and one in the header for all of them),
 cells that are typed into in place with `setEditable`, a price edited as a number but shown as money with `setEditText`,
 and buttons that act on the ticked rows.
+`me.piitex.examples.demo.TableWidgetsDemo` is a mixer of 200 tracks with a slider, a combo box, a switch, a meter and a
+button in every row, through [controls in cells](#controls-in-cells).
 
 ## Columns
 
@@ -49,6 +51,9 @@ not move rows needs no `refresh()`.
 | `setIconColorProvider(item -> Color)` | The color of that icon, so a folder can be the accent; null, or null for a row, is the text color |
 | `setEditable((item, text) -> ...)` | Lets the user [edit the cells](#editing-cells) of this column in place. Null, the default, is read-only |
 | `setEditText(item -> String)` | What the field starts with, when that is not the text the cell shows |
+| `setCellWidget(() -> control, (control, item) -> ...)` | Shows a live [control in each cell](#controls-in-cells) instead of the text. Null goes back to the text |
+| `setCellWidgetFill(width, height)` | Whether those controls stretch to the cell's width and height. Width only by default |
+| `setCellWidgetTabStops(boolean)` | Whether Tab visits each of those controls. Off by default |
 
 `getColumns()` lists them left to right, and `removeColumn(column)` removes one. After the user has resized a column,
 `column.getWidth()` has the new width, to save it. The **last column stretches** to fill the table when the columns
@@ -169,6 +174,44 @@ listener's to refuse: ignore it, and the cell keeps what it showed.
 The field follows its row through a sort, and an edit ends without reporting when its row goes away (`refresh()` without it),
 when `setItems` brings new rows, when its column is removed or when the check boxes are switched on or off.
 
+## Controls in cells
+
+Any element can sit in a cell: a slider, a combo box, a switch, a button, a progress bar, or a container holding several.
+It gets the pointer and the keyboard like it would anywhere else.
+
+```java nocompile
+table.setRowHeight(34);  // room for the controls
+table.addColumn("Volume", t -> String.valueOf(t.volume()))
+        .setComparator(Comparator.comparingDouble(Track::volume))
+        .setCellWidget(() -> new SliderOverlay(180, 0, 100), (slider, track) -> {
+            slider.setValue(track.volume());
+            slider.onValueChange(track::setVolume);
+        });
+table.addColumn("", t -> "").setSortable(false).setCellWidgetFill(false, false)
+        .setCellWidget(() -> new ButtonOverlay("Solo", 64, 24), (button, track) -> button.onMouseClick(_ -> solo(track)));
+```
+
+The first function makes a control, and the second **binds** it to a row's item. Only the rows on screen have controls, so
+a table of ten thousand rows makes about as many as fit. As it scrolls, the controls of rows that left are handed to rows that
+arrived, and bound again with the new item. So `bind` must set **everything** that depends on the item, including the listeners,
+which it replaces. It is also called again for every row on screen after `refresh()`. A sort moves each control with its
+item without binding it again.
+
+- **Pressing a control selects its row** (in a multi-selection, a row already selected stays as it is). The control takes the
+  press, so a double-click on it does not call `onActivate`.
+- A control the user is **holding down or typing in keeps its item** even when its row scrolls away or `refresh()` runs. It is
+  bound again once they let go. If its item leaves the table, it is taken out and the table gets the keyboard back.
+- The table stays **one Tab stop**: cell controls are out of the Tab order unless `setCellWidgetTabStops(true)`. **F2**, or
+  **Enter** when there is no `onActivate` handler, moves the keyboard into the selected row's first control, and **Escape**
+  gives it back to the table. `focusCellWidget(item)` does the same from code.
+- A control **fills the cell's width** less the padding and keeps its own height, centered; `setCellWidgetFill(false, false)`
+  keeps its own width too, placed where the column's alignment puts text. A control taller than the row is cut off, so raise
+  `setRowHeight`.
+- The column's text function is still what sorting and screen readers use. Give it the value the control shows, or a
+  comparator, or turn sorting off for the column.
+- `getCellWidget(item, column)` is the control showing a cell now, or null when that row is off screen. Use it to update
+  something every frame, like a level meter, without binding again.
+
 ## Keys and context menu
 
 `onKey((key, mods) -> ...)` gets every key first, for keys the table has no use for (Delete, say); return true to use
@@ -207,8 +250,9 @@ table.dispose();               // frees the font
 - `onMouseClick` on the table is safe to use: the table's own right-click row selection runs first, then your handler.
 - Text that does not fit its cell ends with an ellipsis. Resize the column, give it a wider default, or turn `setEllipsisInMiddle` on to keep a file extension.
 - Rows cannot be dragged or reordered by the user. For a hierarchy use [`TreeView`](tree-view.md).
-- Cell editing is a text field: there is no drop-down, number spinner or check box cell editor, and Tab does not move on to the
-  next cell. A check box column is the table-wide [boxes](#check-boxes), not one per column.
+- Cell editing is a text field, and Tab does not move on to the next cell. For a drop-down, a spinner or a switch, put that
+  control in the cell with [`setCellWidget`](#controls-in-cells). A check box column is the table-wide
+  [boxes](#check-boxes), not one per column.
 - A double-click on an editable cell edits it instead of calling `onActivate`.
 - One `equals` per item: two entries that are equal are one selection. Use records or types with identity or a unique
   key.

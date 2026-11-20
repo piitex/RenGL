@@ -557,6 +557,31 @@ public class Container extends Element implements Themeable, Draggable {
     }
 
     /**
+     * Told when a mouse button is pressed on {@code target}, one of this Container's descendants (never the Container
+     * itself), before the press goes to {@code target} or anything else. Every ancestor of the hit Element hears it, the
+     * nearest first. A press on a disabled Element is not reported. Does nothing by default; a {@link TableView} uses it
+     * to select the row of a control in one of its cells.
+     */
+    public void onDescendantPressed(Element target, int button) {
+    }
+
+    /**
+     * Told when the left button is let go after a press that {@link #onDescendantPressed} reported, with the same
+     * {@code target}, wherever the pointer is now. Not told if {@code target} was removed from this Container meanwhile.
+     */
+    public void onDescendantReleased(Element target, int button) {
+    }
+
+    /**
+     * Offered a key press, repeat or release meant for {@code focused}, the focused Element, which is one of this
+     * Container's descendants, before it gets it. Every ancestor is asked, the nearest first, until one returns true,
+     * which uses the key up. Not asked while a modal is open, or while a popup takes the keyboard. Returns false by default.
+     */
+    public boolean onDescendantKey(Element focused, int key, int action, int mods) {
+        return false;
+    }
+
+    /**
      * Whether a pointer press, hover or wheel at (px, py), where no child is, falls through to whatever is drawn
      * below this Container. True for a container that shows nothing and listens for nothing there: no visible
      * background or border, no {@link me.piitex.engine.ui.Element#setBackground background effect}, no click listener,

@@ -5,6 +5,7 @@ import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.ui.CursorMode;
+import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
 import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.ui.color.AnimatedPaint;
@@ -26,19 +27,24 @@ import me.piitex.engine.ui.theme.ThemeManager;
 import org.jetbrains.skia.Typeface;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * A scrolling table: one row per item and one {@link Column column} per property, with a header row that stays at the
@@ -64,6 +70,9 @@ import java.util.function.Predicate;
  * <p>
  * Rows can have {@link #setCheckBoxes check boxes} for choosing items apart from selecting them, and a column that is
  * {@linkplain Column#setEditable editable} turns into a text field when its cell is double-clicked or F2 is pressed.
+ * <p>
+ * A column can also show a live control in every cell, such as a slider, a combo box or a button, with
+ * {@link Column#setCellWidget}. Only the rows on screen get one, and they are reused as the table scrolls.
  * <p>
  * It follows the theme like a {@link Container} that {@link #useTheme() uses the theme}. Its own right-click
  * selection runs before any {@link #onMouseClick} handler you set.
@@ -92,6 +101,9 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         private Function<T, Color> iconColor;
         private BiConsumer<T, String> onEdit;
         private Function<T, String> editText;
+        private Supplier<? extends Element> cellFactory;
+        private BiConsumer<Element, T> cellBinder;
+        private boolean cellFillWidth = true, cellFillHeight, cellTabStops;
 
         private Column(String title, Function<T, String> text) {
             this.title = title;
@@ -241,6 +253,70 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             return this;
         }
 
+        /**
+         * Shows a control in each of this column's cells instead of the text: {@code create} makes one, and {@code bind}
+         * points it at a row's item, setting its value and what it does when the user changes it.
+         * <pre>{@code
+         * table.addColumn("Volume", t -> String.valueOf(t.volume()))
+         *      .setCellWidget(() -> new SliderOverlay(100, 0, 100),
+         *                     (slider, track) -> { slider.setValue(track.volume()); slider.onValueChange(track::setVolume); });
+         * }</pre>
+         * Only the rows on screen have a control, so the table makes about as many as fit, and as it scrolls it hands
+         * them to other rows, calling {@code bind} again with the new item. Write {@code bind} so that it sets
+         * everything that depends on the item, and so that calling it twice for the same item does no harm: it is
+         * called again for every row on screen after {@link TableView#refresh()}. A control the user is holding down or
+         * has the keyboard in keeps its item until they let go, even if its row scrolls away.
+         * <p>
+         * Pressing a control selects its row. The control takes the press, so a double-click on it does not
+         * {@link TableView#onActivate activate} the row. The column's text is still what sorting and screen readers
+         * use, so give one that says what the control shows.
+         * <p>
+         * Each control is placed in its cell, its width filling the cell less the padding and its own height kept and
+         * centered (see {@link #setCellWidgetFill}). A control taller than the row is cut off; raise
+         * {@link TableView#setRowHeight}. The table stays one Tab stop: controls in cells are taken out of the Tab
+         * order (see {@link #setCellWidgetTabStops}), and F2, or Enter without an {@link TableView#onActivate}
+         * handler, moves the keyboard into the selected row's first control. Escape gives it back to the table.
+         * <p>
+         * Null for {@code create} goes back to showing the text.
+         */
+        @SuppressWarnings("unchecked")
+        public <E extends Element> Column<T> setCellWidget(Supplier<E> create, BiConsumer<? super E, ? super T> bind) {
+            if (create == null) {
+                cellFactory = null;
+                cellBinder = null;
+                return this;
+            }
+            Objects.requireNonNull(bind, "bind");
+            cellFactory = create;
+            cellBinder = (BiConsumer<Element, T>) (BiConsumer<?, ?>) bind;
+            return this;
+        }
+
+        public boolean hasCellWidget() {
+            return cellFactory != null;
+        }
+
+        /**
+         * Whether a {@link #setCellWidget cell control} is stretched to the width and the height of its cell, less the
+         * padding. One that is not keeps its own size in that direction: across, it sits where the column's
+         * {@link #setAlignment alignment} puts text; up and down, it is centered. By default it fills the width and keeps
+         * its height.
+         */
+        public Column<T> setCellWidgetFill(boolean width, boolean height) {
+            this.cellFillWidth = width;
+            this.cellFillHeight = height;
+            return this;
+        }
+
+        /**
+         * Whether the {@link #setCellWidget cell controls} stay in the Tab order, so Tab visits each one on screen. Off by
+         * default, so Tab moves past the table in one step. Applies to controls made after it is set.
+         */
+        public Column<T> setCellWidgetTabStops(boolean tabStops) {
+            this.cellTabStops = tabStops;
+            return this;
+        }
+
         private String textOf(T item) {
             String value = text.apply(item);
             return value == null ? "" : value;
@@ -255,6 +331,24 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         boolean onKey(int key, int mods);
     }
 
+    /**
+     * A control shown in one cell: the row's item it is bound to, and the factory that made it, so one made by a
+     * column's earlier factory is not handed out again.
+     */
+    private static final class Cell<T> {
+        final Element widget;
+        final Supplier<? extends Element> factory;
+        final T item;
+        int row;
+        int boundGeneration = -1;
+
+        Cell(Element widget, Supplier<? extends Element> factory, T item) {
+            this.widget = widget;
+            this.factory = factory;
+            this.item = item;
+        }
+    }
+
     private final List<Column<T>> columns = new ArrayList<>();
     private final List<T> items = new ArrayList<>(); // as shown: sorted
     private Collection<? extends T> source = List.of();  // as given; read again by refresh()
@@ -264,6 +358,11 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
     private boolean checkBoxes;
     private final Set<T> checked = new LinkedHashSet<>();
     private BiConsumer<T, Boolean> onCheck;
+
+    private Map<Column<T>, Map<T, Cell<T>>> cells = new HashMap<>(); // the controls placed now, by column and item
+    private final Map<Supplier<? extends Element>, ArrayDeque<Element>> spareCells = new IdentityHashMap<>();
+    private Element pressedCell; // a control the left button is held down on
+    private int cellGeneration; // refresh() moves it on, so every control is bound again
 
     private TextFieldOverlay editField;
     private T editing;
@@ -347,6 +446,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         if (column == editingColumn) finishEdit(false, false);
         if (!columns.remove(column)) return;
         if (column == sortColumn) sortColumn = null;
+        if (column.cellFactory != null) spareCells.remove(column.cellFactory);
         clampScroll();
     }
 
@@ -379,6 +479,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
      * item that is gone is unselected, without {@link #onSelect}.
      */
     public void refresh() {
+        cellGeneration++;
         items.clear();
         items.addAll(source);
         applySort();
@@ -955,7 +1056,9 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             case GLFW.GLFW_KEY_PAGE_UP -> index = Math.max(0, index - pageRows());
             case GLFW.GLFW_KEY_PAGE_DOWN -> index = Math.min(items.size() - 1, Math.max(0, index) + pageRows());
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
-                if (index >= 0 && onActivate != null && action == GLFW.GLFW_PRESS) onActivate.accept(items.get(index));
+                if (index < 0 || action != GLFW.GLFW_PRESS) return;
+                if (onActivate != null) onActivate.accept(items.get(index));
+                else focusCellWidget(items.get(index));
                 return;
             }
             case GLFW.GLFW_KEY_SPACE -> {
@@ -970,9 +1073,10 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
                 for (Column<T> column : columns) {
                     if (column.onEdit != null) {
                         startEdit(items.get(index), column);
-                        break;
+                        return;
                     }
                 }
+                focusCellWidget(items.get(index));
                 return;
             }
             default -> {
@@ -1107,6 +1211,264 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         Column<T> clicked = pressedHeader;
         pressedHeader = resizing = null;
         if (clicked != null && !headerMoved && clicked == columnAt(x) && headerAt(y)) sortByUser(clicked);
+    }
+
+    /* Cell controls */
+
+    /**
+     * The control showing {@code item}'s cell in {@code column}, or null if that cell has none now: the column has no
+     * {@link Column#setCellWidget cell control}, or the row is not on screen.
+     */
+    public Element getCellWidget(T item, Column<T> column) {
+        Map<T, Cell<T>> byItem = cells.get(column);
+        Cell<T> cell = byItem == null || item == null ? null : byItem.get(item);
+        return cell == null ? null : cell.widget;
+    }
+
+    /**
+     * Moves the keyboard into the first {@link Column#setCellWidget cell control} of {@code item}'s row, scrolling to it.
+     * Returns false if no column has controls, the item is not in the table, or its control cannot take the keyboard.
+     */
+    public boolean focusCellWidget(T item) {
+        int index = indexOf(item);
+        if (index < 0) return false;
+        for (Column<T> column : columns) {
+            if (column.cellFactory == null) continue;
+            scrollToRow(index);
+            scrollToColumn(column);
+            syncCells();
+            Element widget = getCellWidget(item, column);
+            Element target = widget == null ? null : firstFocusable(widget);
+            PopupHost host = getPopupHost();
+            if (target == null || host == null) return false;
+            host.requestFocus(target);
+            return true;
+        }
+        return false;
+    }
+
+    private static Element firstFocusable(Element element) {
+        if (element instanceof Focusable && !element.isEffectivelyDisabled()) return element;
+        if (element instanceof Container container) {
+            for (Element child : container.getElements().values()) {
+                Element found = firstFocusable(child);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static void setTabStops(Element element, boolean on) {
+        if (element instanceof Focusable) element.setFocusTraversable(on);
+        if (element instanceof Container container) {
+            for (Element child : container.getElements().values()) setTabStops(child, on);
+        }
+    }
+
+    private static boolean isWithin(Element element, Element root) {
+        for (Element e = element; e != null; e = e.owner) {
+            if (e == root) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The cell whose control is, or holds, {@code element}, or null.
+     */
+    private Cell<T> cellOf(Element element) {
+        Element child = element;
+        while (child != null && child.owner != this) child = child.owner;
+        if (child == null) return null;
+        for (Map<T, Cell<T>> byItem : cells.values()) {
+            for (Cell<T> cell : byItem.values()) {
+                if (cell.widget == child) return cell;
+            }
+        }
+        return null;
+    }
+
+    private boolean isActive(Cell<T> cell, Element focus) {
+        return cell.widget == pressedCell || (focus != null && isWithin(focus, cell.widget));
+    }
+
+    private boolean cellHasFocus() {
+        if (cells.isEmpty()) return false;
+        PopupHost host = getPopupHost();
+        Element focus = host == null ? null : host.getFocusedElement();
+        return focus != null && focus != this && cellOf(focus) != null;
+    }
+
+    /**
+     * Gives every visible cell of a column with {@link Column#setCellWidget controls} one, taking it from a row that
+     * scrolled away or making it, binds the ones whose item or {@link #refresh()} changed, and places them. A control
+     * that has the keyboard or is held down keeps its item even off screen, until it lets go or its item leaves.
+     * Run by every {@link #update}.
+     */
+    void syncCells() {
+        boolean wanted = false;
+        for (Column<T> column : columns) wanted |= column.cellFactory != null;
+        if (!wanted && cells.isEmpty()) return;
+
+        PopupHost host = getPopupHost();
+        Element focus = host == null ? null : host.getFocusedElement();
+        double scrollX = getScrollOffsetX(), scrollY = getScrollOffsetY();
+        int first = Math.max(0, (int) (scrollY / rowHeight));
+        int last = Math.min(items.size() - 1, (int) ((scrollY + getHeight() - headerHeight) / rowHeight));
+
+        // first the cells that already show their item, so the ones let go below can be handed to the rows still missing one
+        Map<Column<T>, Map<T, Cell<T>>> next = new HashMap<>();
+        Map<Column<T>, List<Integer>> missing = new HashMap<>();
+        for (int c = 0; c < columns.size(); c++) {
+            Column<T> column = columns.get(c);
+            if (column.cellFactory == null) continue;
+            Map<T, Cell<T>> old = cells.get(column);
+            Map<T, Cell<T>> now = new HashMap<>();
+            List<Integer> rows = new ArrayList<>();
+            float left = leftOf(c), width = widthOf(c);
+            if (left + width > scrollX && left < scrollX + getWidth()) {
+                for (int i = first; i <= last; i++) {
+                    T item = items.get(i);
+                    Cell<T> cell = old == null ? null : old.get(item);
+                    if (cell != null && cell.factory == column.cellFactory) {
+                        old.remove(item);
+                        cell.row = i;
+                        now.put(item, cell);
+                    } else {
+                        rows.add(i);
+                    }
+                }
+            }
+            next.put(column, now);
+            missing.put(column, rows);
+        }
+
+        // the controls whose row scrolled away, or whose column or item went
+        for (Map.Entry<Column<T>, Map<T, Cell<T>>> entry : cells.entrySet()) {
+            Column<T> column = entry.getKey();
+            Map<T, Cell<T>> keep = next.get(column);
+            for (Cell<T> cell : entry.getValue().values()) {
+                int row = isActive(cell, focus) && keep != null && cell.factory == column.cellFactory ? indexOf(cell.item) : -1;
+                if (row >= 0 && !keep.containsKey(cell.item)) {
+                    cell.row = row;
+                    keep.put(cell.item, cell);
+                } else {
+                    releaseCell(cell, column, focus);
+                }
+            }
+        }
+        cells = next;
+        for (Map.Entry<Column<T>, List<Integer>> entry : missing.entrySet()) {
+            Map<T, Cell<T>> now = next.get(entry.getKey());
+            for (int row : entry.getValue()) {
+                T item = items.get(row);
+                if (now.containsKey(item)) continue; // a duplicate row of an equal item shares one control
+                Cell<T> cell = takeCell(entry.getKey(), item);
+                cell.row = row;
+                now.put(item, cell);
+            }
+        }
+
+        for (int c = 0; c < columns.size(); c++) {
+            Column<T> column = columns.get(c);
+            Map<T, Cell<T>> byItem = cells.get(column);
+            if (byItem == null) continue;
+            for (Cell<T> cell : byItem.values()) {
+                placeCell(cell, column, c);
+                if (cell.boundGeneration == cellGeneration) continue;
+                if (cell.boundGeneration >= 0 && isActive(cell, focus)) continue; // bound again once the user lets go
+                cell.boundGeneration = cellGeneration;
+                column.cellBinder.accept(cell.widget, cell.item);
+            }
+        }
+    }
+
+    private Cell<T> takeCell(Column<T> column, T item) {
+        ArrayDeque<Element> spare = spareCells.get(column.cellFactory);
+        Element widget = spare == null ? null : spare.poll();
+        if (widget == null) {
+            widget = Objects.requireNonNull(column.cellFactory.get(), "a cell widget factory returned null");
+            setTabStops(widget, column.cellTabStops);
+        }
+        addElement(widget);
+        return new Cell<>(widget, column.cellFactory, item);
+    }
+
+    /**
+     * Takes a control out of the table, keeping it for another row if its column still makes that kind. If it had the
+     * keyboard, the table takes it back.
+     */
+    private void releaseCell(Cell<T> cell, Column<T> column, Element focus) {
+        removeElement(cell.widget);
+        if (cell.widget == pressedCell) pressedCell = null;
+        if (focus != null && isWithin(focus, cell.widget)) {
+            PopupHost host = getPopupHost();
+            if (host != null) host.requestFocus(this);
+        }
+        if (columns.contains(column) && column.cellFactory == cell.factory) {
+            spareCells.computeIfAbsent(cell.factory, f -> new ArrayDeque<>()).add(cell.widget);
+        }
+    }
+
+    private void placeCell(Cell<T> cell, Column<T> column, int c) {
+        Element widget = cell.widget;
+        double cellLeft = leftOf(c) + CELL_PADDING, cellWidth = Math.max(1, widthOf(c) - 2 * CELL_PADDING);
+        double rowTop = headerHeight + cell.row * (double) rowHeight;
+        double w = column.cellFillWidth ? cellWidth : widget.getWidth();
+        double h = column.cellFillHeight ? Math.max(1, rowHeight - 4) : widget.getHeight();
+        double x = switch (column.alignment) {
+            case RIGHT -> cellLeft + cellWidth - w;
+            case CENTER -> cellLeft + (cellWidth - w) / 2;
+            default -> cellLeft;
+        };
+        double y = rowTop + (rowHeight - h) / 2;
+        if (widget.getWidth() != w) widget.setWidth(w);
+        if (widget.getHeight() != h) widget.setHeight(h);
+        if (widget.getX() != x) widget.setX(x);
+        if (widget.getY() != y) widget.setY(y);
+    }
+
+    /**
+     * Pressing a control in a cell selects its row first. In a multiple selection the row's place in it is kept, as a
+     * right-click keeps it.
+     */
+    @Override
+    public void onDescendantPressed(Element target, int button) {
+        Cell<T> cell = cellOf(target);
+        if (cell == null) return;
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) pressedCell = cell.widget;
+        lastPressItem = null;
+        if (multiSelect && selection.contains(cell.item)) {
+            if (!Objects.equals(selected, cell.item)) {
+                selected = cell.item;
+                if (onSelect != null) onSelect.accept(cell.item);
+            }
+            return;
+        }
+        selectByUser(cell.item);
+    }
+
+    @Override
+    public void onDescendantReleased(Element target, int button) {
+        if (pressedCell != null && isWithin(target, pressedCell)) pressedCell = null;
+    }
+
+    /**
+     * Escape in a cell's control gives the keyboard back to the table.
+     */
+    @Override
+    public boolean onDescendantKey(Element focused, int key, int action, int mods) {
+        if (key != GLFW.GLFW_KEY_ESCAPE || action != GLFW.GLFW_PRESS || cellOf(focused) == null) return false;
+        PopupHost host = getPopupHost();
+        if (host != null) host.requestFocus(this);
+        return true;
+    }
+
+    /**
+     * The header takes the pointer even where a cell's control has scrolled up under it.
+     */
+    @Override
+    public boolean interceptsPointer(double px, double py) {
+        return super.interceptsPointer(px, py) || headerAt(py);
     }
 
     /* Geometry */
@@ -1370,6 +1732,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
     @Override
     public void update(float delta) {
         super.update(delta);
+        syncCells();
         if (editField != null) placeEditor();
         AnimatedPaint.advanceIfAnimated(textColor.get(), delta);
         AnimatedPaint.advanceIfAnimated(headerTextColor.get(), delta);
@@ -1399,6 +1762,12 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
      */
     public void dispose() {
         finishEdit(false, false);
+        for (Map<T, Cell<T>> byItem : cells.values()) {
+            for (Cell<T> cell : byItem.values()) removeElement(cell.widget);
+        }
+        cells.clear();
+        spareCells.clear();
+        pressedCell = null;
         closeFont();
     }
 
@@ -1409,14 +1778,10 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         pushChildClip(renderer);
         renderRows(renderer);
         renderHeader(renderer);
-        if (editField != null) {
-            // the field scrolls with its row, so keep it from being drawn over the header
-            renderer.pushClip((float) getX(), (float) getY() + headerHeight, (float) getWidth(), (float) getHeight() - headerHeight);
-            renderChildren(renderer);
-            renderer.popClip();
-        } else {
-            renderChildren(renderer);
-        }
+        // the edit field and the cells' controls scroll with their rows, so keep them from being drawn over the header
+        renderer.pushClip((float) getX(), (float) getY() + headerHeight, (float) getWidth(), (float) getHeight() - headerHeight);
+        renderChildren(renderer);
+        renderer.popClip();
         renderer.popClip();
         if (isScrollbarVisible()) renderScrollbars(renderer);
     }
@@ -1429,6 +1794,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         Paint text = textColor.get();
         Paint selectionPaint = selectionColor.get();
         Color iconTint = solid(text);
+        boolean keyboardHere = focused || cellHasFocus();
 
         int hoverRow = -1;
         double mx = MouseTracker.getX(), my = MouseTracker.getY();
@@ -1448,9 +1814,9 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
                 renderer.popAlpha();
             }
             if (selection.contains(item)) {
-                if (!focused) renderer.pushAlpha(0.6f);
+                if (!keyboardHere) renderer.pushAlpha(0.6f);
                 renderer.drawQuad(x, rowY, w, rowHeight, selectionPaint, rowCornerRadius);
-                if (!focused) renderer.popAlpha();
+                if (!keyboardHere) renderer.popAlpha();
             } else if (i == hoverRow) {
                 renderer.pushAlpha(0.07f);
                 renderer.drawQuad(x, rowY, w, rowHeight, text, rowCornerRadius);
@@ -1464,7 +1830,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             for (int c = 0; c < columns.size(); c++) {
                 Column<T> column = columns.get(c);
                 float cellX = x + leftOf(c) - scrollX, cellW = widthOf(c);
-                if (cellX + cellW <= x || cellX >= x + w) continue;
+                if (cellX + cellW <= x || cellX >= x + w || column.cellFactory != null) continue;
                 drawCell(renderer, column, item, cellX, rowY, cellW, textH, f, color, iconTint, dim);
             }
         }

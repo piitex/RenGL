@@ -109,6 +109,13 @@ A container can also claim the mouse ahead of its children with
 `public boolean interceptsPointer(double x, double y)` (default `false`). `ResizableContainer` uses it for its
 drag-to-resize handles, so they work even where a child sits under them.
 
+A container can hear about what happens to its descendants without taking it from them. Override
+`onDescendantPressed(target, button)` to be told of a press on any element inside it before that element gets it, and
+`onDescendantReleased(target, button)` to be told when the left button that press began is let go.
+`onDescendantKey(focused, key, action, mods)` is offered each key meant for a focused element inside it first; return
+`true` to use the key up. [`TableView`](../containers/table-view.md#controls-in-cells) uses these to select the row of a
+control in a cell, and to take Escape back from it.
+
 For a draggable panel you rarely implement it yourself. Use `container.setDraggable(true)`. See
 [Container](../containers/container.md#dragging).
 
