@@ -26,12 +26,24 @@ This turns any RenGL project into an app you can hand to someone. It assumes onl
 
 You need an internet connection the first time.
 
+The commands below are for Windows (PowerShell or `cmd`). Each step also has a macOS and Linux version, for any POSIX
+shell (`sh`, `bash`, `zsh`, `dash`). Both versions do the same thing, because the work is done by the packager jar,
+`java -jar rengl-packager-<version>.jar project`. `package-app.ps1` and `package-app.sh` only find that jar and start it.
+
 **1. Once: install the engine and its packager.** In the RenGL folder:
 
 ```powershell
 cd C:\Path\To\RenGL
 .\mvnw.cmd install -DskipTests
 powershell -ExecutionPolicy Bypass -File rengl-packager\install-natives.ps1
+```
+
+On macOS and Linux:
+
+```bash
+cd /path/to/RenGL
+./mvnw install -DskipTests
+sh rengl-packager/install-natives.sh
 ```
 
 The first command builds the engine and the packager into your local Maven repository (`~/.m2`) and takes a while. The
@@ -46,12 +58,21 @@ cd C:\Path\To\MyApp
 powershell -ExecutionPolicy Bypass -File C:\Path\To\RenGL\rengl-packager\package-app.ps1 -Init
 ```
 
+On macOS and Linux:
+
+```bash
+cd /path/to/MyApp
+sh /path/to/RenGL/rengl-packager/package-app.sh -Init
+```
+
 This is the last long command. It looks at your `pom.xml` and sources, and writes two files into the project:
 
 - **`rengl-package.properties`** holds the settings: the app's name, its main class, the version, which platforms to
-  build. The values are guesses, so open it and check them.
-- **`package.cmd`** is a one-line launcher for the script, with the path to the RenGL folder already filled in. That path
-  belongs to this computer, so do not copy `package.cmd` to another one; run `-Init` there instead.
+  build. The values are guesses, so open it and check them. The same file works on every operating system.
+- **`package.cmd`** (Windows) or **`package.sh`** (macOS, Linux) is a one-line launcher for the script, with the path to
+  the RenGL folder already filled in. That path belongs to this computer, so do not copy the launcher to another one.
+  Run `-Init` there instead. When the settings file already exists, `-Init` leaves it alone and writes only the missing
+  launcher, so a project made on Windows gets its `package.sh` the first time it is built on a Mac.
 
 (`-ExecutionPolicy Bypass` is there because PowerShell refuses to run unsigned scripts by default. `package.cmd` has it
 built in.)
@@ -71,7 +92,7 @@ installer=false
 | `name` | none, required | The app's name, also its launcher's file name (`MyApp.exe`) |
 | `mainClass` | none, required | The class with `main`, package included |
 | `version` | `1.0.0` | The app's version |
-| `platform` | `all` | What to build, comma separated: `windows-x64`, `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`. `-Init` writes `windows-x64`, which is the quick one |
+| `platform` | `all` | What to build, comma separated: `windows-x64`, `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`. `-Init` writes this computer's platform, which is the quick one |
 | `installer` | `false` | `true` makes a `setup.exe` for Windows, with a RenGL window, and a `.deb` and an `.rpm` for Linux instead of the `.zip` and `.tar.gz`. `plain` makes the same with the small plain Windows window in the setup, which is about 50 MB smaller when the app cannot share its Java runtime with the window. See [Installers](#installers) and [A RenGL window for the setup](#a-rengl-window-for-the-setup) |
 | `icon` | none | The Windows, Linux and macOS icons: `MyApp.ico,MyApp.png,icns=MyApp-1024.png`. The last is made from a square 1024 px PNG |
 | `vendor`, `description` | none | Shown in the setup, in the properties of the Windows `.exe` files, and in the `.deb` and `.rpm` |
@@ -85,12 +106,19 @@ installer=false
 | `mainJar` | the jar Maven builds | Only for a project that builds more than one jar |
 
 Paths in the file (`icon`, `content`, `output`) are relative to the project. A line starting with `#` is a comment, and
-a setting with nothing after the `=` is ignored. A misspelled setting is an error, not silently skipped.
+a setting with nothing after the `=` is ignored. A misspelled setting is an error, not silently skipped. On macOS and
+Linux a `\` in a path setting is read as `/`, so a file written on Windows still works there.
 
 **3. Build.** In the project's folder:
 
 ```powershell
 .\package.cmd
+```
+
+On macOS and Linux:
+
+```bash
+./package.sh
 ```
 
 It builds your project with Maven (replacing its `target` folder), collects the jars and natives, and runs the
@@ -102,8 +130,13 @@ packager. Anything on the command line wins over the file for that run, so you r
 .\package.cmd -Platform linux-x64,macos-arm64
 ```
 
-Every setting is a parameter of the script with the same name, and `Get-Help C:\Path\To\RenGL\rengl-packager\package-app.ps1 -Detailed`
-lists them. You can also skip the file: `package-app.ps1 -Name MyApp -MainClass com.example.Main` works on its own.
+`package.sh` takes the same parameters. They can also be written the usual Unix way, `--platform linux-x64` or
+`--installer=true`. Every setting is a parameter with the same name. `Get-Help C:\Path\To\RenGL\rengl-packager\package-app.ps1 -Detailed`
+or `sh /path/to/RenGL/rengl-packager/package-app.sh --help` lists them. You can also skip the file:
+`package-app.ps1 -Name MyApp -MainClass com.example.Main` works on its own.
+
+Maven comes from the project's own wrapper (`mvnw.cmd`, or `mvnw` on macOS and Linux) when it has one, else from the
+RenGL folder's wrapper, else from `mvn` on the `PATH`. `package-app.ps1` also runs in PowerShell 7 on macOS and Linux.
 
 **4. Take the result** from the `dist\app-images` folder of your project:
 
@@ -397,13 +430,15 @@ lists no dependencies beyond rpm itself, like the `.deb`.
 | `There is no pom.xml in ...` | `package-app.ps1` was started in the wrong folder. Go to your project's folder first, or pass `-Project C:\Path\To\MyApp` |
 | `The app has no name` or `The app has no main class` | `name` or `mainClass` is empty in `rengl-package.properties`, or the file is missing. Run `package-app.ps1 -Init` once, or fill them in |
 | `'platfrom' is not a setting` (or another word) | A setting in `rengl-package.properties` is misspelled. The message lists the settings that exist |
-| `rengl-package.properties already exists` | `-Init` never overwrites. Edit the file, or delete it and run `-Init` again |
+| `rengl-package.properties and package.cmd already exist` | `-Init` never overwrites. Edit the file, or delete it and run `-Init` again |
 | `package.cmd` is not recognized | In PowerShell a file in the current folder needs `.\`: run `.\package.cmd`. Also check you are in the project's folder |
-| `package.cmd` cannot find `package-app.ps1` | The RenGL folder has moved since `-Init` wrote it. Delete `package.cmd` and run `-Init` again |
+| `package.sh: Permission denied` | The file lost its executable bit (copied from Windows, or a zip). Run `sh package.sh`, or `chmod +x package.sh` once |
+| `package.cmd` cannot find `package-app.ps1` (or `package.sh` cannot find `package-app.sh`) | The RenGL folder has moved since `-Init` wrote it. Delete the launcher and run `-Init` again |
 | `mvn` is not recognized | The RenGL folder ships the Maven wrapper instead: use `.\mvnw.cmd` (`./mvnw` on macOS and Linux) |
+| `Maven was not found` | The jar was started on its own, with no RenGL folder known. Start it through `package-app.ps1` or `package-app.sh`, set `RENGL_HOME` to the RenGL folder, or put Maven on the `PATH` |
 | `Unable to access jarfile rengl-packager.jar` | There is no jar by that name. Use the full path of the installed one, as in [Running it](#running-it) |
-| `The RenGL packager is not at ...` | Step 1 of the quick start has not been run, or not for this engine version |
-| `The windows-x64 natives are missing` (or another platform) | Run `install-natives.ps1` from step 1 |
+| `The RenGL packager is not built` | Step 1 of the quick start has not been run |
+| `The windows-x64 natives are missing` (or another platform) | Run `install-natives.ps1` (`install-natives.sh` on macOS and Linux) from step 1 |
 | `running scripts is disabled on this system` | Run `package.cmd`, which starts the script with the policy bypassed, or start the script as `powershell -ExecutionPolicy Bypass -File ...`, as in the quick start |
 | `Could not set the icon: Could not open ...\MyApp.exe` | The output path is too long for Windows (over about 260 characters). Build into a short folder such as `C:\dist` |
 | The app starts and then cannot find its native libraries | That platform's natives jars (`rengl-natives-<platform>` and LWJGL's) were not in the input folder |
@@ -419,6 +454,12 @@ the icon was read back from the `.exe`; the Phorg setup was run both with its wi
 compared with the image, and it was uninstalled, also while the app was running (the retry finished the job). The
 other projects' scripts were run and built their images and installers, but those apps were not launched. The macOS
 arm64 image was run on a Mac and works. Not checked:
+
+- **`package-app.sh` and `install-natives.sh` have not been run on a Mac or Linux.** On Windows, `package-app.sh` ran
+  under Git Bash's `sh` and built a project from end to end, setup window included. The project mode's macOS and Linux
+  branch was run as far as `-Init` (it writes `package.sh` and this computer's platform), with the operating system's
+  name faked. Still to be run on a real Mac or Linux computer: the build itself (Maven through `mvnw`, `jlink`), the
+  executable bit on the new `package.sh`, and `install-natives.sh`.
 
 - **The RenGL setup window** was tested on one Windows 11 computer: run through the real `setup.exe` (options, progress,
   done), installed, shortcuts left unticked, uninstalled, and the plain-wizard fallback was forced and shown. That

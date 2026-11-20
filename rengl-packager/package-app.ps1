@@ -28,6 +28,11 @@
 
     It needs JDK 25 and, the first time a platform is built, the internet.
 
+    The work is done by the packager jar (java -jar rengl-packager-<version>.jar project); this script only finds the jar
+    and passes the parameters on. On macOS and Linux, package-app.sh beside it does the same from any shell, with the
+    same parameters, and -Init there writes package.sh instead of package.cmd. This script also runs in PowerShell 7 on
+    macOS and Linux.
+
 .PARAMETER Init
     Write rengl-package.properties and package.cmd in the project, with settings guessed from its pom.xml and sources, and
     stop. Neither file is overwritten.
@@ -118,258 +123,58 @@ param(
     [string]$Output = 'dist\app-images'
 )
 
+# Everything else happens in the packager jar (java -jar rengl-packager.jar project), which package-app.sh starts the same
+# way on macOS and Linux. This script finds the jar and passes the parameters on.
 $ErrorActionPreference = 'Stop'
-$bound = $PSBoundParameters
 $RenglRoot = Split-Path $PSScriptRoot -Parent
-$Repository = Join-Path $env:USERPROFILE '.m2\repository\io\github\piitex'
-$ConfigName = 'rengl-package.properties'
-# The engine's natives artifact for each platform: its jar holds Skiko's runtime and its pom brings LWJGL's natives.
-$Natives = [ordered]@{
-    'windows-x64' = 'rengl-natives-windows'
-    'linux-x64'   = 'rengl-natives-linux'
-    'linux-arm64' = 'rengl-natives-linux-arm64'
-    'macos-x64'   = 'rengl-natives-macos'
-    'macos-arm64' = 'rengl-natives-macos-arm64'
-}
-# The settings file's keys (lower case) and the parameters they stand for.
-$Settings = [ordered]@{
-    'name' = 'Name'; 'mainclass' = 'MainClass'; 'mainjar' = 'MainJar'; 'platform' = 'Platform'
-    'installer' = 'Installer'; 'noarchive' = 'NoArchive'; 'icon' = 'Icon'; 'version' = 'Version'
-    'vendor' = 'Vendor'; 'description' = 'Description'; 'identifier' = 'Identifier'; 'addmodules' = 'AddModules'
-    'content' = 'Content'; 'output' = 'Output'
-    'fileassociation' = 'FileAssociation'; 'shellverb' = 'ShellVerb'; 'documenttypes' = 'DocumentTypes'
-}
-# Settings that may be given on several lines, one value each (their values hold commas and bars, so they are not split).
-$Repeating = @('FileAssociation', 'ShellVerb')
 
-function Fail($message) {
-    Write-Error $message
+$Jar = $env:RENGL_PACKAGER
+if (-not $Jar) {
+    # The jar this RenGL folder built, else the newest one in the local Maven repository.
+    $Jar = Get-ChildItem (Join-Path $PSScriptRoot 'target') -Filter 'rengl-packager-*.jar' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notmatch '-(ui|sources|javadoc|tests)\.jar$' } | Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $Jar) {
+    $repository = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.m2/repository/io/github/piitex/rengl-packager'
+    $Jar = Get-ChildItem $repository -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending |
+        ForEach-Object { Join-Path $_.FullName "rengl-packager-$($_.Name).jar" } | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $Jar -or -not (Test-Path $Jar)) {
+    Write-Error "The RenGL packager is not built. In the RenGL folder ($RenglRoot) run: ./mvnw install -DskipTests  (.\mvnw.cmd on Windows)"
     exit 1
 }
 
-function Check($what) {
-    if ($LASTEXITCODE -ne 0) { Fail "$what failed (exit code $LASTEXITCODE)" }
+$Java = Get-Command java -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
+if (-not $Java -and $env:JAVA_HOME) {
+    $Java = Get-ChildItem (Join-Path $env:JAVA_HOME 'bin') -Filter 'java*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.BaseName -eq 'java' } | Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $Java) {
+    Write-Error 'java not found. Install JDK 25 and put its bin folder on PATH (or set JAVA_HOME).'
+    exit 1
 }
 
-foreach ($tool in 'java', 'jdeps', 'jlink') {
-    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { Fail "$tool not found. Install JDK 25 and put its bin folder on PATH (or set JAVA_HOME)." }
-}
-if (-not (Test-Path (Join-Path $Project 'pom.xml'))) {
-    Fail "There is no pom.xml in $Project. Run this from your project's folder, or pass -Project <folder>."
-}
-$Project = (Resolve-Path $Project).Path
-Set-Location $Project
+# Windows PowerShell (and PowerShell 7 before 7.3) passes a quote inside an argument to a program without escaping it,
+# so a shell verb's "%1" would lose its quotes. PowerShell 7.3 and later escape it themselves.
+$passing = Get-Variable PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue
+$escapeQuotes = (-not $passing) -or $passing -eq 'Legacy'
 
-if ($Init) {
-    $configPath = Join-Path $Project $ConfigName
-    $launcherPath = Join-Path $Project 'package.cmd'
-    if (Test-Path $configPath) { Fail "$ConfigName already exists in $Project. Edit it, or delete it to start over." }
-
-    $pom = Get-Content 'pom.xml' -Raw
-    # The parent's id and version are not the project's own.
-    $own = [regex]::Replace($pom, '(?s)<parent>.*?</parent>', '')
-    $guessName = [regex]::Match($own, '<artifactId>\s*([^<\s]+)\s*</artifactId>').Groups[1].Value
-    if (-not $guessName) { $guessName = Split-Path $Project -Leaf }
-    $guessVersion = [regex]::Match($own, '(?s)</artifactId>\s*<version>\s*(\d+(?:\.\d+)*)').Groups[1].Value
-    if (-not $guessVersion) { $guessVersion = '1.0.0' }
-
-    $mains = @()
-    $pomMain = [regex]::Match($pom, '<mainClass>\s*([^<\s]+)\s*</mainClass>').Groups[1].Value
-    if ($pomMain -and $pomMain -notmatch '\$\{') { $mains += $pomMain }
-    $src = Join-Path $Project 'src\main\java'
-    if (Test-Path $src) {
-        $mains += Get-ChildItem $src -Recurse -Filter '*.java' |
-            Where-Object { Select-String -Path $_.FullName -Pattern 'static\s+void\s+main\s*\(' -Quiet } |
-            ForEach-Object { ($_.FullName.Substring($src.Length + 1) -replace '\.java$', '') -replace '[\\/]', '.' }
+$forward = @('project', '-RenglHome', $RenglRoot, '-Project', (Resolve-Path $Project).Path)
+foreach ($key in $PSBoundParameters.Keys) {
+    if ($key -eq 'Project') { continue }
+    $value = $PSBoundParameters[$key]
+    if ($value -is [switch]) {
+        if ($value.IsPresent) { $forward += "-$key" }
+        continue
     }
-    $mains = @($mains | Select-Object -Unique)
-    $guessMain = if ($mains.Count) { $mains[0] } else { '' }
-
-    $lines = @(
-        '# RenGL packaging settings for this project. Build with package.cmd, in this folder.',
-        '# Lines starting with # are comments, and a setting with nothing after the = is ignored.',
-        '# A parameter on the command line wins over this file: package.cmd -Platform linux-x64',
-        '',
-        '# The app''s name, which is also the name of its launcher (MyApp.exe).',
-        "name=$guessName",
-        '',
-        '# The class with the main method, package included.'
-    )
-    if ($mains.Count -gt 1) { $lines += "# Classes with a main method: $($mains -join ', ')" }
-    if (-not $mains.Count) { $lines += '# No main method was found in src\main\java; fill this in.' }
-    $lines += @(
-        "mainClass=$guessMain",
-        "version=$guessVersion",
-        '',
-        '# What to build: windows-x64, linux-x64, linux-arm64, macos-x64, macos-arm64, or all (comma separated).',
-        '# Each platform other than this one downloads its Java modules the first time (about 85 MB each).',
-        'platform=windows-x64',
-        '',
-        '# false: a .zip and .tar.gz per platform.',
-        '# true: a setup.exe for Windows (with a RenGL window) and a .deb for Linux, instead.',
-        '# plain: the same, with the small plain Windows window in the setup (about 50 MB smaller).',
-        'installer=false',
-        '',
-        '# More settings, if you want them. Remove the # to use one.',
-        '# The Windows, Linux and macOS icons. The macOS one is made from a square 1024 px png.',
-        '# icon=MyApp.ico,MyApp.png,icns=MyApp-1024.png',
-        '# vendor=Your Name',
-        '# description=One line about the app',
-        '# A folder of files to ship beside the jars (assets, default data).',
-        '# content=assets',
-        '# Java modules the app loads by reflection, which the packager cannot see.',
-        '# addModules=java.logging,java.prefs'
-    )
-    $utf8 = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText($configPath, (($lines -join "`r`n") + "`r`n"), $utf8)
-    Write-Host "Wrote ${ConfigName}:"
-    Write-Host "  name=$guessName  mainClass=$guessMain  version=$guessVersion"
-
-    if (Test-Path $launcherPath) {
-        Write-Host 'package.cmd already exists; left as it is.'
-    } else {
-        $cmd = @(
-            '@echo off',
-            'rem Builds this project''s app with the RenGL packager. The settings are in rengl-package.properties.',
-            'rem Parameters pass through: package.cmd -Installer true   or   package.cmd -Platform linux-x64',
-            "powershell -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" %*",
-            'exit /b %errorlevel%'
-        )
-        [System.IO.File]::WriteAllText($launcherPath, (($cmd -join "`r`n") + "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
-        Write-Host 'Wrote package.cmd'
-    }
-    if (-not $guessMain) { Write-Warning "No class with a main method was found. Set mainClass in $ConfigName." }
-    Write-Host ''
-    Write-Host "Check $ConfigName, then build with: package.cmd"
-    exit 0
-}
-
-# The settings file, then the parameters over it.
-$configPath = Join-Path $Project $ConfigName
-if (Test-Path $configPath) {
-    Write-Host "==> Settings from $ConfigName"
-    $number = 0
-    foreach ($line in Get-Content $configPath) {
-        $number++
-        $text = $line.Trim()
-        if (-not $text -or $text.StartsWith('#')) { continue }
-        $eq = $text.IndexOf('=')
-        if ($eq -lt 1) { Fail "${ConfigName}, line ${number}: expected setting=value, found '$text'." }
-        $key = $text.Substring(0, $eq).Trim().ToLower()
-        $value = $text.Substring($eq + 1).Trim()
-        if ($key -eq 'installerui') {
-            Fail "${ConfigName}, line ${number}: installerUi is gone. installer=true now gives the setup with the RenGL window; installer=plain gives the small plain Windows window. Delete this line."
-        }
-        if (-not $Settings.Contains($key)) {
-            Fail "${ConfigName}, line ${number}: '$($text.Substring(0, $eq).Trim())' is not a setting. The settings are: name, mainClass, mainJar, platform, installer, noArchive, icon, version, vendor, description, identifier, addModules, content, fileAssociation, shellVerb, documentTypes, output."
-        }
-        if (-not $value) { continue }
-        $parameter = $Settings[$key]
-        if ($bound.ContainsKey($parameter)) { continue }
-        if ($parameter -eq 'Installer') {
-            if ($value -notmatch '^(true|false|plain)$') { Fail "${ConfigName}, line ${number}: installer must be true, false or plain, not '$value'." }
-            $Installer = $value
-        } elseif ($parameter -eq 'NoArchive') {
-            if ($value -notmatch '^(true|false)$') { Fail "${ConfigName}, line ${number}: noArchive must be true or false, not '$value'." }
-            $NoArchive = [switch]($value -eq 'true')
-        } elseif ($Repeating -contains $parameter) {
-            $current = (Get-Variable -Name $parameter).Value
-            Set-Variable -Name $parameter -Value (@($current) + $value)
-        } else {
-            Set-Variable -Name $parameter -Value $value
-        }
+    foreach ($item in @($value)) {
+        $text = [string]$item
+        # Windows PowerShell drops an empty argument altogether, which would take the next one as the value.
+        if ($text -eq '') { continue }
+        if ($escapeQuotes) { $text = $text -replace '"', '\"' }
+        $forward += "-$key", $text
     }
 }
-if (-not $Name) { Fail "The app has no name. Set name= in $ConfigName (package-app.ps1 -Init writes it), or pass -Name." }
-if (-not $MainClass) { Fail "The app has no main class. Set mainClass= in $ConfigName (package-app.ps1 -Init writes it), or pass -MainClass." }
 
-$platforms = if ($Platform -eq 'all') { @($Natives.Keys) } else { $Platform -split ',' | ForEach-Object { $_.Trim() } }
-foreach ($p in $platforms) {
-    if (-not $Natives.Contains($p)) { Fail "Unknown platform '$p'. Use: $($Natives.Keys -join ', '), or all." }
-}
-$Icon = $Icon | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
-$Content = $Content | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
-
-# The project's own Maven wrapper, or RenGL's.
-$mvn = if (Test-Path '.\mvnw.cmd') { '.\mvnw.cmd' } elseif (Test-Path (Join-Path $RenglRoot 'mvnw.cmd')) { Join-Path $RenglRoot 'mvnw.cmd' } else { 'mvn' }
-
-Write-Host "==> Building $Project"
-# Keeps Maven's own JVM from printing its native-access and Unsafe warnings over the build's output.
-$env:MAVEN_OPTS = '--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow'
-# junit comes in through RenGL's dependencies and has no business in an app.
-& $mvn -q -DskipTests clean package dependency:copy-dependencies '-DincludeScope=runtime' '-DexcludeArtifactIds=junit' '-DoutputDirectory=target/input'
-Check 'The Maven build'
-
-if (-not $MainJar) {
-    $jars = Get-ChildItem target -Filter '*.jar' | Where-Object { $_.Name -notmatch '-(sources|javadoc|tests)\.jar$|^original-' } | Sort-Object LastWriteTime -Descending
-    if (-not $jars) { Fail "Maven built no jar in $Project\target. Does the project's pom make one?" }
-    $MainJar = $jars[0].Name
-}
-if (-not (Test-Path "target\$MainJar")) { Fail "target\$MainJar does not exist." }
-Copy-Item "target\$MainJar" target\input\ -Force
-
-# The engine's artifact and version: from the jar the build brought (the whole RenGL engine, or just rengl-core), else the
-# newest RenGL in the local Maven repository. The match ignores case on purpose: file names on Windows don't care either.
-$engineJar = '^(?<id>RenGL|rengl-core)-(?<version>\d+(\.\d+)+.*?)(-natives-.+)?\.jar$'
-$engine = Get-ChildItem target\input -Filter '*.jar' | Where-Object { $_.Name -match $engineJar } | Select-Object -First 1
-if ($engine) {
-    $found = [regex]::Match($engine.Name, $engineJar, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-    $EngineId = $found.Groups['id'].Value
-    $RenglVersion = $found.Groups['version'].Value
-} else {
-    $EngineId = 'RenGL'
-    $newest = Get-ChildItem "$Repository\RenGL" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '\$' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $newest) { Fail "The RenGL engine is not in your Maven repository. In the RenGL folder run: .\mvnw.cmd install -DskipTests" }
-    $RenglVersion = $newest.Name
-    Write-Warning "$MainJar's dependencies hold no RenGL jar; using the natives of RenGL $RenglVersion."
-}
-
-# The build brings the natives of the computer it runs on. The packager picks natives by file name and gives each image
-# only its own platform's, so the other platforms' jars just have to be in the folder. They are fetched with Maven from a
-# throwaway pom that depends on each missing platform's rengl-natives artifact, which brings LWJGL's natives along.
-$missing = @($platforms | Where-Object { -not (Get-ChildItem target\input -Filter "$($Natives[$_])-$RenglVersion.jar") })
-if ($missing) {
-    $dependencies = ($missing | ForEach-Object { "<dependency><groupId>io.github.piitex</groupId><artifactId>$($Natives[$_])</artifactId><version>$RenglVersion</version></dependency>" }) -join ''
-    $nativesPom = Join-Path (Resolve-Path target) 'natives-pom.xml'
-    Set-Content -Path $nativesPom -Encoding UTF8 -Value ('<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>local</groupId><artifactId>natives</artifactId><version>1</version><dependencies>' + $dependencies + '</dependencies></project>')
-    Write-Host "==> Natives for $($missing -join ', ')"
-    # An absolute path: a relative one is taken from the throwaway pom's folder (target), not from the project.
-    $inputFolder = (Resolve-Path 'target\input').Path
-    & $mvn -q -f $nativesPom dependency:copy-dependencies '-DincludeScope=runtime' "-DoutputDirectory=$inputFolder"
-    if ($LASTEXITCODE -ne 0) { Fail "The $($missing -join ', ') natives could not be fetched. In the RenGL folder run: powershell -ExecutionPolicy Bypass -File rengl-packager\install-natives.ps1" }
-}
-
-$Packager = if ($env:RENGL_PACKAGER) { $env:RENGL_PACKAGER } else { "$Repository\rengl-packager\$RenglVersion\rengl-packager-$RenglVersion.jar" }
-if (-not (Test-Path $Packager)) {
-    Fail "The RenGL packager is not at $Packager. In the RenGL folder run: .\mvnw.cmd install -DskipTests"
-}
-
-$packagerArgs = @(
-    '--name', $Name, '--app-version', $Version,
-    '--input', 'target\input', '--main-jar', $MainJar, '--main-class', $MainClass,
-    '--platform', ($platforms -join ','), '--output', $Output
-)
-if ($Vendor) { $packagerArgs += '--vendor', $Vendor }
-if ($Description) { $packagerArgs += '--description', $Description }
-if ($Identifier) { $packagerArgs += '--identifier', $Identifier }
-if ($AddModules) { $packagerArgs += '--add-modules', $AddModules }
-foreach ($i in $Icon) { $packagerArgs += '--icon', $i }
-foreach ($c in $Content) { $packagerArgs += '--content', $c }
-foreach ($a in $FileAssociation) { $packagerArgs += '--file-association', $a }
-# Windows PowerShell passes a quote inside an argument to a program without escaping it, and "%1" would lose its quotes.
-foreach ($v in $ShellVerb) { $packagerArgs += '--shell-verb', ($v -replace '"', '\"') }
-if ($DocumentTypes) { $packagerArgs += '--document-types', (Join-Path $Project $DocumentTypes) }
-# -XstartOnFirstThread is added for macOS by the packager, where it belongs.
-$packagerArgs += '--java-option', '--enable-native-access=ALL-UNNAMED'
-if ($Installer -eq 'true') {
-    $uiInput = Join-Path $RenglRoot 'rengl-packager\target\ui-input'
-    if (-not (Test-Path $uiInput)) { Fail "The setup's RenGL window is not built ($uiInput). In the RenGL folder run: .\mvnw.cmd install -DskipTests   (or use installer=plain for the small plain Windows window)" }
-    $packagerArgs += '--installer-ui', $uiInput
-} elseif ($Installer -eq 'plain') {
-    $packagerArgs += '--installer'
-}
-if ($NoArchive) { $packagerArgs += '--no-archive' }
-
-Write-Host "==> RenGL packager ($($platforms -join ', '))"
-& java --enable-native-access=ALL-UNNAMED -jar $Packager @packagerArgs
-Check 'The RenGL packager'
+& $Java --enable-native-access=ALL-UNNAMED -jar $Jar @forward
+exit $LASTEXITCODE

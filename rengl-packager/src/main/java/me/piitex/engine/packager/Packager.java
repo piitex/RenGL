@@ -28,6 +28,8 @@ public final class Packager {
     private static final String HELP = """
             RenGL packager: builds app-images for Windows, macOS and Linux without jpackage.
 
+            To build and package a whole Maven project in one step instead: project --help
+
             Required
               --name <name>            App name; also the launcher's file name
               --input <dir>            Folder of jars: your app and every dependency, with the natives jars of
@@ -75,11 +77,13 @@ public final class Packager {
     }
 
     public static void main(String[] args) {
+        boolean project = args.length > 0 && args[0].equals(ProjectBuild.COMMAND);
         try {
-            run(args);
+            if (project) ProjectBuild.run(Arrays.copyOfRange(args, 1, args.length));
+            else run(args);
         } catch (IllegalArgumentException e) {
             System.err.println("Error: " + e.getMessage());
-            System.err.println("Run with --help for the options.");
+            System.err.println(project ? "Run with project --help for the settings." : "Run with --help for the options.");
             System.exit(2);
         } catch (FileSystemException e) {
             // The message of these is only the path; say what went wrong, and the usual reason on Windows.

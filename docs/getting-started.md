@@ -46,9 +46,10 @@ This installs every module into `~/.m2`. The native libraries of the six platfor
 
 Each one holds the Skiko runtime of its platform and depends on LWJGL's natives for it, which Maven downloads from
 Maven Central, so this needs the internet but no other operating system. The platforms are `windows`, `windows-arm64`,
-`linux`, `linux-arm64`, `macos` and `macos-arm64`. On Windows, `rengl-packager\install-natives.ps1` runs the same
-command for you. (`./mvnw install -DskipTests -Dnatives.platform=all` installs the engine and the natives artifacts in one
-go.) Repeat all of it when you update the engine.
+`linux`, `linux-arm64`, `macos` and `macos-arm64`. `rengl-packager\install-natives.ps1` (Windows) and
+`rengl-packager/install-natives.sh` (macOS, Linux) run the same command for you.
+(`./mvnw install -DskipTests -Dnatives.platform=all` installs the engine and the natives artifacts in one go.) Repeat
+all of it when you update the engine.
 
 ### 2. Write the pom
 
