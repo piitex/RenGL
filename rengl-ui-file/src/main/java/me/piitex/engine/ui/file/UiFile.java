@@ -56,8 +56,6 @@ public final class UiFile {
     private UiFile() {
     }
 
-    // --- Whole files ----------------------------------------------------------------------------------------------
-
     /**
      * Reads a layout file, with relative image paths in it read from the working folder.
      *
@@ -126,8 +124,6 @@ public final class UiFile {
         file.put("root", write(root));
         return JsonWriter.write(file) + "\n";
     }
-
-    // --- Elements -------------------------------------------------------------------------------------------------
 
     /**
      * An element and everything in it as JSON, ready for {@link JsonWriter}.
@@ -208,8 +204,6 @@ public final class UiFile {
     public static Element copy(Element element, Path base) {
         return read(write(element), base);
     }
-
-    // --- Names and finding ----------------------------------------------------------------------------------------
 
     /**
      * Whether {@code element} stands in for one whose kind wasn't known when the file was loaded. It is an empty

@@ -21,8 +21,6 @@ class AxisScaleTest {
         return axis.ticks().stream().filter(NumericAxis.Tick::major).map(NumericAxis.Tick::value).toList();
     }
 
-    // ---- linear -------------------------------------------------------------------------------------------------
-
     @Test
     void aLinearAxisHasTheTicksOfTheNiceScale() {
         NumericAxis axis = new NumericAxis();
@@ -39,8 +37,6 @@ class AxisScaleTest {
         double[] range = axis.targetRange();
         assertTrue(range[0] < 0 && range[1] > 100, "the ends move out past the data: " + range[0] + " to " + range[1]);
     }
-
-    // ---- log ----------------------------------------------------------------------------------------------------
 
     @Test
     void aLogAxisPutsATickOnEveryPowerOfTen() {
@@ -132,8 +128,6 @@ class AxisScaleTest {
         axis.fit(1, 1000, 6, 0);
         assertEquals(1000, axis.range()[1], 1e-6);
     }
-
-    // ---- time ---------------------------------------------------------------------------------------------------
 
     @Test
     void aDayGetsTicksOnTheSixthHour() {

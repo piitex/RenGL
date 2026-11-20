@@ -269,8 +269,6 @@ public class GaugeOverlay extends Overlay implements Themeable, FontScalable, me
         this.labelFormatter = labelFormatter == null ? v -> String.valueOf(v) : labelFormatter;
     }
 
-    // --- Keyboard focus: nothing to press, but Tab can land here and the reading is spoken, then kept up to date ---
-
     private boolean focused;
 
     @Override
@@ -300,8 +298,6 @@ public class GaugeOverlay extends Overlay implements Themeable, FontScalable, me
     public boolean handlesKey(int key, int mods) {
         return false; // every key still reaches the game
     }
-
-    // --- Accessibility ---
 
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {

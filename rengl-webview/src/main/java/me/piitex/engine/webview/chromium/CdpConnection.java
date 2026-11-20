@@ -94,8 +94,6 @@ final class CdpConnection implements WebSocket.Listener {
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ WebSocket.Listener
-
     @Override
     public void onOpen(WebSocket webSocket) {
         webSocket.request(1);

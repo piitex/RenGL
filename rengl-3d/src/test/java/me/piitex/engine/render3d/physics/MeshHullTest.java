@@ -86,8 +86,6 @@ class MeshHullTest {
         return world;
     }
 
-    // ---- Building hulls ----
-
     @Test
     void cubeHullKeepsOnlyItsCorners() {
         List<Vec3> points = new ArrayList<>(List.of(cubeCorners(0.5f)));
@@ -210,8 +208,6 @@ class MeshHullTest {
         }
     }
 
-    // ---- Hull contacts ----
-
     private static Manifold collide(Shape a, Pose pa, Shape b, Pose pb) {
         Manifold m = new Manifold();
         Narrowphase.collide(a, pa, b, pb, M, m);
@@ -284,8 +280,6 @@ class MeshHullTest {
         for (int i = 0; i < 2; i++) assertEquals(0.01f, m.depths[i], 1e-5f);
     }
 
-    // ---- Hulls moving ----
-
     @Test
     void hullCubeRestsLikeABox() {
         PhysicsWorld world = new PhysicsWorld();
@@ -339,8 +333,6 @@ class MeshHullTest {
         long asleep = rocks.stream().filter(RigidBody::isSleeping).count();
         assertTrue(asleep >= rocks.size() - 1, asleep + " of " + rocks.size() + " asleep");
     }
-
-    // ---- Meshes ----
 
     @Test
     void meshJoinsCornersAndFindsItsRealEdges() {
@@ -569,8 +561,6 @@ class MeshHullTest {
         RigidBody body = new RigidBody(crate).addShape(BoxShape.ofSize(1, 1, 1)).setDensity(1000f);
         assertEquals(125f, body.getMass(), 1e-3f, "a 0.5 m cube of water");
     }
-
-    // ---- Queries ----
 
     @Test
     void raysHitMeshesFromEitherSide() {

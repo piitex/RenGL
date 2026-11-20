@@ -57,8 +57,6 @@ class UiScreenTest {
                 what + ": got " + actual[0] + ", " + actual[1] + ", " + actual[2] + ", " + actual[3] + ", wanted " + r + ", " + g + ", " + b + ", 255");
     }
 
-    // ---- the picture ----------------------------------------------------------------------------------------------
-
     @Test
     void theTextureIsTheContainerSizeTimesTheScale() {
         try (UiScreen one = new UiScreen(new Panel().root); UiScreen two = new UiScreen(new Panel().root, 2f); UiScreen half = new UiScreen(new Panel().root, 0.5f)) {
@@ -174,8 +172,6 @@ class UiScreenTest {
             assertColor(rgba(screen.texture(), 30, 15), 0, 0, 255, "box after the pointer left");
         }
     }
-
-    // ---- the pointer ----------------------------------------------------------------------------------------------
 
     @Test
     void thePointerHoversWhatItIsOver() {
@@ -380,8 +376,6 @@ class UiScreenTest {
         assertThrows(IllegalArgumentException.class, () -> new UiScreen(new Container(10, 10), 0f));
         assertThrows(IllegalArgumentException.class, () -> new UiScreen(new Container(10, 10), -1f));
     }
-
-    // ---- typing ---------------------------------------------------------------------------------------------------
 
     /** A 100 x 60 form with two text fields, one at the top (5, 5, 90 x 15) and one below it (5, 30, 90 x 15). */
     private static final class Form {

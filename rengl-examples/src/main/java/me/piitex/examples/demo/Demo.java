@@ -76,8 +76,6 @@ public class Demo {
         new Engine().start(window);
     }
 
-    // ---- left: settings tabs --------------------------------------------------------------------
-
     private static TabContainer buildSettingsTabs(TextOverlay status) {
         TabContainer tabs = new TabContainer(40, 80, 680, 420);
         tabs.addTab("General", generalPage());
@@ -180,8 +178,6 @@ public class Demo {
         root.addElement(theme);
     }
 
-    // ---- top right: closable documents ----------------------------------------------------------
-
     private static TabContainer buildDocumentTabs(Container root) {
         TabContainer documents = new TabContainer(760, 80, 480, 280);
         documents.setPadding(8);
@@ -207,8 +203,6 @@ public class Demo {
         documents.selectTab(tab);
     }
 
-    // ---- bottom right: overflow -----------------------------------------------------------------
-
     private static TabContainer buildOverflowTabs() {
         TabContainer tabs = new TabContainer(760, 430, 480, 250);
         tabs.setTabPosition(TabContainer.TabPosition.BOTTOM);
@@ -224,8 +218,6 @@ public class Demo {
         tabs.selectTab(0);
         return tabs;
     }
-
-    // ---- helpers --------------------------------------------------------------------------------
 
     /**
      * A transparent column, so the tab container's own panel shows through.

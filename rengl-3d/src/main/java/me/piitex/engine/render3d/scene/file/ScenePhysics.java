@@ -105,8 +105,6 @@ final class ScenePhysics {
         return world == null ? null : BUILT.get(world);
     }
 
-    // ---- Building ---------------------------------------------------------------------------------------------------
-
     /**
      * A new world with a body for each node that has one, where the node is now, and the joints between them. Parts
      * that can't be made (a joint naming a node that isn't there, a model with no meshes to collide as) are left out

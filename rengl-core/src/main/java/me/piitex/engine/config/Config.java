@@ -56,8 +56,6 @@ public final class Config {
         this.root = root;
     }
 
-    // ---------------------------------------------------------------- loading / saving
-
     public static Config parse(String text) {
         return new Config(ConfigParser.parse(text));
     }
@@ -145,8 +143,6 @@ public final class Config {
             Files.move(tmp, abs, StandardCopyOption.REPLACE_EXISTING);
         }
     }
-
-    // ---------------------------------------------------------------- reading
 
     /**
      * Raw value at {@code path} (String, Boolean, Long, Double, List, or a nested section map), or null.
@@ -298,8 +294,6 @@ public final class Config {
         return out;
     }
 
-    // ---------------------------------------------------------------- writing
-
     /**
      * Sets a value, creating intermediate sections as needed. Accepts String, Boolean, Number,
      * or a List of those. A null value removes the entry.
@@ -372,8 +366,6 @@ public final class Config {
         return this;
     }
 
-    // ---------------------------------------------------------------- serialization
-
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -420,8 +412,6 @@ public final class Config {
         }
         return sb.append('"').toString();
     }
-
-    // ---------------------------------------------------------------- helpers
 
     private static void collectKeys(Map<?, ?> map, String prefix, boolean deep, Set<String> out) {
         for (Map.Entry<?, ?> e : map.entrySet()) {

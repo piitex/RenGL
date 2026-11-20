@@ -176,8 +176,6 @@ public final class TileLayer extends MapLayer {
         return count;
     }
 
-    // ---- Collision
-
     /**
      * The collision shapes drawn on the layer's tiles in Tiled's collision editor, placed on the map, mirrored and
      * turned with their cells. Cells whose tile's shape is one rectangle covering the whole cell are joined into
@@ -373,8 +371,6 @@ public final class TileLayer extends MapLayer {
         out[2] = w;
         out[3] = h;
     }
-
-    // ---- Drawing
 
     @Override
     void render(Renderer renderer, Rect view, DrawState parent) {

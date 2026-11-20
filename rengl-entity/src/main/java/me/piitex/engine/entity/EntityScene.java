@@ -241,8 +241,6 @@ public class EntityScene extends Scene {
         return started;
     }
 
-    // --- Settings -------------------------------------------------------------------------------------------------
-
     public Camera getCamera() {
         return camera;
     }
@@ -286,8 +284,6 @@ public class EntityScene extends Scene {
     void setNextId(long nextId) {
         this.nextId = Math.max(this.nextId, nextId);
     }
-
-    // --- Scene hooks ----------------------------------------------------------------------------------------------
 
     @Override
     protected void onEnter() {

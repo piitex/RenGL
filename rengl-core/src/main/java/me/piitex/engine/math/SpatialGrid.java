@@ -296,8 +296,6 @@ public final class SpatialGrid<T> {
         return best;
     }
 
-    // ---- Cells
-
     private int cell(float coordinate) {
         return (int) Math.floor(Math.clamp(coordinate / cellSize, Integer.MIN_VALUE, Integer.MAX_VALUE));
     }

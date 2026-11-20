@@ -204,8 +204,6 @@ public class AccordionContainer extends Container implements Focusable, FontScal
         notifyAccessibleChange();
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.GROUP;

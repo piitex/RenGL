@@ -563,8 +563,6 @@ public class TreeView<T> extends ScrollContainer implements Focusable, FontScala
         notifyAccessibleChange();
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.TREE;

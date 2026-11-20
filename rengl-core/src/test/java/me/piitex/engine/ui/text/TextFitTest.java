@@ -73,8 +73,6 @@ class TextFitTest {
         }
     }
 
-    // --- TextOverlay ---
-
     @Test
     void aMaxWidthCapsTheOverlayAndKeepsTheFullText() {
         String text = "a status line that is much too long to fit in the room it has been given";

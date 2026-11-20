@@ -27,8 +27,6 @@ class QueryEventTest {
         return new PhysicsWorld().setGravity(Vec3.ZERO);
     }
 
-    // ---- Raycasts ----
-
     @Test
     void rayHitsEachShape() {
         PhysicsWorld world = still();
@@ -119,8 +117,6 @@ class QueryEventTest {
         assertEquals(top, world.raycast(new Ray(new Vec3(0.5f, 5, 0), new Vec3(0, -1, 0)), 10f).shape());
     }
 
-    // ---- Overlaps ----
-
     @Test
     void overlapQueries() {
         PhysicsWorld world = still();
@@ -134,8 +130,6 @@ class QueryEventTest {
         assertEquals(List.of(crate), world.overlap(new CapsuleShape(0.2f, 1f), new Vec3(0, 1, 0), Quat.IDENTITY, -1));
         assertTrue(world.overlap(new SphereShape(1f), Vec3.ZERO, null, 2).isEmpty(), "masked out");
     }
-
-    // ---- Events ----
 
     private static final class Recorder implements ContactListener {
         final List<String> events = new ArrayList<>();

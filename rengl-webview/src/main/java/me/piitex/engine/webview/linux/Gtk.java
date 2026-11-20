@@ -109,8 +109,6 @@ final class Gtk {
         return LOOKUP != null && LOOKUP.find(function).isPresent();
     }
 
-    // ------------------------------------------------------------------------------------------------ calls
-
     private static MemoryLayout layoutOf(Object o) {
         return switch (o) {
             case MemorySegment _, String _ -> ADDRESS;
@@ -185,8 +183,6 @@ final class Gtk {
         if (!isNull(owned)) v("g_free", owned);
         return s;
     }
-
-    // ------------------------------------------------------------------------------------------------ callbacks into Java
 
     /** A C function pointer that calls the static method {@code method} of {@code owner}. It must never throw. */
     static MemorySegment stub(Class<?> owner, String method, FunctionDescriptor descriptor) {

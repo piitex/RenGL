@@ -27,7 +27,6 @@ final class MediaFoundation {
     private MediaFoundation() {
     }
 
-    // --- slots of the interfaces this class's users call
     static final int RELEASE = 2;
     // IMFAttributes, which IMFMediaType and IMFSample extend
     static final int GET_UINT32 = 7, GET_UINT64 = 8, GET_GUID = 10, GET_BLOB = 15, SET_UINT32 = 21, SET_UINT64 = 22, SET_GUID = 24;
@@ -40,12 +39,10 @@ final class MediaFoundation {
             READER_SET_CURRENT_TYPE = 7, READER_SET_POSITION = 8, READER_READ_SAMPLE = 9, READER_FLUSH = 10,
             READER_GET_PRESENTATION_ATTRIBUTE = 12;
 
-    // --- stream selectors and flags of the Source Reader
     static final int ALL_STREAMS = 0xFFFFFFFE, ANY_STREAM = 0xFFFFFFFE, MEDIA_SOURCE = 0xFFFFFFFF;
     static final int END_OF_STREAM = 0x2, NATIVE_TYPE_CHANGED = 0x10, CURRENT_TYPE_CHANGED = 0x20;
     static final int INVALID_STREAM_NUMBER = 0xC00D36B3;
 
-    // --- attribute keys and formats
     static final String MT_MAJOR_TYPE = "48eba18e-f8c9-4687-bf11-0a74c9f96a8f";
     static final String MT_SUBTYPE = "f7e34c9a-42e8-4714-b74b-cb29d72c35e5";
     static final String MT_FRAME_SIZE = "1652c33d-d6b2-4012-b834-72030849a37d";
@@ -128,8 +125,6 @@ final class MediaFoundation {
         if (hr < 0 && hr != RPC_E_CHANGED_MODE) throw new IllegalStateException("CoInitializeEx failed: " + hex(hr));
     }
 
-    // ------------------------------------------------------------------ COM calls
-
     /**
      * Calls the method in {@code slot} of the COM object {@code object}. {@code descriptor} describes the method's
      * arguments after the implicit {@code this}; the result is its HRESULT.
@@ -178,8 +173,6 @@ final class MediaFoundation {
         if (hr < 0) throw new IOException(what + " failed (" + hex(hr) + ")");
     }
 
-    // ------------------------------------------------------------------ creating objects
-
     /** A new, empty IMFMediaType. */
     static MemorySegment newMediaType(Arena a) throws IOException {
         MemorySegment out = a.allocate(8);
@@ -225,8 +218,6 @@ final class MediaFoundation {
             throw new IllegalStateException(e);
         }
     }
-
-    // ------------------------------------------------------------------ attributes
 
     /** A GUID's 16 bytes: the first three groups little-endian, the last two as written. */
     static MemorySegment guid(Arena a, String text) {
@@ -285,8 +276,6 @@ final class MediaFoundation {
     static void setGuid(Arena a, MemorySegment attributes, String key, String value) throws IOException {
         check(call(attributes, SET_GUID, D_KEY_GUID, guid(a, key), guid(a, value)), "setting an attribute");
     }
-
-    // ------------------------------------------------------------------ the first four bytes of a format GUID
 
     /** The leading 32 bits of a format GUID, which is the FOURCC or WAVE format tag for the formats Windows defines. */
     static long format(String guidText) {

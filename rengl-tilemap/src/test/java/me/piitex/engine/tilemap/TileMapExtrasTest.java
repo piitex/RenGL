@@ -69,8 +69,6 @@ class TileMapExtrasTest {
         });
     }
 
-    // ---- zstd
-
     @Test
     void aLayerCompressedWithZstdLoads() throws IOException {
         Files.write(dir.resolve("tiles.png"), png());
@@ -101,8 +99,6 @@ class TileMapExtrasTest {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> TileMap.load(dir.resolve("bad.tmj")));
         assertTrue(e.getMessage().contains("bad.tmj") && e.getMessage().toLowerCase().contains("zstd"), e.getMessage());
     }
-
-    // ---- embedded images
 
     @Test
     void aTileSetWithItsImageInsideTheFileLoads() throws IOException {
@@ -138,8 +134,6 @@ class TileMapExtrasTest {
             assertEquals(1, TileMap.load(dir.resolve("packed.tmx")).getTileLayer("a").getTile(0, 0).getId());
         }
     }
-
-    // ---- blend modes
 
     @Test
     void aLayerWithAModeIsDrawnAsOneBlendedUnit() throws IOException {
@@ -247,8 +241,6 @@ class TileMapExtrasTest {
         assertEquals(0, outside, "and clipped to it");
     }
 
-    // ---- text objects
-
     private TileMap textMap() throws IOException {
         write("text.tmx", """
                 <map version="1.10" orientation="orthogonal" width="4" height="4" tilewidth="8" tileheight="8">
@@ -291,8 +283,6 @@ class TileMapExtrasTest {
         assertTrue(calls.contains("pushTransform") && calls.contains("pushClip"), "turned and clipped to its box");
         assertTrue(calls.contains("drawLine"), "the underline");
     }
-
-    // ---- project defaults
 
     private TiledProject project() throws IOException {
         write("game.tiled-project", """

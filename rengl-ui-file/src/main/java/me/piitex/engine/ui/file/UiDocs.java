@@ -96,8 +96,6 @@ public final class UiDocs {
         return !body(kind).isBlank();
     }
 
-    // --- The properties -------------------------------------------------------------------------------------------
-
     private static String properties(List<UiProperty> all, boolean common) {
         Map<String, StringBuilder> groups = new LinkedHashMap<>();
         for (UiProperty property : all) {
@@ -151,8 +149,6 @@ public final class UiDocs {
     private static String number(double value) {
         return value == Math.rint(value) ? Long.toString((long) value) : Double.toString(value);
     }
-
-    // --- Reading --------------------------------------------------------------------------------------------------
 
     private static String load(String id) {
         try (InputStream in = UiDocs.class.getResourceAsStream(RESOURCES + id + ".md")) {

@@ -437,8 +437,6 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         this.paddingY = paddingY;
     }
 
-    // --- Scrolling -------------------------------------------------------------------------------
-
     /**
      * Logical points scrolled per unit of raw wheel offset. See {@link Scrollable#onScroll}. Larger is faster.
      */
@@ -1510,8 +1508,6 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         layoutDirty = true;
     }
 
-    // --- Line numbers and positions --------------------------------------------------------------
-
     /** Whether a column of line numbers is drawn down the left. */
     public boolean isLineNumbers() {
         return lineNumbers;
@@ -1751,8 +1747,6 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         renderer.drawQuad(rule, (float) getY(), 1f, (float) getHeight(), new Color(lineNumberColor.getR(), lineNumberColor.getG(), lineNumberColor.getB(), 0.35f), 0f);
     }
 
-    // --- Scrollbar geometry ----------------------------------------------------------------------
-
     /**
      * Width kept free on the right for the scrollbar, so text wraps before it instead of running underneath. Reserved whenever the scrollbar is enabled, not only while it is showing, so the text does not reflow when it appears.
      */
@@ -1963,8 +1957,6 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         }
     }
 
-    // --- Line layout -----------------------------------------------------------------------------
-
     /**
      * One visual line: {@code [start, end)} into the flat text, and whether it's terminated by a real {@code '\n'} (a paragraph break) rather than just a word-wrap point.
      */
@@ -2165,8 +2157,6 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
         FontMetricsCompat metrics = FontMetricsCompat.of(getOrBuildFont());
         return (-metrics.getAscent() + metrics.getDescent()) + lineSpacing;
     }
-
-    // --- Rendering -------------------------------------------------------------------------------
 
     @Override
     public void render(Renderer renderer) {
@@ -2393,8 +2383,6 @@ public class TextAreaOverlay extends Overlay implements Focusable, Draggable, Sc
             skiaFont = null;
         }
     }
-
-    // --- Accessibility ---
 
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {

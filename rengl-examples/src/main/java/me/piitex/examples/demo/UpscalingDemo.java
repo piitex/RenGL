@@ -169,8 +169,6 @@ public class UpscalingDemo {
             orbit.setTarget(new Vec3(0, 2, 0)).setDistance(34f).setAngles(0.5f, 0.35f).setDistanceLimits(4f, 90f);
         }
 
-        // ---- the scene ---------------------------------------------------------------------------------------------
-
         private void buildWorld() {
             scene.setBackground(new Color(0.05f, 0.07f, 0.12f, 1f));
             scene.setSkybox(Skybox.gradient(new Color(0.18f, 0.34f, 0.72f, 1f), new Color(0.85f, 0.8f, 0.72f, 1f), new Color(0.12f, 0.12f, 0.13f, 1f)));
@@ -305,8 +303,6 @@ public class UpscalingDemo {
             crates.setInstances(instances);
         }
 
-        // ---- every frame -------------------------------------------------------------------------------------------
-
         private void update(Scene3D s, float delta) {
             GpuDevice device = view == null ? null : view.getDevice();
             if (device == null) return;
@@ -356,8 +352,6 @@ public class UpscalingDemo {
                 spinners[i].setRotation(Quat.fromAxisAngle(new Vec3(0.3f, 1f, 0.2f).normalized(), (float) (t * (1.5 + i % 3 * 0.5))));
             }
         }
-
-        // ---- the choices -------------------------------------------------------------------------------------------
 
         /** The device is there: see what can be used, and begin with the best of it. */
         private void start(GpuDevice device) {
@@ -431,8 +425,6 @@ public class UpscalingDemo {
             else if (generation.equals("fsr")) FsrFrameGeneration.setEnabled(on);
         }
 
-        // ---- the numbers -------------------------------------------------------------------------------------------
-
         /** Counts the frames drawn, and twice a second works out how many were drawn and how many were shown. */
         private void count(float delta) {
             framesSince++;
@@ -492,8 +484,6 @@ public class UpscalingDemo {
             if (numbers[0] == null) return;
             for (int i = 0; i < numbers.length; i++) numbers[i].setText(lines[i]);
         }
-
-        // ---- the controls ------------------------------------------------------------------------------------------
 
         void buildControls(Container panel) {
             float y = 16;

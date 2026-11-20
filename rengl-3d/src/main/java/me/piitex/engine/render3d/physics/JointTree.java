@@ -453,8 +453,6 @@ final class JointTree {
         return done;
     }
 
-    // ---- The system -----------------------------------------------------------------------------------------------
-
     private void factor(boolean uniform) {
         assemble(uniform);
         for (Entry p : order) {
@@ -606,8 +604,6 @@ final class JointTree {
             }
         }
     }
-
-    // ---- Small dense algebra --------------------------------------------------------------------------------------
 
     private static void multiply(double[] a, int ar, int ac, double[] b, int bc, double[] out) {
         for (int i = 0; i < ar; i++) {

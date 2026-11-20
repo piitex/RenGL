@@ -65,8 +65,6 @@ public final class SceneFile {
     private SceneFile() {
     }
 
-    // --- Whole scenes ---------------------------------------------------------------------------------------------
-
     /**
      * Writes the scene to a file, creating parent folders as needed. It is written to a temporary file beside it first
      * and then moved into place, so a crash part way through leaves the old file whole.
@@ -158,8 +156,6 @@ public final class SceneFile {
         if (json.get("nextId") instanceof Number n) scene.setNextId(n.longValue());
     }
 
-    // --- Single entities ------------------------------------------------------------------------------------------
-
     /**
      * One entity with its children as JSON, ids included.
      */
@@ -212,8 +208,6 @@ public final class SceneFile {
         }
         return entity;
     }
-
-    // --- Components -----------------------------------------------------------------------------------------------
 
     /**
      * A component as JSON: its type, then its properties.
@@ -269,8 +263,6 @@ public final class SceneFile {
         constructor.setAccessible(true);
         return (Component) constructor.newInstance();
     }
-
-    // --- Helpers --------------------------------------------------------------------------------------------------
 
     static ClassLoader defaultLoader() {
         ClassLoader loader = Thread.currentThread().getContextClassLoader();

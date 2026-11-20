@@ -422,8 +422,6 @@ public class RangeSliderOverlay extends Overlay implements Themeable, Draggable,
         };
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.SLIDER;

@@ -112,8 +112,6 @@ public final class SceneKinds {
         return light;
     }
 
-    // --- Building --------------------------------------------------------------------------------------------------
-
     private static <T> SceneProperty<T> prop(List<SceneProperty<T>> into, String name, String label, Class<?> type, String group,
                                              Function<T, Object> get, SceneProperty.Setter<T> set) {
         SceneProperty<T> property = new SceneProperty<>(name, label, type, get, set).group(group);
@@ -136,8 +134,6 @@ public final class SceneKinds {
     private static String s(Object value) {
         return value == null ? "" : (String) value;
     }
-
-    // --- Nodes -----------------------------------------------------------------------------------------------------
 
     private static NodeInfo info(Node3D node) {
         return SceneMeta.node(node);
@@ -259,8 +255,6 @@ public final class SceneKinds {
                 .tip("With the world's virtual geometry on, draws this from its mesh's clusters. Off draws its detail levels instead");
     }
 
-    // --- Materials -------------------------------------------------------------------------------------------------
-
     private static boolean pbr(Material m) {
         return m.isPbr();
     }
@@ -374,8 +368,6 @@ public final class SceneKinds {
                 .tip("Texture pixels for each point of the layout: more is sharper up close, and costs more to draw");
     }
 
-    // --- Lights ----------------------------------------------------------------------------------------------------
-
     private static LightShadow shadowOf(Light light) {
         Shadows shadows = light.getShadows();
         if (shadows == null) return LightShadow.OFF;
@@ -476,8 +468,6 @@ public final class SceneKinds {
         }
     }
 
-    // --- Camera ----------------------------------------------------------------------------------------------------
-
     static {
         String view = "View";
         prop(CAMERA, "position", "Position", Vec3.class, view, Camera::getPosition, (c, x, b) -> c.setPosition(v(x))).step(0.1);
@@ -492,8 +482,6 @@ public final class SceneKinds {
         prop(CAMERA, "far", "Far", Float.class, view, Camera::getFar, (c, x, b) -> c.setClip(c.getNear(), Math.max(f(x), c.getNear() * 2f)))
                 .omitWhen(200f).range(0.01, 100000).step(10).tip("Farther than this is not seen");
     }
-
-    // --- The scene -------------------------------------------------------------------------------------------------
 
     private static final Color DEFAULT_BACKGROUND = new Color(0.10f, 0.11f, 0.14f, 1f);
     private static final Color DEFAULT_AMBIENT = new Color(0.45f, 0.45f, 0.5f, 1f);
@@ -687,8 +675,6 @@ public final class SceneKinds {
         });
     }
 
-    // --- Physics ---------------------------------------------------------------------------------------------------
-
     private static final ScenePhysics.BodyInfo NO_BODY = new ScenePhysics.BodyInfo();
 
     /** A node's body settings to read: the defaults for a node that has none, without giving it any. */
@@ -849,8 +835,6 @@ public final class SceneKinds {
                     .omitWhen(0f).range(0, 10_000_000).step(100).tip("How hard it can be pulled, in newtons, before it breaks. 0 never breaks");
         }
     }
-
-    // --- Tooltips for what the declarations above don't explain ---------------------------------------------------------
 
     static {
         tips(NODE, "size", "How long each edge of the cube is",

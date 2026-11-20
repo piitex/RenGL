@@ -111,8 +111,6 @@ public final class Entity {
         return destroyed;
     }
 
-    // --- Components -----------------------------------------------------------------------------------------------
-
     /**
      * Adds a component and returns it. If the entity is in a scene that is on the stack, the component's
      * {@link Component#onStart()} runs now.
@@ -181,8 +179,6 @@ public final class Entity {
         if (!components.remove(component)) throw new IllegalArgumentException("component is not on " + this);
         components.add(Math.max(0, Math.min(index, components.size())), component);
     }
-
-    // --- Hierarchy ------------------------------------------------------------------------------------------------
 
     /**
      * The parent entity, or null for a top-level entity of the scene (or one in no scene).
@@ -295,8 +291,6 @@ public final class Entity {
     private void checkAlive() {
         if (destroyed) throw new IllegalStateException(this + " has been destroyed");
     }
-
-    // --- World transform ------------------------------------------------------------------------------------------
 
     /**
      * Where the entity is in the world, after its parents' positions, turns and scales. Each call walks up the parents.

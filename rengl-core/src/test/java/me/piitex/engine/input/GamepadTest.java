@@ -120,8 +120,6 @@ class GamepadTest {
         return new InputContext("test").bind("jump", jump);
     }
 
-    // ---------------------------------------------------------------- connecting
-
     @Test
     void aSlotWithNothingInItReadsAsUntouched() {
         frame();
@@ -235,8 +233,6 @@ class GamepadTest {
         assertTrue(Gamepads.snapshot()[0].buttons[Gamepad.Button.A.code()]);
     }
 
-    // ---------------------------------------------------------------- buttons
-
     @Test
     void aButtonIsDownJustPressedAndJustReleased() {
         Gamepad pad = plugIn("Xbox 360 Controller");
@@ -298,8 +294,6 @@ class GamepadTest {
         frame();
         assertEquals(0f, pad.getHeldTime(Gamepad.Button.A));
     }
-
-    // ---------------------------------------------------------------- sticks and triggers
 
     @Test
     void aStickAtRestWithDriftReadsExactlyZero() {
@@ -373,8 +367,6 @@ class GamepadTest {
         assertEquals((0.5f - 0.05f) / 0.95f, pad.getRightTrigger(), 1e-5);
         assertEquals(0.5f, pad.getRawAxis(Gamepad.Axis.RIGHT_TRIGGER), 1e-6);
     }
-
-    // ---------------------------------------------------------------- actions
 
     @Test
     void aButtonIsAnActionLikeAKey() {
@@ -676,8 +668,6 @@ class GamepadTest {
         assertTrue(controls.isJustPressed("jump"));
     }
 
-    // ---------------------------------------------------------------- binding prompts
-
     @Test
     void aPromptForAGamepadBindingTakesTheNextButtonAndNothingElseDoes() {
         InputContext controls = controls(Binding.gamepad(Gamepad.Button.A));
@@ -751,8 +741,6 @@ class GamepadTest {
         assertEquals(List.of(), bound);
         assertTrue(controls.isDown("jump"));
     }
-
-    // ---------------------------------------------------------------- the interface
 
     private static TextFieldOverlay fieldRecording(List<String> keys) {
         return new TextFieldOverlay(100, 20) {
@@ -921,8 +909,6 @@ class GamepadTest {
         assertEquals(-1f, pad.getLeftStick().y(), 1e-6);
     }
 
-    // ---------------------------------------------------------------- rebinding and saving
-
     @Test
     void aHotkeyBoxLearnsTheNextControllerPressThroughTheRealPipeline() {
         HotkeyOverlay box = new HotkeyOverlay(160, 30) {
@@ -962,8 +948,6 @@ class GamepadTest {
         assertEquals(List.of(Binding.gamepadAxis(Gamepad.Axis.RIGHT_X, true)), fresh.getBindings("right"));
         assertEquals(List.of(Binding.gamepadTrigger(Gamepad.Axis.RIGHT_TRIGGER)), fresh.getBindings("fire"));
     }
-
-    // ---------------------------------------------------------------- settings
 
     @Test
     void thePressPointIsASettingAndLetGoIsBelowIt() {

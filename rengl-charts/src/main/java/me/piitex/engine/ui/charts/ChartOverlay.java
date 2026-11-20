@@ -109,8 +109,6 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
         ThemeManager.register(this);
     }
 
-    // ---- data shared by every chart -----------------------------------------------------------------------------
-
     /**
      * The text above the plot, or empty (the default) for none.
      */
@@ -174,8 +172,6 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
         for (ChartSeries s : series) count = Math.max(count, s.size());
         return count;
     }
-
-    // ---- look ---------------------------------------------------------------------------------------------------
 
     public LegendPosition getLegendPosition() {
         return legendPosition;
@@ -302,8 +298,6 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
         this.onPointClick = listener;
     }
 
-    // ---- pointer ------------------------------------------------------------------------------------------------
-
     /**
      * Acts as if the pointer were at ({@code x}, {@code y}) in the chart's own coordinates (0, 0 is its top-left
      * corner) until {@link #clearHover()}. For tests and snapshots, where there is no mouse.
@@ -317,8 +311,6 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
     public void clearHover() {
         pointerOverride = false;
     }
-
-    // ---- hooks for the chart types ------------------------------------------------------------------------------
 
     /**
      * Works out where the plot goes in what is left after the title and legend, and anything else that depends on the data or the size.
@@ -413,8 +405,6 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
     protected float focus(int index) {
         return index >= 0 && index < focus.length ? focus[index] : 1f;
     }
-
-    // ---- helpers for the chart types ----------------------------------------------------------------------------
 
     protected org.jetbrains.skia.Font labelFont() {
         return labelFont;
@@ -511,8 +501,6 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
         return luminance > 0.6f ? new Color(0.1f, 0.1f, 0.12f, 1f) : Color.WHITE;
     }
 
-    // ---- frame --------------------------------------------------------------------------------------------------
-
     @Override
     public void update(float delta) {
         super.update(delta);
@@ -598,8 +586,6 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
             renderer.popAlpha();
         }
     }
-
-    // ---- layout -------------------------------------------------------------------------------------------------
 
     private void refreshLayout() {
         long signature = signature();
@@ -711,8 +697,6 @@ public abstract class ChartOverlay extends Overlay implements Themeable, FontSca
         }
         return -1;
     }
-
-    // ---- theme and fonts ----------------------------------------------------------------------------------------
 
     @Override
     public void applyTheme(Theme theme) {

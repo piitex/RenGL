@@ -182,8 +182,6 @@ class ShadowGpuTest {
         return new Node3D("floor", Mesh.plane(size, size), new Material(Color.WHITE).setRoughness(0.9f));
     }
 
-    // ---- two lights, two shadows ---------------------------------------------------------------------------------
-
     /**
      * A weak sun from the left with a pillar at x = -6, and a strong spot light over a taller pillar at x = 6, each with its
      * own shadow settings. The spot light's shadow is a ring around its pillar's foot; the sun's falls to the right of its pillar.
@@ -222,8 +220,6 @@ class ShadowGpuTest {
         });
     }
 
-    // ---- eight lights ---------------------------------------------------------------------------------------------
-
     /**
      * Eight spot lights in a row, each over its own pillar and leaning towards it from the outer side, so each throws a
      * shadow towards the middle of the picture that no other light fills in (the pillars' tops, seen from the middle,
@@ -258,8 +254,6 @@ class ShadowGpuTest {
             });
         }
     }
-
-    // ---- a point light ---------------------------------------------------------------------------------------------
 
     /**
      * A bulb 4 up over a floor, with a low pillar east, west, south and north of it, one on the diagonal and a block right
@@ -298,8 +292,6 @@ class ShadowGpuTest {
             });
         }
     }
-
-    // ---- cascades --------------------------------------------------------------------------------------------------
 
     /**
      * Widths, in scene units, of the soft edge of the nearest pillar's shadow, by backend and cascade count, so that the one
@@ -359,8 +351,6 @@ class ShadowGpuTest {
             }
         });
     }
-
-    // ---- custom falloffs and filters -------------------------------------------------------------------------------
 
     /**
      * Three bulbs along x. The left one's falloff gives nothing, the middle one's range is 3 but its falloff reaches twice as

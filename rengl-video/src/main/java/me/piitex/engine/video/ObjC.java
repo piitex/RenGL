@@ -121,8 +121,6 @@ final class ObjC {
         return AVAILABLE;
     }
 
-    // ------------------------------------------------------------------ the runtime
-
     /** Frees what the code in between autoreleased. Wrap every stretch of calls in one. */
     static final class Pool implements AutoCloseable {
         private final MemorySegment context = (MemorySegment) invoke(POOL_PUSH);
@@ -241,8 +239,6 @@ final class ObjC {
         return p == null || p.equals(MemorySegment.NULL);
     }
 
-    // ------------------------------------------------------------------ Foundation helpers
-
     static MemorySegment string(Arena arena, String s) {
         return id(cls("NSString"), "stringWithUTF8String:", arena.allocateFrom(s));
     }
@@ -273,8 +269,6 @@ final class ObjC {
         }
         return id(cls("NSDictionary"), "dictionaryWithObjects:forKeys:count:", v, k, (long) keys.length);
     }
-
-    // ------------------------------------------------------------------ CoreMedia and CoreVideo
 
     /** A CMTime as seconds. */
     static double seconds(MemorySegment cmTime) {

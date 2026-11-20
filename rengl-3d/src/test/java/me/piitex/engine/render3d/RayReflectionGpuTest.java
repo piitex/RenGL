@@ -198,8 +198,6 @@ class RayReflectionGpuTest {
         return tests;
     }
 
-    // ---- a polished floor ------------------------------------------------------------------------------------------
-
     /**
      * A bare metal floor of the given roughness with a box standing on it behind the point (0, 0, 0): the floor there reflects the
      * box's face that looks at the camera. A sun lights the box.
@@ -283,8 +281,6 @@ class RayReflectionGpuTest {
     private static String rgb(int[] c) {
         return "rgb " + c[0] + ", " + c[1] + ", " + c[2];
     }
-
-    // ---- a corner --------------------------------------------------------------------------------------------------
 
     /**
      * A floor with a tall wall rising from it at x = 2, lit by the flat ambient light alone, with ambient occlusion by rays.

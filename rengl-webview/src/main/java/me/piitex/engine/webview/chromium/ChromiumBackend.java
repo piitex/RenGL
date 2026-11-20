@@ -115,8 +115,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
         } : listener;
     }
 
-    // ------------------------------------------------------------------------------------------------ plumbing
-
     private void post(Runnable command) {
         if (closed) return;
         try {
@@ -172,8 +170,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
         log.warn("Web view: {}", reason);
         listener.onFailed(reason);
     }
-
-    // ------------------------------------------------------------------------------------------------ start up
 
     private void launch() {
         try {
@@ -361,8 +357,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
         page("Emulation.setDeviceMetricsOverride", String.format(Locale.ROOT,
                 "{\"width\":%d,\"height\":%d,\"deviceScaleFactor\":1,\"mobile\":false}", width, height));
     }
-
-    // ------------------------------------------------------------------------------------------------ events
 
     @Override
     public void event(String method, Map<String, Object> params, String sessionId) {
@@ -591,8 +585,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ navigation
-
     private void navigateNow(String url) {
         page("Page.navigate", "{\"url\":" + CdpInput.quote(url) + "}", reply -> {
             Map<String, Object> r = result(reply);
@@ -663,8 +655,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
         });
     }
 
-    // ------------------------------------------------------------------------------------------------ display
-
     @Override
     public void resize(int w, int h) {
         int nw = Math.max(1, w), nh = Math.max(1, h);
@@ -692,8 +682,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
     private boolean shown(long now) {
         return now - lastSeen < SHOWN_FOR_NANOS;
     }
-
-    // ------------------------------------------------------------------------------------------------ pictures
 
     private boolean jpegFormat() {
         return options.getQuality() != WebViewOptions.Quality.CRISP;
@@ -791,8 +779,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
         });
     }
 
-    // ------------------------------------------------------------------------------------------------ input
-
     @Override
     public void pointerMove(double x, double y, int buttons, int mods) {
         pointerX = x;
@@ -839,8 +825,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
         submit(() -> page("Emulation.setFocusEmulationEnabled", "{\"enabled\":" + focused + "}"));
     }
 
-    // ------------------------------------------------------------------------------------------------ script
-
     private void executeNow(String script, Consumer<String> result) {
         page("Runtime.evaluate", "{\"expression\":" + CdpInput.quote(script) + ",\"returnByValue\":true,\"awaitPromise\":true}", reply -> {
             Map<String, Object> r = result(reply);
@@ -870,8 +854,6 @@ public final class ChromiumBackend implements WebViewBackend, CdpConnection.Hand
         submit(() -> page("Runtime.evaluate", "{\"expression\":" + CdpInput.quote(
                 "window.__renglDeliver && window.__renglDeliver(" + CdpInput.quote(json) + ")") + "}"));
     }
-
-    // ------------------------------------------------------------------------------------------------ closing
 
     @Override
     public void close() {

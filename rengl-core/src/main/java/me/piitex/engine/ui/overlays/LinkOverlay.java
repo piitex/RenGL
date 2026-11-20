@@ -77,8 +77,6 @@ public class LinkOverlay extends TextOverlay implements me.piitex.engine.ui.Acti
         renderer.drawLine(x, baseline + thickness * 1.5f, x + textWidth, baseline + thickness * 1.5f, color, thickness);
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.LINK;

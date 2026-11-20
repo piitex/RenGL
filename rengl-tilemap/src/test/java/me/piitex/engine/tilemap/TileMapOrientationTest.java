@@ -57,8 +57,6 @@ class TileMapOrientationTest {
                 new TileMap(7, 5, 32, 32));
     }
 
-    // ---- where cells are -----------------------------------------------------------------------------------------
-
     @Test
     void anIsometricMapIsADiamondWithCellZeroAtTheTop() {
         TileMap map = TileMap.isometric(4, 4, 64, 32);
@@ -196,8 +194,6 @@ class TileMapOrientationTest {
         assertThrows(UnsupportedOperationException.class, () -> TileMap.hexagonal(3, 3, 56, 64, 32, TileMap.StaggerAxis.Y, true).toTileY(10f));
     }
 
-    // ---- loading -------------------------------------------------------------------------------------------------
-
     private static String map(String attributes, int w, int h, int tw, int th, String data) {
         return """
                 {"type":"map",%s,"width":%d,"height":%d,"tilewidth":%d,"tileheight":%d,
@@ -264,8 +260,6 @@ class TileMapOrientationTest {
         assertTrue(e.getMessage().contains("triangular"), e.getMessage());
     }
 
-    // ---- tiles under a point and collision -----------------------------------------------------------------------
-
     @Test
     void thePointerFindsTheTileOfAnIsometricCell() throws IOException {
         // ids 1, 2, 3: green is tile 1, blue tile 2 in a 4 by 4 picture; 3 by 3 diamonds 8 by 4
@@ -309,8 +303,6 @@ class TileMapOrientationTest {
         float[] c = map.getCellCenter(1, 0);
         assertEquals(1, ground.getTileAt(c[0] + 100f, c[1]).getId());
     }
-
-    // ---- drawing -------------------------------------------------------------------------------------------------
 
     private static int pixel(Bitmap bmp, int x, int y) {
         return bmp.getColor(x, y);
@@ -396,8 +388,6 @@ class TileMapOrientationTest {
         assertEquals(2f, where[0], 1e-4, "odd rows are half a cell right");
         assertEquals(-1f, where[1], 1e-4);
     }
-
-    // ---- objects on an isometric map -----------------------------------------------------------------------------
 
     private TileMap isoObjects() throws IOException {
         return load("iso-objects.tmj", """

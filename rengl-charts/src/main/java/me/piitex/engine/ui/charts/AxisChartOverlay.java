@@ -51,8 +51,6 @@ public abstract class AxisChartOverlay extends ChartOverlay {
         this.beginAtZero = beginAtZero;
     }
 
-    // ---- series -------------------------------------------------------------------------------------------------
-
     /**
      * Adds a series. Its color comes from the palette unless it was given one. Returns it, so it can be changed later.
      */
@@ -94,8 +92,6 @@ public abstract class AxisChartOverlay extends ChartOverlay {
     public void clearSeries() {
         series.clear();
     }
-
-    // ---- axis ---------------------------------------------------------------------------------------------------
 
     public boolean isBeginAtZero() {
         return beginAtZero;
@@ -201,8 +197,6 @@ public abstract class AxisChartOverlay extends ChartOverlay {
     public double[] getAxisRange() {
         return value.range();
     }
-
-    // ---- time axis ----------------------------------------------------------------------------------------------
 
     private void requireLine() {
         if (categoriesInBands()) throw new UnsupportedOperationException("Only a line chart has a time axis");
@@ -358,8 +352,6 @@ public abstract class AxisChartOverlay extends ChartOverlay {
         return hash * 31 + (timed ? 1 : 0);
     }
 
-    // ---- what the chart types decide ----------------------------------------------------------------------------
-
     /**
      * The lowest and highest value of the visible series, as {low, high}, or null when there are none. On a log axis only
      * values {@linkplain #usable usable} on it count.
@@ -406,8 +398,6 @@ public abstract class AxisChartOverlay extends ChartOverlay {
     protected final boolean usable(double v) {
         return !Double.isNaN(v) && (!logAxis() || v > 0);
     }
-
-    // ---- geometry -----------------------------------------------------------------------------------------------
 
     /**
      * The value axis position of {@code value}, in chart coordinates: y for a vertical axis, x for a horizontal one. NaN
@@ -465,8 +455,6 @@ public abstract class AxisChartOverlay extends ChartOverlay {
     protected double epsilon() {
         return value.epsilon();
     }
-
-    // ---- layout -------------------------------------------------------------------------------------------------
 
     @Override
     protected void layoutPlot(float left, float top, float right, float bottom) {
@@ -544,8 +532,6 @@ public abstract class AxisChartOverlay extends ChartOverlay {
         value.ease(k);
         if (timed) time.ease(k);
     }
-
-    // ---- pointer ------------------------------------------------------------------------------------------------
 
     @Override
     protected void pointerMoved(double x, double y) {
@@ -633,8 +619,6 @@ public abstract class AxisChartOverlay extends ChartOverlay {
         ChartSeries s = series.get(seriesIndex);
         return new ChartHit(seriesIndex, category, s.getName(), categoryLabel(category), s.get(category));
     }
-
-    // ---- drawing ------------------------------------------------------------------------------------------------
 
     @Override
     protected void drawPlot(Renderer renderer) {

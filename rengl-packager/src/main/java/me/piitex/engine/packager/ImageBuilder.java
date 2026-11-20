@@ -221,8 +221,6 @@ final class ImageBuilder {
         Files.move(from, to);
     }
 
-    // ---- archives -------------------------------------------------------------------------------------------------
-
     /** Packs the image into one file to hand out: a {@code .zip} for Windows, a {@code .tar.gz} (with executable bits kept) for the others. */
     Path archive(Path image, Path outputDir) throws IOException {
         String base = app.name() + "-" + app.version() + "-" + platform.id();

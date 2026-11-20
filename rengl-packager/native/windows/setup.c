@@ -44,7 +44,6 @@
 #define PATHLEN 2048
 #define UNINSTALL_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
 
-/* ---- application data ---------------------------------------------------------------------------------------------- */
 
 static wchar_t appName[256] = L"App";
 static wchar_t appVersion[64];
@@ -73,8 +72,6 @@ typedef struct {
 static Entry *entries;
 static int entryCount;
 static size_t zipStart;        /* where the payload begins: the size of this program without it */
-
-/* ---- small helpers ------------------------------------------------------------------------------------------------- */
 
 static uint32_t rd16(const uint8_t *p) { return p[0] | (p[1] << 8); }
 static uint32_t rd32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t) p[3] << 24); }
@@ -196,7 +193,6 @@ static uint8_t *readFile(const wchar_t *path, size_t *size) {
     return data;
 }
 
-/* ---- inflate ------------------------------------------------------------------------------------------------------- */
 /* Raw deflate, with the code tables as direct lookups so that a few hundred megabytes unpack in seconds. */
 
 typedef struct { uint16_t t[1 << 15]; int bits; } Huff;
@@ -365,8 +361,6 @@ static uint32_t crc32(const uint8_t *p, size_t n) {
     return ~c;
 }
 
-/* ---- the payload --------------------------------------------------------------------------------------------------- */
-
 static int mapSelf(void) {
     GetModuleFileNameW(NULL, selfPath, PATHLEN);
     HANDLE f = CreateFileW(selfPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
@@ -489,8 +483,6 @@ static HKEY hive(int allUsers) {
     return allUsers ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
 }
 
-/* ---- registry and shortcuts ---------------------------------------------------------------------------------------- */
-
 static void regString(HKEY key, const wchar_t *name, const wchar_t *value) {
     RegSetValueExW(key, name, 0, REG_SZ, (const BYTE *) value, (DWORD) ((wcslen(value) + 1) * sizeof(wchar_t)));
 }
@@ -544,8 +536,6 @@ static void defaultDir(wchar_t *out, int allUsers) {
         swprintf(out, PATHLEN, L"%ls\\Programs\\%ls", base, appName);
     }
 }
-
-/* ---- Explorer's right-click menu and Open with --------------------------------------------------------------------- */
 
 #define CLASSES L"Software\\Classes\\"
 
@@ -659,8 +649,6 @@ static int removeShell(const char *text, size_t size, HKEY root) {
     }
     return any;
 }
-
-/* ---- installing ---------------------------------------------------------------------------------------------------- */
 
 #define WM_PROGRESS (WM_APP + 1)
 #define WM_FINISHED (WM_APP + 2)
@@ -907,8 +895,6 @@ static int install(Job *j) {
     return 1;
 }
 
-/* ---- uninstalling -------------------------------------------------------------------------------------------------- */
-
 /* Removes what uninstall.dat lists in dir. Returns 1 if everything went. */
 static int removeInstall(const wchar_t *dir, int silent, wchar_t *nameOut) {
     wchar_t path[PATHLEN], id[256] = L"", desktop[PATHLEN] = L"", menu[PATHLEN] = L"", scope[16] = L"";
@@ -1055,8 +1041,6 @@ static int runUninstaller(int silent, const wchar_t *removeDir) {
     CloseHandle(pi.hProcess);
     return 0;
 }
-
-/* ---- the wizard ---------------------------------------------------------------------------------------------------- */
 
 enum {
     ID_TITLE = 100, ID_SUB, ID_DESC, ID_DIRLABEL, ID_DIR, ID_BROWSE, ID_DESKTOP, ID_MENU, ID_ALLUSERS, ID_LAUNCH, ID_PROGRESS, ID_STATUS, ID_LINE
@@ -1278,8 +1262,6 @@ static int runWizard(int nShow) {
     return 0;
 }
 
-/* ---- the RenGL setup program --------------------------------------------------------------------------------------- */
-
 /*
  * When the payload carries a ui/ folder (setup.ini says ui=<launcher>), that folder is a small RenGL app-image whose window
  * is the installer you see. This program only unpacks it into the temp folder, runs it with
@@ -1450,8 +1432,6 @@ static int runUi(void) {
     }
     return code;
 }
-
-/* ---- entry --------------------------------------------------------------------------------------------------------- */
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdLine, int nShow) {
     int argc = 0;

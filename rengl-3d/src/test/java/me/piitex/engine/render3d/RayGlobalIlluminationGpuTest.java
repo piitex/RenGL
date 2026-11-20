@@ -230,8 +230,6 @@ class RayGlobalIlluminationGpuTest {
         return "rgb " + c[0] + ", " + c[1] + ", " + c[2];
     }
 
-    // ---- a red wall beside a floor ---------------------------------------------------------------------------------
-
     /**
      * A white floor with a tall red wall rising from it at x = 2.5, lit by a sun that shines on the floor and on the wall's face
      * toward it, and by nothing else: what tints the floor beside the wall can only be light bouncing off it.
@@ -291,8 +289,6 @@ class RayGlobalIlluminationGpuTest {
         });
     }
 
-    // ---- a glowing box ---------------------------------------------------------------------------------------------
-
     /** A white floor in the dark with a box that glows standing on it: the only light there is. */
     private static Scene3D glow(boolean gi) {
         Scene3D scene = new Scene3D();
@@ -331,8 +327,6 @@ class RayGlobalIlluminationGpuTest {
         });
     }
 
-    // ---- a roof ----------------------------------------------------------------------------------------------------
-
     /**
      * A white floor under a white sky, half of it covered by a roof: where the roof is, the sky is shut out, and the light that
      * comes in is what the sky gives the roof's underside, which the roof itself shuts out from.
@@ -367,8 +361,6 @@ class RayGlobalIlluminationGpuTest {
         });
     }
 
-    // ---- an open floor ---------------------------------------------------------------------------------------------
-
     /** A white floor under a flat ambient light and nothing else: all of it is indirect light, and nothing is in its way. */
     private static Scene3D open(boolean gi) {
         Scene3D scene = new Scene3D();
@@ -387,8 +379,6 @@ class RayGlobalIlluminationGpuTest {
             r.check("open: the floor is lit by the ambient light", Math.abs(c[0] - 187) < 14 && Math.abs(c[0] - c[2]) < 8, rgb(c));
         });
     }
-
-    // ---- all together ----------------------------------------------------------------------------------------------
 
     /** The red wall again, with every other ray traced effect on too. */
     private static Scene3D everything() {

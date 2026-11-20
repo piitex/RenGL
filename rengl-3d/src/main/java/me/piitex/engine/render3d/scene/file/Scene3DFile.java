@@ -68,8 +68,6 @@ public final class Scene3DFile {
     private Scene3DFile() {
     }
 
-    // --- Files -----------------------------------------------------------------------------------------------------
-
     /**
      * Reads a scene file, with pictures and models read from the working folder, and the animations its models are set
      * to play started.
@@ -225,8 +223,6 @@ public final class Scene3DFile {
         return new Scene3D();
     }
 
-    // --- Nodes -----------------------------------------------------------------------------------------------------
-
     /**
      * A node and everything in it as JSON, ready for {@link JsonWriter}.
      */
@@ -284,8 +280,6 @@ public final class Scene3DFile {
         return readNode(write(node), base);
     }
 
-    // --- Properties ------------------------------------------------------------------------------------------------
-
     private static <T> Map<String, Object> writeAll(List<SceneProperty<T>> properties, T target) {
         Map<String, Object> json = new LinkedHashMap<>();
         for (SceneProperty<T> property : properties) {
@@ -307,8 +301,6 @@ public final class Scene3DFile {
             throw where == null ? e : new IllegalArgumentException(where + ": " + e.getMessage(), e);
         }
     }
-
-    // --- Looking things up -----------------------------------------------------------------------------------------
 
     /**
      * The first node named {@code name} in the scene, or null. The nodes inside a model are not looked in: they are the
@@ -431,8 +423,6 @@ public final class Scene3DFile {
         return info == null || info.shape != Shape.TERRAIN ? null : info.heightmapProblem;
     }
 
-    // --- Loading models ahead of time ------------------------------------------------------------------------------
-
     /**
      * Reads the model file at {@code path} (in {@code base}, the project's folder) ahead of time, so that the next node
      * given that file shows it at once instead of waiting for it. A big model can take seconds to read, so call this on a
@@ -444,8 +434,6 @@ public final class Scene3DFile {
     public static void preloadModel(String path, Path base) throws IOException {
         SceneMeta.preloadModel(path, base);
     }
-
-    // --- Screens ---------------------------------------------------------------------------------------------------
 
     /**
      * The screen a node's material shows, or null if it has none. A loaded scene draws it again by itself; to use it, point
@@ -478,8 +466,6 @@ public final class Scene3DFile {
             if (screen != null) scene.addScreen(screen);
         });
     }
-
-    // --- Physics ---------------------------------------------------------------------------------------------------
 
     /**
      * The scene's joints, in order, to change, add to or take from; loading the scene to run it makes each into a real
@@ -524,8 +510,6 @@ public final class Scene3DFile {
         ScenePhysics.Built built = ScenePhysics.built(scene.getPhysics());
         return built == null ? null : built.joints.get(name);
     }
-
-    // --- Running ---------------------------------------------------------------------------------------------------
 
     // Lights that blink get an animation of their own, with the glow of the node they name, so a lamp and its bulb stay in step.
     // A glowing material with a pattern of its own blinks by itself, unless a light already blinks it.

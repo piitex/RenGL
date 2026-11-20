@@ -60,7 +60,6 @@ public final class VideoPlayer implements AutoCloseable {
     private final boolean useAudio;
     private final int audioChannels, audioRate;
 
-    // --- state shared with the decode thread, guarded by lock
     private final Object lock = new Object();
     private final ArrayDeque<VideoFrame> frames = new ArrayDeque<>();
     private long frameBytes;
@@ -77,7 +76,6 @@ public final class VideoPlayer implements AutoCloseable {
 
     private final Thread thread;
 
-    // --- render thread
     private final List<Runnable> finishListeners = new ArrayList<>();
     private final List<Runnable> loopListeners = new ArrayList<>();
     private final List<Consumer<Throwable>> errorListeners = new ArrayList<>();
@@ -134,8 +132,6 @@ public final class VideoPlayer implements AutoCloseable {
         return open(new File(path));
     }
 
-    // ------------------------------------------------------------------ what the file is
-
     public File getFile() {
         return file;
     }
@@ -166,8 +162,6 @@ public final class VideoPlayer implements AutoCloseable {
     public boolean hasAudio() {
         return useAudio;
     }
-
-    // ------------------------------------------------------------------ playback
 
     /**
      * Starts or resumes playing. After the end of a video this starts it again from the beginning.
@@ -375,8 +369,6 @@ public final class VideoPlayer implements AutoCloseable {
         }
     }
 
-    // ------------------------------------------------------------------ per frame
-
     /**
      * Moves playback on by {@code delta} seconds and picks the picture to show. Call it once per frame on the render
      * thread.
@@ -522,8 +514,6 @@ public final class VideoPlayer implements AutoCloseable {
         return Math.max(0, shownPts - passStart);
     }
 
-    // ------------------------------------------------------------------ cleanup
-
     private void stopAudio() {
         if (playback != null) {
             playback.stop();
@@ -554,8 +544,6 @@ public final class VideoPlayer implements AutoCloseable {
             Thread.currentThread().interrupt();
         }
     }
-
-    // ------------------------------------------------------------------ shared queues (lock held)
 
     /** How many decoded pictures are waiting. For tests, to check the queue stays bounded. */
     int queuedFrames() {
@@ -644,8 +632,6 @@ public final class VideoPlayer implements AutoCloseable {
         public void close() {
         }
     }
-
-    // ------------------------------------------------------------------ the decode thread
 
     private final class Decoding implements Runnable {
         private final Demuxer demuxer;

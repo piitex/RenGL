@@ -133,8 +133,6 @@ public class ResizableContainer extends Container {
         super(x, y, width, height);
     }
 
-    // ------------------------------------------------------------------------------------------ limits
-
     /**
      * The smallest size this container will shrink to. 0 (the default) means no minimum. Applies right away.
      */
@@ -168,8 +166,6 @@ public class ResizableContainer extends Container {
     public double getMaxHeight() {
         return maxHeight;
     }
-
-    // ------------------------------------------------------------------------------------------ what scales
 
     /**
      * Whether children are scaled along with this container (default true).
@@ -215,8 +211,6 @@ public class ResizableContainer extends Container {
     public boolean isFixedSize(Element element) {
         return fixedSize.contains(element);
     }
-
-    // ------------------------------------------------------------------------------------------ following the window
 
     /**
      * Whether this container tracks the window's size (default true). See the class docs.
@@ -295,8 +289,6 @@ public class ResizableContainer extends Container {
         applyBounds(x, y, width, height);
         hasReference = true; // applyBounds drops it; this resize came from the reference itself
     }
-
-    // ------------------------------------------------------------------------------------------ dragging
 
     /**
      * Lets the user resize this container by dragging its four corners (true), or turns that off (false). Use
@@ -463,8 +455,6 @@ public class ResizableContainer extends Container {
             renderer.drawQuad(hx, hy, hw, hh, handle == highlighted ? HANDLE_COLOR_ACTIVE : HANDLE_COLOR, 0f);
         }
     }
-
-    // ------------------------------------------------------------------------------------------ scaling
 
     /**
      * Moves/resizes this container to the given bounds (size clamped to the limits), carrying the children

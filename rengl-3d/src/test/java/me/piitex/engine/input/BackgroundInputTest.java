@@ -214,8 +214,6 @@ class BackgroundInputTest {
         assertEquals(List.of("exited"), events);
     }
 
-    // ---- backgrounds that are taken away, and layers ---------------------------------------------------------------
-
     private static final class Probe implements me.piitex.engine.ui.background.Background {
         final String name;
         final List<String> log;

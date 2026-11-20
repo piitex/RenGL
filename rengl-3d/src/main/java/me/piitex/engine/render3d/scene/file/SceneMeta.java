@@ -161,8 +161,6 @@ final class SceneMeta {
         };
     }
 
-    // --- Rotation -------------------------------------------------------------------------------------------------
-
     static Vec3 euler(Node3D node) {
         NodeInfo info = node(node);
         if (info.euler == null || !Euler.same(Euler.toQuat(info.euler), node.getRotation())) info.euler = Euler.of(node.getRotation());
@@ -173,8 +171,6 @@ final class SceneMeta {
         node(node).euler = degrees;
         node.setRotation(Euler.toQuat(degrees));
     }
-
-    // --- Shapes and models ----------------------------------------------------------------------------------------
 
     /** Whether a node of this shape draws a mesh of its own that the file describes, so its material is the file's too. */
     static boolean drawsMesh(Shape shape) {
@@ -257,8 +253,6 @@ final class SceneMeta {
         info.base = base;
         rebuild(node);
     }
-
-    // --- Prefabs --------------------------------------------------------------------------------------------------
 
     private static final ThreadLocal<java.util.Set<Path>> LOADING = ThreadLocal.withInitial(java.util.HashSet::new);
 
@@ -382,8 +376,6 @@ final class SceneMeta {
         }
     }
 
-    // --- Textures -------------------------------------------------------------------------------------------------
-
     static void setTexture(Material material, int slot, String path, Path base) {
         MaterialInfo info = material(material);
         info.textures[slot] = path;
@@ -404,8 +396,6 @@ final class SceneMeta {
         }
         material.setPbr(pbr);
     }
-
-    // --- Screens ---------------------------------------------------------------------------------------------------
 
     static void setScreen(Material material, String path, Path base) {
         MaterialInfo info = material(material);
@@ -497,8 +487,6 @@ final class SceneMeta {
     private static boolean near(float a, float b) {
         return Math.abs(a - b) < 1e-4f;
     }
-
-    // --- Sky ------------------------------------------------------------------------------------------------------
 
     /** Makes the scene's skybox again from what it was told, after any of it changed. */
     static void rebuildSky(Scene3D scene, Path base) {

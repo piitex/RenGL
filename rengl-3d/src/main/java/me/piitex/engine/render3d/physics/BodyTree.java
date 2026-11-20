@@ -209,8 +209,6 @@ final class BodyTree {
         validate(b, count);
     }
 
-    // ---- Building ---------------------------------------------------------------------------------------------------
-
     private static boolean finite(Bounds b) {
         return Float.isFinite(b.min().x()) && Float.isFinite(b.min().y()) && Float.isFinite(b.min().z())
                 && Float.isFinite(b.max().x()) && Float.isFinite(b.max().y()) && Float.isFinite(b.max().z());

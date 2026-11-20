@@ -188,8 +188,6 @@ class RayShadowGpuTest {
         return scene;
     }
 
-    // ---- a sun -----------------------------------------------------------------------------------------------------
-
     /**
      * A sun from the left with a pillar at x = -6: its shadow falls to the right of the pillar.
      */
@@ -217,8 +215,6 @@ class RayShadowGpuTest {
         });
     }
 
-    // ---- a spot light ----------------------------------------------------------------------------------------------
-
     private static Scene3D spot() {
         Scene3D scene = base();
         scene.lights().add(Light.spot(new Vec3(6, 6, 0), new Vec3(0, -1, 0), Color.WHITE, 3f, 20f, 35f, 45f).setCastShadow(true));
@@ -233,8 +229,6 @@ class RayShadowGpuTest {
             r.check("spot: the shadow falls around the pillar", shadowed < lit * 0.6 && lit > 400, "shadowed " + shadowed + " lit " + lit);
         });
     }
-
-    // ---- a point light ---------------------------------------------------------------------------------------------
 
     private static Scene3D pointRoom() {
         Scene3D scene = base();
@@ -267,8 +261,6 @@ class RayShadowGpuTest {
         }
     }
 
-    // ---- a node that moves -----------------------------------------------------------------------------------------
-
     /** From the fourth frame on the pillar stands at x = 6 instead of x = -6. */
     private static void movePillar(Scene3D scene, int frame) {
         if (frame < 4) return;
@@ -287,8 +279,6 @@ class RayShadowGpuTest {
             r.check("moving: the old shadow is gone", Math.abs(old - open) < Math.max(20, open * 0.15), "old place " + old + " open " + open);
         });
     }
-
-    // ---- instances -------------------------------------------------------------------------------------------------
 
     private static Scene3D instanced() {
         Scene3D scene = base();

@@ -137,8 +137,6 @@ public final class WebViewSelfCheck {
         System.exit(code[0]);
     }
 
-    // ------------------------------------------------------------------------------------------------ steps
-
     private int runAll() {
         step("starts", () -> {
             backend = WebViews.create(options, new WebViewBackend.Listener() {
@@ -378,8 +376,6 @@ public final class WebViewSelfCheck {
         System.out.printf(Locale.ROOT, "          (%.1f pictures a second at %dx%d)%n", fps, width, height);
         check(fps >= 3, "fewer than 3 pictures a second: " + fps);
     }
-
-    // ------------------------------------------------------------------------------------------------ helpers
 
     private void step(String name, Step step) {
         long t0 = System.nanoTime();

@@ -160,8 +160,6 @@ final class Ffx {
         return Files.isRegularFile(loader.resolveSibling(FRAME_GENERATION));
     }
 
-    // ---- the five functions -------------------------------------------------------------------------------------
-
     private int call(MethodHandle function, MemorySegment... arguments) {
         try {
             return switch (arguments.length) {
@@ -199,8 +197,6 @@ final class Ffx {
         return call(configure, context, description);
     }
 
-    // ---- messages from the library ------------------------------------------------------------------------------
-
     private static MemorySegment messageCallback;
 
     private static void onMessage(int type, MemorySegment message) {
@@ -221,8 +217,6 @@ final class Ffx {
         }
         return messageCallback;
     }
-
-    // ---- the structs --------------------------------------------------------------------------------------------
 
     /**
      * A {@code VkDeviceContext}: the device, the GPU and the address of {@code vkGetDeviceProcAddr}.
@@ -309,8 +303,6 @@ final class Ffx {
                 .u32(resourceUsage(image.usage()))
                 .u32(state).end();
     }
-
-    // ---- a context ----------------------------------------------------------------------------------------------
 
     /**
      * One version of the upscaler the library offers.

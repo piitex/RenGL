@@ -272,8 +272,6 @@ class LinuxMediaSourceTest {
         assertEquals("Audio", LinuxMediaSource.codecName("  ", false));
     }
 
-    // ------------------------------------------------------------------ the parts of the pipeline that are not native calls
-
     @Test
     void aPathBecomesAFileAddress() {
         String uri = GstPipeline.uriOf(new File("clips/a b.mp4").getAbsoluteFile());

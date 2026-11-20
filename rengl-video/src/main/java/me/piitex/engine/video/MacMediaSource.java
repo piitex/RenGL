@@ -100,8 +100,6 @@ final class MacMediaSource implements Demuxer {
         }
     }
 
-    // ------------------------------------------------------------------ the asset
-
     private MemorySegment firstTrack(Arena a, String type) {
         MemorySegment tracks = ObjC.id(asset, "tracksWithMediaType:", ObjC.string(a, type));
         if (ObjC.isNull(tracks) || ObjC.lng(tracks, "count") == 0) return null;
@@ -142,8 +140,6 @@ final class MacMediaSource implements Demuxer {
             default -> code.trim();
         };
     }
-
-    // ------------------------------------------------------------------ the reader
 
     private void startReader(double from, Arena a) throws IOException {
         stopReader();
@@ -196,8 +192,6 @@ final class MacMediaSource implements Demuxer {
         }
         reader = videoOut = audioOut = null;
     }
-
-    // ------------------------------------------------------------------ Demuxer
 
     @Override
     public MediaInfo info() {

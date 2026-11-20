@@ -94,8 +94,6 @@ final class VkRay {
         }
     }
 
-    // ---- bottom level ----------------------------------------------------------------------------------------------
-
     RayGeometry geometry(float[] vertices, int vertexCount, int floatsPerVertex, int[] indices) {
         if (vertexCount <= 0 || indices.length < 3) throw new IllegalArgumentException("A ray geometry needs triangles");
         if (floatsPerVertex < 3) throw new IllegalArgumentException("A vertex holds at least a position");
@@ -196,8 +194,6 @@ final class VkRay {
             });
         }
     }
-
-    // ---- top level -------------------------------------------------------------------------------------------------
 
     RayScene scene(int capacity) {
         return new Scene(Math.max(1, capacity));

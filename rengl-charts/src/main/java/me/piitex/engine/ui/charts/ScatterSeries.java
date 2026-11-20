@@ -35,8 +35,6 @@ public class ScatterSeries extends ChartSeries {
         setPoints(xs, ys, sizes);
     }
 
-    // ---- points -------------------------------------------------------------------------------------------------
-
     /**
      * Replaces every point. The chart eases from where the points were.
      */
@@ -128,8 +126,6 @@ public class ScatterSeries extends ChartSeries {
         return this;
     }
 
-    // ---- what a point does not allow ----------------------------------------------------------------------------
-
     @Override
     public ChartSeries setValues(double... values) {
         throw new UnsupportedOperationException("A scatter series has points: use setPoints or add(x, y)");
@@ -144,8 +140,6 @@ public class ScatterSeries extends ChartSeries {
     public ChartSeries add(double value) {
         throw new UnsupportedOperationException("A scatter series has points: use add(x, y)");
     }
-
-    // ---- easing -------------------------------------------------------------------------------------------------
 
     double shownX(int index) {
         return index >= 0 && index < shownXs.length ? shownXs[index] : Double.NaN;

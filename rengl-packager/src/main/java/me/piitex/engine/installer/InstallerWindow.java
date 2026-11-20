@@ -255,8 +255,6 @@ final class InstallerWindow {
                 .start();
     }
 
-    // ---- small builders -------------------------------------------------------------------------------------------
-
     /** Body text, in whatever the current theme uses for it (the page is built after the theme is set). */
     private static Color ink() {
         return ThemeManager.getCurrent().getText();

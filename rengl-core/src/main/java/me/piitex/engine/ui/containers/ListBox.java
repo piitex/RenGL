@@ -402,8 +402,6 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
         notifyAccessibleChange();
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.LIST;

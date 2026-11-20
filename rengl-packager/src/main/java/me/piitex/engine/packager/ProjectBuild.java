@@ -151,8 +151,6 @@ final class ProjectBuild {
         build(project, home, settings(project, given));
     }
 
-    // ---- settings -------------------------------------------------------------------------------------------------
-
     /** {@code Name}, {@code main-class} or {@code mainclass} to {@code mainClass}; anything else as it was, lower case. */
     private static String canonical(String key) {
         String plain = key.replace("-", "").replace("_", "").toLowerCase(Locale.ROOT);
@@ -212,8 +210,6 @@ final class ProjectBuild {
         List<String> values = settings.get(key);
         return values == null || values.isEmpty() ? fallback : values.getLast();
     }
-
-    // ---- the build ------------------------------------------------------------------------------------------------
 
     private static void build(Path project, Path home, Map<String, List<String>> settings) throws Exception {
         String name = single(settings, "name", "");
@@ -371,8 +367,6 @@ final class ProjectBuild {
         }
     }
 
-    // ---- -Init ----------------------------------------------------------------------------------------------------
-
     private static void init(Path project, Path home) throws IOException {
         Path config = project.resolve(CONFIG_NAME);
         Path launcher = project.resolve(WINDOWS ? "package.cmd" : "package.sh");
@@ -506,8 +500,6 @@ final class ProjectBuild {
         Matcher m = Pattern.compile(regex).matcher(text);
         return m.find() ? m.group(1) : "";
     }
-
-    // ---- tools ----------------------------------------------------------------------------------------------------
 
     /**
      * The RenGL folder: as the scripts pass it, else RENGL_HOME, else the folder this jar was built in (its

@@ -162,8 +162,6 @@ class LodGeneratorTest {
         assertEquals(faceMiddle, m.getLods().level(1).error(), faceMiddle * 0.15f);
     }
 
-    // ---- model files --------------------------------------------------------------------------------------------
-
     @Test
     void nodesNamedLikeUnitysLevelsBecomeAChain() throws IOException {
         Gltf file = new Gltf();

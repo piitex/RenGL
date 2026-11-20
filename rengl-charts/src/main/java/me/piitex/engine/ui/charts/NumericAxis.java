@@ -37,8 +37,6 @@ final class NumericAxis {
     private List<Tick> ticks = List.of();
     private DateTimeFormatter tickFormat;
 
-    // ---- settings -----------------------------------------------------------------------------------------------
-
     /**
      * Sets what the axis is asked to be. Changing the scale makes the axis jump to its new range instead of easing there.
      *
@@ -70,8 +68,6 @@ final class NumericAxis {
     List<Tick> ticks() {
         return ticks;
     }
-
-    // ---- fitting ------------------------------------------------------------------------------------------------
 
     /**
      * Works out the range and the ticks for data from {@code low} to {@code high} (real units; NaN when there is none), with
@@ -223,8 +219,6 @@ final class NumericAxis {
         }
         return widest;
     }
-
-    // ---- easing and reading -------------------------------------------------------------------------------------
 
     /** Moves the drawn range toward the one the data asks for. */
     void ease(float k) {

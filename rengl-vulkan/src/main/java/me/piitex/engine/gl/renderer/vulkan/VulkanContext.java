@@ -204,8 +204,6 @@ public final class VulkanContext implements RenderBackend.Context {
         return VK_NULL_HANDLE;
     }
 
-    // ---- handles Skia needs -------------------------------------------------------------------------------------
-
     /**
      * The LWJGL objects behind the raw handles below, for the optional 3D layer, which records its own Vulkan work on
      * this device and queue.
@@ -898,8 +896,6 @@ public final class VulkanContext implements RenderBackend.Context {
         }
     }
 
-    // ---- swapchain ----------------------------------------------------------------------------------------------
-
     private void recreateSwapchain(MemoryStack stack) {
         frameEvent(VulkanExtensionProvider.FrameEvent.SWAPCHAIN_CHANGING);
         vkDeviceWaitIdle(device); // Skia may still be using the old images
@@ -1059,8 +1055,6 @@ public final class VulkanContext implements RenderBackend.Context {
             default -> "FIFO";
         };
     }
-
-    // ---- recording ----------------------------------------------------------------------------------------------
 
     private void record(MemoryStack stack, VkCommandBuffer cmd, long image, int oldLayout, int newLayout,
                         int srcStage, int dstStage, int srcAccess, int dstAccess) {

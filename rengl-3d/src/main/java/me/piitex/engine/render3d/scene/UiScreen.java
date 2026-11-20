@@ -573,8 +573,6 @@ public final class UiScreen implements AutoCloseable, PopupHost {
         return false;
     }
 
-    // ---- popups ---------------------------------------------------------------------------------------------------
-
     /**
      * Opens {@code popup} over the container, closing any popup that is open. Done by the elements that have popups (a dropdown,
      * a menu), not by the game; see {@link PopupHost}.

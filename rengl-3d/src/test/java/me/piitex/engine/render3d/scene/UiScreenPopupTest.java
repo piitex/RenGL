@@ -44,8 +44,6 @@ class UiScreenPopupTest {
         return root;
     }
 
-    // ---- dragging -----------------------------------------------------------------------------------------------
-
     private static final class Card extends Container {
         int starts, updates, ends;
         double lastEndX = Double.NaN;
@@ -196,8 +194,6 @@ class UiScreenPopupTest {
         }
     }
 
-    // ---- dropdown lists -----------------------------------------------------------------------------------------
-
     private static DropdownOverlay<String> dropdown(Container root, double x, double y, String... items) {
         DropdownOverlay<String> box = new DropdownOverlay<>(100, 24);
         box.setPosition(x, y);
@@ -346,8 +342,6 @@ class UiScreenPopupTest {
         }
     }
 
-    // ---- context menus ------------------------------------------------------------------------------------------
-
     @Test
     void aRightPressOpensTheContextMenuAtThePointer() {
         Container root = root();
@@ -426,8 +420,6 @@ class UiScreenPopupTest {
         }
     }
 
-    // ---- pickers ------------------------------------------------------------------------------------------------
-
     @Test
     void aColorPickerOpensItsPanelInsideTheScreen() {
         Container big = new Container(500, 500); // the panel is nearly as big as the small screens of the other tests
@@ -452,8 +444,6 @@ class UiScreenPopupTest {
             assertFalse(picker.isOpen(), "a press outside closes it");
         }
     }
-
-    // ---- the pointer while drawing -----------------------------------------------------------------------------
 
     @Test
     void whatDrawsOnTheScreenIsToldWhereThePointerIsOnIt() {

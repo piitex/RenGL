@@ -49,8 +49,6 @@ class WindowsDragDropTest {
         return Path.of(System.getProperty("java.io.tmpdir"), name).toAbsolutePath();
     }
 
-    // ---- calling COM objects ------------------------------------------------------------------------------------
-
     private static int call(MemorySegment object, int slot, FunctionDescriptor descriptor, Object... arguments) throws Throwable {
         MemorySegment table = object.reinterpret(8).get(ADDRESS, 0).reinterpret(8L * (slot + 1));
         Object[] all = new Object[arguments.length + 2];
@@ -77,8 +75,6 @@ class WindowsDragDropTest {
         return ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN).putInt(d1).putShort((short) 0).putShort((short) 0)
                 .put(new byte[]{(byte) 0xC0, 0, 0, 0, 0, 0, 0, 0x46}).array();
     }
-
-    // ---- the files being dragged out ----------------------------------------------------------------------------
 
     @Test
     void theFilesAreMadeOnlyWhenSomeoneAsksForThem() throws Throwable {
@@ -172,8 +168,6 @@ class WindowsDragDropTest {
             source.release();
         }
     }
-
-    // ---- the window as a drop target ----------------------------------------------------------------------------
 
     /** The few user32 calls the window test needs. */
     private static final class User32 {

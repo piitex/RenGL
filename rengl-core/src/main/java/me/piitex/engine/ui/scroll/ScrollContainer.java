@@ -298,8 +298,6 @@ public class ScrollContainer extends Container implements Scrollable {
         return Math.max(margin, radius - Math.sqrt(radius * radius - dx * dx));
     }
 
-    // --- Vertical scrollbar geometry -------------------------------------------------------------
-
     private double verticalTrackX() {
         return getX() + getWidth() - scrollBarStyle.getThickness() - scrollBarStyle.getMargin();
     }
@@ -333,8 +331,6 @@ public class ScrollContainer extends Container implements Scrollable {
         return px >= x && px <= x + w && py >= y && py <= y + h;
     }
 
-    // --- Horizontal scrollbar geometry -----------------------------------------------------------
-
     private double horizontalTrackX() {
         return getX() + trackEndInset();
     }
@@ -367,8 +363,6 @@ public class ScrollContainer extends Container implements Scrollable {
         double x = horizontalThumbX(), y = horizontalTrackY(), w = horizontalThumbLength(), h = scrollBarStyle.getThickness();
         return px >= x && px <= x + w && py >= y && py <= y + h;
     }
-
-    // --- Thumb dragging --------------------------------------------------------------------------
 
     /**
      * Checks for a press on either scrollbar thumb first; falls back to {@link
@@ -447,8 +441,6 @@ public class ScrollContainer extends Container implements Scrollable {
         }
         super.onDragEnd(x, y);
     }
-
-    // --- Rendering -------------------------------------------------------------------------------
 
     @Override
     public void render(Renderer renderer) {

@@ -49,8 +49,6 @@ public class ScatterChartOverlay extends ChartOverlay {
         super(width, height);
     }
 
-    // ---- series -------------------------------------------------------------------------------------------------
-
     /**
      * Adds a series. Returns it, so points can be added later.
      */
@@ -105,8 +103,6 @@ public class ScatterChartOverlay extends ChartOverlay {
     public void clearSeries() {
         series.clear();
     }
-
-    // ---- axes ---------------------------------------------------------------------------------------------------
 
     public AxisScale getXScale() {
         return xScale;
@@ -224,8 +220,6 @@ public class ScatterChartOverlay extends ChartOverlay {
         return yAxis.range();
     }
 
-    // ---- points -------------------------------------------------------------------------------------------------
-
     public float getMarkerRadius() {
         return markerRadius;
     }
@@ -255,8 +249,6 @@ public class ScatterChartOverlay extends ChartOverlay {
         double share = Math.sqrt(size / largestSize);
         return (float) (bubbleMin + (bubbleMax - bubbleMin) * Math.min(1.0, share));
     }
-
-    // ---- layout -------------------------------------------------------------------------------------------------
 
     @Override
     public int categoryCount() {
@@ -349,8 +341,6 @@ public class ScatterChartOverlay extends ChartOverlay {
         yAxis.ease(k);
     }
 
-    // ---- geometry -----------------------------------------------------------------------------------------------
-
     private float px(double x) {
         double t = xAxis.fraction(x);
         return Double.isNaN(t) ? Float.NaN : (float) (plotX + t * plotW);
@@ -378,8 +368,6 @@ public class ScatterChartOverlay extends ChartOverlay {
     public float pointRadius(int seriesIndex, int point) {
         return radius((ScatterSeries) series.get(seriesIndex), point);
     }
-
-    // ---- pointer ------------------------------------------------------------------------------------------------
 
     @Override
     protected void pointerMoved(double x, double y) {
@@ -428,8 +416,6 @@ public class ScatterChartOverlay extends ChartOverlay {
         DoubleFunction<String> format = xFormat;
         return format != null ? format.apply(x) : ChartFormat.plain(x);
     }
-
-    // ---- drawing ------------------------------------------------------------------------------------------------
 
     @Override
     protected void drawPlot(Renderer renderer) {

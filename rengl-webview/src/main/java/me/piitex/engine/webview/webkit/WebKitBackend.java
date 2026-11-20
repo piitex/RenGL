@@ -87,8 +87,6 @@ public abstract class WebKitBackend implements WebViewBackend {
         return closed;
     }
 
-    // ------------------------------------------------------------------------------------------------ what a toolkit provides
-
     /** Runs {@code task} on the toolkit's thread, later or at once if already there. Callable from any thread; must not block. */
     protected abstract void runOnUiThread(Runnable task);
 
@@ -152,8 +150,6 @@ public abstract class WebKitBackend implements WebViewBackend {
     /** Frees everything. Runs once, on the UI thread, after the last command. */
     protected abstract void shutdown();
 
-    // ------------------------------------------------------------------------------------------------ plumbing
-
     /** Queues a command for the UI thread. */
     protected final void post(Runnable command) {
         if (closed) return;
@@ -195,8 +191,6 @@ public abstract class WebKitBackend implements WebViewBackend {
         log.warn("Web view: {}", reason);
         listener.onFailed(reason);
     }
-
-    // ------------------------------------------------------------------------------------------------ the periodic work
 
     /** The subclass calls this about every 40 ms on the UI thread. */
     protected final void tick() {
@@ -290,8 +284,6 @@ public abstract class WebKitBackend implements WebViewBackend {
         });
     }
 
-    // ------------------------------------------------------------------------------------------------ navigation rules
-
     /** Whether an address is one a web view loads itself. Anything else (mailto:, an app's own scheme) is never loaded. */
     public static boolean isWebScheme(String url) {
         if (url == null) return false;
@@ -347,8 +339,6 @@ public abstract class WebKitBackend implements WebViewBackend {
         return permission != null && options.getPermissions().contains(permission);
     }
 
-    // ------------------------------------------------------------------------------------------------ WebViewBackend: navigation
-
     @Override
     public void navigate(String url) {
         if (!options.allows(url)) {
@@ -389,8 +379,6 @@ public abstract class WebKitBackend implements WebViewBackend {
         submit(this::goForwardNow);
     }
 
-    // ------------------------------------------------------------------------------------------------ WebViewBackend: display
-
     @Override
     public void resize(int w, int h) {
         int fw = Math.max(1, w), fh = Math.max(1, h);
@@ -411,8 +399,6 @@ public abstract class WebKitBackend implements WebViewBackend {
         lastSeen = now;
         if (wasHidden) post(() -> pacer.shownAgain(System.nanoTime()));
     }
-
-    // ------------------------------------------------------------------------------------------------ WebViewBackend: input
 
     @Override
     public void pointerMove(double x, double y, int buttons, int mods) {
@@ -489,8 +475,6 @@ public abstract class WebKitBackend implements WebViewBackend {
         });
     }
 
-    // ------------------------------------------------------------------------------------------------ WebViewBackend: script
-
     @Override
     public void execute(String script, Consumer<String> result) {
         submit(() -> evaluateRaw(WebKitJs.wrapForJson(script), result));
@@ -501,8 +485,6 @@ public abstract class WebKitBackend implements WebViewBackend {
         if (!options.isScriptBridge()) return;
         submit(() -> evaluateRaw(WebKitJs.deliver(json), null));
     }
-
-    // ------------------------------------------------------------------------------------------------ closing
 
     @Override
     public void close() {

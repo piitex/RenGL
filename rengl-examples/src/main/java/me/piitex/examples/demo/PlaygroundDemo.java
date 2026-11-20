@@ -203,8 +203,6 @@ public class PlaygroundDemo {
             updateStats();
         }
 
-        // ---- The course ---------------------------------------------------------------------------------------
-
         /** Stairs up to a tower, a rope bridge to a second tower, and a ramp back down. */
         private void stairsAndBridge() {
             Color stone = new Color(0.62f, 0.6f, 0.56f, 1f);

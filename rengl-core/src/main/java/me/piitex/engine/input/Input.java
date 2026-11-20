@@ -72,8 +72,6 @@ public final class Input {
         for (int i = 0; i < buttons.length; i++) buttons[i] = new PressState();
     }
 
-    // ---------------------------------------------------------------- keys
-
     /**
      * True while {@code key} (a {@code GLFW_KEY_*} code) is held.
      */
@@ -128,8 +126,6 @@ public final class Input {
     void trackModifier(int key, boolean down) {
         if (modifierBit(key) != 0) modifiersHeld[key] = down;
     }
-
-    // ---------------------------------------------------------------- mouse
 
     /**
      * True while {@code button} ({@code GLFW_MOUSE_BUTTON_*}) is held.
@@ -217,8 +213,6 @@ public final class Input {
         return any.justPressed(frame);
     }
 
-    // ---------------------------------------------------------------- contexts
-
     /**
      * Adds a context that is active whatever scene is showing, such as one for a screenshot or fullscreen key. The
      * window's contexts get presses before every scene's, the last added first.
@@ -251,8 +245,6 @@ public final class Input {
         return active;
     }
 
-    // ---------------------------------------------------------------- rebinding
-
     /**
      * Hands the next key, mouse button or wheel turn to {@code onBound} as a {@link Binding}, for a "press a key"
      * prompt in a controls menu. It comes before everything else, the interface included, so every key can be bound,
@@ -278,8 +270,6 @@ public final class Input {
     public boolean isListening() {
         return bindingListener != null;
     }
-
-    // ---------------------------------------------------------------- controllers
 
     private final Gamepad[] pads = new Gamepad[Gamepads.MAX];
     private final List<Gamepad.Listener> padListeners = new ArrayList<>();
@@ -545,8 +535,6 @@ public final class Input {
         int source = Binding.padSource(edge.pad().getIndex(), edge.device(), edge.code());
         for (InputContext context : active) context.release(source, frame);
     }
-
-    // ---------------------------------------------------------------- fed by InputProcessor
 
     /**
      * The start of a frame's input.

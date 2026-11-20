@@ -281,8 +281,6 @@ public final class BackgroundKinds {
         return new Setting(name, label, type, b -> get.apply(owner.cast(b)), (b, v) -> set.accept(owner.cast(b), type.cast(v)));
     }
 
-    // --- The kinds ------------------------------------------------------------------------------------------------
-
     /** Every kind, in the order a tool lists them. */
     public static List<Kind> all() {
         synchronized (byId) {
@@ -313,8 +311,6 @@ public final class BackgroundKinds {
             byId.put(kind.id, kind);
         }
     }
-
-    // --- Reading and writing --------------------------------------------------------------------------------------
 
     /**
      * The background as settings: its {@code "type"} and every setting it has. Null for one of another class, which

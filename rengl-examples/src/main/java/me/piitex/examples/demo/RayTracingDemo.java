@@ -398,8 +398,6 @@ public class RayTracingDemo {
             for (int i = 0; i < numbers.length; i++) numbers[i].setText(lines[i]);
         }
 
-        // ---- the controls ------------------------------------------------------------------------------------------
-
         /**
          * Fills the panel; returns how far down it goes.
          */

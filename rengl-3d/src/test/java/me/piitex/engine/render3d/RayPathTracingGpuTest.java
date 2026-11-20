@@ -230,8 +230,6 @@ class RayPathTracingGpuTest {
         return "rgb " + c[0] + ", " + c[1] + ", " + c[2];
     }
 
-    // ---- a closed room with a lamp ---------------------------------------------------------------------------------
-
     private static void slab(Scene3D scene, String name, float x, float y, float z, float sx, float sy, float sz) {
         Node3D node = new Node3D(name, Mesh.cube(1f), new Material(Color.WHITE).setRoughness(0.9f));
         node.setPosition(x, y, z);
@@ -290,8 +288,6 @@ class RayPathTracingGpuTest {
         });
     }
 
-    // ---- a red wall beside a floor ---------------------------------------------------------------------------------
-
     /**
      * A white floor with a tall red wall rising from it at x = 2.5, lit by a sun that shines on the floor and on the wall's face
      * toward it, and by nothing else: what tints the floor beside the wall can only be light bouncing off it. Path traced, or
@@ -345,8 +341,6 @@ class RayPathTracingGpuTest {
         });
     }
 
-    // ---- a roof ----------------------------------------------------------------------------------------------------
-
     /**
      * A white floor under a white sky, half of it covered by a roof: where the roof is, the sky is shut out, and what light
      * comes in is what the sky gives the roof's underside, which the roof itself shuts out from.
@@ -377,8 +371,6 @@ class RayPathTracingGpuTest {
         });
     }
 
-    // ---- an open floor ---------------------------------------------------------------------------------------------
-
     /** A white floor under a flat ambient light and nothing else: all of it is indirect light, and nothing is in its way. */
     private static Scene3D open() {
         Scene3D scene = new Scene3D();
@@ -397,8 +389,6 @@ class RayPathTracingGpuTest {
             r.check("open: the floor is lit by the ambient light", Math.abs(c[0] - 187) < 14 && Math.abs(c[0] - c[2]) < 8, rgb(c));
         });
     }
-
-    // ---- all together ----------------------------------------------------------------------------------------------
 
     /** The red wall again, drawn at half size and enlarged by the built-in temporal upscaler, which jitters the camera. */
     private static Scene3D upscaled() {

@@ -147,8 +147,6 @@ public class WebViewOverlay extends Overlay implements Focusable, PointerInput {
         return options;
     }
 
-    // ------------------------------------------------------------------------------------------------ navigation
-
     /**
      * Opens an address. Allowed only if it passes {@link WebViewOptions#allowHost}; otherwise the blocked-navigation
      * listener hears of it. Without a scheme, {@code https://} is assumed.
@@ -226,8 +224,6 @@ public class WebViewOverlay extends Overlay implements Focusable, PointerInput {
         return failure;
     }
 
-    // ------------------------------------------------------------------------------------------------ script and policy
-
     /**
      * Runs JavaScript in the page. {@code result} is called on the render thread with the value as JSON (a string comes
      * back quoted), or null if the script failed. Not available before the browser is ready.
@@ -267,8 +263,6 @@ public class WebViewOverlay extends Overlay implements Focusable, PointerInput {
         redirects.add(new Redirect(uriPrefix, handler));
         return this;
     }
-
-    // ------------------------------------------------------------------------------------------------ listeners
 
     public WebViewOverlay onUrlChanged(Consumer<String> listener) {
         this.urlListener = listener;
@@ -314,8 +308,6 @@ public class WebViewOverlay extends Overlay implements Focusable, PointerInput {
         this.readyListener = listener;
         return this;
     }
-
-    // ------------------------------------------------------------------------------------------------ the browser
 
     private void startBrowser() {
         state = State.STARTING;
@@ -477,8 +469,6 @@ public class WebViewOverlay extends Overlay implements Focusable, PointerInput {
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ pictures
-
     /** Decodes pictures on a thread of its own, newest first, so the render thread never waits for a decode. */
     private void decodeFrames() {
         try {
@@ -511,8 +501,6 @@ public class WebViewOverlay extends Overlay implements Focusable, PointerInput {
             return null;
         }
     }
-
-    // ------------------------------------------------------------------------------------------------ element
 
     @Override
     public void update(float delta) {
@@ -612,8 +600,6 @@ public class WebViewOverlay extends Overlay implements Focusable, PointerInput {
         if (state != State.FAILED) state = State.NOT_STARTED;
     }
 
-    // ------------------------------------------------------------------------------------------------ keyboard
-
     @Override
     public void onFocusGained() {
         focused = true;
@@ -657,8 +643,6 @@ public class WebViewOverlay extends Overlay implements Focusable, PointerInput {
         WebViewBackend b = backend;
         if (b != null) b.composition(preedit.text(), preedit.caret());
     }
-
-    // ------------------------------------------------------------------------------------------------ pointer
 
     @Override
     public void onPointerMove(double x, double y, int buttons, int mods) {

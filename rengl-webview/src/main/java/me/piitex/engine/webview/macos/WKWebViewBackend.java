@@ -105,8 +105,6 @@ public final class WKWebViewBackend extends WebKitBackend {
         ObjC.onMainThread(task);
     }
 
-    // ------------------------------------------------------------------------------------------------ start and stop
-
     private void start() {
         if (isClosed()) return;
         try (ObjC.Pool pool = ObjC.pool(); Arena a = Arena.ofConfined()) {
@@ -209,8 +207,6 @@ public final class WKWebViewBackend extends WebKitBackend {
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ what the delegate reports
-
     /** Called by the delegate for each navigation about to start; returns whether it may. */
     boolean decideNavigation(MemorySegment action) {
         String url = actionUrl(action);
@@ -258,8 +254,6 @@ public final class WKWebViewBackend extends WebKitBackend {
         messageFromPage(source, ObjC.describe(ObjC.id(message, "body")));
     }
 
-    // ------------------------------------------------------------------------------------------------ the window's key state
-
     /** The methods of the window class that answer for the key state. */
     static List<ObjC.Imp> windowImps() {
         FunctionDescriptor yesNo = FunctionDescriptor.of(JAVA_BYTE, ADDRESS, ADDRESS);
@@ -280,8 +274,6 @@ public final class WKWebViewBackend extends WebKitBackend {
     static byte windowYes(MemorySegment self, MemorySegment cmd) {
         return 1;
     }
-
-    // ------------------------------------------------------------------------------------------------ navigation
 
     @Override
     protected void loadUrl(String url) {
@@ -338,8 +330,6 @@ public final class WKWebViewBackend extends WebKitBackend {
         return webView != null && ObjC.bool(webView, "canGoForward");
     }
 
-    // ------------------------------------------------------------------------------------------------ display
-
     @Override
     protected void applySize(int w, int h) {
         if (webView == null) return;
@@ -362,8 +352,6 @@ public final class WKWebViewBackend extends WebKitBackend {
         ObjC.release(configuration);
     }
 
-    // ------------------------------------------------------------------------------------------------ script
-
     @Override
     protected void evaluateRaw(String script, Consumer<String> result) {
         if (webView == null) {
@@ -374,8 +362,6 @@ public final class WKWebViewBackend extends WebKitBackend {
                 : ObjC.block((value, error) -> result.accept(ObjC.isNull(error) ? ObjC.describe(value) : null));
         ObjC.run(webView, "evaluateJavaScript:completionHandler:", ObjC.string(script), handler);
     }
-
-    // ------------------------------------------------------------------------------------------------ input
 
     private static double uptime() {
         return ObjC.dbl(ObjC.id(ObjC.cls("NSProcessInfo"), "processInfo"), "systemUptime");

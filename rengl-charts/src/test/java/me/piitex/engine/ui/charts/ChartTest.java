@@ -52,8 +52,6 @@ class ChartTest {
                 && Math.abs(b - expected.getB() * 255) <= tolerance;
     }
 
-    // ---- scale and formats --------------------------------------------------------------------------------------
-
     @Test
     void niceScaleRoundsToTensAndFives() {
         NiceScale scale = NiceScale.of(3.2, 47.9, 6);
@@ -93,8 +91,6 @@ class ChartTest {
         assertEquals("3.0", ChartFormat.decimals(1).apply(3));
         assertEquals("12 ms", ChartFormat.unit(" ms").apply(12));
     }
-
-    // ---- series -------------------------------------------------------------------------------------------------
 
     @Test
     void aSeriesEasesTowardItsValuesAndSnapsWhenClose() {
@@ -137,8 +133,6 @@ class ChartTest {
         assertEquals(6, s.size());
         assertTrue(Double.isNaN(s.get(3)));
     }
-
-    // ---- line and bar charts ------------------------------------------------------------------------------------
 
     @Test
     void anAxisChartFitsItsRangeToTheData() {
@@ -269,8 +263,6 @@ class ChartTest {
         assertNull(line.legendBounds(0));
     }
 
-    // ---- pie ----------------------------------------------------------------------------------------------------
-
     @Test
     void aPieTotalsItsVisibleSlices() {
         PieChartOverlay pie = new PieChartOverlay(400, 300);
@@ -324,8 +316,6 @@ class ChartTest {
         click(donut, 200, 150);
         assertTrue(hits.isEmpty(), "the middle of a donut is empty");
     }
-
-    // ---- drawing ------------------------------------------------------------------------------------------------
 
     @Test
     void aBarIsDrawnInItsSeriesColorAndGrowsFromTheBaseline() {
@@ -421,8 +411,6 @@ class ChartTest {
             assertTrue(near(bmp.getColor(150, 150), Color.WHITE, 2), "only the white the test drew first");
         }
     }
-
-    // ---- theme --------------------------------------------------------------------------------------------------
 
     @Test
     void textColorFollowsTheThemeUntilPinned() {

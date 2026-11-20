@@ -41,7 +41,6 @@ import static me.piitex.engine.webview.windows.Com.*;
 public final class WebView2Backend implements WebViewBackend {
     private static final Logger log = LogManager.getLogger("WebView");
 
-    // --- vtable slots (counted from IUnknown's three), checked against the SDK's interface order
     // ICoreWebView2Environment
     private static final int ENV_CREATE_CONTROLLER = 3;
     // ICoreWebView2Controller
@@ -136,8 +135,6 @@ public final class WebView2Backend implements WebViewBackend {
         } : listener;
     }
 
-    // ------------------------------------------------------------------------------------------------ the thread
-
     private void run() {
         try {
             threadId = currentThreadId();
@@ -203,8 +200,6 @@ public final class WebView2Backend implements WebViewBackend {
     private void submit(Runnable command) {
         post(() -> whenReady(command));
     }
-
-    // ------------------------------------------------------------------------------------------------ start up
 
     private void begin() {
         try {
@@ -375,8 +370,6 @@ public final class WebView2Backend implements WebViewBackend {
         running = false;
     }
 
-    // ------------------------------------------------------------------------------------------------ navigation
-
     private void navigateNow(String url) {
         try (Arena a = Arena.ofConfined()) {
             check(call(webview, WV_NAVIGATE, PTR, wide(a, url)), "Navigate");
@@ -422,8 +415,6 @@ public final class WebView2Backend implements WebViewBackend {
     public void goForward() {
         submit(() -> call(webview, WV_GO_FORWARD, NO_ARGS));
     }
-
-    // ------------------------------------------------------------------------------------------------ display
 
     @Override
     public void resize(int w, int h) {
@@ -518,8 +509,6 @@ public final class WebView2Backend implements WebViewBackend {
         nextCaptureAt = Math.min(nextCaptureAt, now);
     }
 
-    // ------------------------------------------------------------------------------------------------ pictures
-
     private void tick(long now) {
         if (nativeMode || !shown(now)) return;
         if (!capturing && now >= nextCaptureAt) capture(now);
@@ -611,8 +600,6 @@ public final class WebView2Backend implements WebViewBackend {
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ cursor
-
     private void pollCursor(long now) {
         nextCursorPoll = now + CURSOR_POLL_NANOS;
         cursorPolling = true;
@@ -630,8 +617,6 @@ public final class WebView2Backend implements WebViewBackend {
             }
         });
     }
-
-    // ------------------------------------------------------------------------------------------------ input
 
     private void devtools(String method, String params) {
         try (Arena a = Arena.ofConfined()) {
@@ -712,8 +697,6 @@ public final class WebView2Backend implements WebViewBackend {
         });
     }
 
-    // ------------------------------------------------------------------------------------------------ script
-
     private void executeNow(String script, Consumer<String> result) {
         try (Arena a = Arena.ofConfined()) {
             int hr = call(webview, WV_EXECUTE_SCRIPT, PTR_PTR, wide(a, script), onResult((status, json) -> {
@@ -737,8 +720,6 @@ public final class WebView2Backend implements WebViewBackend {
             }
         });
     }
-
-    // ------------------------------------------------------------------------------------------------ closing
 
     @Override
     public void close() {

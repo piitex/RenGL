@@ -114,8 +114,6 @@ final class ColliderLines {
         }
     }
 
-    // ---- Pieces -----------------------------------------------------------------------------------------------------
-
     private void circle(Vec3 center, Vec3 a, Vec3 b, float radius, int steps) {
         Vec3 previous = center.add(a.mul(radius));
         for (int i = 1; i <= steps; i++) {

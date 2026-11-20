@@ -189,8 +189,6 @@ final class LightClusters {
         return plane[0] * p.x() + plane[1] * p.y() + plane[2] * p.z() + plane[3];
     }
 
-    // ---- texture data ---------------------------------------------------------------------------------------------
-
     /**
      * Fills {@code out} (cleared first) with {@code rows} rows of {@link #LIGHT_TEXELS} texels, one row a light:
      * <pre>

@@ -40,8 +40,6 @@ final class FlacStream implements PcmStream {
         readHeader();
     }
 
-    // ---- bit reading ------------------------------------------------------------------------------------------
-
     private long readBits(int n) {
         if (n == 0) return 0;
         while (cacheBits < n) {
@@ -80,8 +78,6 @@ final class FlacStream implements PcmStream {
     private boolean atEnd() {
         return bytePosition() >= data.length;
     }
-
-    // ---- stream header ----------------------------------------------------------------------------------------
 
     private void readHeader() {
         if (data.length > 10 && data[0] == 'I' && data[1] == 'D' && data[2] == '3') { // an ID3v2 tag in front of the stream
@@ -132,8 +128,6 @@ final class FlacStream implements PcmStream {
     public long totalFrames() {
         return totalSamples > 0 ? totalSamples : -1;
     }
-
-    // ---- frames -----------------------------------------------------------------------------------------------
 
     /**
      * Decodes the next frame into {@code out}. Returns false at the end of the stream or at damaged data.
@@ -341,8 +335,6 @@ final class FlacStream implements PcmStream {
             s[i] += (int) (sum >> shift);
         }
     }
-
-    // ---- PcmStream --------------------------------------------------------------------------------------------
 
     @Override
     public int read(short[] dst, int off, int len) {

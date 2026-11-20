@@ -51,8 +51,6 @@ class ChartAxesTest {
                 && Math.abs(b - expected.getB() * 255) <= tolerance;
     }
 
-    // ---- log value axis -----------------------------------------------------------------------------------------
-
     @Test
     void aLogAxisSpreadsPowersOfTenEvenly() {
         LineChartOverlay line = new LineChartOverlay(500, 300);
@@ -160,8 +158,6 @@ class ChartAxesTest {
         assertEquals("big", hits.getFirst().seriesName());
         assertEquals(2000, hits.getFirst().value());
     }
-
-    // ---- time axis ----------------------------------------------------------------------------------------------
 
     @Test
     void aTimeAxisSpacesPointsByWhenTheyHappened() {
@@ -288,8 +284,6 @@ class ChartAxesTest {
         line.finishAnimation();
         assertEquals("Day 2", line.categoryLabel(1));
     }
-
-    // ---- scatter ------------------------------------------------------------------------------------------------
 
     private static ScatterChartOverlay scatter() {
         ScatterChartOverlay chart = new ScatterChartOverlay(600, 400);

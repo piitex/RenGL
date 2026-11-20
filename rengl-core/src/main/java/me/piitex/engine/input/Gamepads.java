@@ -48,8 +48,6 @@ public final class Gamepads {
     private Gamepads() {
     }
 
-    // ---------------------------------------------------------------- settings
-
     /**
      * How far a stick must be pushed before it counts, as a fraction of its travel: the circle around the middle inside
      * which it reads 0. Real sticks do not rest at exactly 0, so without this a pad lying on a table moves the player.
@@ -107,8 +105,6 @@ public final class Gamepads {
         return enabled;
     }
 
-    // ---------------------------------------------------------------- mappings
-
     /**
      * Adds controller mappings in SDL's text form, one per line, such as the lines of a {@code gamecontrollerdb.txt}. A
      * mapping with the GUID of a pad already known replaces it. Safe from any thread; it takes effect on the next pump of
@@ -128,8 +124,6 @@ public final class Gamepads {
     public static void loadMappings(Path file) throws IOException {
         loadMappings(Files.readString(file, StandardCharsets.UTF_8));
     }
-
-    // ---------------------------------------------------------------- the main thread
 
     /**
      * Main thread, every pass of the engine's loop: reads every controller there is.

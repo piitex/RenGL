@@ -67,8 +67,6 @@ final class VkSoftRay {
         }
     }
 
-    // ---- the arena -------------------------------------------------------------------------------------------------
-
     private void ensureArena() {
         if (arena == null) grow(FIRST_ARENA_WORDS);
     }
@@ -149,8 +147,6 @@ final class VkSoftRay {
         if (arena != null) vmaDestroyBuffer(device.allocator, arena.handle(), arena.allocation());
         arena = null;
     }
-
-    // ---- bottom level ----------------------------------------------------------------------------------------------
 
     RayGeometry geometry(float[] vertices, int vertexCount, int floatsPerVertex, int[] indices) {
         if (vertexCount <= 0 || indices.length < 3) throw new IllegalArgumentException("A ray geometry needs triangles");
@@ -233,8 +229,6 @@ final class VkSoftRay {
             device.destroyLater(() -> release(at, words));
         }
     }
-
-    // ---- top level -------------------------------------------------------------------------------------------------
 
     RayScene scene(int capacity) {
         ensureArena();
@@ -337,8 +331,6 @@ final class VkSoftRay {
             });
         }
     }
-
-    // ---- matrices --------------------------------------------------------------------------------------------------
 
     /**
      * The inverse of a column-major 4x4 that moves and turns and scales (its last row is 0 0 0 1), as the three rows of its upper

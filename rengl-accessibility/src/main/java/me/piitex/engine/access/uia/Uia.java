@@ -91,8 +91,6 @@ final class Uia {
     private static final MethodHandle SAFE_ARRAY_ACCESS_DATA = down(OLEAUT32, "SafeArrayAccessData", FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
     private static final MethodHandle SAFE_ARRAY_UNACCESS_DATA = down(OLEAUT32, "SafeArrayUnaccessData", FunctionDescriptor.of(JAVA_INT, ADDRESS));
 
-    // ---- strings, variants, arrays ------------------------------------------------------------------------------
-
     /** A new BSTR holding {@code text}. The receiver of it frees it. */
     static MemorySegment bstr(String text) throws Throwable {
         try (Arena temp = Arena.ofConfined()) {

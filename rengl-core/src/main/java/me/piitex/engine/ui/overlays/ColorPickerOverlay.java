@@ -107,8 +107,6 @@ public class ColorPickerOverlay extends Overlay implements Themeable, Focusable,
         return toHex(getColor(), alphaEnabled);
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.BUTTON;

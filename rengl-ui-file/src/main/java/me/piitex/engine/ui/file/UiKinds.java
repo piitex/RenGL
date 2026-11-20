@@ -131,8 +131,6 @@ public final class UiKinds {
         }
     }
 
-    // --- What a container holds -----------------------------------------------------------------------------------
-
     /**
      * The elements {@code container} holds as a layout, in order. A tab container's bar and a split container's divider
      * are parts of it, not elements, so they aren't here.
@@ -190,8 +188,6 @@ public final class UiKinds {
         return e;
     }
 
-    // --- Radio groups ---------------------------------------------------------------------------------------------
-
     /**
      * Puts the radio buttons in {@code root}, and what it holds, into groups by their {@code group} name: those with the
      * same name choose one between them, those with none choose alone. A group a button is already in is kept, with
@@ -240,8 +236,6 @@ public final class UiKinds {
     private static String groupName(RadioButtonOverlay radio) {
         return stash(radio, "group") instanceof String s ? s : "";
     }
-
-    // --- Definitions ----------------------------------------------------------------------------------------------
 
     private static void containers() {
         add("container", "Container", CONTAINERS, Container.class, () -> new Container(200, 150), true,
@@ -611,8 +605,6 @@ public final class UiKinds {
                 property(type, TEXT, "italic", "Italic", Boolean.class, TextOverlay::isItalic, TextOverlay::setItalic),
                 color(type, TEXT, "textColor", "Text Color", TextOverlay::getTextColor, TextOverlay::setTextColor));
     }
-
-    // --- Building properties --------------------------------------------------------------------------------------
 
     private static void add(String id, String label, String group, Class<? extends Element> type,
                             Supplier<? extends Element> maker, boolean sized, UiProperty... own) {

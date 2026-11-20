@@ -136,8 +136,6 @@ class HotkeyOverlayGamepadTest {
         assertEquals("Left Stick Left", box.getDisplayText());
     }
 
-    // ---------------------------------------------------------------- a box only for the pad
-
     @Test
     void aControllerBoxIgnoresKeysExceptEscapeAndBackspace() {
         box.setGamepadOnly(true);
@@ -187,8 +185,6 @@ class HotkeyOverlayGamepadTest {
         assertEquals("Press a key or button...", box.getDisplayText());
     }
 
-    // ---------------------------------------------------------------- naming
-
     @Test
     void buttonsAreNamedForTheLayoutSet() {
         box.setBinding(PAD_A);
@@ -200,8 +196,6 @@ class HotkeyOverlayGamepadTest {
         box.setBinding(Binding.key(GLFW.GLFW_KEY_J));
         assertEquals("J", box.getDisplayText());
     }
-
-    // ---------------------------------------------------------------- an action with a key and a button
 
     private InputContext controls() {
         return new InputContext("test")

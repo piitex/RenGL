@@ -237,8 +237,6 @@ public final class PhysXBackend implements PhysicsBackend {
         for (Joint joint : world.joints()) jointAdded(joint);
     }
 
-    // ---- Bodies ---------------------------------------------------------------------------------------------------
-
     @Override
     public void bodyAdded(RigidBody body) {
         if (closed || mirrors.containsKey(body)) return;
@@ -673,8 +671,6 @@ public final class PhysXBackend implements PhysicsBackend {
         return index;
     }
 
-    // ---- Joints ---------------------------------------------------------------------------------------------------
-
     @Override
     public void jointAdded(Joint joint) {
         if (closed || joints.containsKey(joint)) return;
@@ -686,8 +682,6 @@ public final class PhysXBackend implements PhysicsBackend {
         PhysXJoints.Link link = joints.remove(joint);
         if (link != null) link.release();
     }
-
-    // ---- Stepping -------------------------------------------------------------------------------------------------
 
     @Override
     public void step(PhysicsWorld world, float dt) {
@@ -781,8 +775,6 @@ public final class PhysXBackend implements PhysicsBackend {
         return broken;
     }
 
-    // ---- Events ---------------------------------------------------------------------------------------------------
-
     /**
      * PhysX calls these from inside fetchResults, on the thread stepping the world. They only keep the list of what
      * touches; the world tells the listeners after the step.
@@ -869,8 +861,6 @@ public final class PhysXBackend implements PhysicsBackend {
         }
     }
 
-    // ---- Lifetime -------------------------------------------------------------------------------------------------
-
     @Override
     public void close() {
         if (closed) return;
@@ -903,8 +893,6 @@ public final class PhysXBackend implements PhysicsBackend {
         v1.destroy();
         v2.destroy();
     }
-
-    // ---- Small conversions ----------------------------------------------------------------------------------------
 
     /** A quarter turn around Z, which stands PhysX's capsule (along X) up along Y. */
     private static final Quat X_TO_Y = Quat.fromAxisAngle(Vec3.Z, (float) (Math.PI / 2));

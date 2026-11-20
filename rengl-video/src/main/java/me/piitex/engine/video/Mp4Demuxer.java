@@ -123,8 +123,6 @@ final class Mp4Demuxer implements Demuxer {
         }
     }
 
-    // ------------------------------------------------------------------ boxes
-
     private void parseBoxes(long start, long end) throws IOException {
         src.seek(start);
         while (src.position() + 8 <= end) {
@@ -327,8 +325,6 @@ final class Mp4Demuxer implements Demuxer {
         t.mediaStart = start;
     }
 
-    // ------------------------------------------------------------------ sample descriptions
-
     private void sampleEntry(Track t, long end) throws IOException {
         src.skip(4);
         int entries = src.be32s();
@@ -386,8 +382,6 @@ final class Mp4Demuxer implements Demuxer {
             src.seek(at + size);
         }
     }
-
-    // ------------------------------------------------------------------ sample tables of a plain file
 
     /** Walks a (count, value) table one sample at a time. */
     private static final class Cursor {
@@ -451,8 +445,6 @@ final class Mp4Demuxer implements Demuxer {
         t.endDts = time.value;
     }
 
-    // ------------------------------------------------------------------ fragments
-
     private void fragmentHeader(long end) throws IOException {
         int flags = src.be32s() & 0xFFFFFF;
         int id = (int) src.be32();
@@ -487,8 +479,6 @@ final class Mp4Demuxer implements Demuxer {
         }
         fragNext = data;
     }
-
-    // ------------------------------------------------------------------ tracks
 
     private void pick() {
         for (Track t : tracks) {
@@ -573,8 +563,6 @@ final class Mp4Demuxer implements Demuxer {
     void warnIfDegraded() {
         if (audioDropped) log.warn("{}: the '{}' soundtrack is not supported; playing without sound.", name, droppedAudio);
     }
-
-    // ------------------------------------------------------------------ Demuxer
 
     @Override
     public MediaInfo info() {

@@ -217,10 +217,8 @@ public class MetalContext implements AutoCloseable {
         invokePPP(device, sel_getUid("release"), objc_msgSend);
     }
 
-    // ------------------------------------------------------------------
     // Selectors with float/struct arguments can't go through invokePPP,
     // so they use FFM downcalls with the correct ABI descriptors.
-    // ------------------------------------------------------------------
 
     private static final Linker LINKER = Linker.nativeLinker();
 

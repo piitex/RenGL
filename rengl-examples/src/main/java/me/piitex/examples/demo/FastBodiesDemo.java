@@ -238,8 +238,6 @@ public class FastBodiesDemo {
             world.add(new RigidBody(stairs, BodyType.STATIC).addShape(MeshShape.of(stairs)));
         }
 
-        // ---- fast bodies ------------------------------------------------------------------------------------------
-
         void fire() {
             float y = 1f + random.nextFloat() * 8f, z = (random.nextFloat() - 0.5f) * 14f;
             shoot(kind, new Vec3(-14f, y, z), speed, 0.2f + random.nextFloat() * 1.2f);
@@ -294,8 +292,6 @@ public class FastBodiesDemo {
             continuous = on;
             for (RigidBody body : fired) body.setContinuous(on);
         }
-
-        // ---- bodies with dents ------------------------------------------------------------------------------------
 
         void dropLs() {
             for (int i = 0; i < 6; i++) {

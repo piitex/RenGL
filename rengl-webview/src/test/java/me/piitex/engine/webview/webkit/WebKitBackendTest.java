@@ -314,8 +314,6 @@ class WebKitBackendTest {
         return b;
     }
 
-    // ------------------------------------------------------------------------------------------------ start up
-
     @Test
     void commandsGivenBeforeTheViewExistsAreCarriedOutWhenItDoes() {
         fake = new Fake(new WebViewOptions(), heard);
@@ -334,8 +332,6 @@ class WebKitBackendTest {
         fake.ready();
         assertEquals(1, heard.events.stream().filter("ready"::equals).count());
     }
-
-    // ------------------------------------------------------------------------------------------------ navigation rules
 
     @Test
     void anAddressOutsideTheAllowedHostsIsRefusedBeforeItIsLoaded() {
@@ -440,8 +436,6 @@ class WebKitBackendTest {
         assertFalse(heard.events.contains("title "), "an empty title is not news");
     }
 
-    // ------------------------------------------------------------------------------------------------ pictures
-
     @Test
     void aHiddenPageTakesNoPictures() {
         start(new WebViewOptions());
@@ -515,8 +509,6 @@ class WebKitBackendTest {
         assertEquals(List.of("size 300x200", "size 1x1"), fake.calls);
     }
 
-    // ------------------------------------------------------------------------------------------------ input
-
     @Test
     void aKeyThatTypesACharacterIsLeftToTheTextCallAndSoNothingIsTypedTwice() {
         start(new WebViewOptions());
@@ -585,8 +577,6 @@ class WebKitBackendTest {
         assertEquals(List.of("focus true", "focus false"), fake.calls);
     }
 
-    // ------------------------------------------------------------------------------------------------ script
-
     @Test
     void aScriptIsWrappedSoItsResultIsJson() {
         start(new WebViewOptions());
@@ -650,8 +640,6 @@ class WebKitBackendTest {
         assertFalse(fake.permitted(WebViewOptions.Permission.MICROPHONE));
         assertFalse(fake.permitted(null));
     }
-
-    // ------------------------------------------------------------------------------------------------ closing
 
     @Test
     void closingFreesTheViewOnceAndIgnoresLaterCommands() {

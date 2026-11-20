@@ -65,8 +65,6 @@ final class WindowsVersion {
         }
     }
 
-    // ---- the resource ---------------------------------------------------------------------------------------------
-
     /** The four numbers of a version such as {@code 1.2.3-beta}: the leading digits of each dot-separated part, 0 where there are none. */
     static int[] numbers(String version) {
         int[] parts = new int[4];

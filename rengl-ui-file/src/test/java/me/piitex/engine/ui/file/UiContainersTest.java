@@ -43,8 +43,6 @@ class UiContainersTest {
         UiKinds.of(element).getProperty(property).set(element, value);
     }
 
-    // --- Tabs -----------------------------------------------------------------------------------------------------
-
     @Test
     void tabsHoldTheirContentAndNotTheBar() {
         Container root = root();
@@ -126,8 +124,6 @@ class UiContainersTest {
         assertEquals(1, UiFile.find(again, "inner", TabContainer.class).getTabCount());
     }
 
-    // --- Splits ---------------------------------------------------------------------------------------------------
-
     @Test
     void aSplitHoldsTwoPanes() {
         Container root = root();
@@ -198,8 +194,6 @@ class UiContainersTest {
         TabContainer again = UiFile.find(reload(root), "t", TabContainer.class);
         assertEquals(2, again.getTabCount(), "what the file says, not the starter on top of it");
     }
-
-    // --- Dock and flow --------------------------------------------------------------------------------------------
 
     @Test
     void dockedChildrenTakeTheEdgesInOrder() {
@@ -296,8 +290,6 @@ class UiContainersTest {
         assertEquals(1, UiKinds.children(again).size());
     }
 
-    // --- Radio groups ---------------------------------------------------------------------------------------------
-
     @Test
     void radioButtonsWithTheSameGroupNameChooseOne() {
         Container root = root();
@@ -343,8 +335,6 @@ class UiContainersTest {
         assertNull(b.getGroup());
         assertEquals(List.of(a), group.getButtons());
     }
-
-    // --- Other new kinds ------------------------------------------------------------------------------------------
 
     @Test
     void aNumberFieldIsOneElementNotALayoutOfParts() {

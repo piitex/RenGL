@@ -138,8 +138,6 @@ public final class VkTarget implements RenderTarget {
         return samples > 1 ? 2 : 1;
     }
 
-    // ---- what the UI layer needs to wrap the image in Skia ------------------------------------------------------
-
     /**
      * The colour {@code VkImage}. After a pass it is in {@code COLOR_ATTACHMENT_OPTIMAL}; Skia leaves it in
      * {@code TRANSFER_SRC_OPTIMAL}, which the next pass accepts because it starts from {@code UNDEFINED}.

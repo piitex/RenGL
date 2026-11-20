@@ -383,8 +383,6 @@ public class SpriteDemo {
             minimap.end(renderer);
         }
 
-        // ---- the map
-
         private void generateMap() {
             for (int y = 0; y < MAP; y++) {
                 for (int x = 0; x < MAP; x++) map[y][x] = random.nextInt(100) < 6 ? FLOWERS : GRASS;

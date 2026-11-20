@@ -216,8 +216,6 @@ class SceneGpuTest {
         return scene;
     }
 
-    // ---- a row of instances ----------------------------------------------------------------------------------------
-
     private static Scene3D row() {
         Scene3D scene = base();
         scene.setAmbient(Color.WHITE, 1f);
@@ -238,8 +236,6 @@ class SceneGpuTest {
             r.check("instances: one near the edge shows", px.luma(5f, 0f, 0f) > 300, "luma " + px.luma(5f, 0f, 0f));
         });
     }
-
-    // ---- shadows from out of view ----------------------------------------------------------------------------------
 
     private static Scene3D pillars() {
         Scene3D scene = base();
@@ -267,8 +263,6 @@ class SceneGpuTest {
         });
     }
 
-    // ---- a skinned mesh --------------------------------------------------------------------------------------------
-
     private static Scene3D skinned() {
         Scene3D scene = base();
         scene.setAmbient(Color.WHITE, 1f);
@@ -295,8 +289,6 @@ class SceneGpuTest {
         r.guard("a skinned mesh: and the picture is empty", () -> r.check("a skinned mesh: and the picture is empty", px.luma(0f, 0f, 0f) < 20,
                 "luma " + px.luma(0f, 0f, 0f)));
     }
-
-    // ---- a sky of linear light ---------------------------------------------------------------------------------------------
 
     /**
      * An 8 by 4 panorama of dim blue-grey sky, with a sun (40 times white) four pixels wide at the horizon either looking along
@@ -354,8 +346,6 @@ class SceneGpuTest {
             r.check(name, sun ? centre > 500 : centre < 330, "luma " + centre);
         });
     }
-
-    // ---- bloom ---------------------------------------------------------------------------------------------------------
 
     /**
      * A small white lamp in a dark room.
@@ -417,8 +407,6 @@ class SceneGpuTest {
         return toned(mapping, exposure).setBloom(0.8f).setBloomThreshold(50f);
     }
 
-    // ---- more than 256 joints ----------------------------------------------------------------------------------------
-
     /**
      * A cube skinned to the last of 400 joints, which stands in view while the others are scattered far away.
      */
@@ -455,8 +443,6 @@ class SceneGpuTest {
                 "luma " + px.luma(0f, 0f, 0f)));
     }
 
-    // ---- see-through instances ---------------------------------------------------------------------------------------
-
     /**
      * A red pane in front of a blue one, both half see-through, as instances of one node: the red one must be drawn after
      * the blue one whichever is first in the node's list.
@@ -483,8 +469,6 @@ class SceneGpuTest {
             r.check("see-through instances: the near one is over the far one", c[0] > c[2] + 20, "r " + c[0] + " b " + c[2]);
         });
     }
-
-    // ---- the triangles of one see-through mesh -------------------------------------------------------------------------
 
     /**
      * One mesh of two panes, a red one in front of a blue one, the red one stored first, so drawn in stored order the blue
@@ -525,8 +509,6 @@ class SceneGpuTest {
         });
     }
 
-    // ---- tone mapping and exposure -----------------------------------------------------------------------------------
-
     /**
      * A white floor lit from straight above at twice white (and a little ambient), so the lit colour is about 2.
      */
@@ -547,8 +529,6 @@ class SceneGpuTest {
             r.check("tone mapping: " + name, c[1] >= low && c[1] < high, "green is " + c[1] + ", expected " + low + " to " + (high - 1));
         });
     }
-
-    // ---- texture transforms and a second set of coordinates ----------------------------------------------------------
 
     /**
      * A plane with a two-pixel texture, red then blue along u, which runs along +X.
@@ -598,8 +578,6 @@ class SceneGpuTest {
                     + java.util.Arrays.toString(c) + java.util.Arrays.toString(d));
         });
     }
-
-    // ---- a height map ------------------------------------------------------------------------------------------------
 
     /**
      * A plane with a 64-pixel colour texture, red up to x = 0.16 and blue after it, and, with {@code map}, a height map that is high

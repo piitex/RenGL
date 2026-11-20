@@ -1405,8 +1405,6 @@ final class SceneShaders {
             }
             """;
 
-    // ---- velocity pass ---------------------------------------------------------------------------------------
-
     /**
      * The previous frame's model matrix of each instance, at locations 12 to 15 of a vertex buffer of its own. A skinned
      * mesh has none (its joints are the transform), and its previous position is taken to be this one.
@@ -1519,8 +1517,6 @@ final class SceneShaders {
             }
             """;
 
-    // ---- shadow pass -----------------------------------------------------------------------------------------
-
     static String shadowVertex(boolean skinned, boolean morph) {
         return "#version 450\n" + INPUTS + (skinned ? SKIN_INPUTS : "") + (morph ? MORPH_INPUTS : "") + UV_TRANSFORM + """
                 layout(set = 0, binding = 0) uniform ShadowFrame { mat4 lightViewProj; vec4 shadowMode; };
@@ -1563,8 +1559,6 @@ final class SceneShaders {
                 outColor = vec4(enc, 1.0);
             }
             """;
-
-    // ---- skybox ----------------------------------------------------------------------------------------------
 
     static final String SKY_VERTEX = "#version 450\n" + """
             layout(location = 0) in vec2 aPos;

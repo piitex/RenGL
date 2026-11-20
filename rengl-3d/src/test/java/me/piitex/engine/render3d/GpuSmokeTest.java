@@ -154,8 +154,6 @@ class GpuSmokeTest {
         return tests;
     }
 
-    // ---- the scene ---------------------------------------------------------------------------------------------
-
     private static Scene3D buildScene() {
         Scene3D scene = new Scene3D();
         Node3D floor = new Node3D("floor", Mesh.plane(40, 120), new Material(Color.WHITE).setTexture(
@@ -320,8 +318,6 @@ class GpuSmokeTest {
         });
     }
 
-
-    // ---- culling, shadow softness and sky lighting --------------------------------------------------------------
 
     /**
      * Two cubes in view, several things out of it, and a cube above the view that casts a shadow into it.
@@ -669,8 +665,6 @@ class GpuSmokeTest {
             }
         });
     }
-
-    // ---- the device --------------------------------------------------------------------------------------------
 
     private void deviceChecks(GpuDevice device, GpuHarness.Recorder r) {
         r.guard("device: anti-aliasing", () -> msaaChecks(device, r));

@@ -93,8 +93,6 @@ public final class CharacterController {
         return world;
     }
 
-    // ---- Control --------------------------------------------------------------------------------------------------
-
     public Vec3 getWalkVelocity() {
         return walk;
     }
@@ -205,8 +203,6 @@ public final class CharacterController {
         return this;
     }
 
-    // ---- State ----------------------------------------------------------------------------------------------------
-
     /**
      * Whether the character stood on walkable ground after the last step.
      */
@@ -241,8 +237,6 @@ public final class CharacterController {
     public boolean isTouchingCeiling() {
         return ceiling;
     }
-
-    // ---- Settings -------------------------------------------------------------------------------------------------
 
     public float getSlopeLimit() {
         return slopeLimit;
@@ -308,8 +302,6 @@ public final class CharacterController {
         airAcceleration = Math.max(0f, metresPerSecondSquared);
         return this;
     }
-
-    // ---- The move -------------------------------------------------------------------------------------------------
 
     void attach(PhysicsWorld world) {
         this.world = world;

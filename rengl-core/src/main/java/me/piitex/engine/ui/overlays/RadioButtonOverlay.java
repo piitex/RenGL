@@ -176,8 +176,6 @@ public class RadioButtonOverlay extends Overlay implements Themeable, me.piitex.
         }
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.RADIO_BUTTON;

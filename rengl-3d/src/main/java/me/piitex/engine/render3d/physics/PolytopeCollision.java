@@ -49,8 +49,6 @@ final class PolytopeCollision {
         }
     }
 
-    // ---- Polytope against polytope ---------------------------------------------------------------------------------
-
     /**
      * Two polytopes by the separating axis test: the face normals of each and the crossings of their edge directions.
      * A face contact clips the other polytope's face that turns most against it to the touching face; an edge contact is
@@ -277,8 +275,6 @@ final class PolytopeCollision {
         return lowest <= 1e-3f ? best : -1;
     }
 
-    // ---- Rounded shapes against a polytope --------------------------------------------------------------------------
-
     /**
      * A sphere ({@code p0} equal to {@code p1}) or capsule, given by its middle line and radius, against a polytope. The
      * gap between the line and the polytope gives the contact; a capsule lying flat on a face touches at both ends.
@@ -382,8 +378,6 @@ final class PolytopeCollision {
             if (depth >= Math.max(d0, d1) - flat) out.add(p.add(n.mul(r - depth * 0.5f)), depth);
         }
     }
-
-    // ---- Polytope against a plane ----------------------------------------------------------------------------------
 
     static void plane(Polytope a, Vec3 normal, Vec3 point, float margin, Manifold out) {
         out.normal = normal.negate();

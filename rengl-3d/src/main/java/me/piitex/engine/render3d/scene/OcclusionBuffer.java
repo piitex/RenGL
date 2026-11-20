@@ -41,8 +41,6 @@ final class OcclusionBuffer {
         return depth[y * WIDTH + x];
     }
 
-    // ---- drawing occluders ----------------------------------------------------------------------------------------
-
     /**
      * Draws a world-space triangle. The part behind the near plane is cut off first, so a floor under the camera still counts.
      */
@@ -110,8 +108,6 @@ final class OcclusionBuffer {
     private static double edge(double[] p, double[] q, double x, double y) {
         return (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]);
     }
-
-    // ---- asking ---------------------------------------------------------------------------------------------------
 
     /**
      * Whether a box (its eight corners, as {@code x, y, z} triples) is hidden behind what was drawn.

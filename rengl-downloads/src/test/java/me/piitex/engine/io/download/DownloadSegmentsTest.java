@@ -109,8 +109,6 @@ class DownloadSegmentsTest {
         }
     }
 
-    // ---- segments
-
     @Test
     void aSingleConnectionStillWorks() throws Exception {
         URI url = serve(300_000);
@@ -186,8 +184,6 @@ class DownloadSegmentsTest {
         assertFalse(Files.exists(dir.resolve("cancel.bin")));
     }
 
-    // ---- bandwidth
-
     @Test
     void aCapSlowsTheTransfer() throws Exception {
         URI url = serve(600_000);
@@ -243,8 +239,6 @@ class DownloadSegmentsTest {
         long wait = throttle.reserve(1000);
         assertTrue(wait > 800_000_000L && wait < 1_100_000_000L, "the next second's worth waits a second: " + wait);
     }
-
-    // ---- proxy
 
     @Test
     void aProxyReceivesTheRequest() throws Exception {

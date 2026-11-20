@@ -122,8 +122,6 @@ public final class WebKitGtkBackend extends WebKitBackend {
         tick();
     }
 
-    // ------------------------------------------------------------------------------------------------ start and stop
-
     private void start() {
         if (isClosed()) return;
         try {
@@ -194,8 +192,6 @@ public final class WebKitGtkBackend extends WebKitBackend {
             if (profile != null) profile.release();
         }
     }
-
-    // ------------------------------------------------------------------------------------------------ callbacks from GTK
 
     private static WebKitGtkBackend backend(MemorySegment data) {
         return BY_ID.get(data.address());
@@ -381,8 +377,6 @@ public final class WebKitGtkBackend extends WebKitBackend {
         return MemorySegment.ofAddress(token);
     }
 
-    // ------------------------------------------------------------------------------------------------ navigation
-
     @Override
     protected void loadUrl(String url) {
         Gtk.v("webkit_web_view_load_uri", view, url);
@@ -437,8 +431,6 @@ public final class WebKitGtkBackend extends WebKitBackend {
     protected void applySize(int w, int h) {
         if (view != null) Gtk.v("gtk_widget_set_size_request", view, w, h);
     }
-
-    // ------------------------------------------------------------------------------------------------ script and pictures
 
     @Override
     protected void evaluateRaw(String script, Consumer<String> result) {
@@ -522,8 +514,6 @@ public final class WebKitGtkBackend extends WebKitBackend {
             }
         }
     }
-
-    // ------------------------------------------------------------------------------------------------ input
 
     private static long now() {
         return Gtk.l("g_get_monotonic_time") / 1000L;

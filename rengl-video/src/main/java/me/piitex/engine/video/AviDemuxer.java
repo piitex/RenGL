@@ -91,8 +91,6 @@ final class AviDemuxer implements Demuxer {
         }
     }
 
-    // ------------------------------------------------------------------ headers
-
     private void parseHeaders() throws IOException {
         src.seek(12);
         while (src.position() + 12 <= src.size()) {
@@ -247,8 +245,6 @@ final class AviDemuxer implements Demuxer {
                 audio == null ? null : "PCM", "AVI");
     }
 
-    // ------------------------------------------------------------------ Demuxer
-
     @Override
     public MediaInfo info() {
         return info;
@@ -369,8 +365,6 @@ final class AviDemuxer implements Demuxer {
         videoFrames = frame;
         audioBytes = audioByteCount;
     }
-
-    // ------------------------------------------------------------------ index
 
     private void buildIndex() throws IOException {
         indexed = true;

@@ -122,8 +122,6 @@ public class Download {
         this(URI.create(url), target);
     }
 
-    // ---------------------------------------------------------------- configuration
-
     /**
      * Adds a request header, e.g. {@code Authorization}. Takes effect on the next attempt.
      */
@@ -240,8 +238,6 @@ public class Download {
         listeners.remove(listener);
     }
 
-    // ---------------------------------------------------------------- state (safe from any thread)
-
     public URI getUrl() {
         return url;
     }
@@ -310,8 +306,6 @@ public class Download {
     public Throwable getError() {
         return error;
     }
-
-    // ---------------------------------------------------------------- control
 
     /**
      * Starts, or resumes from a {@code .part} file. A no-op while already active or completed. Restarting a failed
@@ -382,8 +376,6 @@ public class Download {
             setState(DownloadState.QUEUED);
         }
     }
-
-    // ---------------------------------------------------------------- worker
 
     private void run() {
         int attempt = 0;
@@ -586,8 +578,6 @@ public class Download {
             windowBytes = 0;
         }
     }
-
-    // ---------------------------------------------------------------- segmented transfer
 
     private Path segmentFile(int index) {
         return index == 0 ? partFile : partFile.resolveSibling(partFile.getFileName() + "." + index);

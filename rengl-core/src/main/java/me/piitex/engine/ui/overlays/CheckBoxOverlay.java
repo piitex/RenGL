@@ -173,8 +173,6 @@ public class CheckBoxOverlay extends Overlay implements Themeable, me.piitex.eng
         renderer.drawLine(x2, y2, x3, y3, color, checkThickness);
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.CHECK_BOX;

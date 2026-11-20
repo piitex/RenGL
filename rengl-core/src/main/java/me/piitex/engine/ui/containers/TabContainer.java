@@ -535,8 +535,6 @@ public class TabContainer extends Layout {
             });
         }
 
-        // --- Accessibility ---
-
         @Override
         protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
             return me.piitex.engine.access.AccessibleRole.TAB_LIST;
@@ -551,8 +549,6 @@ public class TabContainer extends Layout {
             String title = selected.title == null ? "" : selected.title;
             return title + ", tab " + (tabs.indexOf(selected) + 1) + " of " + tabs.size();
         }
-
-        // ----- geometry --------------------------------------------------------------------------
 
         private org.jetbrains.skia.Font font() {
             Typeface typeface = Font.getDefault();
@@ -683,8 +679,6 @@ public class TabContainer extends Layout {
             return contains(px, py) ? tabAt(px) : -1;
         }
 
-        // ----- input -----------------------------------------------------------------------------
-
         private void handleClick(MouseClickEvent event) {
             int arrow = arrowAt(event.getMouseX());
             if (arrow != 0) {
@@ -770,8 +764,6 @@ public class TabContainer extends Layout {
             return TextShaping.width(font(), tab.title) > titleWidth(tab) ? tab.title : null;
         }
 
-        // ----- font scaling (see ResizableContainer) ---------------------------------------------
-
         @Override
         public float[] getFontSizes() {
             return new float[]{style.getFontSize()};
@@ -781,8 +773,6 @@ public class TabContainer extends Layout {
         public void setFontSizes(float[] sizes) {
             style.setFontSize(sizes[0]);
         }
-
-        // ----- drawing ---------------------------------------------------------------------------
 
         private float titleWidth(Tab tab) {
             return (float) tab.width - style.getHorizontalPadding() - rightInset(tab);

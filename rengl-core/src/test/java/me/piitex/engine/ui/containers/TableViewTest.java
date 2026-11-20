@@ -247,8 +247,6 @@ class TableViewTest {
         assertTrue(TableView.compareNatural("b", "a1") > 0);
     }
 
-    // --- sort group, scroll on setItems, header and icon colors ---
-
     @Test
     void aSortGroupStaysOnTopInBothDirections() {
         table.setSortGroup(e -> e.name().startsWith("zeta") || e.name().startsWith("alpha"));

@@ -176,8 +176,6 @@ public class Scene3DDemo {
         return scene;
     }
 
-    // ---- the main scene -------------------------------------------------------------------------
-
     /**
      * The big scene and the state the UI changes. The overlays and the scene's update handler both run on the
      * render thread; only {@link #loadInBackground} starts another, and it hands its result over through

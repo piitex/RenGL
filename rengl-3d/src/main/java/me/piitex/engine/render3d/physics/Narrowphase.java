@@ -85,8 +85,6 @@ final class Narrowphase {
         };
     }
 
-    // ---- Spheres --------------------------------------------------------------------------------------------------
-
     private static void sphereSphere(float ra, Vec3 ca, float rb, Vec3 cb, float margin, Manifold out) {
         Vec3 d = cb.sub(ca);
         float distance = d.length();
@@ -136,8 +134,6 @@ final class Narrowphase {
         out.normal = n.negate();
         out.add(center.sub(n.mul(height * 0.5f + radius * 0.5f)), -separation);
     }
-
-    // ---- Capsules -------------------------------------------------------------------------------------------------
 
     private static Vec3 capsuleEnd(CapsuleShape capsule, Pose pose, float side) {
         return pose.toWorld(new Vec3(0f, capsule.halfHeight() * side, 0f));
@@ -306,8 +302,6 @@ final class Narrowphase {
         }
     }
 
-    // ---- Boxes ----------------------------------------------------------------------------------------------------
-
     private static void boxPlane(Vec3 half, Pose box, PlaneShape plane, Pose planePose, float margin, Manifold out) {
         Vec3 n = planePose.rotate(plane.normal());
         out.normal = n.negate();
@@ -453,8 +447,6 @@ final class Narrowphase {
         out.normal = n;
         out.add(closest[0].add(closest[1]).mul(0.5f), -separation);
     }
-
-    // ---- Helpers --------------------------------------------------------------------------------------------------
 
     static Vec3 closestOnSegment(Vec3 a, Vec3 b, Vec3 p) {
         Vec3 ab = b.sub(a);

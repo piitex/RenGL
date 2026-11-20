@@ -102,8 +102,6 @@ class LiveScreenGpuTest {
         return c[0] + c[1] + c[2];
     }
 
-    // ---- an animated screen ----------------------------------------------------------------------------------------
-
     private static TextureData fill(TextureData texture, int r, int g, int b) {
         texture.edit(px -> {
             for (int i = 0; i < px.length; i += 4) {
@@ -158,8 +156,6 @@ class LiveScreenGpuTest {
             });
         });
     }
-
-    // ---- a clickable panel -----------------------------------------------------------------------------------------
 
     /**
      * A container on the same square: red, with a blue button in its top right quarter that turns green when clicked. The
@@ -220,8 +216,6 @@ class LiveScreenGpuTest {
             });
         });
     }
-
-    // ---- typing on a panel -----------------------------------------------------------------------------------------
 
     /**
      * Every byte of a target's picture, top row first.
@@ -315,8 +309,6 @@ class LiveScreenGpuTest {
         });
     }
 
-    // ---- more lights than the old limit --------------------------------------------------------------------------
-
     private static Scenario manyLights() {
         Scene3D scene = new Scene3D();
         scene.lights().clear();
@@ -338,8 +330,6 @@ class LiveScreenGpuTest {
             }
         });
     }
-
-    // ---- blinking lights -------------------------------------------------------------------------------------------
 
     /**
      * A wall lit by a lamp, and a bulb that glows by itself, both driven by one {@link LightAnimation}. The pattern is
@@ -405,8 +395,6 @@ class LiveScreenGpuTest {
             });
         });
     }
-
-    // ---- running them ----------------------------------------------------------------------------------------------
 
     @TestFactory
     List<DynamicTest> vulkan() {

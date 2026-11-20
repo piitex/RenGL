@@ -1125,8 +1125,6 @@ public class TextFieldOverlay extends Overlay implements Focusable, Draggable, T
         }
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.TEXT_FIELD;

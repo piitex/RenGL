@@ -66,8 +66,6 @@ final class Mp4Builder {
         return layout == Layout.FRAGMENTED ? buildFragmented() : buildPlain();
     }
 
-    // ------------------------------------------------------------------ plain
-
     private byte[] buildPlain() throws IOException {
         byte[] ftyp = box("ftyp", cat(ascii("isom"), u32(512), ascii("isom"), ascii("mp41")));
         // mdat payload: each frame followed by that frame's audio
@@ -149,8 +147,6 @@ final class Mp4Builder {
         return trak(2, total, AUDIO_RATE, "soun", box("stbl", stbl.toArray(new byte[0][])), 0, 0, 0);
     }
 
-    // ------------------------------------------------------------------ fragmented
-
     private byte[] buildFragmented() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(box("ftyp", cat(ascii("iso5"), u32(512), ascii("iso5"), ascii("dash"))));
@@ -206,8 +202,6 @@ final class Mp4Builder {
         }
         return box("moof", parts.toArray(new byte[0][]));
     }
-
-    // ------------------------------------------------------------------ shared boxes
 
     private byte[] mvhd(int duration, int nextTrack) {
         return box("mvhd", cat(u32(0), u32(0), u32(0), u32(VIDEO_SCALE), u32(duration), u32(0x10000), new byte[2 + 10],

@@ -45,8 +45,6 @@ final class Com {
 
     static final int ADD_REF = 1, RELEASE = 2;
 
-    // ------------------------------------------------------------------------------------------------ calling out
-
     private static final Map<FunctionDescriptor, MethodHandle> CALLS = new ConcurrentHashMap<>();
 
     static MethodHandle function(SymbolLookup lookup, String name, FunctionDescriptor descriptor) {
@@ -101,8 +99,6 @@ final class Com {
         if (obj != null && obj.address() != 0) call(obj, RELEASE, NO_ARGS);
     }
 
-    // ------------------------------------------------------------------------------------------------ strings
-
     static MemorySegment wide(Arena arena, String s) {
         return arena.allocateFrom(s, StandardCharsets.UTF_16LE);
     }
@@ -137,8 +133,6 @@ final class Com {
             return out.get(JAVA_INT, 0);
         }
     }
-
-    // ------------------------------------------------------------------------------------------------ Win32
 
     private static final SymbolLookup OLE = SymbolLookup.libraryLookup("ole32.dll", GLOBAL);
     private static final SymbolLookup KERNEL = SymbolLookup.libraryLookup("kernel32.dll", GLOBAL);
@@ -336,8 +330,6 @@ final class Com {
         r.set(JAVA_INT, 12, bottom);
         return r;
     }
-
-    // ------------------------------------------------------------------------------------------------ callbacks in
 
     /** {@code Invoke(HRESULT, pointer)}: the completion of most calls; the pointer is a result or a new object. */
     @FunctionalInterface

@@ -594,8 +594,6 @@ public class TextFlowOverlay extends TextOverlay implements Scrollable, Draggabl
         }
     }
 
-    // --- Scrollbar geometry & thumb dragging (same math as TextAreaOverlay) ----------------------
-
     private double trackX() {
         return getX() + getWidth() - scrollBarStyle.getThickness() - scrollBarStyle.getMargin();
     }

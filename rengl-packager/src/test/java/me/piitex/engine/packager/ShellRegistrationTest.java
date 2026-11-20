@@ -26,8 +26,6 @@ class ShellRegistrationTest {
     @TempDir
     Path dir;
 
-    // ---- --shell-verb ------------------------------------------------------------------------------------------------
-
     @Test
     void aVerbIsReadFromItsFourParts() {
         AppSpec.ShellVerb verb = AppSpec.ShellVerb.parse("Directory|OpenZip.Compress1Zip|Compress to ZIP|--compress=zip \"%1\"");
@@ -72,8 +70,6 @@ class ShellRegistrationTest {
                 assoc=.7z|7z / archive
                 """, WindowsSetup.registrations(app));
     }
-
-    // ---- --document-types --------------------------------------------------------------------------------------------
 
     private static final String TYPES = """
             <array>
@@ -126,8 +122,6 @@ class ShellRegistrationTest {
         }
         assertThrows(IllegalArgumentException.class, () -> PlistFragment.documentTypes(dir.resolve("missing.plist")));
     }
-
-    // ---- a real install --------------------------------------------------------------------------------------------
 
     /**
      * Runs the setup this packager builds, silently, for the current user, and looks in the registry with {@code reg}:

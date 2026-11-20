@@ -107,8 +107,6 @@ public final class UiaHost implements AccessibilityHost, UiaCom.Owner {
         return connected;
     }
 
-    // ---- the window procedure ----------------------------------------------------------------------------------
-
     /** Render thread. */
     private void tick() {
         if (closed) {
@@ -182,8 +180,6 @@ public final class UiaHost implements AccessibilityHost, UiaCom.Owner {
         return (long) Uia.RETURN_RAW_ELEMENT_PROVIDER.invoke(hwnd, wParam, lParam, root.simple());
     }
 
-    // ---- UiaCom.Owner ------------------------------------------------------------------------------------------
-
     @Override
     public UiaFrame frame() {
         return frame;
@@ -227,8 +223,6 @@ public final class UiaHost implements AccessibilityHost, UiaCom.Owner {
             return MemorySegment.NULL;
         }
     }
-
-    // ---- the tree and its events -------------------------------------------------------------------------------
 
     private UiaCom.Obj providerFor(int id) {
         return id == 0 ? root : raised.computeIfAbsent(id, i -> new UiaCom.Obj(this, i));

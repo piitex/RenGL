@@ -75,8 +75,6 @@ final class WkDelegate {
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ the callbacks
-
     /** {@code -webView:decidePolicyForNavigationAction:decisionHandler:}; the handler takes 1 to allow and 0 to cancel. */
     static void decidePolicy(MemorySegment self, MemorySegment cmd, MemorySegment webView, MemorySegment action, MemorySegment handler) {
         long policy = 0;

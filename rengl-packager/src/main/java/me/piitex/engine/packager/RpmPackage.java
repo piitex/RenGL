@@ -93,8 +93,6 @@ final class RpmPackage {
         return v.isEmpty() || !Character.isDigit(v.charAt(0)) ? "0." + v : v;
     }
 
-    // ---- what goes in ---------------------------------------------------------------------------------------------
-
     /** Everything the package owns, sorted by path as the file list has to be. The system's own folders ({@code /opt}, {@code /usr/bin}) are not ours to list. */
     static List<Item> items(AppSpec app, String pkg, Path image) throws IOException {
         String home = "/opt/" + app.name();
@@ -143,8 +141,6 @@ final class RpmPackage {
             return cpio.size();
         }
     }
-
-    // ---- the package header ---------------------------------------------------------------------------------------
 
     private static byte[] packageHeader(AppSpec app, String pkg, String version, String arch, List<Item> items, long now, long archiveSize) throws IOException {
         String summary = app.description().replace('\n', ' ');
@@ -241,8 +237,6 @@ final class RpmPackage {
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    // ---- the signature header and the lead ------------------------------------------------------------------------
-
     /** Sizes and digests, so the package can be checked; there is no signature. Padded so that the package header starts on an 8-byte boundary. */
     private static byte[] signatureHeader(byte[] header, Path payload, long archiveSize) throws IOException {
         MessageDigest md5 = digest("MD5");
@@ -293,8 +287,6 @@ final class RpmPackage {
         byte[] buffer = new byte[1 << 16];
         for (int n; (n = in.read(buffer)) > 0; ) digest.update(buffer, 0, n);
     }
-
-    // ---- a header structure ---------------------------------------------------------------------------------------
 
     /**
      * An rpm header: an index of (tag, type, offset, count) entries in tag order, then the data they point at. The first

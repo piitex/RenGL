@@ -180,8 +180,6 @@ final class Sl {
         return null;
     }
 
-    // ---- start-up -----------------------------------------------------------------------------------------------------
-
     private static void onMessage(int type, MemorySegment message) {
         String text = message.reinterpret(Integer.MAX_VALUE).getString(0).stripTrailing();
         if (type == 2) log.error("[Streamline] {}", text);
@@ -356,8 +354,6 @@ final class Sl {
         }
     }
 
-    // ---- structs: a header (next, the GUID, the version) and the fields at fixed offsets ---------------------------
-
     /**
      * Zeroed memory for a struct of {@code size} bytes with the header every Streamline struct starts with: the pointer to the
      * next struct of a chain (null), the type's GUID and the version of the struct.
@@ -492,8 +488,6 @@ final class Sl {
     static MemorySegment dlssgState(Arena arena) {
         return struct(arena, 88, "CC8AC8E1-A179-44F5-97FA-E74112F9BC61", 4);
     }
-
-    // ---- calls --------------------------------------------------------------------------------------------------------
 
     static String describe(int result) {
         return result >= 0 && result < RESULTS.length ? RESULTS[result] + " (" + result + ")" : "result " + result;

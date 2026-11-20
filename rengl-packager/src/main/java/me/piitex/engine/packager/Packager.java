@@ -179,8 +179,6 @@ public final class Packager {
         System.out.println("\nDone.");
     }
 
-    // ---- the installer window -------------------------------------------------------------------------------------
-
     private static final String INSTALLER_JAR_SUFFIX = "-ui.jar";   // rengl-packager-<version>-ui.jar
 
     private static Path installerUi(Map<String, List<String>> options) {
@@ -265,8 +263,6 @@ public final class Packager {
         }
     }
 
-    // ---- arguments ------------------------------------------------------------------------------------------------
-
     private static final Set<String> FLAGS = Set.of("help", "no-archive", "installer");
 
     private static Map<String, List<String>> parse(String[] args) {
@@ -350,8 +346,6 @@ public final class Packager {
         return new AppSpec.FileAssociation(extension, parts.length > 1 ? parts[1].strip() : "", parts.length > 2 ? parts[2].strip() : extension.toUpperCase(Locale.ROOT) + " file");
     }
 
-    // ---- jars and modules -----------------------------------------------------------------------------------------
-
     private static List<Path> jars(Path input, String mainJar) throws IOException {
         try (Stream<Path> files = Files.list(input)) {
             List<Path> jars = new ArrayList<>(files.filter(f -> f.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar")).sorted().toList());
@@ -386,8 +380,6 @@ public final class Packager {
         for (String extra : options.getOrDefault("add-modules", List.of())) modules.addAll(List.of(extra.split(",")));
         return List.copyOf(modules);
     }
-
-    // ---- folders --------------------------------------------------------------------------------------------------
 
     /** Empties a folder this tool made on an earlier run. Refuses any other folder, so a typo in --output cannot delete anything. */
     private static Path freshDir(Path dir) throws IOException {

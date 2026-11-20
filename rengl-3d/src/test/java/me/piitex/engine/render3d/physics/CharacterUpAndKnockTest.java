@@ -25,8 +25,6 @@ class CharacterUpAndKnockTest {
         return world;
     }
 
-    // ---- Up ----
-
     @Test
     void anUpAlongX_standsOnAWallAndWalksAlongIt() {
         // Gravity pulls towards +X, the floor's face is at x = 5, so "up" is -X.
@@ -94,8 +92,6 @@ class CharacterUpAndKnockTest {
         assertEquals(1f, c.getUp().y(), 1e-5f);
         assertThrows(IllegalArgumentException.class, () -> c.setUp(Vec3.ZERO));
     }
-
-    // ---- Knocks ----
 
     /**
      * The fastest the character goes along -X in the half second after a crate of {@code kilograms} thrown at its chest

@@ -173,8 +173,6 @@ public final class RigidBody {
         return vx != 0f || vy != 0f || vz != 0f || wx != 0f || wy != 0f || wz != 0f;
     }
 
-    // ---- Sleep ----------------------------------------------------------------------------------------------------
-
     /**
      * Whether the body is resting and skipped by the simulation until something touches, pushes or moves it. A body
      * falls asleep after half a second of barely moving, together with everything it rests on or against.
@@ -217,8 +215,6 @@ public final class RigidBody {
         return this;
     }
 
-    // ---- Material -------------------------------------------------------------------------------------------------
-
     public PhysicsMaterial getMaterial() {
         return material;
     }
@@ -238,8 +234,6 @@ public final class RigidBody {
     public RigidBody setRestitution(float restitution) {
         return setMaterial(material.withRestitution(restitution));
     }
-
-    // ---- Shapes and mass ------------------------------------------------------------------------------------------
 
     /**
      * The shapes as given, in the node's local units, before its scale.
@@ -364,8 +358,6 @@ public final class RigidBody {
         return this;
     }
 
-    // ---- Place ----------------------------------------------------------------------------------------------------
-
     /**
      * Where the body's origin (its node's origin) is in the world.
      */
@@ -415,8 +407,6 @@ public final class RigidBody {
         teleported();
         return this;
     }
-
-    // ---- Motion ---------------------------------------------------------------------------------------------------
 
     /**
      * The velocity of the centre of mass, in metres per second.
@@ -713,8 +703,6 @@ public final class RigidBody {
     public String toString() {
         return "RigidBody[" + (node == null ? "" : node.getName() + ", ") + type + ", " + getPosition() + "]";
     }
-
-    // ---- World use ------------------------------------------------------------------------------------------------
 
     void attach(PhysicsWorld world) {
         this.world = world;

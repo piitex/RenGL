@@ -462,8 +462,6 @@ public class ComboBoxOverlay<T> extends TextFieldOverlay {
         }
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.COMBO_BOX;

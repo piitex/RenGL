@@ -195,8 +195,6 @@ final class ObjC {
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ the runtime
-
     /** Frees what the code in between autoreleased. Wrap every stretch of calls made from a thread of Java in one. */
     static final class Pool implements AutoCloseable {
         private final MemorySegment context = (MemorySegment) invoke(N.poolPush);
@@ -302,8 +300,6 @@ final class ObjC {
         if (!isNull(object)) run(object, "release");
     }
 
-    // ------------------------------------------------------------------------------------------------ values
-
     static Struct point(Arena a, double x, double y) {
         MemorySegment s = a.allocate(NSPOINT);
         s.set(JAVA_DOUBLE, 0, x);
@@ -357,8 +353,6 @@ final class ObjC {
         return id(cls("NSURL"), "URLWithString:", string(address));
     }
 
-    // ------------------------------------------------------------------------------------------------ classes defined at run time
-
     /** An {@link Imp} for a static method of {@code owner} whose Java signature matches {@code descriptor}. */
     static Imp imp(String selector, String encoding, Class<?> owner, String method, FunctionDescriptor descriptor) {
         try {
@@ -402,8 +396,6 @@ final class ObjC {
         invoke(N.registerPair, c);
         return c;
     }
-
-    // ------------------------------------------------------------------------------------------------ blocks
 
     private record PendingBlock(MemorySegment memory, BiConsumer<MemorySegment, MemorySegment> handler) {
     }
@@ -449,8 +441,6 @@ final class ObjC {
         MethodHandle h = BLOCK_CALLS.computeIfAbsent(d, LINKER::downcallHandle);
         invoke(h, function, block, argument);
     }
-
-    // ------------------------------------------------------------------------------------------------ the main thread
 
     /** Runs {@code task} on the main thread, in the main run loop. It is not run if nothing pumps that loop. */
     static void onMainThread(Runnable task) {
@@ -499,8 +489,6 @@ final class ObjC {
         } while (System.nanoTime() < end);
     }
 
-    // ------------------------------------------------------------------------------------------------ pictures and scrolling
-
     /** An {@code NSImage} as raw BGRA pixels, at the image's own pixel size (twice the points on a Retina display). */
     static WebKitBackend.Picture picture(MemorySegment nsImage) {
         MemorySegment image = id(nsImage, "CGImageForProposedRect:context:hints:", MemorySegment.NULL, MemorySegment.NULL, MemorySegment.NULL);
@@ -541,8 +529,6 @@ final class ObjC {
             invoke(N.cfRelease, cg);
         }
     }
-
-    // ------------------------------------------------------------------------------------------------ plumbing
 
     private static Object invoke(MethodHandle handle, Object... args) {
         try {

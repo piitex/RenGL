@@ -162,8 +162,6 @@ public final class ColliderView {
         if (root.getParent() != null) root.getParent().remove(root);
     }
 
-    // ---- Following the world ----------------------------------------------------------------------------------------
-
     void sync(float alpha) {
         if (!root.isVisible()) return;
         // The view's nodes are placed in the world; if its node was put under a moved parent, undo the parent's move.

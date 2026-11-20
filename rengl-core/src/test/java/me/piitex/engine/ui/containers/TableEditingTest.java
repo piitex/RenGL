@@ -59,8 +59,6 @@ class TableEditingTest {
         table.onKeyPressed(key, GLFW.GLFW_PRESS, 0);
     }
 
-    // ---- check boxes --------------------------------------------------------------------------------------------
-
     @Test
     void aTableHasNoCheckBoxesUntilAskedFor() {
         assertFalse(table.isCheckBoxes());
@@ -212,8 +210,6 @@ class TableEditingTest {
             }
         }
     }
-
-    // ---- editing ------------------------------------------------------------------------------------------------
 
     @Test
     void aColumnIsReadOnlyUntilItIsEditable() {

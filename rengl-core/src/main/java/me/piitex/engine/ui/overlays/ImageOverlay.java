@@ -287,8 +287,6 @@ public class ImageOverlay extends Overlay {
         }
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.IMAGE;

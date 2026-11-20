@@ -634,8 +634,6 @@ public class Element {
         this.tabIndex = tabIndex;
     }
 
-    // --- Accessibility --------------------------------------------------------------------------------------------
-
     private me.piitex.engine.access.AccessibleRole accessibleRole;
     private String accessibleName, accessibleDescription;
     private Element labelledBy;

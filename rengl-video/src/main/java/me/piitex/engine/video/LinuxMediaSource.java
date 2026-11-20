@@ -110,8 +110,6 @@ final class LinuxMediaSource implements Demuxer {
         return format.audioChannels() > 0 ? new PcmAudioDecoder(format.audioChannels(), format.audioRate(), 16, false) : null;
     }
 
-    // ------------------------------------------------------------------ packets
-
     @Override
     public Packet next() throws IOException {
         for (; ; ) {

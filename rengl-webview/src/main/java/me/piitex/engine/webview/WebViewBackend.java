@@ -133,7 +133,6 @@ public interface WebViewBackend extends AutoCloseable {
 
     void setListener(Listener listener);
 
-    // --- navigation
     void navigate(String url);
 
     /** Shows this HTML as a page. The address stays {@code about:blank} and the page can reach no other site's data. */
@@ -147,7 +146,6 @@ public interface WebViewBackend extends AutoCloseable {
 
     void goForward();
 
-    // --- display
     /** The size of the page in pixels. */
     void resize(int width, int height);
 
@@ -163,7 +161,6 @@ public interface WebViewBackend extends AutoCloseable {
     default void setBounds(int x, int y, int width, int height, boolean visible) {
     }
 
-    // --- input, with positions in the page's own pixels
     void pointerMove(double x, double y, int buttons, int mods);
 
     void pointerButton(double x, double y, int button, boolean pressed, int mods);
@@ -184,7 +181,6 @@ public interface WebViewBackend extends AutoCloseable {
     /** Whether the page has the keyboard. */
     void setFocused(boolean focused);
 
-    // --- script
     /** Runs JavaScript in the page; {@code result} gets the value as JSON, or null if it failed. */
     void execute(String script, Consumer<String> result);
 

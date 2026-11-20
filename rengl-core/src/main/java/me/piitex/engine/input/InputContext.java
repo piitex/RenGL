@@ -96,8 +96,6 @@ public final class InputContext {
         return name;
     }
 
-    // ---------------------------------------------------------------- actions and bindings
-
     /**
      * Adds an action with its default bindings, which are also its bindings until changed. An action with no bindings
      * is allowed; the player can bind it later.
@@ -201,8 +199,6 @@ public final class InputContext {
         return this;
     }
 
-    // ---------------------------------------------------------------- saving
-
     /**
      * Stores the bindings the player changed under {@code path}, one list per action, such as
      * {@code jump: [SPACE, MOUSE_RIGHT]}. Actions left at their defaults are removed from the config, so a game update
@@ -253,8 +249,6 @@ public final class InputContext {
             a.bindings = loaded;
         }
     }
-
-    // ---------------------------------------------------------------- state
 
     /**
      * True while the action is held through this context.
@@ -359,8 +353,6 @@ public final class InputContext {
         return active;
     }
 
-    // ---------------------------------------------------------------- settings
-
     public boolean isEnabled() {
         return enabled;
     }
@@ -411,8 +403,6 @@ public final class InputContext {
     public String toString() {
         return "InputContext[" + name + "]";
     }
-
-    // ---------------------------------------------------------------- called by Input
 
     /**
      * The actions a press of {@code device}/{@code code} with {@code mods} held triggers here: those bound to it whose

@@ -257,8 +257,6 @@ public final class VkGpuDevice implements GpuDevice {
         return out.get(0);
     }
 
-    // ---- GpuDevice ----------------------------------------------------------------------------------------------
-
     @Override
     public RenderAPI api() {
         return RenderAPI.VULKAN;
@@ -462,8 +460,6 @@ public final class VkGpuDevice implements GpuDevice {
         return ray().scene(capacity);
     }
 
-    // ---- for code that records Vulkan work of its own (a vendor's upscaler) -------------------------------------
-
     /**
      * The window's Vulkan instance, GPU and device, which this device shares with Skia.
      */
@@ -570,8 +566,6 @@ public final class VkGpuDevice implements GpuDevice {
         vkDestroyCommandPool(device, uploadPool, null);
         vmaDestroyAllocator(allocator);
     }
-
-    // ---- helpers for the other classes --------------------------------------------------------------------------
 
     static void check(int result, String what) {
         if (result != VK_SUCCESS) throw new IllegalStateException("Vulkan could not " + what + " (VkResult " + result + ")");

@@ -136,8 +136,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         ThemeManager.register(this);
     }
 
-    // --- Range/value -----------------------------------------------------------------------------
-
     public double getMin() {
         return min;
     }
@@ -287,8 +285,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         return nearest + (raw - nearest) * eased;
     }
 
-    // --- Geometry --------------------------------------------------------------------------------
-
     /**
      * How thick the track/fill bar is drawn, in logical points.
      */
@@ -321,8 +317,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
     public void setTickSpacing(double tickSpacing) {
         this.tickSpacing = tickSpacing;
     }
-
-    // --- Colors ----------------------------------------------------------------------------------
 
     public Paint getTrackColor() {
         return trackColor.get();
@@ -390,8 +384,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         this.labelColor.set(labelColor);
     }
 
-    // --- Label -----------------------------------------------------------------------------------
-
     /**
      * Formats {@link #getValue()} into the text drawn centered above the thumb, re-evaluated every frame. For example, {@code v -> Math.round(v) + "%"} gives a percentage readout. Null, the default, draws no label. See {@link PercentSliderOverlay} for a subclass that sets this once in its constructor.
      */
@@ -420,8 +412,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         labelFontDirty = true;
         tickLabelFontDirty = true;
     }
-
-    // --- Tick labels -----------------------------------------------------------------------------
 
     /**
      * Formats each tick's own value into the small text drawn under it, re-evaluated
@@ -473,8 +463,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         this.tickLabelColor.set(tickLabelColor);
     }
 
-    // --- Interaction -----------------------------------------------------------------------------
-
     /**
      * Whether the thumb is currently being dragged. This drives {@link #getThumbActiveColor()}.
      */
@@ -522,8 +510,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         }
     }
 
-    // --- Value <-> pixel mapping -----------------------------------------------------------------
-
     private double trackStartX() {
         return getX() + thumbRadius;
     }
@@ -548,8 +534,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         ratio = Math.max(0, Math.min(1, ratio));
         return min + ratio * (max - min);
     }
-
-    // --- Theme -----------------------------------------------------------------------------------
 
     /**
      * Themes the track, fill, thumb, tick, and label colors as a baseline, skipping
@@ -580,8 +564,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         labelColor.clearExplicit();
         tickLabelColor.clearExplicit();
     }
-
-    // --- Rendering -------------------------------------------------------------------------------
 
     @Override
     public void render(Renderer renderer) {
@@ -723,8 +705,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
         }
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.SLIDER;
@@ -740,8 +720,6 @@ public class SliderOverlay extends Overlay implements Themeable, Draggable, Font
     protected boolean usesFocusRing() {
         return true;
     }
-
-    // --- Keyboard ---
 
     @Override
     public void onFocusGained() {

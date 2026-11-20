@@ -160,8 +160,6 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
         return angularImpulse().mul(1f / dt);
     }
 
-    // ---- World use ------------------------------------------------------------------------------------------------
-
     void attach(PhysicsWorld world) {
         this.world = world;
         broken = false;
@@ -345,8 +343,6 @@ public abstract sealed class Joint permits BallJoint, DistanceJoint, FixedJoint,
             rows[at + i].set(a, b, n, ra.cross(n), rb.cross(n));
         }
     }
-
-    // ---- Helpers --------------------------------------------------------------------------------------------------
 
     /**
      * {@code world} in the body's own space, from its origin.

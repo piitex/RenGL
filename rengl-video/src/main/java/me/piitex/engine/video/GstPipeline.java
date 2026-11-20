@@ -169,8 +169,6 @@ final class GstPipeline implements GstPlayback {
         }
     }
 
-    // ------------------------------------------------------------------ samples
-
     @Override
     public Sample pullVideo(int millis) {
         MemorySegment sample = pullSample(video, millis * NANOS_PER_MILLI);

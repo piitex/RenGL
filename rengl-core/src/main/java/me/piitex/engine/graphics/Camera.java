@@ -260,8 +260,6 @@ public class Camera {
         this.bounds = bounds;
     }
 
-    // ---- Shake
-
     /**
      * Knocks the view about: adds {@code trauma} to the camera's trauma, which is capped at 1 and dies away by itself
      * in {@link #update}. The view moves and turns by the square of the trauma, so small knocks stay small and big

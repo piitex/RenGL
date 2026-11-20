@@ -125,8 +125,6 @@ class TreeViewFileDragTest {
         assertTrue(drops.isEmpty(), "the drag left the window; it is not a move inside the tree");
     }
 
-    // ---- through the input processor ----------------------------------------------------------------------------
-
     private RecordingWindow window;
     private InputProcessor processor;
 

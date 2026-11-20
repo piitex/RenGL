@@ -499,8 +499,6 @@ final class SceneRenderer {
         return texture;
     }
 
-    // ---- pipelines ---------------------------------------------------------------------------------------------
-
     private Pipeline pipeline(int key) {
         Pipeline existing = pipelines.get(key);
         if (existing != null) return existing;
@@ -545,8 +543,6 @@ final class SceneRenderer {
             case EQUIRECT_HDR -> SKY_EQUIRECT_HDR_FRAGMENT;
         }, VertexLayout.of(VertexFormat.FLOAT2), false, false, false)));
     }
-
-    // ---- one render --------------------------------------------------------------------------------------------
 
     void render(Scene3D scene, RenderTarget target, float delta) {
         frame++;
@@ -858,8 +854,6 @@ final class SceneRenderer {
         pass.drawIndexed(quad.indexCount, group.viewCount, group.first);
     }
 
-    // ---- virtual geometry ------------------------------------------------------------------------------------------
-
     /**
      * Has the GPU pick the clusters of every group drawn as virtual geometry, for the camera and for the shadows, into the
      * render call's lists (see {@link VirtualGeometry}). A group's error allowed is the scene's pixel error doubled for each
@@ -925,8 +919,6 @@ final class SceneRenderer {
             log.warn("Virtual geometry can not test what is hidden on this GPU ({}); clusters are culled by the view alone.", e.getMessage());
         }
     }
-
-    // ---- collecting and building the instance stream -----------------------------------------------------------
 
     /** The most triangles drawn into the occlusion picture in a frame; occluders past it hide nothing. */
     private static final int MAX_OCCLUDER_TRIANGLES = 50_000;
@@ -1122,8 +1114,6 @@ final class SceneRenderer {
                 | (mesh.isLines() ? KEY_LINES : 0) | (gpuMorph ? KEY_MORPH : 0);
     }
 
-    // ---- levels of detail ----------------------------------------------------------------------------------------
-
     /**
      * The last level of the chain a node may draw: a level without skinning can't follow a skinned node's joints, and one
      * without the same blend shapes can't take a morphed node's weights, so neither it nor any past it is used.
@@ -1227,8 +1217,6 @@ final class SceneRenderer {
         int level = pickLevel(node, chain, last, nearest, scale, previous);
         return chain.level(Math.min(last, level + rayLodBias)).mesh();
     }
-
-    // ---- picture cards ------------------------------------------------------------------------------------------
 
     /**
      * Whether a node may be drawn as its mesh's picture card: a card holds the mesh at rest, solid, in one material.
@@ -2009,8 +1997,6 @@ final class SceneRenderer {
         }
     }
 
-    // ---- shadows -----------------------------------------------------------------------------------------------
-
     /**
      * What the main pass needs to read this frame's shadows: the lights' plans (views with their tiles) and the atlas.
      */
@@ -2410,8 +2396,6 @@ final class SceneRenderer {
         }
     }
 
-    // ---- the light grid ------------------------------------------------------------------------------------------
-
     /**
      * Whether the scene shader with the light grid compiles here. If it does not (reported once), scenes shade their lights
      * directly from then on.
@@ -2483,8 +2467,6 @@ final class SceneRenderer {
             MemoryUtil.memFree(data);
         }
     }
-
-    // ---- uniform blocks ----------------------------------------------------------------------------------------
 
     /**
      * The custom pieces this frame's lights use, as the index of the shader variant that holds them. A set that doesn't
@@ -2691,8 +2673,6 @@ final class SceneRenderer {
     private void putColor(Color c, float alphaSlot) {
         scratch.putFloat(c.getR()).putFloat(c.getG()).putFloat(c.getB()).putFloat(alphaSlot);
     }
-
-    // ---- GPU objects -------------------------------------------------------------------------------------------
 
     /**
      * Uploads one mesh, texture or skybox now, as drawing it would.

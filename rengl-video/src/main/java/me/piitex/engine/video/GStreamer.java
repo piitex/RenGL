@@ -158,8 +158,6 @@ final class GStreamer {
         return isNull(pointer) ? null : pointer.reinterpret(Long.MAX_VALUE).getString(0);
     }
 
-    // ------------------------------------------------------------------ elements and properties
-
     /** A new element, or NULL when its plug-in is not installed. */
     static MemorySegment make(String factory, String name) {
         try (Arena a = Arena.ofConfined()) {
@@ -260,8 +258,6 @@ final class GStreamer {
         }
     }
 
-    // ------------------------------------------------------------------ the bus
-
     static MemorySegment bus(MemorySegment element) {
         try {
             return (MemorySegment) Lib.GET_BUS.invoke(element);
@@ -316,8 +312,6 @@ final class GStreamer {
             throw failed(e);
         }
     }
-
-    // ------------------------------------------------------------------ appsink and samples
 
     /** The next sample, waiting up to {@code timeoutNanos}; NULL if none. The caller releases it. */
     static MemorySegment pullSample(MemorySegment sink, long timeoutNanos) {

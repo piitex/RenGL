@@ -88,8 +88,6 @@ final class UiaCom {
         Obj object(int id);
     }
 
-    // ---- objects -----------------------------------------------------------------------------------------------
-
     private static final Map<Long, Obj> LIVE = new ConcurrentHashMap<>();
     private static final AtomicLong COOKIES = new AtomicLong(1);
 
@@ -182,8 +180,6 @@ final class UiaCom {
         pointer.reinterpret(8).set(ADDRESS, 0, value);
     }
 
-    // ---- the tables --------------------------------------------------------------------------------------------
-
     private static MemorySegment upcall(String method, MemoryLayout... arguments) {
         FunctionDescriptor descriptor = FunctionDescriptor.of(JAVA_INT, arguments);
         try {
@@ -252,8 +248,6 @@ final class UiaCom {
         if (TABLES[SIMPLE] == null) throw new IllegalStateException();
     }
 
-    // ---- IUnknown ----------------------------------------------------------------------------------------------
-
     private static int queryInterface(MemorySegment self, MemorySegment riid, MemorySegment ppv) {
         try {
             Obj object = from(self);
@@ -292,8 +286,6 @@ final class UiaCom {
         log.debug("UI Automation provider call failed", t);
         return Uia.E_FAIL;
     }
-
-    // ---- IRawElementProviderSimple -----------------------------------------------------------------------------
 
     private static int providerOptions(MemorySegment self, MemorySegment result) {
         try {
@@ -396,8 +388,6 @@ final class UiaCom {
         }
     }
 
-    // ---- IRawElementProviderFragment ---------------------------------------------------------------------------
-
     private static int navigate(MemorySegment self, int direction, MemorySegment result) {
         try {
             Obj object = from(self);
@@ -499,8 +489,6 @@ final class UiaCom {
         }
     }
 
-    // ---- IRawElementProviderFragmentRoot -----------------------------------------------------------------------
-
     private static int elementFromPoint(MemorySegment self, double screenX, double screenY, MemorySegment result) {
         try {
             out(result, MemorySegment.NULL);
@@ -529,8 +517,6 @@ final class UiaCom {
             return fail(t);
         }
     }
-
-    // ---- patterns ----------------------------------------------------------------------------------------------
 
     /** The control and the Element to act on, or an error code. */
     private interface Action {
@@ -726,8 +712,6 @@ final class UiaCom {
             return fail(t);
         }
     }
-
-    // ---- for the host ------------------------------------------------------------------------------------------
 
     /** Calls Release on a COM pointer that someone else gave us. */
     static void releasePointer(MemorySegment pointer) {

@@ -141,8 +141,6 @@ final class WinMediaSource implements Demuxer {
         }
     }
 
-    // ------------------------------------------------------------------ the streams
-
     private void findStreams(Arena a) {
         for (int i = 0; i < 64 && (videoIndex < 0 || audioIndex < 0); i++) {
             MemorySegment out = a.allocate(8);
@@ -335,8 +333,6 @@ final class WinMediaSource implements Demuxer {
         }
         return s.toString().trim();
     }
-
-    // ------------------------------------------------------------------ Demuxer
 
     @Override
     public MediaInfo info() {

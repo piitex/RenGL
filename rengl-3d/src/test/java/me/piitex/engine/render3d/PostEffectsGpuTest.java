@@ -125,8 +125,6 @@ class PostEffectsGpuTest {
         return new Color(r, g, b, 1f);
     }
 
-    // ---- the grade and the vignette --------------------------------------------------------------------------------
-
     private static Scenario look() {
         TextureData texture = new TextureData(8, 8, new byte[8 * 8 * 4]);
         fill(texture, 200, 100, 50);
@@ -206,8 +204,6 @@ class PostEffectsGpuTest {
         });
     }
 
-    // ---- the colour fringe -----------------------------------------------------------------------------------------
-
     private static Scenario fringe() {
         TextureData texture = new TextureData(8, 8, new byte[8 * 8 * 4]);
         fill(texture, 255, 255, 255);
@@ -249,8 +245,6 @@ class PostEffectsGpuTest {
             MemoryUtil.memFree(data);
         }
     }
-
-    // ---- ambient occlusion -----------------------------------------------------------------------------------------
 
     private static Scenario corner() {
         Scene3D scene = flat();
@@ -303,8 +297,6 @@ class PostEffectsGpuTest {
             });
         });
     }
-
-    // ---- running them ----------------------------------------------------------------------------------------------
 
     @TestFactory
     List<DynamicTest> vulkan() {

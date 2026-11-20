@@ -88,8 +88,6 @@ final class ObjC {
         return System.getProperty("os.name", "").toLowerCase().contains("mac");
     }
 
-    // ---- calls --------------------------------------------------------------------------------------------------------
-
     /** The class of that name, or 0 where it does not exist (a framework that is not there, or an older macOS). */
     long cls(String name) {
         try (Arena arena = Arena.ofConfined()) {

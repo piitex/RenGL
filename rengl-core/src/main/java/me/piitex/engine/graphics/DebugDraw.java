@@ -96,8 +96,6 @@ public final class DebugDraw {
         return new DebugDraw(queue, seconds);
     }
 
-    // ---- shapes
-
     /**
      * A line from (x0, y0) to (x1, y1).
      */
@@ -206,8 +204,6 @@ public final class DebugDraw {
         shape.text = text;
     }
 
-    // ---- drawing
-
     /**
      * Draws the queue in screen coordinates, as they were given.
      */
@@ -286,8 +282,6 @@ public final class DebugDraw {
         renderer.drawLine(s.x1, s.y1, backX - sideX, backY - sideY, s.color, line);
     }
 
-    // ---- settings
-
     /**
      * Turns debug drawing on or off, on by default. While off, shapes aren't queued and {@link #draw} draws nothing.
      * Turning it off also empties the queue. Shared with every {@link #hold} view.
@@ -355,8 +349,6 @@ public final class DebugDraw {
     public int size() {
         return queue.shapes.size();
     }
-
-    // ---- the queue
 
     private Shape add(int kind, Color color) {
         Queue q = queue;

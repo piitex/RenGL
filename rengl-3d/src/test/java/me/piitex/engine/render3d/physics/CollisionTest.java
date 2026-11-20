@@ -47,8 +47,6 @@ class CollisionTest {
     private static final CapsuleShape CAPSULE = new CapsuleShape(0.25f, 0.5f);
     private static final PlaneShape FLOOR = new PlaneShape();
 
-    // ---- Spheres ----
-
     @Test
     void sphereSphere() {
         Manifold m = collide(BALL, at(0, 0, 0), BALL, at(0.9f, 0, 0));
@@ -114,8 +112,6 @@ class CollisionTest {
         assertEquals(0.05f, end.depths[0], 1e-5f);
     }
 
-    // ---- Capsules ----
-
     @Test
     void capsuleCapsuleCrossingAndParallel() {
         Quat lying = Quat.fromAxisAngle(Vec3.Z, PI / 2);
@@ -167,8 +163,6 @@ class CollisionTest {
         assertTrue(inside.count >= 1 && maxDepth(inside) > 0.5f);
         assertEquals(0, collide(CAPSULE, at(0, 1.4f, 0), CUBE, at(0, 0, 0)).count);
     }
-
-    // ---- Boxes ----
 
     @Test
     void boxPlane() {
@@ -258,8 +252,6 @@ class CollisionTest {
             assertTrue(ab.count <= Manifold.MAX_POINTS);
         }
     }
-
-    // ---- Broadphase and world ----
 
     @Test
     void broadphaseFindsExactlyTheOverlappingPairs() {

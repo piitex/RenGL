@@ -200,8 +200,6 @@ public final class TileMap {
         return load(file.toPath(), project);
     }
 
-    // ---- Size
-
     /**
      * The map's width in tiles. For an infinite map, the width of the area its layers cover.
      */
@@ -507,8 +505,6 @@ public final class TileMap {
         return new float[]{origin[0] + tileWidth / 2f, origin[1] + tileHeight / 2f};
     }
 
-    // ---- Layers
-
     /**
      * The layers at the top of the map, bottom first, as they are drawn; groups hold more. To draw the game's own
      * sprites between layers, draw them one by one:
@@ -616,8 +612,6 @@ public final class TileMap {
         objectsById = null;
     }
 
-    // ---- Tile sets
-
     /**
      * The tile sets the map uses, in the order Tiled lists them.
      */
@@ -640,8 +634,6 @@ public final class TileMap {
     public void addTileSet(TileSet set) {
         if (!tileSets.contains(set)) tileSets.add(set);
     }
-
-    // ---- Objects
 
     /**
      * Every object on every object layer, in drawing order.
@@ -681,8 +673,6 @@ public final class TileMap {
         return found;
     }
 
-    // ---- Collision
-
     /**
      * The collision shapes of every tile layer: the shapes drawn on tiles in Tiled's collision editor, placed
      * wherever those tiles are. See {@link TileLayer#getCollisionShapes()}. Object layers of walls aren't included,
@@ -693,8 +683,6 @@ public final class TileMap {
         for (MapLayer layer : getAllLayers()) if (layer instanceof TileLayer tiles) shapes.addAll(tiles.getCollisionShapes());
         return shapes;
     }
-
-    // ---- Time and drawing
 
     /**
      * Moves animated tiles on by {@code delta} seconds. Call it once a frame, or once a fixed step.
@@ -767,8 +755,6 @@ public final class TileMap {
     QuadBuffer quads() {
         return quads;
     }
-
-    // ---- What Tiled set on the map
 
     /**
      * The background color set in Tiled's map properties, or null if none is set.

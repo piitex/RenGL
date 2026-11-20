@@ -116,8 +116,6 @@ public final class FsrFrameGeneration {
         return new IllegalStateException(t);
     }
 
-    // ---- the window's device ------------------------------------------------------------------------------------
-
     /** What this device has to say to the library. Everything of one window. */
     private static final class Session {
         final Ffx ffx;
@@ -215,8 +213,6 @@ public final class FsrFrameGeneration {
         }
     }
 
-    // ---- Vulkan's own swapchain calls, for when the library's would not start ------------------------------------
-
     private static final class Plain {
         private MethodHandle create, destroy, images, acquire, present;
 
@@ -235,8 +231,6 @@ public final class FsrFrameGeneration {
             present = bind("vkQueuePresentKHR", FunctionDescriptor.of(JAVA_INT, JAVA_LONG, JAVA_LONG));
         }
     }
-
-    // ---- the swapchain ------------------------------------------------------------------------------------------
 
     /** The five swapchain calls: the library's while it has a swapchain, Vulkan's if it never made one. */
     private static final class Hooks implements VulkanExtensionProvider.SwapchainHooks {
@@ -406,8 +400,6 @@ public final class FsrFrameGeneration {
         s.skipDestroy = 0L;
         log.info("FSR frame generation: swapchain taken down");
     }
-
-    // ---- frame generation ---------------------------------------------------------------------------------------
 
     private static boolean ensureFrameGeneration(Session s) {
         if (s.fg != null) return true;

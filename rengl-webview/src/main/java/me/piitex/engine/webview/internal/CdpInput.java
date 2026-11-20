@@ -26,8 +26,6 @@ public final class CdpInput {
         this.sender = sender;
     }
 
-    // ------------------------------------------------------------------------------------------------ mouse
-
     private static String buttonName(int glfwButton) {
         return switch (glfwButton) {
             case 0 -> "left";
@@ -75,8 +73,6 @@ public final class CdpInput {
         sender.send("Input.dispatchMouseEvent", "{\"type\":\"mouseMoved\",\"x\":-1,\"y\":-1,\"button\":\"none\",\"buttons\":0}");
     }
 
-    // ------------------------------------------------------------------------------------------------ keyboard
-
     /** A key (a GLFW key code, with GLFW's action: 0 release, 1 press, 2 repeat). */
     public void key(int glfwKey, int action, int mods) {
         int vk = Keys.virtualKey(glfwKey);
@@ -110,8 +106,6 @@ public final class CdpInput {
         int c = Math.max(0, Math.min(caret, text.length()));
         sender.send("Input.imeSetComposition", "{\"text\":" + quote(text) + ",\"selectionStart\":" + c + ",\"selectionEnd\":" + c + "}");
     }
-
-    // ------------------------------------------------------------------------------------------------ the page's cursor
 
     /** What the page wants under the pointer, and whether a text field has its focus. */
     public record Probe(CursorMode cursor, boolean editing) {

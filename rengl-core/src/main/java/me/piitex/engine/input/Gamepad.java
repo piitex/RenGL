@@ -237,8 +237,6 @@ public final class Gamepad {
         return layout;
     }
 
-    // ---------------------------------------------------------------- buttons
-
     /**
      * True while {@code button} is held. The D-pad counts as four buttons.
      */
@@ -263,8 +261,6 @@ public final class Gamepad {
     public float getHeldTime(Button button) {
         return buttons[button.ordinal()].heldTime();
     }
-
-    // ---------------------------------------------------------------- axes
 
     /**
      * The axis with the dead zone taken out: -1 to 1 for a stick axis (y grows downwards, so up is negative) and 0 to 1 for
@@ -314,8 +310,6 @@ public final class Gamepad {
     public String toString() {
         return connected ? "Gamepad[" + index + ", " + name + "]" : "Gamepad[" + index + ", not connected]";
     }
-
-    // ---------------------------------------------------------------- fed by Input
 
     void connect(String name, String guid) {
         this.connected = true;

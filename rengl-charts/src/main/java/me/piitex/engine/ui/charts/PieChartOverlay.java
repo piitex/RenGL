@@ -57,8 +57,6 @@ public class PieChartOverlay extends ChartOverlay {
         setLegendPosition(LegendPosition.RIGHT);
     }
 
-    // ---- data ---------------------------------------------------------------------------------------------------
-
     /**
      * Replaces every slice. {@code labels} and {@code values} line up one to one.
      */
@@ -146,8 +144,6 @@ public class PieChartOverlay extends ChartOverlay {
         return Double.isNaN(v) ? 0 : v;
     }
 
-    // ---- look ---------------------------------------------------------------------------------------------------
-
     public float getHoleRatio() {
         return holeRatio;
     }
@@ -197,8 +193,6 @@ public class PieChartOverlay extends ChartOverlay {
         this.centerText = text;
         this.centerCaption = caption;
     }
-
-    // ---- hooks --------------------------------------------------------------------------------------------------
 
     @Override
     protected int legendCount() {
@@ -288,8 +282,6 @@ public class PieChartOverlay extends ChartOverlay {
         centerFont = null;
     }
 
-    // ---- geometry -----------------------------------------------------------------------------------------------
-
     /** The share of the whole that slice {@code index} takes as drawn, 0 to 1. */
     private double share(int index, double totalShown) {
         if (totalShown <= 0) return 0;
@@ -335,8 +327,6 @@ public class PieChartOverlay extends ChartOverlay {
         if (hoverSlice < 0) return null;
         return new ChartHit(0, hoverSlice, series.getFirst().getName(), categoryLabel(hoverSlice), series.getFirst().get(hoverSlice));
     }
-
-    // ---- drawing ------------------------------------------------------------------------------------------------
 
     @Override
     protected void drawPlot(Renderer renderer) {

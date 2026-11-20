@@ -84,8 +84,6 @@ final class AviBuilder {
         return f;
     }
 
-    // ------------------------------------------------------------------ layout
-
     private ByteBuffer b;
 
     private void fourcc(String s) {

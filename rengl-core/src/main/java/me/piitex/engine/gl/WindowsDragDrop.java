@@ -108,8 +108,6 @@ final class WindowsDragDrop {
     private WindowsDragDrop() {
     }
 
-    // ---- COM plumbing -------------------------------------------------------------------------------------------
-
     private static byte[] guid(int d1, int d2, int d3, int... d4) {
         ByteBuffer b = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
         b.putInt(d1).putShort((short) d2).putShort((short) d3);
@@ -218,8 +216,6 @@ final class WindowsDragDrop {
         return table.get(ADDRESS, 8L * index);
     }
 
-    // ---- starting up -------------------------------------------------------------------------------------------
-
     /**
      * Main thread: readies the thread for OLE, once. False if it can't be done, for instance when something has
      * already made the thread a multi-threaded apartment, which OLE's drag and drop refuses to run in.
@@ -238,8 +234,6 @@ final class WindowsDragDrop {
         }
         return oleReady;
     }
-
-    // ---- dragging out ------------------------------------------------------------------------------------------
 
     /**
      * The files being dragged out. Holds the {@link FileDrag.Source} and asks it once, the first time anything wants
@@ -445,8 +439,6 @@ final class WindowsDragDrop {
             log.warn("Could not release the mouse button after a drag", t);
         }
     }
-
-    // ---- dropping in ---------------------------------------------------------------------------------------------
 
     /**
      * The window's drop target.

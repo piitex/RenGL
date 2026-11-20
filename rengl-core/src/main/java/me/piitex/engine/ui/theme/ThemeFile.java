@@ -160,8 +160,6 @@ public final class ThemeFile {
         return new Token(name, label, group, Float.class, min, max, get::apply, (theme, value) -> set.accept(theme, ((Number) value).floatValue()), TIPS.getOrDefault(name, ""));
     }
 
-    // --- The settings ---------------------------------------------------------------------------------------------
-
     /** Every setting a theme has, in the order a file writes them and a tool should show them. */
     public static List<Token> tokens() {
         return TOKENS;
@@ -192,8 +190,6 @@ public final class ThemeFile {
         copy.setAssetBase(theme.assetBase());
         return copy;
     }
-
-    // --- Reading and writing --------------------------------------------------------------------------------------
 
     /**
      * Reads a theme file.

@@ -113,8 +113,6 @@ final class TiledReader {
         }
     }
 
-    // ---- Map
-
     private TileMap buildMap(Map<String, Object> root, Path file) {
         String kind = str(root, "type", "map");
         if (!kind.equals("map")) throw new IllegalArgumentException("this is a " + kind + " file, not a map");
@@ -160,8 +158,6 @@ final class TiledReader {
         }
         return map;
     }
-
-    // ---- Layers
 
     private MapLayer layer(Map<String, Object> entry, Path file, Gids gids) {
         String name = str(entry, "name", "");
@@ -277,8 +273,6 @@ final class TiledReader {
         layer.setRepeat(bool(entry, "repeatx", false), bool(entry, "repeaty", false));
         return layer;
     }
-
-    // ---- Objects
 
     /**
      * An object, with its template's settings under its own. Tile objects take their tile from the map's tile sets,
@@ -437,8 +431,6 @@ final class TiledReader {
             throw new FileProblem(path, e);
         }
     }
-
-    // ---- Tile sets
 
     private TileSet tileSetFile(Path path) {
         TileSet cached = tileSets.get(path);
@@ -599,8 +591,6 @@ final class TiledReader {
         }
         return new Texture(Image.Companion.makeRaster(info, pixels, w * 4));
     }
-
-    // ---- Properties
 
     /**
      * The properties of a map, layer, tile set, tile or object: the defaults of its class if the project defines it, with

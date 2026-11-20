@@ -388,8 +388,6 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
             return (int) Math.floor((mouseY - getY() + scroll) / rowHeight());
         }
 
-        // --- Scrollbar -------------------------------------------------------------------------
-
         /**
          * Width of the strip on the right edge the scrollbar takes, or 0 when every row fits.
          */
@@ -524,8 +522,6 @@ public class DropdownOverlay<T> extends Overlay implements Themeable, Focusable,
             renderer.drawBorder(x, y, w, h, border, owner.getStyling().getBorderThickness(), radius);
         }
     }
-
-    // --- Accessibility ---
 
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {

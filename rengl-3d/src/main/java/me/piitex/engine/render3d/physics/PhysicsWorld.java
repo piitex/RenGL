@@ -301,8 +301,6 @@ public final class PhysicsWorld {
         return this;
     }
 
-    // ---- Queries --------------------------------------------------------------------------------------------------
-
     public boolean isQueriesHitTriggers() {
         return queriesHitTriggers;
     }

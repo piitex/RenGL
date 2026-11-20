@@ -312,8 +312,6 @@ public class ReorderableGrid extends ScrollContainer implements Focusable {
         return lifted;
     }
 
-    // --- Layout ------------------------------------------------------------------------------------
-
     private int columns() {
         return Math.max(1, (int) ((getWidth() + gap) / (itemWidth + gap)));
     }
@@ -332,8 +330,6 @@ public class ReorderableGrid extends ScrollContainer implements Focusable {
         int row = Math.max(0, (int) Math.floor(centerY / (itemHeight + gap)));
         return Math.min(items.size() - 1, row * columns + col);
     }
-
-    // --- Pressing ----------------------------------------------------------------------------------
 
     private Container itemAt(double windowX, double windowY) {
         double x = windowX - getContentOriginX(), y = windowY - getContentOriginY();
@@ -453,8 +449,6 @@ public class ReorderableGrid extends ScrollContainer implements Focusable {
                     : "Dropped " + labelOf(item) + ", " + (items.indexOf(item) + 1) + " of " + items.size());
         }
     }
-
-    // --- Keyboard and accessibility ----------------------------------------------------------------
 
     /**
      * What an item is called to a screen reader: its accessible name, else the first text inside it, else "Item".
@@ -685,8 +679,6 @@ public class ReorderableGrid extends ScrollContainer implements Focusable {
                 ThemeManager.getCurrent().getAccent(), carryStart >= 0 ? 4f : 2f, 4f);
         renderer.popClip();
     }
-
-    // --- Dragging ----------------------------------------------------------------------------------
 
     /**
      * Puts the lifted item under the pointer (kept inside the grid) and moves it in the order to the slot it now

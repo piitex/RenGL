@@ -122,8 +122,6 @@ public class ButtonOverlay extends TextOverlay implements Themeable, me.piitex.e
         this.onAction = onAction;
     }
 
-    // --- Icon ----------------------------------------------------------------------------------------------------
-
     /**
      * Puts an icon beside the label, the pair centered in the button, or the icon alone when the label is empty. The
      * icon is the label's color, so it follows the theme and {@link #setTextColor}, and fades with a
@@ -237,8 +235,6 @@ public class ButtonOverlay extends TextOverlay implements Themeable, me.piitex.e
             renderer.drawText(shown, textX, drawY, font, resolveTextColor(getTextColor()));
         }
     }
-
-    // --- Accessibility ---
 
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {

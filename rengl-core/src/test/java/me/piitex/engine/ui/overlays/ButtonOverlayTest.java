@@ -63,8 +63,6 @@ class ButtonOverlayTest {
         button.getMouseClickListenerConsumer().accept(new MouseClickEvent(0, 0, 0, 0));
     }
 
-    // --- Disabled ---
-
     @Test
     void aDisabledButtonDoesNotFireItsAction() {
         ButtonOverlay button = button("Extract");
@@ -131,8 +129,6 @@ class ButtonOverlayTest {
         assertEquals(0xFFFFFF, disabled.getColor(100, 30) & 0xFFFFFF, "disabled does not");
         assertTrue(button.isHovered(), "the hover state itself is left as it was");
     }
-
-    // --- Icon ---
 
     @Test
     void anIconSitsBesideTheLabelAndTheTwoAreCentered() {
@@ -220,8 +216,6 @@ class ButtonOverlayTest {
         button.setIconSize(0);
         assertEquals(25, button.getIconSize(), 0.5);
     }
-
-    // --- Ellipsis ---
 
     @Test
     void aLongLabelStaysInsideTheButtonWithEllipsize() {

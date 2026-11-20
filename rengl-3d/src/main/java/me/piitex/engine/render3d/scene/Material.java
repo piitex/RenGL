@@ -185,8 +185,6 @@ public final class Material {
         return this;
     }
 
-    // ---- physically based shading ------------------------------------------------------------------------------
-
     public boolean isPbr() {
         return pbr;
     }

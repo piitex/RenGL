@@ -97,8 +97,6 @@ final class ColliderMeshes {
         return new Built(mesh, pattern);
     }
 
-    // ---- Shapes -----------------------------------------------------------------------------------------------------
-
     private void box(Vec3 h) {
         float x = h.x(), y = h.y(), z = h.z();
         Vec3[] c = new Vec3[8];
@@ -191,8 +189,6 @@ final class ColliderMeshes {
         Vec3 u = side[0].mul(PLANE_SIZE / 2f), v = side[1].mul(PLANE_SIZE / 2f), lift = n.mul(SKIN);
         quad(lift.sub(u).sub(v), lift.add(u).sub(v), lift.add(u).add(v), lift.sub(u).add(v), n, PLANE_CELL);
     }
-
-    // ---- Faces ------------------------------------------------------------------------------------------------------
 
     /**
      * Flat four-sided face a, b, c, d, with lines along its edges and about every {@code cell} metres across it.

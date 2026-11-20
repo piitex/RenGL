@@ -118,8 +118,6 @@ final class DebPackage {
         }
     }
 
-    // ---- ar -------------------------------------------------------------------------------------------------------
-
     private static void member(OutputStream out, String name, byte[] content) throws IOException {
         header(out, name, content.length);
         out.write(content);

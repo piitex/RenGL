@@ -52,8 +52,6 @@ class RpmPackageTest {
         file = Files.readAllBytes(rpm);
     }
 
-    // ---- reading ----------------------------------------------------------------------------------------------------
-
     private record Header(byte[] bytes, int indexCount, Map<Integer, Object> tags) {
         String string(int tag) {
             return (String) tags.get(tag);
@@ -173,8 +171,6 @@ class RpmPackageTest {
         for (byte[] part : parts) d.update(part);
         return d.digest();
     }
-
-    // ---- tests ------------------------------------------------------------------------------------------------------
 
     @Test
     void theLeadSaysThisIsAnRpmWithASignatureHeader() {

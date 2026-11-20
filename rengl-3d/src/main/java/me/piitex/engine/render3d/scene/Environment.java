@@ -60,8 +60,6 @@ final class Environment {
         return (float) Math.max(0, Math.floor(Math.log(size) / Math.log(2)));
     }
 
-    // ---- the sources -----------------------------------------------------------------------------------------
-
     private static void gradient(Skybox sky, double[] sh) {
         int w = 32, h = 16;
         for (int y = 0; y < h; y++) {

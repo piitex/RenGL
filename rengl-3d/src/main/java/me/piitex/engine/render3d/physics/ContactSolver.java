@@ -259,8 +259,6 @@ final class ContactSolver {
         }
     }
 
-    // ---- Helpers --------------------------------------------------------------------------------------------------
-
     private static float inverse(float k) {
         return k > 1e-12f ? 1f / k : 0f;
     }

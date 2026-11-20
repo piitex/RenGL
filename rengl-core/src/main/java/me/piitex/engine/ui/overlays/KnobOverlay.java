@@ -388,8 +388,6 @@ public class KnobOverlay extends Overlay implements Themeable, Draggable, Focusa
         if (this.value != before) notifyAccessibleChange();
     }
 
-    // --- Accessibility ---
-
     @Override
     protected me.piitex.engine.access.AccessibleRole defaultAccessibleRole() {
         return me.piitex.engine.access.AccessibleRole.SLIDER;
