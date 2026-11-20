@@ -73,10 +73,13 @@ Apple does not state two conventions plainly, and they are the first thing to tr
 shimmers: `-Drengl.metalfx.flip=motion,jitterx,jittery` (any of the three) reverses the sign of the motion vectors and of the
 camera's jitter on that axis.
 
-**Not run.** This was written on a Windows machine with no Mac to try it on: it compiles, the provider's availability logic is
-tested, and the rest has never touched MoltenVK or MetalFX. The parts most likely to need a fix are the export of the textures
-(MoltenVK is asked for them without the creation-time flags the extension's specification describes) and the signs above.
-`Upscalers.available` does not offer MetalFX when its first check fails, and the log says what failed.
+**Run on an Apple M5** (MoltenVK, Vulkan 1.3), where it upscales the scene. Getting there took one fix: MoltenVK's
+`vkExportMetalObjectsEXT` fills in only the first structure of a chain, so the Metal device, the command queue and each
+texture are asked for in calls of their own. It drew at the same speed as the built-in upscaler at the same render scale, as
+expected, since both draw the same number of pixels. **Not checked:** the signs above (the picture was not compared against a
+moving reference, so a trail or shimmer is still worth trying the flips on), the picture quality against the built-in upscaler,
+and the speed of each preset. `Upscalers.available` does not offer MetalFX when its first check fails, and the log says what
+failed.
 
 ## FSR
 

@@ -316,8 +316,10 @@ It is the same two levels as an acceleration structure, so everything built on a
 nearest-hit and any-hit rules) is shared.
 
 It costs more: the walk runs on the shader cores instead of the RT cores, so several effects at once on a big scene want a fast
-GPU. Use fewer rays (`setRayTracedGlobalIlluminationRays`), shorter ones, or only the effects you need. Its speed has been
-measured only on an RTX 4090 (where it is not what you would choose); on a Mac it has not been run yet. The triangles of all the
+GPU. Use fewer rays (`setRayTracedGlobalIlluminationRays`), shorter ones, or only the effects you need. It has run on an Apple
+M5 through MoltenVK, where `RayTracingDemo`'s default preset (path tracing) drew about 15 to 24 frames a second at 3200 by 1800;
+the other presets were not timed there. On an RTX 4090 it is not what you would choose, but every ray test passes with it forced
+on. The triangles of all the
 meshes share one storage buffer, so a scene with more than fits the GPU's (`maxStorageBufferRange`) leaves the meshes that do not
 fit out, with an error in the log.
 
