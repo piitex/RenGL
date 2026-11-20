@@ -2,15 +2,22 @@ package me.piitex.engine.input;
 
 import me.piitex.engine.Window;
 import me.piitex.engine.WindowOptions;
+import me.piitex.engine.gl.renderer.Renderer;
+import me.piitex.engine.ui.overlays.ButtonOverlay;
 import me.piitex.engine.ui.containers.TreeTableView;
 import me.piitex.engine.ui.containers.TreeView;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.glfw.GLFW;
 
+import java.lang.reflect.Proxy;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -257,5 +264,49 @@ class TreeTableDragTest {
         drag(2, rowY(0, 0.1));
         assertTrue(drops.isEmpty());
         assertFalse(tree.isDraggingRow());
+    }
+
+    /** A renderer that draws nothing but keeps the alpha stack, so a test can see how faded something is drawn. */
+    private static Renderer alphaRenderer() {
+        Deque<Float> alpha = new ArrayDeque<>(List.of(1f));
+        return (Renderer) Proxy.newProxyInstance(Renderer.class.getClassLoader(), new Class<?>[]{Renderer.class}, (proxy, method, args) -> {
+            switch (method.getName()) {
+                case "pushAlpha" -> alpha.push(alpha.peek() * (Float) args[0]);
+                case "popAlpha" -> alpha.pop();
+                case "getAlpha" -> {
+                    return alpha.peek();
+                }
+                default -> {
+                }
+            }
+            Class<?> type = method.getReturnType();
+            if (type == boolean.class) return false;
+            if (type == float.class) return 0f;
+            if (type == double.class) return 0d;
+            if (type == int.class) return 0;
+            if (type == long.class) return 0L;
+            return null;
+        });
+    }
+
+    @Test
+    void cellControlsFadeWithTheirDraggedRow() {
+        Map<String, Float> drawnAt = new HashMap<>();
+        tree.addColumn("Open", n -> "").setWidth(80).setCellWidget(() -> new ButtonOverlay("", 60, 20) {
+            @Override
+            public void render(Renderer renderer) {
+                drawnAt.put(getText(), renderer.getAlpha());
+            }
+        }, (button, n) -> button.setText(n.name));
+        tree.update(0);
+        Renderer renderer = alphaRenderer();
+        hold(2, rowY(0, 0.1));
+        tree.render(renderer);
+        assertEquals(0.4f, drawnAt.get("readme"), 1e-6f);
+        assertEquals(1f, drawnAt.get("src"), 1e-6f);
+        release();
+        drawnAt.clear();
+        tree.render(renderer);
+        assertEquals(1f, drawnAt.get("readme"), 1e-6f);
     }
 }

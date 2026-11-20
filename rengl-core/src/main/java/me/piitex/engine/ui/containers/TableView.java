@@ -30,6 +30,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -2288,6 +2289,32 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         renderer.popClip();
         if (isScrollbarVisible()) renderScrollbars(renderer);
         if (draggingRow && pressedItem != null) renderDragPreview(renderer);
+    }
+
+    /**
+     * Draws the children, fading the cells' controls of rows being dragged the way their row is faded.
+     */
+    @Override
+    protected void renderChildren(Renderer renderer) {
+        if (!draggingRow || draggedSet.isEmpty()) {
+            super.renderChildren(renderer);
+            return;
+        }
+        Set<Element> faded = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Map<T, Cell<T>> byItem : cells.values()) {
+            for (Cell<T> cell : byItem.values()) {
+                if (draggedSet.contains(cell.item)) faded.add(cell.widget);
+            }
+        }
+        renderer.pushTranslate((float) (getX() + childOffsetX()), (float) (getY() + childOffsetY()));
+        for (Element child : getElements().values()) {
+            if (!child.isEnabled()) continue;
+            boolean fade = faded.contains(child);
+            if (fade) renderer.pushAlpha(CARRIED_ALPHA);
+            child.renderWithTransitions(renderer);
+            if (fade) renderer.popAlpha();
+        }
+        renderer.popTranslate();
     }
 
     /**
