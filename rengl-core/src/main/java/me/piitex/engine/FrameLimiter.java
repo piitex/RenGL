@@ -11,7 +11,7 @@ import java.util.concurrent.locks.LockSupport;
  * the deadline is reset to now instead of being chased with a burst of un-throttled frames.
  * <p>
  * Sleeping alone is too coarse (OS timers wake up ms late), so it parks until shortly before the deadline
- * and spins for the remainder.
+ * and spins for the remainder. Throttled frames (background, minimized) skip the spin and just park.
  * <p>
  * Render thread only.
  */
@@ -28,6 +28,15 @@ final class FrameLimiter {
      * returns immediately.
      */
     void limit(int maxFps) {
+        limit(maxFps, true);
+    }
+
+    /**
+     * Like {@link #limit(int)}, but with {@code precise} false it parks the whole remainder instead of spinning the
+     * last {@link #SPIN_NANOS}: for throttled frames (background or minimized) where waking a little late doesn't
+     * matter and burning a core does.
+     */
+    void limit(int maxFps, boolean precise) {
         if (maxFps <= 0) {
             deadline = 0L;
             return;
@@ -43,7 +52,9 @@ final class FrameLimiter {
 
         long remaining;
         while ((remaining = deadline - System.nanoTime()) > 0) {
-            if (remaining > SPIN_NANOS) {
+            if (!precise) {
+                LockSupport.parkNanos(remaining);
+            } else if (remaining > SPIN_NANOS) {
                 LockSupport.parkNanos(remaining - SPIN_NANOS);
             } else {
                 Thread.onSpinWait();

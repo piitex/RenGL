@@ -750,9 +750,9 @@ public class Engine {
             Host pacer = pacingHost();
             WindowOptions pacing = pacer != null ? pacer.window.getWindowOptions() : live.isEmpty() ? null : live.get(0).window.getWindowOptions();
             if (!live.isEmpty() && live.stream().allMatch(h -> h.window.isMinimized())) {
-                frameLimiter.limit(MINIMIZED_FPS); // nothing is visible, so don't redraw at full rate
+                frameLimiter.limit(MINIMIZED_FPS, false); // nothing is visible, so don't redraw at full rate
             } else if (pacing != null && pacing.getBackgroundFPS() > 0 && live.stream().noneMatch(h -> h.window.isFocused())) {
-                frameLimiter.limit(pacing.getBackgroundFPS()); // in the background: the display's rate isn't needed
+                frameLimiter.limit(pacing.getBackgroundFPS(), false); // in the background: the display's rate isn't needed
             } else if (pacing != null && !pacing.isVsync()) {
                 fastFrames = 0;
                 frameLimiter.limit(pacing.getMaxFPS());
