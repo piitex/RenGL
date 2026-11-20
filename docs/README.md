@@ -41,6 +41,7 @@ If you are new, read [Getting started](getting-started.md) and then [Architectur
 | [ReorderableGrid](containers/reorderable-grid.md) | Drag-to-rearrange grid of items |
 | [TreeView](containers/tree-view.md) | A tree of items, like an editor's hierarchy or a file browser |
 | [TableView](containers/table-view.md) | Rows and columns with a fixed header, click-to-sort and resizable columns, check boxes and cells that edit in place |
+| [TreeTableView](containers/table-view.md#tree-tables) | A table whose rows form a tree, with columns across every level |
 | [ListBox](containers/list-box.md) · [AccordionContainer](containers/accordion-container.md) | A pick-one-or-many list; sections that fold |
 | [ToastManager](containers/toast-manager.md) · [MessageBox](containers/message-box.md) | Corner notifications; one-line alert, confirm, prompt and choose dialogs |
 | [ToolBar](containers/tool-bar.md) · [StatusBar](containers/status-bar.md) | The strips along the top and bottom of a window |

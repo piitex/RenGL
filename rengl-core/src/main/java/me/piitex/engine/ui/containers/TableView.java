@@ -74,6 +74,8 @@ import java.util.function.Supplier;
  * A column can also show a live control in every cell, such as a slider, a combo box or a button, with
  * {@link Column#setCellWidget}. Only the rows on screen get one, and they are reused as the table scrolls.
  * <p>
+ * For rows that form a tree, with columns across every level, use {@link TreeTableView}.
+ * <p>
  * It follows the theme like a {@link Container} that {@link #useTheme() uses the theme}. Its own right-click
  * selection runs before any {@link #onMouseClick} handler you set.
  */
@@ -349,9 +351,21 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         }
     }
 
+    /**
+     * A row of a tree: how deep it is, the row of its parent (-1 at the top level), and whether it has children.
+     */
+    private record Node(int depth, int parent, boolean hasChildren) {
+    }
+
     private final List<Column<T>> columns = new ArrayList<>();
     private final List<T> items = new ArrayList<>(); // as shown: sorted
     private Collection<? extends T> source = List.of();  // as given; read again by refresh()
+    private Function<T, ? extends Collection<? extends T>> children; // what is under an item, for a tree; null for a flat table
+    private final Set<T> expanded = new HashSet<>();
+    private final List<Node> nodes = new ArrayList<>(); // beside items, for a tree
+    private Column<T> treeColumn;
+    private float indent = 16f;
+    private boolean toggleOnDoubleClick = true;
     private Column<T> sortColumn;
     private boolean sortAscending = true;
 
@@ -533,16 +547,23 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         for (T item : items) {
             if (checked.contains(item)) result.add(item);
         }
+        if (children != null && result.size() < checked.size()) {
+            Set<T> shown = new HashSet<>(result);
+            for (T item : checked) {
+                if (!shown.contains(item)) result.add(item); // inside closed items, in the order they were ticked
+            }
+        }
         return result;
     }
 
     /**
-     * Ticks or clears one item. An item that is not in the table is ignored. Does not fire {@link #onCheck}.
+     * Ticks or clears one item. An item that is not in the table is ignored (in a tree, any item counts, shown or
+     * not). Does not fire {@link #onCheck}.
      */
     public void setChecked(T item, boolean on) {
         if (item == null) return;
         if (!on) checked.remove(item);
-        else if (indexOf(item) >= 0) checked.add(item);
+        else if (children != null || indexOf(item) >= 0) checked.add(item);
     }
 
     /**
@@ -583,7 +604,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
 
     /** The header's box: clears everything if every row is ticked, else ticks every row. */
     private void toggleAllChecks() {
-        boolean all = !items.isEmpty() && checked.size() >= items.size();
+        boolean all = !items.isEmpty() && shownChecked() >= items.size();
         for (T item : new ArrayList<>(items)) {
             if (checked.contains(item) == !all) continue;
             setChecked(item, !all);
@@ -591,8 +612,190 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         }
     }
 
+    /**
+     * A tree keeps the ticks of items inside closed items; a flat table forgets the ones whose item is gone.
+     */
     private void pruneChecked() {
-        if (!checked.isEmpty()) checked.retainAll(new HashSet<>(items));
+        if (children == null && !checked.isEmpty()) checked.retainAll(new HashSet<>(items));
+    }
+
+    /** How many of the rows shown are ticked. */
+    private int shownChecked() {
+        if (children == null) return checked.size();
+        int count = 0;
+        for (T item : items) {
+            if (checked.contains(item)) count++;
+        }
+        return count;
+    }
+
+    /* Tree */
+
+    /**
+     * Makes the table a tree: {@code children} lists what is under an item (empty or null for a leaf), and the items
+     * given to {@link #setItems} are the top level. Null makes it flat again. {@link TreeTableView} is the public face.
+     */
+    void setTreeChildren(Function<T, ? extends Collection<? extends T>> children) {
+        this.children = children;
+        refresh();
+    }
+
+    boolean isTree() {
+        return children != null;
+    }
+
+    boolean isExpanded(T item) {
+        return item != null && expanded.contains(item);
+    }
+
+    /**
+     * Opens or closes an item. Closing the item above the lead row selects it instead, without {@link #onSelect}; when
+     * only other selected rows were inside, it joins the selection for them.
+     */
+    void setExpanded(T item, boolean expand) {
+        if (children == null || item == null) return;
+        boolean leadInside = false, anyInside = false;
+        if (!expand) {
+            leadInside = isBelow(indexOf(selected), item);
+            for (T each : selection) anyInside |= isBelow(indexOf(each), item);
+        }
+        if (expand ? !expanded.add(item) : !expanded.remove(item)) return;
+        rebuildRows();
+        if (leadInside) selectOnly(item);
+        else if (anyInside && indexOf(item) >= 0) selection.add(item);
+    }
+
+    /**
+     * The user opened or closed an item: tells the listeners if the selection moved to it.
+     */
+    private void toggleByUser(T item) {
+        T before = selected;
+        int count = selection.size();
+        setExpanded(item, !expanded.contains(item));
+        if (!Objects.equals(before, selected) || count != selection.size()) notifySelection(before);
+    }
+
+    void expandAll() {
+        if (children == null) return;
+        List<T> stack = new ArrayList<>(source);
+        Set<T> seen = new HashSet<>();
+        while (!stack.isEmpty()) {
+            T item = stack.removeLast();
+            if (!seen.add(item)) continue;
+            Collection<? extends T> kids = children.apply(item);
+            if (kids == null || kids.isEmpty()) continue;
+            expanded.add(item);
+            stack.addAll(kids);
+        }
+        rebuildRows();
+    }
+
+    void collapseAll() {
+        if (children == null || expanded.isEmpty()) return;
+        int row = indexOf(selected);
+        while (row >= 0 && nodes.get(row).parent >= 0) row = nodes.get(row).parent;
+        T top = row >= 0 ? items.get(row) : null;
+        expanded.clear();
+        rebuildRows();
+        if (top != null) selectOnly(top);
+    }
+
+    /**
+     * Opens every item above {@code item} and scrolls its row into view. Returns false if it is not in the tree.
+     */
+    boolean reveal(T item) {
+        if (item == null) return false;
+        if (children != null && indexOf(item) < 0) {
+            List<T> path = new ArrayList<>();
+            if (!search(source, item, path, new HashSet<>())) return false;
+            expanded.addAll(path);
+            rebuildRows();
+        }
+        int row = indexOf(item);
+        scrollToRow(row);
+        return row >= 0;
+    }
+
+    private boolean search(Collection<? extends T> level, T target, List<T> path, Set<T> seen) {
+        if (level == null) return false;
+        for (T item : level) {
+            if (Objects.equals(item, target)) return true;
+            if (!seen.add(item)) continue;
+            path.add(item);
+            if (search(children.apply(item), target, path, seen)) return true;
+            path.removeLast();
+        }
+        return false;
+    }
+
+    /** How deep {@code item}'s row is (0 at the top level), or -1 if it is not shown. */
+    int depthOf(T item) {
+        int row = indexOf(item);
+        return row < 0 ? -1 : nodes.isEmpty() ? 0 : nodes.get(row).depth;
+    }
+
+    /** The item above {@code item}'s row, or null at the top level or when it is not shown. */
+    T parentOf(T item) {
+        int row = indexOf(item);
+        int parent = row < 0 || nodes.isEmpty() ? -1 : nodes.get(row).parent;
+        return parent < 0 ? null : items.get(parent);
+    }
+
+    void setTreeColumn(Column<T> column) {
+        treeColumn = column;
+    }
+
+    /** The column that shows the arrows and indents: the one set, else the first. Null for a flat table. */
+    Column<T> getTreeColumn() {
+        if (children == null || columns.isEmpty()) return null;
+        return treeColumn != null && columns.contains(treeColumn) ? treeColumn : columns.getFirst();
+    }
+
+    float getIndent() {
+        return indent;
+    }
+
+    void setIndent(float indent) {
+        this.indent = Math.max(0f, indent);
+    }
+
+    void setToggleOnDoubleClick(boolean toggleOnDoubleClick) {
+        this.toggleOnDoubleClick = toggleOnDoubleClick;
+    }
+
+    boolean isToggleOnDoubleClick() {
+        return toggleOnDoubleClick;
+    }
+
+    /**
+     * Lists the rows again after an item opened or closed, keeping what a refresh keeps, without binding the cells'
+     * controls again: their items did not change.
+     */
+    private void rebuildRows() {
+        applySort();
+        pruneSelection();
+        clampScroll();
+    }
+
+    private boolean isBelow(int row, T ancestor) {
+        if (row < 0 || nodes.isEmpty()) return false;
+        for (int r = nodes.get(row).parent; r >= 0; r = nodes.get(r).parent) {
+            if (Objects.equals(items.get(r), ancestor)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * How far the tree column's content of a row moves right for its depth and arrow; 0 in any other column.
+     */
+    private float treeInset(int row, Column<T> column) {
+        if (row < 0 || row >= nodes.size() || column != getTreeColumn()) return 0f;
+        return nodes.get(row).depth * indent + indent;
+    }
+
+    /** The left edge of a row's arrow, as a distance into the content. */
+    private float arrowLeft(int row, int columnIndex) {
+        return leftOf(columnIndex) + CELL_PADDING / 2f + nodes.get(row).depth * indent;
     }
 
     /* Editing */
@@ -698,7 +901,8 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             finishEdit(false, false);
             return;
         }
-        editField.setBounds(leftOf(c), headerHeight + index * rowHeight, widthOf(c), rowHeight);
+        float inset = treeInset(index, editingColumn);
+        editField.setBounds(leftOf(c) + inset, headerHeight + index * rowHeight, Math.max(40f, widthOf(c) - inset), rowHeight);
     }
 
     private void scrollToColumn(Column<T> column) {
@@ -758,7 +962,34 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
 
     private void applySort() {
         items.clear();
+        nodes.clear();
+        Comparator<T> order = sortOrder();
+        if (children != null) {
+            addLevel(source, 0, -1, order);
+            return;
+        }
         items.addAll(source);
+        if (order != null) items.sort(order);
+    }
+
+    /**
+     * Adds one level of a tree, sorted on its own, with the open items' children under them.
+     */
+    private void addLevel(Collection<? extends T> level, int depth, int parent, Comparator<T> order) {
+        if (level == null || level.isEmpty()) return;
+        List<T> sorted = new ArrayList<>(level);
+        if (order != null) sorted.sort(order);
+        for (T item : sorted) {
+            Collection<? extends T> kids = children.apply(item);
+            boolean hasChildren = kids != null && !kids.isEmpty();
+            int row = items.size();
+            items.add(item);
+            nodes.add(new Node(depth, parent, hasChildren));
+            if (hasChildren && expanded.contains(item)) addLevel(kids, depth + 1, row, order);
+        }
+    }
+
+    private Comparator<T> sortOrder() {
         Comparator<T> order = null;
         if (sortColumn != null) {
             Column<T> column = sortColumn;
@@ -772,7 +1003,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             Comparator<T> grouped = Comparator.comparing((T item) -> !group.test(item)); // false (matching) first
             order = order == null ? grouped : grouped.thenComparing(order);
         }
-        if (order != null) items.sort(order);
+        return order;
     }
 
     /**
@@ -829,6 +1060,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
      * table. Does not fire {@link #onSelect}.
      */
     public void setSelected(T item) {
+        if (children != null) reveal(item);
         int index = indexOf(item);
         if (index < 0) {
             clearSelection();
@@ -878,7 +1110,7 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
     public void setSelectedItems(Collection<? extends T> chosen) {
         List<T> found = new ArrayList<>();
         for (T item : chosen) {
-            if (indexOf(item) >= 0) found.add(item);
+            if (children != null ? reveal(item) : indexOf(item) >= 0) found.add(item);
         }
         clearSelection();
         if (found.isEmpty()) return;
@@ -973,6 +1205,11 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             if (column.title != null && !column.title.isBlank()) out.append(column.title).append(": ");
             out.append(cell);
         }
+        if (children != null) {
+            Node node = nodes.get(items.indexOf(selected));
+            out.append(", level ").append(node.depth + 1);
+            if (node.hasChildren) out.append(expanded.contains(selected) ? ", expanded" : ", collapsed");
+        }
         if (checkBoxes) out.append(checked.contains(selected) ? ", checked" : ", not checked");
         if (selection.size() > 1) out.append(", ").append(selection.size()).append(" rows selected");
         return out.toString();
@@ -1055,6 +1292,26 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             case GLFW.GLFW_KEY_END -> index = items.size() - 1;
             case GLFW.GLFW_KEY_PAGE_UP -> index = Math.max(0, index - pageRows());
             case GLFW.GLFW_KEY_PAGE_DOWN -> index = Math.min(items.size() - 1, Math.max(0, index) + pageRows());
+            case GLFW.GLFW_KEY_LEFT -> {
+                if (children == null || index < 0) return;
+                Node node = nodes.get(index);
+                if (node.hasChildren && expanded.contains(items.get(index))) {
+                    toggleByUser(items.get(index));
+                    notifyAccessibleChange();
+                    return;
+                }
+                if (node.parent < 0) return;
+                index = node.parent;
+            }
+            case GLFW.GLFW_KEY_RIGHT -> {
+                if (children == null || index < 0 || !nodes.get(index).hasChildren) return;
+                if (!expanded.contains(items.get(index))) {
+                    toggleByUser(items.get(index));
+                    notifyAccessibleChange();
+                    return;
+                }
+                index++; // its first child
+            }
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
                 if (index < 0 || action != GLFW.GLFW_PRESS) return;
                 if (onActivate != null) onActivate.accept(items.get(index));
@@ -1154,6 +1411,15 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             toggleCheck(item);
             return;
         }
+        Column<T> tree = getTreeColumn();
+        if (tree != null && nodes.get(index).hasChildren) {
+            double from = arrowLeft(index, columns.indexOf(tree)), at = contentX(x);
+            if (at >= from && at < from + indent) {
+                lastPressItem = null;
+                toggleByUser(item);
+                return;
+            }
+        }
         int mods = multiSelect ? heldModifiers() : 0;
         boolean toggle = (mods & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0, range = (mods & GLFW.GLFW_MOD_SHIFT) != 0;
         if (toggle || range) {
@@ -1182,8 +1448,12 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         selectByUser(item);
         if (doubleClick) {
             Column<T> cell = columnAt(x);
-            if (cell != null && cell.onEdit != null) startEdit(item, cell);
-            else if (onActivate != null) onActivate.accept(item);
+            if (cell != null && cell.onEdit != null) {
+                startEdit(item, cell);
+                return;
+            }
+            if (children != null && toggleOnDoubleClick && nodes.get(index).hasChildren) toggleByUser(item);
+            if (onActivate != null) onActivate.accept(item);
         }
     }
 
@@ -1411,7 +1681,8 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
 
     private void placeCell(Cell<T> cell, Column<T> column, int c) {
         Element widget = cell.widget;
-        double cellLeft = leftOf(c) + CELL_PADDING, cellWidth = Math.max(1, widthOf(c) - 2 * CELL_PADDING);
+        float inset = treeInset(cell.row, column);
+        double cellLeft = leftOf(c) + CELL_PADDING + inset, cellWidth = Math.max(1, widthOf(c) - 2 * CELL_PADDING - inset);
         double rowTop = headerHeight + cell.row * (double) rowHeight;
         double w = column.cellFillWidth ? cellWidth : widget.getWidth();
         double h = column.cellFillHeight ? Math.max(1, rowHeight - 4) : widget.getHeight();
@@ -1830,8 +2101,16 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             for (int c = 0; c < columns.size(); c++) {
                 Column<T> column = columns.get(c);
                 float cellX = x + leftOf(c) - scrollX, cellW = widthOf(c);
-                if (cellX + cellW <= x || cellX >= x + w || column.cellFactory != null) continue;
-                drawCell(renderer, column, item, cellX, rowY, cellW, textH, f, color, iconTint, dim);
+                if (cellX + cellW <= x || cellX >= x + w) continue;
+                float inset = treeInset(i, column);
+                if (inset > 0 && nodes.get(i).hasChildren) {
+                    float arrowX = x + arrowLeft(i, c) - scrollX;
+                    if (arrowX + indent <= cellX + cellW) {
+                        drawArrow(renderer, arrowX + indent / 2f, rowY + rowHeight / 2f, expanded.contains(item), color);
+                    }
+                }
+                if (column.cellFactory != null) continue;
+                drawCell(renderer, column, item, cellX + inset, rowY, Math.max(0f, cellW - inset), textH, f, color, iconTint, dim);
             }
         }
         renderer.popClip();
@@ -1879,7 +2158,8 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
         renderer.popAlpha();
 
         if (checkBoxes) {
-            int state = checked.isEmpty() ? 0 : checked.size() >= items.size() ? 2 : 1;
+            int shown = shownChecked();
+            int state = shown == 0 ? 0 : shown >= items.size() ? 2 : 1;
             drawCheckBox(renderer, x - scrollX + (CHECK_COLUMN - BOX_SIZE) / 2f, y + (headerHeight - BOX_SIZE) / 2f, state, titles);
         }
         for (int c = 0; c < columns.size(); c++) {
@@ -1919,6 +2199,18 @@ public class TableView<T> extends ScrollContainer implements Focusable, FontScal
             renderer.drawLine(x + BOX_SIZE * 0.42f, y + BOX_SIZE - 4f, x + BOX_SIZE - 3f, y + 4f, color, 2f);
         } else if (state == 1) {
             renderer.drawLine(x + 3.5f, y + BOX_SIZE / 2f, x + BOX_SIZE - 3.5f, y + BOX_SIZE / 2f, color, 2f);
+        }
+    }
+
+    /** A tree row's arrow: pointing down when open, right when closed. */
+    private static void drawArrow(Renderer renderer, float cx, float cy, boolean open, Paint color) {
+        float r = 3.5f;
+        if (open) {
+            renderer.drawLine(cx - r, cy - r / 2f, cx, cy + r / 2f, color, 1.5f);
+            renderer.drawLine(cx, cy + r / 2f, cx + r, cy - r / 2f, color, 1.5f);
+        } else {
+            renderer.drawLine(cx - r / 2f, cy - r, cx + r / 2f, cy, color, 1.5f);
+            renderer.drawLine(cx + r / 2f, cy, cx - r / 2f, cy + r, color, 1.5f);
         }
     }
 

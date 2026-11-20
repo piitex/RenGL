@@ -8,6 +8,8 @@ several), ticks check boxes, opens rows, renames them in place and drags them to
 
 It is a [`ScrollContainer`](scroll-container.md), so the wheel and the scrollbar work the same way.
 
+For a tree with columns (a size, a date, a switch per row) use a [`TreeTableView`](table-view.md#tree-tables).
+
 ```java nocompile
 TreeView<Entity> tree = new TreeView<>(260, 500, Entity::getChildren); // width, height, what is under an item
 tree.setPosition(8, 40);

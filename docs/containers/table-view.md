@@ -30,6 +30,7 @@ cells that are typed into in place with `setEditable`, a price edited as a numbe
 and buttons that act on the ticked rows.
 `me.piitex.examples.demo.TableWidgetsDemo` is a mixer of 200 tracks with a slider, a combo box, a switch, a meter and a
 button in every row, through [controls in cells](#controls-in-cells).
+`me.piitex.examples.demo.TreeTableDemo` is a [tree table](#tree-tables): a scene outline with columns at every depth.
 
 ## Columns
 
@@ -212,6 +213,51 @@ item without binding it again.
 - `getCellWidget(item, column)` is the control showing a cell now, or null when that row is off screen. Use it to update
   something every frame, like a level meter, without binding again.
 
+## Tree tables
+
+`me.piitex.engine.ui.containers.TreeTableView<T>` is a `TableView` whose rows form a tree, like JavaFX's
+`TreeTableView`: a scene outline with a triangle count and a visibility switch per entity, or a project's files with
+their size and date. Each row is indented under its parent in the tree column, with an arrow to open or close it, and the
+other columns line up across every level.
+
+```java nocompile
+TreeTableView<Entity> tree = new TreeTableView<>(600, 400, Entity::children); // children: empty or null for a leaf
+tree.addColumn("Name", Entity::name).setWidth(260);                           // the first column is the tree column
+tree.addColumn("Triangles", e -> String.valueOf(e.triangles())).setAlignment(TextAlign.RIGHT)
+        .setComparator(Comparator.comparingInt(Entity::triangles));
+tree.addColumn("Visible", e -> "").setCellWidgetFill(false, false)
+        .setCellWidget(() -> new ToggleSwitchOverlay(40, 22), (toggle, e) -> {
+            toggle.setOn(e.visible());
+            toggle.onToggle(e::setVisible);
+        });
+tree.setRoots(scene.roots());
+tree.expand(scene.roots().getFirst());
+```
+
+Everything on this page works in a tree table: sorting, resizing, selection, check boxes, editing in place and controls in
+cells (a control in the tree column is indented with its row). What is different:
+
+- Like [`TreeView`](tree-view.md), it does not hold the items. It asks the `children` function what is under each one,
+  only for the open part of the tree, and `refresh()` reads it again. `setRoots` is the same as `setItems`.
+- `getItems()` is the rows shown now: the roots and everything inside open items.
+- A sort orders **each level on its own**, and children stay under their parent. A sort group applies within each level.
+- The user opens or closes an item by clicking its arrow (which does not select), double-clicking its row, or with **Left**
+  and **Right**: Right opens a closed item and then moves to its first child, and Left closes an open item and then moves
+  to its parent. `setToggleOnDoubleClick(false)` keeps a double-click for `onActivate` only. A double-click on an editable
+  cell edits it, as in a table.
+- `expand`, `collapse`, `setExpanded`, `isExpanded`, `expandAll`, `collapseAll` and `reveal(item)` (opens the items above
+  it and scrolls to it) do it from code. `setSelected` reveals the item first. Open items are kept by `equals`, also while
+  their parent is closed.
+- Closing the item above the selected row selects the closed item instead, reported through `onSelect` when the user did it.
+- Ticks inside closed items are kept, and `getCheckedItems()` lists them after the ticked rows shown. The header's box
+  ticks and counts only the rows shown.
+- `depthOf(item)` and `parentOf(item)` describe a row shown now. `setTreeColumn(column)` moves the arrows to another
+  column, and `setIndent` sets the step per level (default 16).
+- Rows cannot be dragged to a new parent. For that use [`TreeView`](tree-view.md), which has no columns.
+
+`me.piitex.examples.demo.TreeTableDemo` is a scene outline of nested buildings, floors and props with a triangle count,
+a visibility switch and an opacity slider in every row, check boxes, and names edited in place.
+
 ## Keys and context menu
 
 `onKey((key, mods) -> ...)` gets every key first, for keys the table has no use for (Delete, say); return true to use
@@ -249,7 +295,8 @@ table.dispose();               // frees the font
 
 - `onMouseClick` on the table is safe to use: the table's own right-click row selection runs first, then your handler.
 - Text that does not fit its cell ends with an ellipsis. Resize the column, give it a wider default, or turn `setEllipsisInMiddle` on to keep a file extension.
-- Rows cannot be dragged or reordered by the user. For a hierarchy use [`TreeView`](tree-view.md).
+- Rows cannot be dragged or reordered by the user. For a hierarchy with columns use a [tree table](#tree-tables); to drag
+  items to new parents use [`TreeView`](tree-view.md).
 - Cell editing is a text field, and Tab does not move on to the next cell. For a drop-down, a spinner or a switch, put that
   control in the cell with [`setCellWidget`](#controls-in-cells). A check box column is the table-wide
   [boxes](#check-boxes), not one per column.

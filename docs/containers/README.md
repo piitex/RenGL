@@ -14,6 +14,7 @@ split containers, modals and tree views are all containers.
 | [ReorderableGrid](reorderable-grid.md) | A scrolling grid of items the user rearranges by dragging, with drop targets |
 | [TreeView](tree-view.md) | A scrolling tree of items with expand arrows, single or multiple selection, check boxes, renaming in place and drag to move |
 | [TableView](table-view.md) | A scrolling table with a fixed header: sortable, resizable columns and single or multiple selection |
+| [TreeTableView](table-view.md#tree-tables) | A table whose rows form a tree, with columns across every level |
 | [ListBox](list-box.md) | A scrolling list of items to pick one or several from, with filtering, type-ahead and custom rows |
 | [AccordionContainer](accordion-container.md) | Sections with a title bar over a body that folds away, optionally one open at a time |
 | [ToastManager](toast-manager.md) | Short messages that slide into a corner of the window and fade away on their own |
