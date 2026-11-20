@@ -108,6 +108,36 @@ saves.setRowHeight(44);
 The renderer is given each visible row's box in window coordinates, already clipped to the row, with the selection and hover
 highlight drawn underneath.
 
+### Controls in rows
+
+`setRowWidget` puts a live control in every row, such as a switch, a slider or a button. `create` makes one and `bind` points it
+at a row's item:
+
+```java
+mods.setRowWidget(() -> new ToggleSwitchOverlay(40, 22), (toggle, mod) -> {
+    toggle.setOn(mod.enabled());
+    toggle.onToggle(mod::setEnabled);
+});
+```
+
+The control keeps its own size and sits at the right end of the row, with the icon and label to its left.
+`setRowWidgetFill(true)` stretches it over the whole row instead, and the list then draws no label. Use that for a row built
+from a `Container` of several controls (a name, a slider and a button, say).
+
+- Only the rows on screen get a control. As the list scrolls, the same controls move to the rows coming into view and `bind`
+  runs again with the new item. So `bind` must set everything that depends on the item, and running it twice must do no harm.
+  `refresh()` binds every control on screen again.
+- A control the user is holding down, or has the keyboard in, keeps its item until they let go, even if its row scrolls away.
+- Pressing a control selects its row. A double-click on a control doesn't fire `onActivate`.
+- The list stays one Tab stop. F2, or Enter when there is no `onActivate`, moves the keyboard into the selected row's control,
+  and Escape gives it back. `setRowWidgetTabStops(true)` puts the controls in the Tab order instead.
+- `getRowWidget(item)` gives the control showing that item now (null if its row is off screen). `focusRowWidget(item)` scrolls to
+  the row and moves the keyboard into its control.
+- The label is still what type-ahead and screen readers use.
+
+`me.piitex.examples.demo.ListWidgetsDemo` shows both kinds: a mod list with a switch per row, and a player list whose rows hold a
+slider and a Kick button. [TableView](table-view.md) has the same thing per column.
+
 ## Notes
 
 - Call `dispose()` when permanently discarding a list: it owns a native font.

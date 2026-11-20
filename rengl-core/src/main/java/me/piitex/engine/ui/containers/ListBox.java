@@ -4,7 +4,9 @@ import me.piitex.engine.ui.text.TextShaping;
 import me.piitex.engine.Window;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
+import me.piitex.engine.ui.Element;
 import me.piitex.engine.ui.Focusable;
+import me.piitex.engine.ui.PopupHost;
 import me.piitex.engine.ui.color.AnimatedPaint;
 import me.piitex.engine.ui.color.Color;
 import me.piitex.engine.ui.color.LinearGradient;
@@ -22,17 +24,22 @@ import me.piitex.engine.ui.theme.ThemeManager;
 import org.jetbrains.skia.Typeface;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * A scrolling list of items, one per row, where the user picks one (or several). It is the plain list a {@link TableView}
@@ -51,7 +58,8 @@ import java.util.function.Predicate;
  * The user selects a row by clicking it or with the arrow, Home, End and Page keys, selects several with {@link
  * #setMultiSelect} (Ctrl-click toggles, Shift-click selects a range, Ctrl+A selects all), opens one with a double-click or
  * Enter ({@link #onActivate}), and jumps to a row by typing the start of its text. The rows can show an {@linkplain
- * #setIconProvider icon}, or be drawn entirely by a {@link RowRenderer}. A {@link #setContextMenu context menu} opens on a
+ * #setIconProvider icon}, be drawn entirely by a {@link RowRenderer}, or hold a live control such as a switch, a slider or a
+ * button ({@link #setRowWidget}). A {@link #setContextMenu context menu} opens on a
  * right-click after selecting the row under the pointer, unless it is already part of the selection.
  * <p>
  * It follows the theme like a {@link Container} that {@link #useTheme() uses the theme}.
@@ -68,6 +76,24 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
     @FunctionalInterface
     public interface RowRenderer<T> {
         void render(Renderer renderer, T item, float x, float y, float width, float height, boolean selected, boolean hovered);
+    }
+
+    /**
+     * A control shown in one row: the item it is bound to, and the factory that made it, so one made by an earlier factory
+     * is not handed out again.
+     */
+    private static final class Cell<T> {
+        final Element widget;
+        final Supplier<? extends Element> factory;
+        final T item;
+        int row;
+        int boundGeneration = -1;
+
+        Cell(Element widget, Supplier<? extends Element> factory, T item) {
+            this.widget = widget;
+            this.factory = factory;
+            this.item = item;
+        }
     }
 
     /**
@@ -96,6 +122,15 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
     private Consumer<List<T>> onSelectionChange;
     private Consumer<T> onActivate;
     private KeyListener keyListener;
+
+    private Supplier<? extends Element> rowFactory;
+    private BiConsumer<Element, T> rowBinder;
+    private boolean rowWidgetFill;
+    private boolean rowWidgetTabStops;
+    private Map<T, Cell<T>> cells = new HashMap<>(); // the controls placed now, by item
+    private final ArrayDeque<Element> spareCells = new ArrayDeque<>();
+    private Element pressedCell; // a control the left button is held down on
+    private int cellGeneration; // refresh() moves it on, so every control is bound again
 
     private float rowHeight = 26f;
     private float fontSize = 15f;
@@ -175,6 +210,7 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
      * label provider} gives has changed in a way that matters to the filter. Keeps the scroll position, clamped.
      */
     public void refresh() {
+        cellGeneration++;
         items.clear();
         for (T item : source) {
             if (filter == null || filter.test(item)) items.add(item);
@@ -247,6 +283,287 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
      */
     public void setEmptyText(String emptyText) {
         this.emptyText = emptyText == null ? "" : emptyText;
+    }
+
+    /* Row controls */
+
+    /**
+     * Shows a control in each row: {@code create} makes one, and {@code bind} points it at a row's item, setting its value
+     * and what it does when the user changes it.
+     * <pre>{@code
+     * mods.setRowWidget(() -> new ToggleSwitchOverlay(40, 22),
+     *                   (toggle, mod) -> { toggle.setOn(mod.enabled()); toggle.onToggle(mod::setEnabled); });
+     * }</pre>
+     * Only the rows on screen have a control, so the list makes about as many as fit, and as it scrolls it hands them to
+     * other rows, calling {@code bind} again with the new item. Write {@code bind} so that it sets everything that depends
+     * on the item, and so that calling it twice for the same item does no harm: it is called again for every row on screen
+     * after {@link #refresh()}. A control the user is holding down or has the keyboard in keeps its item until they let
+     * go, even if its row scrolls away.
+     * <p>
+     * By default the control keeps its own size and sits at the right end of the row, centered up and down, with the
+     * icon and label to its left. {@link #setRowWidgetFill} stretches it over the whole row instead, for a row made of a
+     * container of several controls, and the list then draws no label.
+     * <p>
+     * Pressing a control selects its row. The control takes the press, so a double-click on it does not
+     * {@link #onActivate activate} the row. The label is still what type-ahead and screen readers use. The list stays
+     * one Tab stop: controls in rows are taken out of the Tab order (see {@link #setRowWidgetTabStops}), and F2, or Enter
+     * without an {@link #onActivate} handler, moves the keyboard into the selected row's control. Escape gives it back.
+     * <p>
+     * Null for {@code create} takes the controls away.
+     */
+    @SuppressWarnings("unchecked")
+    public <E extends Element> void setRowWidget(Supplier<E> create, BiConsumer<? super E, ? super T> bind) {
+        spareCells.clear();
+        if (create == null) {
+            rowFactory = null;
+            rowBinder = null;
+            return;
+        }
+        Objects.requireNonNull(bind, "bind");
+        rowFactory = create;
+        rowBinder = (BiConsumer<Element, T>) (BiConsumer<?, ?>) bind;
+    }
+
+    public boolean hasRowWidget() {
+        return rowFactory != null;
+    }
+
+    /**
+     * Whether a {@link #setRowWidget row control} covers the whole row, less a small padding, instead of keeping its own
+     * size at the row's right end. Off by default.
+     */
+    public void setRowWidgetFill(boolean fill) {
+        this.rowWidgetFill = fill;
+    }
+
+    public boolean isRowWidgetFill() {
+        return rowWidgetFill;
+    }
+
+    /**
+     * Whether the {@link #setRowWidget row controls} stay in the Tab order, so Tab visits each one on screen. Off by
+     * default, so Tab moves past the list in one step. Applies to controls made after it is set.
+     */
+    public void setRowWidgetTabStops(boolean tabStops) {
+        this.rowWidgetTabStops = tabStops;
+    }
+
+    /**
+     * The control showing {@code item}'s row, or null if it has none now: there is no {@link #setRowWidget row control},
+     * or the row is not on screen.
+     */
+    public Element getRowWidget(T item) {
+        Cell<T> cell = item == null ? null : cells.get(item);
+        return cell == null ? null : cell.widget;
+    }
+
+    /**
+     * Moves the keyboard into the {@link #setRowWidget control} of {@code item}'s row, scrolling to it. Returns false if
+     * there are no row controls, the item is not shown, or its control cannot take the keyboard.
+     */
+    public boolean focusRowWidget(T item) {
+        int index = indexOf(item);
+        if (index < 0 || rowFactory == null) return false;
+        scrollToIndex(index);
+        syncCells();
+        Element widget = getRowWidget(item);
+        Element target = widget == null ? null : firstFocusable(widget);
+        PopupHost host = getPopupHost();
+        if (target == null || host == null) return false;
+        host.requestFocus(target);
+        return true;
+    }
+
+    private static Element firstFocusable(Element element) {
+        if (element instanceof Focusable && !element.isEffectivelyDisabled()) return element;
+        if (element instanceof Container container) {
+            for (Element child : container.getElements().values()) {
+                Element found = firstFocusable(child);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static void setTabStops(Element element, boolean on) {
+        if (element instanceof Focusable) element.setFocusTraversable(on);
+        if (element instanceof Container container) {
+            for (Element child : container.getElements().values()) setTabStops(child, on);
+        }
+    }
+
+    private static boolean isWithin(Element element, Element root) {
+        for (Element e = element; e != null; e = e.owner) {
+            if (e == root) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The row whose control is, or holds, {@code element}, or null.
+     */
+    private Cell<T> cellOf(Element element) {
+        Element child = element;
+        while (child != null && child.owner != this) child = child.owner;
+        if (child == null) return null;
+        for (Cell<T> cell : cells.values()) {
+            if (cell.widget == child) return cell;
+        }
+        return null;
+    }
+
+    private boolean isActive(Cell<T> cell, Element focus) {
+        return cell.widget == pressedCell || (focus != null && isWithin(focus, cell.widget));
+    }
+
+    private boolean cellHasFocus() {
+        if (cells.isEmpty()) return false;
+        PopupHost host = getPopupHost();
+        Element focus = host == null ? null : host.getFocusedElement();
+        return focus != null && focus != this && cellOf(focus) != null;
+    }
+
+    /**
+     * Gives every visible row a {@link #setRowWidget control}, taking it from a row that scrolled away or making it, binds
+     * the ones whose item or {@link #refresh()} changed, and places them. A control that has the keyboard or is held down
+     * keeps its item even off screen, until it lets go or its item leaves. Run by every {@link #update}.
+     */
+    void syncCells() {
+        if (rowFactory == null && cells.isEmpty()) return;
+        PopupHost host = getPopupHost();
+        Element focus = host == null ? null : host.getFocusedElement();
+        double scrollY = getScrollOffsetY();
+        int first = Math.max(0, (int) (scrollY / rowHeight));
+        int last = Math.min(items.size() - 1, (int) ((scrollY + getHeight()) / rowHeight));
+
+        // first the rows that already show their item, so the controls let go below can be handed to the rows still missing one
+        Map<T, Cell<T>> next = new HashMap<>();
+        List<Integer> missing = new ArrayList<>();
+        if (rowFactory != null) {
+            for (int i = first; i <= last; i++) {
+                T item = items.get(i);
+                Cell<T> cell = cells.get(item);
+                if (cell != null && cell.factory == rowFactory) {
+                    cells.remove(item);
+                    cell.row = i;
+                    next.put(item, cell);
+                } else if (!next.containsKey(item)) {
+                    missing.add(i);
+                }
+            }
+        }
+
+        // the controls whose row scrolled away, or whose item went
+        for (Cell<T> cell : cells.values()) {
+            int row = isActive(cell, focus) && cell.factory == rowFactory ? indexOf(cell.item) : -1;
+            if (row >= 0 && !next.containsKey(cell.item)) {
+                cell.row = row;
+                next.put(cell.item, cell);
+            } else {
+                releaseCell(cell, focus);
+            }
+        }
+        cells = next;
+        for (int row : missing) {
+            T item = items.get(row);
+            if (next.containsKey(item)) continue; // a duplicate row of an equal item shares one control
+            Cell<T> cell = takeCell(item);
+            cell.row = row;
+            next.put(item, cell);
+        }
+
+        for (Cell<T> cell : next.values()) {
+            placeCell(cell);
+            if (cell.boundGeneration == cellGeneration) continue;
+            if (cell.boundGeneration >= 0 && isActive(cell, focus)) continue; // bound again once the user lets go
+            cell.boundGeneration = cellGeneration;
+            rowBinder.accept(cell.widget, cell.item);
+        }
+    }
+
+    private Cell<T> takeCell(T item) {
+        Element widget = spareCells.poll();
+        if (widget == null) {
+            widget = Objects.requireNonNull(rowFactory.get(), "a row widget factory returned null");
+            setTabStops(widget, rowWidgetTabStops);
+        }
+        addElement(widget);
+        return new Cell<>(widget, rowFactory, item);
+    }
+
+    /**
+     * Takes a control out of the list, keeping it for another row if the list still makes that kind. If it had the
+     * keyboard, the list takes it back.
+     */
+    private void releaseCell(Cell<T> cell, Element focus) {
+        removeElement(cell.widget);
+        if (cell.widget == pressedCell) pressedCell = null;
+        if (focus != null && isWithin(focus, cell.widget)) {
+            PopupHost host = getPopupHost();
+            if (host != null) host.requestFocus(this);
+        }
+        if (cell.factory == rowFactory) spareCells.add(cell.widget);
+    }
+
+    private float scrollbarRoom() {
+        return isScrollbarVisible() && getMaxScrollY() > 0 ? 10f : 0f;
+    }
+
+    private void placeCell(Cell<T> cell) {
+        Element widget = cell.widget;
+        double rowTop = cell.row * (double) rowHeight;
+        double right = getWidth() - TEXT_PADDING - scrollbarRoom();
+        double w, h, x;
+        if (rowWidgetFill) {
+            w = Math.max(1, right - 4);
+            h = Math.max(1, rowHeight - 4);
+            x = 4;
+        } else {
+            w = widget.getWidth();
+            h = widget.getHeight();
+            x = right - w;
+        }
+        double y = rowTop + (rowHeight - h) / 2;
+        if (widget.getWidth() != w) widget.setWidth(w);
+        if (widget.getHeight() != h) widget.setHeight(h);
+        if (widget.getX() != x) widget.setX(x);
+        if (widget.getY() != y) widget.setY(y);
+    }
+
+    /**
+     * Pressing a control in a row selects the row first. In a multiple selection the row's place in it is kept, as a
+     * right-click keeps it.
+     */
+    @Override
+    public void onDescendantPressed(Element target, int button) {
+        Cell<T> cell = cellOf(target);
+        if (cell == null) return;
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) pressedCell = cell.widget;
+        lastPressItem = null;
+        if (multiSelect && selection.contains(cell.item)) {
+            if (!Objects.equals(selected, cell.item)) {
+                selected = cell.item;
+                if (onSelect != null) onSelect.accept(cell.item);
+            }
+            return;
+        }
+        selectByUser(cell.item);
+    }
+
+    @Override
+    public void onDescendantReleased(Element target, int button) {
+        if (pressedCell != null && isWithin(target, pressedCell)) pressedCell = null;
+    }
+
+    /**
+     * Escape in a row's control gives the keyboard back to the list.
+     */
+    @Override
+    public boolean onDescendantKey(Element focused, int key, int action, int mods) {
+        if (key != GLFW.GLFW_KEY_ESCAPE || action != GLFW.GLFW_PRESS || cellOf(focused) == null) return false;
+        PopupHost host = getPopupHost();
+        if (host != null) host.requestFocus(this);
+        return true;
     }
 
     /* Selection */
@@ -502,7 +819,13 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
             case GLFW.GLFW_KEY_PAGE_UP -> index = Math.max(0, index - pageRows());
             case GLFW.GLFW_KEY_PAGE_DOWN -> index = Math.min(items.size() - 1, Math.max(0, index) + pageRows());
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
-                if (index >= 0 && onActivate != null && action == GLFW.GLFW_PRESS) onActivate.accept(items.get(index));
+                if (index < 0 || action != GLFW.GLFW_PRESS) return;
+                if (onActivate != null) onActivate.accept(items.get(index));
+                else focusRowWidget(items.get(index));
+                return;
+            }
+            case GLFW.GLFW_KEY_F2 -> {
+                if (index >= 0 && action == GLFW.GLFW_PRESS) focusRowWidget(items.get(index));
                 return;
             }
             default -> {
@@ -751,6 +1074,7 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
     @Override
     public void update(float delta) {
         super.update(delta);
+        syncCells();
         AnimatedPaint.advanceIfAnimated(textColor.get(), delta);
         AnimatedPaint.advanceIfAnimated(dimTextColor.get(), delta);
         AnimatedPaint.advanceIfAnimated(selectionColor.get(), delta);
@@ -777,6 +1101,10 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
      * Frees the font. The list can still be drawn afterwards; it makes a new one.
      */
     public void dispose() {
+        for (Cell<T> cell : cells.values()) removeElement(cell.widget);
+        cells.clear();
+        spareCells.clear();
+        pressedCell = null;
         closeFont();
     }
 
@@ -801,6 +1129,7 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
         Paint text = textColor.get();
         Paint selectionPaint = selectionColor.get();
         Color iconTint = solid(text);
+        boolean keyboardHere = focused || cellHasFocus();
 
         if (items.isEmpty()) {
             if (!emptyText.isEmpty()) {
@@ -829,9 +1158,9 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
                 renderer.popAlpha();
             }
             if (isSelected) {
-                if (!focused) renderer.pushAlpha(0.6f);
+                if (!keyboardHere) renderer.pushAlpha(0.6f);
                 renderer.drawQuad(x, rowY, w, rowHeight, selectionPaint, rowCornerRadius);
-                if (!focused) renderer.popAlpha();
+                if (!keyboardHere) renderer.popAlpha();
             } else if (i == hoverRow) {
                 renderer.pushAlpha(0.07f);
                 renderer.drawQuad(x, rowY, w, rowHeight, text, rowCornerRadius);
@@ -843,6 +1172,7 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
                 renderer.popClip();
                 continue;
             }
+            if (rowWidgetFill && rowFactory != null) continue;
             boolean dim = dimmed.test(item);
             drawRow(renderer, item, x, rowY, w, textH, f, dim ? dimTextColor.get() : text, iconTint, dim);
         }
@@ -851,7 +1181,9 @@ public class ListBox<T> extends ScrollContainer implements Focusable, FontScalab
 
     private void drawRow(Renderer renderer, T item, float x, float rowY, float w, float textH, org.jetbrains.skia.Font f,
                          Paint color, Color iconTint, boolean dim) {
-        float left = x + TEXT_PADDING, right = x + w - TEXT_PADDING - (isScrollbarVisible() && getMaxScrollY() > 0 ? 10f : 0f);
+        float left = x + TEXT_PADDING, right = x + w - TEXT_PADDING - scrollbarRoom();
+        Element widget = getRowWidget(item);
+        if (widget != null) right -= (float) widget.getWidth() + 6f;
         IconAsset icon = iconProvider == null ? null : iconProvider.apply(item);
         if (icon != null) {
             int size = Math.round(iconSize);
