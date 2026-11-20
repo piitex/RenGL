@@ -48,7 +48,7 @@ public class Demo {
         // To reduce console spam add these jvm flags
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
 
-        Window window = new Window(new WindowOptions("Tab containers").setDimensions(1280, 720));
+        Window window = new Window(new WindowOptions("Tab containers").setDimensions(1280, 720).setSplashEnabled(false));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

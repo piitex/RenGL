@@ -63,7 +63,7 @@ public class PlaygroundDemo {
 
     static void main() {
         // -XstartOnFirstThread is required on macOS.
-        Window window = new Window(new WindowOptions("Playground Demo").setDimensions(1200, 760).setRenderer(chooseApi()));
+        Window window = new Window(new WindowOptions("Playground Demo").setDimensions(1200, 760).setSplashEnabled(false).setRenderer(chooseApi()));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

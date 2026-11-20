@@ -79,7 +79,7 @@ public class UpscalingDemo {
         else if (generation.equals("fsr")) System.setProperty("rengl.fsr.framegen", "true");
 
         // Vsync is off because frame generation does not run with it; the cap is lifted so the numbers are the GPU's own.
-        Window window = new Window(new WindowOptions("Upscaling and frame generation").setDimensions(WIDTH, HEIGHT)
+        Window window = new Window(new WindowOptions("Upscaling and frame generation").setDimensions(WIDTH, HEIGHT).setSplashEnabled(false)
                 .setRenderer(RenderAPI.VULKAN).setVsync(false).setMaxFPS(0).setBackgroundFPS(0));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());

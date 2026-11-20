@@ -11,7 +11,7 @@ import me.piitex.engine.ui.theme.ThemeManager;
 public class Test {
     public static void main(String[] args) {
         ThemeManager.setCurrent(new CrimsonTheme()); // before building, so everything starts dark
-        Window window = new Window(new WindowOptions("Form").setDimensions(800, 600));
+        Window window = new Window(new WindowOptions("Form").setDimensions(800, 600).setSplashEnabled(false));
 
         Container root = new Container(800, 600);
         window.addContainer(root);

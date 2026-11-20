@@ -59,7 +59,7 @@ public class Scene3DDemo {
     static void main() throws IOException {
         // -XstartOnFirstThread is required on macOS. To reduce console spam also add
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
-        Window window = new Window(new WindowOptions("3D Demo").setDimensions(1100, 700).setRenderer(chooseApi()));
+        Window window = new Window(new WindowOptions("3D Demo").setDimensions(1100, 700).setSplashEnabled(false).setRenderer(chooseApi()));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

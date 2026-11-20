@@ -48,7 +48,7 @@ public class WidgetsDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
-        Window window = new Window(new WindowOptions("Widgets Demo").setDimensions(980, 640));
+        Window window = new Window(new WindowOptions("Widgets Demo").setDimensions(980, 640).setSplashEnabled(false));
 
         Container root = new Container(980, 640);
         window.addContainer(root);

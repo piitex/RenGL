@@ -20,7 +20,7 @@ public class EntityDemo {
 
     static void main() {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
-        Window window = new Window(new WindowOptions("Entity Demo").setDimensions(1000, 640));
+        Window window = new Window(new WindowOptions("Entity Demo").setDimensions(1000, 640).setSplashEnabled(false));
         EntityScene scene = EntityScene.load("src/main/resources/demo/entities.json");
         scene.setShowColliders(true);
         window.getSceneManager().set(scene);

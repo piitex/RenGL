@@ -34,7 +34,7 @@ public class TreeDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
-        Window window = new Window(new WindowOptions("Tree Demo").setDimensions(1000, 640));
+        Window window = new Window(new WindowOptions("Tree Demo").setDimensions(1000, 640).setSplashEnabled(false));
         EntityScene scene = EntityScene.load("rengl-examples/src/main/resources/demo/entities.json");
         window.getSceneManager().set(scene);
 

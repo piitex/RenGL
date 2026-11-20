@@ -74,7 +74,7 @@ public class RayTracingDemo {
     private static final float[] QUALITY_SCALES = {1f, 0.67f, 0.58f, 0.5f, 0.33f};
 
     static void main() {
-        Window window = new Window(new WindowOptions("Ray tracing and path tracing").setDimensions(WIDTH, HEIGHT)
+        Window window = new Window(new WindowOptions("Ray tracing and path tracing").setDimensions(WIDTH, HEIGHT).setSplashEnabled(false)
                 .setRenderer(RenderAPI.VULKAN).setVsync(false).setMaxFPS(0).setBackgroundFPS(0));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());

@@ -32,7 +32,7 @@ public class MultiWindowDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
-        Window main = new Window(new WindowOptions("Multi Window Demo").setDimensions(420, 260));
+        Window main = new Window(new WindowOptions("Multi Window Demo").setDimensions(420, 260).setSplashEnabled(false));
 
         VerticalLayout layout = new VerticalLayout(20, 20, 380, 220);
         layout.setSpacing(14f);
@@ -47,7 +47,7 @@ public class MultiWindowDemo {
 
         open.onAction(() -> {
             opened++;
-            Window game = new Window(new WindowOptions("Game window " + opened).setDimensions(640, 420));
+            Window game = new Window(new WindowOptions("Game window " + opened).setDimensions(640, 420).setSplashEnabled(false));
             EntityScene scene = EntityScene.load("rengl-examples/src/main/resources/demo/entities.json");
             scene.getCamera().setZoom(0.6f);
             game.getSceneManager().set(scene);

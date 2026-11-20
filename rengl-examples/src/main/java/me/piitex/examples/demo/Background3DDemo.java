@@ -39,7 +39,7 @@ import java.io.File;
 public class Background3DDemo {
     static void main() {
         // -XstartOnFirstThread is required on macOS.
-        Window window = new Window(new WindowOptions("3D Background Demo").setDimensions(1000, 650).setRenderer(chooseApi()));
+        Window window = new Window(new WindowOptions("3D Background Demo").setDimensions(1000, 650).setSplashEnabled(false).setRenderer(chooseApi()));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

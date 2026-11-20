@@ -46,7 +46,7 @@ public class Studio3DDemo {
     static void main() {
         // -XstartOnFirstThread is required on macOS. To reduce console spam also add
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
-        Window window = new Window(new WindowOptions("3D Studio Demo").setDimensions(1400, 800).setRenderer(chooseApi()));
+        Window window = new Window(new WindowOptions("3D Studio Demo").setDimensions(1400, 800).setSplashEnabled(false).setRenderer(chooseApi()));
         WindowOptions options = window.getWindowOptions();
 
         build();

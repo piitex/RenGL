@@ -32,7 +32,7 @@ public class ResizableContainerDemo {
 
     static void main() {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
-        Window window = new Window(new WindowOptions("Resizable containers").setDimensions(1280, 720));
+        Window window = new Window(new WindowOptions("Resizable containers").setDimensions(1280, 720).setSplashEnabled(false));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

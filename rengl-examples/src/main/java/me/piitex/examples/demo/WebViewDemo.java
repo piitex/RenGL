@@ -79,7 +79,7 @@ public class WebViewDemo {
             else address = a;
         }
 
-        Window window = new Window(new WindowOptions("Web view demo").setDimensions(W, H));
+        Window window = new Window(new WindowOptions("Web view demo").setDimensions(W, H).setSplashEnabled(false));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

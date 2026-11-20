@@ -28,7 +28,7 @@ public class FileDialogDemo {
         // To reduce console spam add these jvm flags
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
 
-        Window window = new Window(new WindowOptions("File dialogs").setDimensions(700, 520));
+        Window window = new Window(new WindowOptions("File dialogs").setDimensions(700, 520).setSplashEnabled(false));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

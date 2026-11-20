@@ -58,7 +58,7 @@ public class HdrSkyDemo {
 
     static void main() {
         // -XstartOnFirstThread is required on macOS.
-        Window window = new Window(new WindowOptions("HDR sky demo").setDimensions(1100, 700).setRenderer(chooseApi()));
+        Window window = new Window(new WindowOptions("HDR sky demo").setDimensions(1100, 700).setSplashEnabled(false).setRenderer(chooseApi()));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

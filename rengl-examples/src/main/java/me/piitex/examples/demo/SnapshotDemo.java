@@ -39,7 +39,7 @@ public class SnapshotDemo {
 
     static void main() {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
-        Window window = new Window(new WindowOptions("Snapshot demo").setDimensions(1000, 620));
+        Window window = new Window(new WindowOptions("Snapshot demo").setDimensions(1000, 620).setSplashEnabled(false));
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
 

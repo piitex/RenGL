@@ -65,7 +65,7 @@ public class TableEditDemo {
         // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=deny
         Font.setDefaultFont(new File("rengl-examples/src/main/resources/Roboto-Regular.ttf"));
         ThemeManager.setCurrent(new DarkTheme());
-        Window window = new Window(new WindowOptions("Table editing").setDimensions(860, 600));
+        Window window = new Window(new WindowOptions("Table editing").setDimensions(860, 600).setSplashEnabled(false));
 
         Container root = new Container(860, 600);
         window.addContainer(root);
