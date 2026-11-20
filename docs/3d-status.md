@@ -63,7 +63,8 @@ what is known to be wrong or missing, and what comes next. Last updated 2026-10-
 
 `gl.renderer.GpuInterop` gives GPU code what it needs to share Skia's context: `gpuApi()`, `skiaContext()`,
 `vulkanContext()`, `pixelScale()` and `onDispose(Runnable)`. Only `SkikoRenderer` (OpenGL) and `VulkanSkikoRenderer`
-implement it. Metal and the CPU snapshot renderer do not, so a `Viewport3D` there warns once and draws nothing.
+implement it. Metal does not, so a `Viewport3D` there warns once and draws nothing. Nor does the CPU snapshot renderer;
+there a viewport draws the picture it last showed in its window, copied back from the GPU with Skia's `readPixels`.
 
 ### GPU abstraction (`render3d`, `render3d.gl`, `render3d.vk`)
 

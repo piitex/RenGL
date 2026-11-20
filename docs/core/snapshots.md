@@ -25,12 +25,44 @@ slot.addElement(new ImageOverlay(new File("saves/slot1.png"), 320, 180));
 | `takeSnapshotAsync(scale, callback)` | Waits for the next frame, then calls `callback` on the render thread. Safe from any thread |
 
 Snapshots are drawn by a CPU `OffscreenRenderer`, not read back from the screen, so they work the same on OpenGL, Vulkan and Metal, do
-not flicker the window, and can be a different size than what is on screen.
+not flicker the window, and can be a different size than what is on screen. [3D](#3d) is the one part that comes from the GPU.
 
-For the same reason a snapshot **leaves out [3D](../3d/README.md)**: a [`Viewport3D`](../3d/viewport-3d.md) or
-[`Background3D`](../3d/background-3d.md) is drawn by the GPU, so the CPU renderer has nothing to draw there (a viewport logs
-a warning once). To save what a 3D view shows, read the picture back from its target with `RenderTarget.readPixels()` in a
-[custom content](../3d/custom-rendering.md).
+## 3D
+
+[3D](../3d/README.md) is in snapshots too, with the same calls. A [`Viewport3D`](../3d/viewport-3d.md) or a
+[`Background3D`](../3d/background-3d.md) in what is captured draws the picture it last showed in the window, copied back
+from the GPU, at its place and with its rounded corners, and the 2D UI around and over it is drawn as usual:
+
+```java
+// The 3D view on its own, at its size in pixels:
+try (Snapshot shot = viewport.takeSnapshot(viewport.getPixelWidth() / (float) viewport.getWidth())) {
+    shot.savePng(Path.of("screenshots/scene.png"));
+}
+
+// The whole window, 3D background and viewports included, from any thread:
+window.takeSnapshotAsync(1f, shot -> {
+    try (shot) {
+        shot.savePng(Path.of("screenshots/window.png"));
+    } catch (IOException e) {
+        log.warn("Could not save the screenshot", e);
+    }
+});
+```
+
+It works on OpenGL and Vulkan, the two APIs that draw 3D. The picture is the finished one, what is on screen:
+
+- **Full size.** It is the viewport's output at its size in pixels, after the scene's [render scale](../3d/scenes.md) and
+  upscaler have enlarged it, not the smaller picture the scene drew. `Viewport3D.setResolutionScale` below 1 makes the
+  picture itself smaller, and the snapshot scales it up as the window does.
+- **Anti-aliased and tone mapped.** Multisampling is resolved and HDR is tone mapped and exposed before the copy, so
+  bloom, exposure and the tone curve look as they do on screen.
+- **The frame last shown.** A snapshot does not draw the scene again, so it does not move animations, a temporal upscaler
+  or path tracing on by a frame. `takeSnapshotAsync` runs at the start of a frame, before the viewport draws again, so it
+  gets the frame on screen at that moment. With frame generation on, it is the last drawn frame, not a generated one.
+
+A viewport that has not been drawn in a window yet, or one in a Metal window, has no picture and is left out (the area is
+transparent). Each viewport in the snapshot costs one copy from the GPU, which waits for the GPU, so snapshots are for
+save slots and screenshots, not for every frame.
 
 ## Using the result
 

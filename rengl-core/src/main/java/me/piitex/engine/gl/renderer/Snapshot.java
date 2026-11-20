@@ -23,6 +23,9 @@ import java.util.function.Consumer;
  * {@link Element#takeSnapshot()} or {@link Window#takeSnapshot(float)}. It is a plain copy: later changes to the UI do not
  * affect it.
  * <p>
+ * The UI is drawn on the CPU. A 3D view in it (the optional 3D layer's viewport or 3D window background) draws the
+ * picture it last showed in the window instead, copied back from the GPU.
+ * <p>
  * A snapshot owns a native image. Call {@link #close()} when you are done with it, unless you handed it to
  * {@link #toOverlay} (see there).
  * <pre>{@code

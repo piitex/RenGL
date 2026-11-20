@@ -7,7 +7,8 @@ import org.jetbrains.skia.DirectContext;
  * Implemented by the renderers that draw through a GPU API a separate GPU layer can share: the OpenGL and Vulkan
  * ones. It gives code that renders with the GPU itself, such as the optional 3D layer's viewport, what it
  * needs to hand its pictures to Skia. A renderer that does not implement it, the Metal one and the CPU one behind
- * {@link Snapshot}, has no GPU to share, and such code skips its drawing there.
+ * {@link Snapshot}, has no GPU to share. Such code skips its drawing on Metal, and in a snapshot draws a CPU copy of
+ * what it last showed in the window.
  * <p>
  * Render thread only, like the renderer itself.
  */

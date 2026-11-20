@@ -187,10 +187,11 @@ runs when the scene draws.
 
 ## Gotchas
 
-- **Metal windows and snapshots draw nothing.** The first time a viewport draws on a renderer that can't share the GPU
-  (Metal, or the CPU renderer behind [snapshots](../core/snapshots.md)), it logs
-  `A Viewport3D can only draw in a window running on OpenGL or Vulkan` once and leaves the rectangle empty. A
-  snapshot of the UI therefore leaves a viewport out.
+- **Metal windows draw nothing.** The first time a viewport draws on a Metal window it logs
+  `A Viewport3D can only draw in a window running on OpenGL or Vulkan` once and leaves the rectangle empty.
+- **[Snapshots](../core/snapshots.md#3d) include the viewport**: `viewport.takeSnapshot(scale)`, or a snapshot of a
+  container or the window holding it, draws the picture the viewport last showed, copied back from the GPU (upscaled,
+  anti-aliased and tone mapped, as on screen). A viewport not drawn in a window yet is left out.
 - **Anti-aliasing costs memory.** 4 samples of a 4K viewport hold about four times the colour and depth memory of 1. For a background that fills a large window, or a weak GPU, lower it with `setSamples(2)` or `setSamples(1)`.
 - **It re-renders every frame by default,** even when nothing changed. For a still picture, use
   [`setContinuous(false)`](#drawing-only-when-needed).

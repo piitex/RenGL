@@ -94,7 +94,7 @@ Vulkan renderers allow that (they implement `GpuInterop`):
 | | OpenGL | Vulkan | Metal | Snapshots (CPU) |
 |---|---|---|---|---|
 | 2D UI | Yes | Yes | Yes | Yes |
-| [`Viewport3D`](../3d/viewport-3d.md), [`Background3D`](../3d/background-3d.md) | Yes | Yes | **No**, they warn once and draw nothing | No, they are left out |
+| [`Viewport3D`](../3d/viewport-3d.md), [`Background3D`](../3d/background-3d.md) | Yes | Yes | **No**, they warn once and draw nothing | Yes, the picture shown on OpenGL or Vulkan ([3D in snapshots](snapshots.md#3d)) |
 
 So **on macOS, a program with 3D asks for Vulkan.** A program with only 2D can stay on the default.
 

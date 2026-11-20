@@ -161,7 +161,8 @@ on [Rendering APIs](core/rendering-apis.md).
 The OpenGL and Vulkan renderers also implement `GpuInterop`, the one hook the optional [3D layer](3d/README.md) uses to
 share Skia's GPU context (`backendContext()` gives the Vulkan device to it, and is null on OpenGL): 3D renders into an offscreen picture and Skia draws it like an image, in a
 [`Viewport3D`](3d/viewport-3d.md) element or behind the window as a [`Background3D`](3d/background-3d.md). The Metal
-renderer and the CPU renderer behind [snapshots](core/snapshots.md) don't implement it, so 3D needs OpenGL or Vulkan.
+renderer and the CPU renderer behind [snapshots](core/snapshots.md) don't implement it, so 3D needs OpenGL or Vulkan; a
+snapshot gets a viewport's picture by copying back the one the window last showed.
 Nothing in the core knows about 3D: a program that never uses it never starts it.
 
 `Renderer` calls are only legal on the render thread, between `begin()` and `end()`. That is

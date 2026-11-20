@@ -2,6 +2,7 @@ package me.piitex.engine.render3d;
 
 import me.piitex.engine.RenderAPI;
 import me.piitex.engine.gl.renderer.GpuInterop;
+import me.piitex.engine.gl.renderer.OffscreenRenderer;
 import me.piitex.engine.gl.renderer.Renderer;
 import me.piitex.engine.input.MouseTracker;
 import me.piitex.engine.render3d.gl.GlRenderTarget;
@@ -13,10 +14,14 @@ import me.piitex.engine.ui.scroll.Scrollable;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.skia.BackendRenderTarget;
+import org.jetbrains.skia.Bitmap;
+import org.jetbrains.skia.ColorAlphaType;
 import org.jetbrains.skia.ColorSpace;
+import org.jetbrains.skia.ColorType;
 import org.jetbrains.skia.DirectContext;
 import org.jetbrains.skia.FramebufferFormat;
 import org.jetbrains.skia.Image;
+import org.jetbrains.skia.ImageInfo;
 import org.jetbrains.skia.Surface;
 import org.jetbrains.skia.SurfaceColorFormat;
 import org.jetbrains.skia.SurfaceOrigin;
@@ -46,8 +51,9 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_TILING_OPTIMAL;
  * <p>
  * It needs a window that runs on OpenGL or Vulkan. On macOS that means asking for Vulkan with
  * {@code windowOptions.setRenderer(RenderAPI.VULKAN)}; a Metal window can't show it (the viewport logs that once and
- * draws nothing). A {@link me.piitex.engine.ui.Element#takeSnapshot snapshot} of the UI leaves the viewport out,
- * since a snapshot is drawn on the CPU.
+ * draws nothing). A {@link me.piitex.engine.ui.Element#takeSnapshot snapshot} of the viewport, of a container holding
+ * it or of the window includes the picture the viewport last showed in the window, copied back from the GPU, so it
+ * shows what is on screen; a viewport that has not been drawn in a window yet is left out.
  * <p>
  * By default the content draws every frame. For a picture that rarely changes, {@link #setContinuous
  * setContinuous(false)} draws it only when it is asked to ({@link #requestRender}), and otherwise shows the last
@@ -336,16 +342,21 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
     public void render(Renderer renderer) {
         if (!isEnabled()) return;
         super.render(renderer);
-        closeInFlight();
         if (content == null || failed) return;
 
         if (!(renderer instanceof GpuInterop interop)) {
-            if (!reportedUnsupported) {
+            // A snapshot: the CPU renderer behind it can't draw 3D, so it gets the picture the window shows. The
+            // in-flight Skia objects are left alone, as the window's frame may still need them.
+            if (drawShownPicture(renderer)) return;
+            if (renderer instanceof OffscreenRenderer) {
+                log.debug("A snapshot left out a Viewport3D that has not been drawn in a window yet");
+            } else if (!reportedUnsupported) {
                 reportedUnsupported = true;
-                log.warn("A Viewport3D can only draw in a window running on OpenGL or Vulkan (on macOS, RenderAPI.VULKAN), not on Metal or in a snapshot, so it draws nothing here.");
+                log.warn("A Viewport3D can only draw in a window running on OpenGL or Vulkan (on macOS, RenderAPI.VULKAN), not on Metal, so it draws nothing here.");
             }
             return;
         }
+        closeInFlight();
 
         float scale = interop.pixelScale() * resolutionScale;
         // A minimized window (or a layout with no room) leaves nothing to draw into. Drawing a 1 by 1 picture instead would
@@ -380,6 +391,37 @@ public class Viewport3D extends Element implements Focusable, Draggable, Scrolla
         }
         renderer.drawImage(picture, (float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(),
                 getStyling().getCornerRadius(), 1f);
+    }
+
+    /**
+     * Draws the picture this viewport last showed in its window into {@code renderer}, a renderer with no GPU of its own
+     * (the CPU one behind a {@link me.piitex.engine.gl.renderer.Snapshot}), at the place and with the corners the window
+     * draws it with. The picture is the content's finished output: anti-aliasing resolved, tone mapped, and at the
+     * viewport's size in pixels whatever the scene's render scale or upscaler. It is copied back from the GPU, which
+     * waits for the GPU. Returns false when there is no such picture: the viewport has not been drawn in a window yet,
+     * or its window can't draw 3D (Metal).
+     */
+    private boolean drawShownPicture(Renderer renderer) {
+        if (gpu == null || picture == null) return false;
+        DirectContext context = gpu.interop.skiaContext();
+        // Something 3D may have changed OpenGL state since Skia last looked, and the copy back goes through Skia.
+        if (gpu.interop.gpuApi() == RenderAPI.OPENGL) context.resetGLAll();
+        int w = picture.getWidth(), h = picture.getHeight();
+        ImageInfo info = new ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
+        byte[] pixels;
+        try (Bitmap bitmap = new Bitmap()) {
+            if (!bitmap.allocPixels(info) || !picture.readPixels(context, bitmap, 0, 0)) {
+                log.warn("Could not copy the 3D viewport's {}x{} picture back from the GPU for a snapshot, so it is left out", w, h);
+                return true;
+            }
+            pixels = bitmap.readPixels(info, w * 4, 0, 0);
+        }
+        if (pixels == null) return true;
+        try (Image copy = Image.Companion.makeRaster(info, pixels, w * 4)) {
+            renderer.drawImage(copy, (float) getX(), (float) getY(), (float) getWidth(), (float) getHeight(),
+                    getStyling().getCornerRadius(), 1f);
+        }
+        return true;
     }
 
     /**
